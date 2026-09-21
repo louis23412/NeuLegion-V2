@@ -1,0 +1,174 @@
+{
+  "generatedAt": "2026-09-19T10:25:23.689Z",
+  "note": "Round 6 literature refresh (quoted-phrase queries, sortBy=relevance), targeting the block-length / long-run-variance / variance-consistent-inference front behind reality_check.js (White RC, Hansen SPA, consistent SPA_c, Romano-Wolf StepM) and the section-W automatic block-length selector (Politis & White 2004). Purpose: ground docs/TODO.md item 7 (variance-consistent resampling). Headline finds: 1809.04541 (lugsail lag windows: LRV/HAC estimators have *significant negative bias* under positive correlation — explains the measured bootSE/trueSE = 0.33 at phi=0.8) and its 2026 successor 2606.17369 (zero-lugsail kernels: zero asymptotic bias regardless of correlation strength, with inference-optimal bandwidths); 1204.1035 (fixed-b subsampling + p-value calibration — the bandwidth-sensitivity fix that motivates variance-consistent resampling); 2606.25968 (studentized cheap bootstrap: higher-order coverage at low compute — the Romano-Wolf \"Siegfried\" pathway); and self-normalization (2509.07112, 1302.0114) as the tuning-free alternative that sidesteps LRV estimation entirely. Entries lightly filtered to block-length / long-run-variance / resampling-inference relevance.",
+  "queries": [
+    {
+      "file": "automatic-block-length",
+      "query": "\"automatic block length selection\"",
+      "totalResults": 0,
+      "count": 0,
+      "entries": []
+    },
+    {
+      "file": "optimal-block-length",
+      "query": "\"optimal block length\"",
+      "totalResults": 8,
+      "count": 1,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/1403.3275v1",
+          "title": "Convergence rates of empirical block length selectors for block bootstrap",
+          "published": "2014-03-13",
+          "category": "math.ST",
+          "summary": "We investigate the accuracy of two general non-parametric methods for estimating optimal block lengths for block bootstraps with time series - the first proposed in the seminal paper of Hall, Horowitz and Jing (Biometrika 82 (1995) 561-574) and the second from Lahiri et al. (Stat. Methodol. 4 (2007) 292-321)."
+        }
+      ]
+    },
+    {
+      "file": "long-run-variance",
+      "query": "\"long-run variance estimation\"",
+      "totalResults": 18,
+      "count": 5,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2606.17369v1",
+          "title": "Inference Optimal Long Run Variance Estimation with Lugsail Kernels",
+          "published": "2026-06-15",
+          "category": "math.ST",
+          "summary": "For datasets with unknown but stationary serial dependence, a robust long run variance estimator is essential to handle diverse scenarios. Spectral variance estimators are commonly used but tend to exhibit significant negative bias in the presence of positive correlation. To overcome this, zero lugsail estimators have been introduced, offering zero asymptotic bias regardless of the correlation structure."
+        },
+        {
+          "id": "http://arxiv.org/abs/2209.05399v2",
+          "title": "Principles of Statistical Inference in Online Problems",
+          "published": "2022-09-12",
+          "category": "stat.ME",
+          "summary": "To investigate a dilemma of statistical and computational efficiency faced by long-run variance estimators, we propose a decomposition of kernel weights in a quadratic form and some online inference principles."
+        },
+        {
+          "id": "http://arxiv.org/abs/2103.02235v3",
+          "title": "Prewhitened Long-Run Variance Estimation Robust to Nonstationarity",
+          "published": "2021-03-03",
+          "category": "econ.EM",
+          "summary": "We introduce a nonparametric nonlinear VAR prewhitened long-run variance (LRV) estimator for the construction of standard errors robust to autocorrelation and heteroskedasticity. Existing methods either are theoretically valid only under stationarity and have poor finite-sample properties under nonstationarity."
+        },
+        {
+          "id": "http://arxiv.org/abs/2605.15596v1",
+          "title": "Tail postcoloring in long-run variance estimation of time series",
+          "published": "2026-05-15",
+          "category": "stat.ME",
+          "summary": "Prewhitening is a common approach to deal with strong autocorrelation. In this article, we propose a new approach called tail postcoloring. It uses parametric models to project, or color back, the neglected tail autocovariances in nonparametric estimators onto the final estimator."
+        },
+        {
+          "id": "http://arxiv.org/abs/2103.00060v1",
+          "title": "Simultaneous Bandwidths Determination for DK-HAC Estimators and Long-Run Variance Estimation in Nonparametric Settings",
+          "published": "2021-02-26",
+          "category": "econ.EM",
+          "summary": "We consider the derivation of data-dependent simultaneous bandwidths for double kernel heteroskedasticity and autocorrelation consistent (DK-HAC) estimators ... optimal bandwidths that jointly minimize the global asymptotic MSE."
+        }
+      ]
+    },
+    {
+      "file": "fixed-b",
+      "query": "\"fixed-b asymptotics\"",
+      "totalResults": 4,
+      "count": 3,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/1204.1035v1",
+          "title": "Fixed-b Subsampling and Block Bootstrap: Improved Confidence Sets Based on P-value Calibration",
+          "published": "2012-04-04",
+          "category": "math.ST",
+          "summary": "Subsampling and block-based bootstrap methods have been used in a wide range of inference problems for time series. To accommodate the dependence, these resampling methods involve a bandwidth parameter, such as subsampling window width and block size. In empirical work, using different bandwidth parameters could lead to different inference results."
+        },
+        {
+          "id": "http://arxiv.org/abs/2111.14590v2",
+          "title": "The Fixed-b Limiting Distribution and the ERP of HAR Tests Under Nonstationarity",
+          "published": "2021-11-29",
+          "category": "econ.EM",
+          "summary": "We show that the nonstandard limiting distribution of HAR test statistics under fixed-b asymptotics is not pivotal (even after studentization) when the data are nonstationary. It depends on the integrated local long-run variance."
+        },
+        {
+          "id": "http://arxiv.org/abs/2309.08707v4",
+          "title": "Fixed-b Asymptotics for Panel Models with Two-Way Clustering",
+          "published": "2023-09-15",
+          "category": "econ.EM",
+          "summary": "This paper studies a cluster robust variance estimator proposed by Chiang, Hansen and Sasaki (2024) for linear panels ... we show algebraically that it is a linear combination of three common variance estimators."
+        }
+      ]
+    },
+    {
+      "file": "studentized-bootstrap",
+      "query": "\"studentized bootstrap\"",
+      "totalResults": 7,
+      "count": 1,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2606.25968v1",
+          "title": "Studentized Cheap Bootstrap: Achieving Higher-Order Coverage Accuracy with Low Computation",
+          "published": "2026-06-24",
+          "category": "stat.ME",
+          "summary": "The bootstrap is a versatile method for quantifying statistical uncertainty. Among its variants, a popular approach, the studentized bootstrap, provably achieves higher-order coverage error reduction compared to other benchmarks. However, its implementation typically requires an analytical form of the standard error, or otherwise an additional layer of resampling."
+        }
+      ]
+    },
+    {
+      "file": "lugsail",
+      "query": "\"lugsail\" kernel variance",
+      "totalResults": 82175,
+      "count": 1,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/1809.04541v3",
+          "title": "Lugsail lag windows for estimating time-average covariance matrices",
+          "published": "2018-09-12",
+          "category": "stat.CO",
+          "summary": "Lag windows are commonly used in time series, econometrics, steady-state simulation, and Markov chain Monte Carlo to estimate time-average covariance matrices. In the presence of positive correlation of the underlying process, estimators of this matrix almost always exhibit significant negative bias, leading to undesirable finite-sample properties. We propose a new family of lag windows."
+        }
+      ]
+    },
+    {
+      "file": "self-normalization",
+      "query": "\"self-normalization\" time series",
+      "totalResults": 783281,
+      "count": 2,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2509.07112v3",
+          "title": "Self-Normalization for CUSUM-based Change Detection in Locally Stationary Time Series",
+          "published": "2025-09-08",
+          "category": "math.ST",
+          "summary": "A new bivariate partial sum process for locally stationary time series is introduced ... For stationary data, self-normalization relies on the factorization of a constant long-run variance."
+        },
+        {
+          "id": "http://arxiv.org/abs/1302.0114v1",
+          "title": "Inference for modulated stationary processes",
+          "published": "2013-02-01",
+          "category": "math.ST",
+          "summary": "We study statistical inferences for a class of modulated stationary processes with time-dependent variances. Based on a self-normalization technique, we address several inference problems, including a self-normalized central limit theorem."
+        }
+      ]
+    },
+    {
+      "file": "hac-standard-errors",
+      "query": "\"HAC standard errors\"",
+      "totalResults": 6,
+      "count": 2,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2603.03997v1",
+          "title": "Bandwidth Selection for Spatial HAC Standard Errors",
+          "published": "2026-03-04",
+          "category": "econ.EM",
+          "summary": "Spatial autocorrelation in regression models can lead to downward biased standard errors and thus incorrect inference. The most common correction is the spatial HAC estimator introduced by Conley (1999). A critical input is the kernel bandwidth."
+        },
+        {
+          "id": "http://arxiv.org/abs/2108.06093v3",
+          "title": "A Unified Frequency Domain Cross-Validatory Approach to HAC Standard Error Estimation",
+          "published": "2021-08-13",
+          "category": "econ.EM",
+          "summary": "A unified frequency domain cross-validation (FDCV) method is proposed to obtain a heteroskedasticity and autocorrelation consistent (HAC) standard error, enabling model/tuning parameter selection across both parametric and nonparametric spectral estimators simultaneously."
+        }
+      ]
+    }
+  ]
+}

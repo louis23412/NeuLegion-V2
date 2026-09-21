@@ -1,0 +1,194 @@
+# NeuLegion — bibliography
+
+Citations are grouped by domain. arXiv identifiers are as returned by the
+2026-09 sweep (and its 2026-09-18 / Round-3 refreshes); raw results are in
+[`research/raw/`](research/raw/). Classic (non-arXiv) references are given with
+venue/year so they remain findable.
+
+## Memory & retrieval
+
+- Behrouz, Zhong, Mirrokni. *Titans: Learning to Memorize at Test Time.* arXiv 2501.00663.
+- *Titans Revisited: A Lightweight Reimplementation and Critical Analysis.* arXiv 2510.09551.
+- *Titans-as-a-Layer: Test-Time Memory for Conversational Speech Emotion Recognition.* arXiv 2606.08573.
+- *Self-Evolving World Models for LLM Agent Planning.* arXiv 2606.30639.
+- *A Hippocampus for Linear Attention: An Exact Memory for What the Recurrent State Forgets.* arXiv 2607.02303.
+- *Eviction as Estimation: A Fixed-Lag Smoothing View of Test-Time Memory.* arXiv 2607.24667.
+- *Mela: Test-Time Memory Consolidation based on Transformation Hypothesis.* arXiv 2605.10537.
+- *Anatomy of Associative Recall in Fixed-State Recurrences.* arXiv 2609.16183.
+- Ramsauer et al. *Hopfield Networks is All You Need.* arXiv 2008.02217.
+- Kanerva. *Sparse Distributed Memory.* MIT Press, 1988.
+
+## LSH & approximate nearest neighbours
+
+- Charikar. *Similarity Estimation Techniques from Rounding Algorithms.* STOC 2002.
+- *Training-Free Hashing-Based Attention via Binary Principal Components.* arXiv 2608.04405. (data-aware hashing — use the data's principal components as the hash hyperplanes rather than random ones, so a fixed bit budget carries more variance; grounds `hivemind/memory/binarypc.js` and its Eckart–Young dominance proof, and the wired `_refreshLshHyperplanes` refresh)
+- Andoni, Indyk & Laarhoven. *Optimal Data-Dependent Hashing for Approximate Near Neighbors.* arXiv 1501.01062 (STOC 2015). (an optimal data-dependent scheme beats the best data-independent LSH for every approximation factor `c > 1` — the optimality grounding for aligning the hash to the data)
+- *Density Sensitive Hashing.* arXiv 1205.2930. (hash directions from the data *density*, not just the covariance — the research relative of the measured low-variance noise-tail effect)
+- *Fast approximate furthest neighbors with data-dependent hashing (DrusillaHash).* arXiv 1605.09784. (projection bases selected from the data distribution)
+- *Fast Search on Binary Codes by Weighted Hamming Distance.* arXiv 2009.08591. (hash bits are not equally reliable — grounds the weighted-Hamming metric in `hivemind/memory/bitweight.js`)
+- Cover & Thomas. *Elements of Information Theory* (2nd ed.), Wiley 2006. (binary symmetric channel — the bit is a channel about the neighbourhood with crossover `P(flip)`, so its reliability is `1 − H₂(P)`; grounds the information reading of the flip law)
+- *NeuRoute: Logit-Guided Neural Routing for Billion-Scale Vector Search with Sub-Hour Index Construction.* arXiv 2608.15438. (2026 — a learned hashing index whose query-time logits yield an *uncertainty* signal that prioritises perturbing the bits the query is least sure of: reliability-weighted probing, learned rather than from the spectrum. Grounds the Round-16 query-adaptive probe budget — same idea, with the uncertainty read off the exact flip law `Φ(−|margin|/σ)` instead of a logit head)
+- *PDET-LSH: Scalable In-Memory Indexing for High-Dimensional ANN with Quality Guarantees.* arXiv 2603.24920. (index-construction efficiency)
+- *DSCH-Loss: A Dynamic Semantic Channel Objective for Deep Semantic Hashing.* arXiv 2607.24567. (an information-channel objective for hash bits)
+- *Clark Hash: Stateless Sparse Johnson-Lindenstrauss Quantization for Neural Embeddings.* arXiv 2605.28034. (float queries scored against stored sketches — the mirror of a binary bucket index plus an exact cosine rescore)
+- *U-HNSW: An Efficient Graph-based Solution to ANNS Under Universal Lp Metrics.* arXiv 2605.02030.
+- *A randomized algorithm for principal component analysis.* arXiv 0809.2274. (Halko, Martinsson & Tropp — the randomised range finder, the scaling path for a large aligned rank)
+- *Bit-Scalable Deep Hashing with Regularized Similarity Learning.* arXiv 1508.04535. (choose the code length with the data — grounds the oversubscribed-hash-width observation)
+- *On the Recall Scaling Laws in Mamba: A Theoretical and Mechanistic Study via Hashing.* arXiv 2609.07681. (2026 — recall-vs-width scaling laws for hashing-based associative recall)
+- *Dynamic Query Modification for Binary Locality Sensitive Hashing.* arXiv 2605.23807. (the query-side companion to data-aware hashing — replace the query with the l2-normalised centroid of the neighbours found so far; grounds `hivemind/memory/querymod.js`: Theorem 1 maximality of the centroid, Theorem 2 first-order ACP, Appendix C.1 minimal residual covariance, §6.4 hash-failure elimination, and the denoising/synthetic regime laws, all proved in `querymod.test.js`)
+- *A Tour of Locality Sensitive Filtering on the Sphere.* arXiv 2604.24323. (asymmetric Gaussian *filters* — a data point and a query independently select caps — can beat LSH's collision exponent for angular distance; the self-contained unit-sphere treatment is exactly NeuLegion's projection space, so this is the next index-tier lead for `hivemind/memory/lsh.js`)
+- *Predictive Associative Memory: Retrieval Beyond Similarity Through Temporal Co-occurrence.* arXiv 2602.11322. (retrieve the memory that *followed* a similar state rather than the state that looks similar — a research direction for the memory-retrieval path; needs a trained predictor, not a pure-function proof)
+- *Dense Holographic Associative Memories.* arXiv 2606.18492. (dense Hopfield-style associative recall via a volume-hologram analogy — capacity/denoising theory for the episodic bank)
+- *Sinkhorn Based Associative Memory Retrieval Using Spherical Hellinger Kantorovich Dynamics.* arXiv 2606.28300. (an optimal-transport retrieval energy over weighted point clouds — a heavier recall operator than the cosine kernel)
+- *Positional LSH: Binary Block Matrix Approximation for Attention with Linear Biases.* arXiv 2605.09472. (positional-bias attention through the LSH lens — an attention-kernels-domain lead)
+- *2L-LSH: A Locality-Sensitive Hash Function-Based Method For Rapid Point Cloud Indexing.* arXiv 2604.21442. (a two-level LSH construction — a candidate index-structure refinement)
+- *Exact Limits of Random Projections for Preserving Geometry: Distance Recovery, Nearest-Neighbor Rankings, and Covariance Shape in Gaussian Models.* arXiv 2609.02155. (quantifies what data-INdependent random projections fail to preserve — the theoretical case for the data-aware PCA-aligned basis in `hivemind/memory/binarypc.js`)
+- *Spectral-LSH: Sub-Quadratic Prompt Compression via Krylov-Projected LSH.* arXiv 2607.19368.
+- *MESS: Fast and Private Semantic Search on Multi-Graph HNSW.* arXiv 2607.28999.
+- *Learning Partition Trees for Nearest Neighbor Search.* arXiv 2607.09909.
+- *MP-RW-LSH: An Efficient Multi-Probe LSH Solution to ANNS in L1 Distance.* arXiv 2103.05864.
+- *Cardinality Estimation for High-Dimensional Similarity Queries with Adaptive Bucket Probing.* arXiv 2604.04603. (2026 — adopts multi-probe LSH but explores neighbouring buckets with a budget adapted to the query and the distance threshold; grounds the query-adaptive probe depth in `hivemind/memory/multiprobe.js` / `bitweight.js`)
+- *Query-Adaptive Hash Code Ranking for Large-Scale Multi-View Visual Search.* arXiv 1904.08623. (the sibling idea for ranking — query-adaptive bitwise/tablewise weighting rather than a fixed Hamming score)
+- *FOLD: Fuzzy Online Deduplication for Very Large Evolving Datasets via ANN.* arXiv 2606.03001.
+
+## Attention, kernels & normalisation
+
+- Su et al. *RoFormer: Enhanced Transformer with Rotary Position Embedding.* arXiv 2104.09864.
+- *Disentangling the Expressivity of RoPE.* arXiv 2608.11909.
+- *Position Encoding in Transformers: … RoPE and Long-Context Scaling.* arXiv 2608.10021.
+- *ATFlash: Per-RoPE-Wavelength Attention Windows.* arXiv 2608.02947.
+- Zhang & Sennrich. *Root Mean Square Layer Normalization.* arXiv 1910.07467.
+- Shazeer. *GLU Variants Improve Transformer.* arXiv 2002.05202.
+- Ramachandran et al. *Searching for Activation Functions.* arXiv 1710.05941.
+- *Higher-Dimensional Rotary Position Embedding.* arXiv 2608.29715.
+- *MeRoTune: RoPE-Safe Merging with a Tunable Dial.* arXiv 2609.07971.
+- *RoLA: Rotary-Positioned Low-Rank Linear Attention for Efficient Diffusion Transformers.* arXiv 2609.06712.
+- *Modern Transformers Are Implicit Hybrids.* arXiv 2609.02986.
+- *SpectralShift: Context Extension of Gated DeltaNet.* arXiv 2609.14320.
+- *Consensus Dynamics in Selective State Space Models.* arXiv 2609.17997.
+- *RunningTensor: Generalizing Linear Attention to Higher-Order Recurrent States.* arXiv 2609.12814.
+- *Content-Based Addressing for Long Context.* arXiv 2609.07314.
+
+## Structure scaling (width / depth)
+
+- Kaplan et al. *Scaling Laws for Neural Language Models.* arXiv 2001.08361.
+- Yang et al. *Tensor Programs V: Tuning Large Neural Networks via Zero-Shot Hyperparameter Transfer* (μP). arXiv 2203.03466.
+- *Coupled Scaling: A Representational Accessibility Framework for Neural Scaling.* arXiv 2609.03533.
+- *Skaling: Chinchilla's Exponents Meet Kaplan's Coupling.* arXiv 2608.07222.
+- *Neural Scaling Universality: If Exponents Are Fixed, Time to Understand Them.* arXiv 2606.25008.
+- *The Entropic Bound for Transformers: Why Static Rank Fails and Attention Wins.* arXiv 2607.23050.
+
+## Ensemble & evolution
+
+- Lakshminarayanan, Pritzel, Blundell. *Simple and Scalable Predictive Uncertainty Estimation using Deep Ensembles.* arXiv 1612.01474.
+- *Breaking Diversity Collapse in Spiking Pseudo-Ensembles.* arXiv 2608.01090.
+- *Reliability Analysis for BraTS-GoAT: Deep-Ensemble Uncertainty.* arXiv 2608.13223.
+- *EGGROLL, Unrolled: Low-Rank Evolution Strategies at Scale.* arXiv 2609.10980.
+- *Gradient-Free Training of Spiking Neural Networks via Low-Rank Evolution Strategies.* arXiv 2605.30361.
+- *Understanding Evolution Strategies for LLM Reasoning.* arXiv 2608.27351.
+- *Integer Natural Evolution Strategies.* arXiv 2608.23714.
+- Salimans et al. *Evolution Strategies as a Scalable Alternative to RL.* arXiv 1703.03864.
+- Hansen. *The CMA Evolution Strategy: A Tutorial.* arXiv 1604.00772.
+
+## Training & distillation
+
+- Hinton, Vinyals, Dean. *Distilling the Knowledge in a Neural Network.* arXiv 1503.02531.
+- *Multi-Teacher Distillation for Cross-Domain Streaming Speech Encoding.* arXiv 2609.18686.
+- *Enhanced Knowledge Distillation for Detection Transformer via Teacher Prediction Refinement.* arXiv 2609.19964.
+- *Label-Guided Knowledge Distillation for 3D-CNNs.* arXiv 2609.13024.
+- *Knowledge Distillation of a Normalising Flow for Real-Time Anomaly Detection.* arXiv 2609.15295.
+- *Infinite-Parameter LLMs: Generating and Adapting Weights from Live Data.* arXiv 2609.18842.
+- *Confidence-Anchored Test-Time Adaptation for GUI Grounding.* arXiv 2609.15307.
+- *Rollback the World, Keep the Reflection.* arXiv 2609.18304.
+
+## Continual learning
+
+- Kirkpatrick et al. *Overcoming Catastrophic Forgetting in Neural Networks.* PNAS 2017, arXiv 1612.00796.
+- Shin et al. *Continual Learning with Deep Generative Replay.* arXiv 1705.08690.
+- *Effects of Introducing Synaptic Scaling on Spiking Neural Network Learning.* arXiv 2601.11261.
+- *Local homeostatic regulation of the spectral radius of echo-state networks.* arXiv 2101.10665.
+- *DR.WILSS: Diffusion-Based Replay for Weakly Supervised Continual Semantic Segmentation.* arXiv 2609.18444.
+- *Past, Future, All at Once: Post-hoc JANUS Rectification.* arXiv 2609.19985.
+- *Homeostatic Continual Learning.* arXiv 2609.13771.
+- *Uncertainty-Aware Continual Learning for Open-World Intent Discovery.* arXiv 2609.17866.
+- *CLARE: Scalable Class-Incremental Continual Learning via Sparsity.* arXiv 2609.17026.
+- *Parameter Isolation with Domain-Specific Experts.* arXiv 2609.14730.
+- *Where Should a Document Live: Context, Representations, or Parameters?* arXiv 2609.17346.
+
+## Financial validation
+
+- López de Prado. *Advances in Financial Machine Learning.* Wiley, 2018.
+- López de Prado. *Machine Learning for Asset Managers.* Cambridge, 2020.
+- Bailey & López de Prado. *The Deflated Sharpe Ratio.* 2014.
+- Bailey, Borwein, López de Prado, Zhu. *The Probability of Backtest Overfitting.* Journal of Computational Finance, 2016. (combinatorially symmetric cross-validation; `analysis/overfitting.js`)
+- Bailey, Borwein, López de Prado, Zhu. *Pseudo-Mathematics and Financial Charlatanism.* 2014.
+- Politis & Romano. *The Stationary Bootstrap.* JASA, 1994. (geometric-block resampling for the bootstrap p-values and for the RC/SPA draws)
+- Politis & White. *Automatic Block-Length Selection for the Dependent Bootstrap.* Econometric Reviews 23(1):53–70, 2004. (flat-top-lag-window block-length selector: `K_n = max(5, ceil(sqrt(log10 n)))`, the smallest `m` with autocorrelations below `2·sqrt(log10(n)/n)`, then `b_opt = (2·g²/D_SB)^(1/3)·n^(1/3)`; `analysis/reality_check.js` `politisWhiteBlockLength`)
+- Patton, Politis & White. *Correction to "Automatic Block-Length Selection for the Dependent Bootstrap".* Econometric Reviews 28(4):372–375, 2009. (adds the circular-bootstrap variant and the `m ≤ m_max` / `b ≤ b_max` caps reproduced in `politisWhiteBlockLength`)
+- Politis & Romano. *Large Sample Confidence Regions Based on Subsamples under Minimal Assumptions.* Annals of Statistics 22(4):2031–2050, 1994. (variance-consistent **subsampling** — the reference distribution is built from overlapping windows of the same series, so no long-run-variance estimate is needed; `analysis/reality_check.js` `subsamplingSpa`/`subsamplingStepM`)
+- Politis, Romano & Wolf. *Subsampling.* Springer Series in Statistics, 1999 (ch. 3–4). (the subsampling theory for the studentized statistic: the window studentization is approximately pivotal, which is why the window and full scales must share one bandwidth)
+- *Lugsail Lag Windows for Estimating Time-Average Covariance Matrices.* arXiv 1809.04541. (kernel HAC/LRV estimators have a significant **negative** bias under positive correlation — the mechanism behind the block bootstrap's under-estimated studentizer, measured at `bootSE/trueSE ≈ 0.33` for φ=0.8, T=120)
+- *Inference Optimal Long Run Variance Estimation with Lugsail Kernels.* arXiv 2606.17369. (zero-lugsail kernels: zero asymptotic bias for the long-run variance regardless of correlation strength, with inference-optimal bandwidths)
+- *Fixed-b Subsampling and Block Bootstrap: Improved Confidence Sets Based on P-value Calibration.* arXiv 1204.1035. (bandwidth sensitivity of subsampling p-values, and the calibration that makes them size-correct — grounds pinning ONE bandwidth shared by the window and full scales in `subsamplingSpa`)
+- *Difference-Based High-Dimensional Long-Run Covariance Matrix Estimation for Mean-shift Time Series.* arXiv 2603.17226. (a single-window HAC estimate is biased when the level moves between segments — the standard-error analogue of the walk-forward fold boundary, motivating the segment-aware `groups` resampling in `subsamplingSpa` / `subsamplingStepM` / `walkForwardSearch`)
+- *Most Powerful Test with Exact Family-Wise Error Rate Control: Necessary Conditions and a Path to Fast Computing.* arXiv 2512.14131.
+- *On Asymptotic Behaviors of Stepwise Multiple Testing Procedures.* arXiv 2212.08372. (the step-down/step-up family the Romano–Wolf StepM belongs to)
+- *New Procedures Controlling the False Discovery Proportion via Romano–Wolf's Heuristic.* arXiv 1311.4030. (extends the step-down to FDP when the candidate universe grows past a handful)
+- *Control of Generalized Error Rates in Multiple Testing.* arXiv 0710.2258. (k-FWER / FDP — the relaxation used when strict FWER costs too much power)
+- Romano & Wolf. *Generalizations of the Familywise Error Rate.* Annals of Statistics 33(3):1138–1154, 2005. (the k-FWER criterion and its single-step / step-down constructions; `analysis/reality_check.js` `subsamplingKfwer`; preprint arXiv math/0507420)
+- *Stepup Procedures for Control of Generalizations of the Familywise Error Rate.* arXiv math/0611266. (step-up / step-down gFWER constructions — grounds choosing the single-step k-FWER and the step-down FDP as the two ends of the family)
+- *On Stepwise Control of the Generalized Familywise Error Rate.* arXiv 0810.5004. (the general stepwise gFWER scheme `subsamplingFdp` instantiates — why the reference must be taken over the FULL family, not a survivor set)
+- *Some Results on Generalized Familywise Error Rate Controlling Procedures under Dependence.* arXiv 2504.17611. (gFWER control remains available for CORRELATED test statistics — the walk-forward family, which is why `subsamplingKfwer` references the full family on the shared window grid)
+- *On Stepdown Control of the False Discovery Proportion.* arXiv math/0610843. (the step-down FDP construction `subsamplingFdp` follows — descend in statistic order, apply a growing-k reference)
+- *Further Results on Controlling the False Discovery Proportion.* arXiv 1406.0266. (finite-sample limits of step-down FDP control — one reason `subsamplingFdp` is labelled EXPERIMENTAL)
+- *Only Closed Testing Procedures are Admissible for Controlling False Discovery Proportions.* arXiv 1901.04885. (a step-down heuristic is not closed testing, so it cannot rigorously control the FDP — the honest, citable reason `subsamplingFdp` ships EXPERIMENTAL)
+- *Asymptotic Uncertainty of False Discovery Proportion for Dependent t-Tests.* arXiv 2207.01619. (realized-FDP uncertainty under exactly the dependence the walk-forward candidate streams have — why `estimatedFdp` is a point estimate, not a guaranteed bound)
+- *Estimating False Discovery Proportion Under Arbitrary Covariance Dependence.* arXiv 1010.6056. (dependence-robust FDP estimation — a future upgrade path for `estimatedFdp`)
+- *Selecting and Testing Asset Pricing Models: A Stepwise Approach.* arXiv 2601.10279. (finance-domain analogue of growing the candidate universe with a stepwise multiple-testing screen — grounds `docs/TODO.md` item 10)
+- *Multiple Testing under High-dimensional Dynamic Factor Model.* arXiv 2303.07631. (factor-driven dependence as the candidate universe grows — the structure to expect when more features enter the family)
+- *Interpretable Hypothesis-Driven Trading: A Rigorous Walk-Forward Validation Framework for Market Microstructure Signals.* arXiv 2512.12924.
+- *A Novel Approach to Trading Strategy Parameter Optimization Using Double Out-of-Sample Data and Walk-Forward Techniques.* arXiv 2602.10785. (walk-forward window-length sensitivity — why the subsampling `windowLength` is an explicit knob rather than a hidden default)
+- White. *A Reality Check for Data Snooping.* Econometrica 48(5):1097–1126, 2000. (bootstrap max-statistic over candidate strategies; `analysis/reality_check.js`)
+- Hansen. *A Test for Superior Predictive Ability.* Journal of Business & Economic Statistics 23(4):365–380, 2005. (studentized, recentred SPA — less conservative than RC when many candidates are poor; `analysis/reality_check.js`)
+- Romano & Wolf. *Stepwise Multiple Testing as Formalized Data Snooping.* Econometrica 73(4):1237–1282, 2005. (the step-down max-t that names *which* candidates beat the benchmark while controlling the family-wise error rate; `analysis/reality_check.js`) Hansen (2005) §4 supplies the *consistent* recentring `A_k = ω_k·√(2 ln ln T)` used by the consistent SPA p-value and the step-down.
+- *Testing for Equal Predictive Accuracy with Strong Dependence.* arXiv 2409.12662. (Diebold-Mariano power collapses under autocorrelation — why SPA is studentized by a dependence-aware bootstrap standard error)
+- Pardo. *The Evaluation and Optimization of Trading Strategies.* Wiley, 2008. (walk-forward analysis)
+- *When Alpha Disappears: A One-Switch Benchmark for Decision-Time Leakage in Financial Backtests.* arXiv 2605.23959.
+- *What Survives Honest Evaluation? Leakage-Safe, Search-Aware Assessment of LLM-Driven Trading Strategy Discovery.* arXiv 2608.27734. (a leaky Sharpe-35 oracle **survives** DSR/PBO — statistical correction is not a substitute for a structural look-ahead guardrail)
+- *AlgoXpert Alpha Research Framework: A Rigorous IS/WFA/OOS Protocol for Mitigating Overfitting in Quantitative Strategies.* arXiv 2603.09219.
+- *The GT-Score: A Robust Objective Function for Reducing Overfitting in Data-Driven Trading Strategies.* arXiv 2602.00080.
+- *Regime-Conditional Distributional Comparison of Trading Strategies: A GAMLSS/ZAGA Framework.* arXiv 2606.31251.
+- *Spurious Predictability in Financial Machine Learning.* arXiv 2604.15531.
+- *Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade.* arXiv 2608.23808. (independent 2026 production study — 359,062 backtest records — whose robustness grade composes **DSR + PBO + SPA + MinTRL**, the same four-test battery this project ships)
+- *Volatility-Aware Extreme Event Detection in High-Frequency Financial Markets.* arXiv 2607.17555.
+- *Stock Price Prediction Using Triple Barrier Labeling and Raw OHLCV Data.* arXiv 2504.02249.
+- *Supervised Autoencoders with Fractionally Differentiated Features and Triple Barrier Labelling.* arXiv 2411.12753.
+- Binance. *Symbol tick size & price precision* (`exchangeInfo` `PRICE_FILTER.tickSize`). Platform docs, 2024.
+- *Hopfield Networks for Asset Allocation.* arXiv 2407.17645.
+- *Conditional Independence Testing in Time Series.* arXiv 2609.20772.
+- *SPEAR NeXT: Causal Latent Forecasting Across Multiple Horizons.* arXiv 2609.16871.
+- Cameron & Miller. *A Practitioner's Guide to Cluster-Robust Inference.* Journal of Human Resources 50(2):317–372, 2015. (clusters are the independent units; the cluster-robust variance estimator and the t(C−1) reference distribution with few clusters — grounds `analysis/dependence.js` `clusterJackknife`/`pairedClusterTest` and the fold-window cluster view)
+- Künsch. *The Jackknife and the Bootstrap for General Stationary Observations.* Annals of Statistics 17(3):1217–1241, 1989. (the delete-block jackknife variance estimator for serially dependent data — deleting one fold window across all streams and re-estimating is exactly this estimator applied to the walk-forward's own block structure)
+- Karim, Nielsen, MacKinnon & Webb. *Improved Inference for CSDID Using the Cluster Jackknife.* arXiv 2602.12043, 2026. (the delete-one-cluster jackknife repairs over-rejection with few/unequal clusters — the same remedy, independent 2026 evidence; grounds preferring the jackknife over the planned equicorrelation scaling of the pooled Sharpe SE)
+- Kish. *Survey Sampling.* Wiley, 1965. (the design effect `1 + (K−1)ρ`: K correlated units are worth `K/(1+(K−1)ρ)` independent ones — the `equicorrelationDesignEffect` / `effectiveStreams` diagnostic, and the reason K streams are not K observations)
+- Ledoit & Wolf. *Robust Performance Hypothesis Testing with the Sharpe Ratio.* Journal of Empirical Finance 15(5):850–859, 2008. (comparing two Sharpe ratios on dependent samples — the paired-cluster Sharpe difference behind `requireSharpeDiff`)
+- Demšar. *Statistical Comparisons of Classifiers over Multiple Data Sets.* Journal of Machine Learning Research 7:1–30, 2006. (the exact sign test as the robust paired comparison, recommended over the t-test for non-normal paired samples — grounds `pairedClusterSignTest` and the `requireBreadth` hurdle)
+- Halle, Djurović, Andreassen & Langaas. *Is the Familywise Error Rate in Genomics Controlled by Methods Based on the Effective Number of Independent Tests?* arXiv 1612.04535, 2016. (methods that substitute an effective number of independent tests for the number of tests actually run do **not** control the FWER — the citable reason `effectiveTrials` is a diagnostic and the deflated Sharpe keeps `trials = K`)
+- Harvey, Liu & Zhu. *…and the Cross-Section of Expected Returns.* Review of Financial Studies 29(1):5–68, 2016. (correlated tests are still tests that were run: the multiple-testing hurdle grows with the number searched — the second reason `trials = K` is retained even when the family is concentrated)
+- Frazzini, Israel & Moskowitz. *Trading Costs.* SSRN 3221167, 2018. (the empirical scale of trading costs, and why a gross-only verdict is not a verdict — grounds the `costLadder` levels and `breakEvenCostBps`)
+- Binance. *Spot and USDⓈ-M futures fee schedules* (spot taker 10 bps, USDⓈ-M futures taker 5 bps). Platform docs, 2024–2026. (the concrete cost levels the default `costLadder` brackets)
+
+## Observability, calibration & monitoring
+
+Grounding for the dedicated outer analysis layer (`src/observer/`, ROADMAP P1-2) —
+the online metrics that watch the legion's *internal* health, as opposed to the
+`analysis/*` battery which scores its *returns*.
+
+- Brier. *Verification of Forecasts Expressed in Terms of Probability.* Monthly Weather Review 78(1):1–3, 1950. (the Brier score — the proper scoring rule the consensus calibration is measured with)
+- Murphy. *A New Vector Partition of the Probability Score.* Journal of Applied Meteorology 12(4):595–600, 1973. (the reliability–resolution–uncertainty decomposition, so a bad Brier score can be attributed to miscalibration rather than to an uninformative forecast)
+- Wald. *Sequential Tests of Statistical Hypotheses.* Annals of Mathematical Statistics 16(2):117–186, 1945. (the sequential probability ratio test — a rolling hit-rate-vs-chance alarm that stops as soon as the evidence is decisive, instead of waiting for a fixed window)
+- Page. *Continuous Inspection Schemes.* Biometrika 41(1/2):100–115, 1954. (CUSUM — the drift detector for per-controller score and consensus Brier; cheaper and better-powered than a moving-average threshold for a persistent mean shift)
+- Cohen. *A Coefficient of Agreement for Nominal Scales.* Educational and Psychological Measurement 20(1):37–46, 1960. (Cohen's κ — chance-corrected member agreement, so "diversity" is not confused with "all members predict the majority class")
+- Kuncheva & Whitaker. *Measures of Diversity in Classifier Ensembles and Their Relationship with the Ensemble Accuracy.* Machine Learning 51(2):181–207, 2003. (the diversity-measure family and its accuracy relationship — grounds using agreement/entropy as the echo-chamber alarm for the hivemind broadcast)
+- Gini. *Variabilità e Mutabilità.* 1912. (the Gini coefficient — the influence-concentration readout)
+- Hirschman. *National Power and the Structure of Foreign Trade.* 1945. (the Herfindahl–Hirschman index — the concentration readout alongside Gini, so a single-controller consensus capture is visible)

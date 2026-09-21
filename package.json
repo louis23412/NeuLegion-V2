@@ -1,0 +1,32 @@
+{
+  "name": "hivemind",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "louis23412",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "train": "node ./src/mainController.js",
+    "fetch": "node ./src/fetch_candles.js",
+    "fetch:full": "node ./src/fetch_candles.js --full",
+    "fetch:update": "node ./src/fetch_candles.js --mode update",
+    "fetch:check": "node ./src/fetch_candles.js --check",
+    "fetch:all": "node ./src/update_candles_basket.js",
+    "fetch:all:full": "node ./src/update_candles_basket.js --full",
+    "fetch:all:check": "node ./src/update_candles_basket.js --check",
+    "preflight": "node ./src/preflight.js",
+    "dryrun": "node ./src/dryrun.js",
+    "analyze": "node ./src/analyze.js",
+    "test": "node --test \"test/node/*.test.js\"",
+    "test:candles": "node --test test/node/candles.test.js",
+    "test:analysis": "node --test test/node/analysis.test.js",
+    "test:locks": "node --test test/node/locks.test.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.8.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

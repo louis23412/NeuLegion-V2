@@ -1,0 +1,217 @@
+{
+  "generatedAt": "2026-09-19T11:39:19.354Z",
+  "note": "Round 9 literature refresh (broad relevance-query sweep, sortBy=relevance), targeting docs/TODO.md item 9/10: the generalized-error-rate front (k-FWER / step-down FDP) shipped this round as `subsamplingKfwer` + `subsamplingFdp` (analysis.test.js section Z), and the next step (item 10: sustained power under a growing candidate universe). Headline finds: math/0507420 (Romano & Wolf, Generalizations of the FWER — the k-FWER foundation), math/0611266 + 0810.5004 (stepup/stepwise gFWER), 2504.17611 (gFWER control UNDER DEPENDENCE, 2025), math/0610843 + 1406.0266 (step-down FDP control and its finite-sample limits), and 1901.04885 (only CLOSED testing is admissible for FDP control — the honest reason `subsamplingFdp` is EXPERIMENTAL, not LOCKED-exact). On the candidate-universe front: 2601.10279 (stepwise asset-pricing model selection) and 2303.07631 (multiple testing under a high-dimensional dynamic factor model). Carry-over: 2608.23808 (MinervaScore).",
+  "purpose": "Ground docs/TODO.md items 9 (k-FWER + FDP step-down, shipped) and 10 (sustained power / candidate-universe growth).",
+  "queries": [
+    {
+      "file": "candidate-universe-growth-asset-pricing",
+      "query": "all:candidate universe growth asset pricing"
+    },
+    {
+      "file": "false-discovery-rate-dependent-hypotheses",
+      "query": "all:false discovery rate dependent hypotheses"
+    },
+    {
+      "file": "generalized-familywise-error-rate",
+      "query": "all:generalized familywise error rate"
+    },
+    {
+      "file": "step-down-false-discovery-proportion",
+      "query": "all:step-down false discovery proportion"
+    },
+    {
+      "file": "multiple-testing-large-scale-asset-pricing",
+      "query": "all:multiple testing large scale asset pricing"
+    },
+    {
+      "file": "search-luck-backtest-selection",
+      "query": "all:search luck backtest selection"
+    },
+    {
+      "file": "reproducibility-quantitative-finance-backtest",
+      "query": "all:reproducibility quantitative finance backtest"
+    },
+    {
+      "file": "false-discovery-proportion-dependence",
+      "query": "all:false discovery proportion dependence"
+    },
+    {
+      "file": "data-snooping-bootstrap-predictive-ability",
+      "query": "all:data snooping bootstrap predictive ability"
+    },
+    {
+      "file": "multiple-hypothesis-testing-trading-rules",
+      "query": "all:multiple hypothesis testing trading rules"
+    },
+    {
+      "file": "power-multiple-testing-dependent-tests",
+      "query": "all:power multiple testing dependent tests"
+    },
+    {
+      "file": "high-dimensional-multiple-testing-factor",
+      "query": "all:high-dimensional multiple testing factor"
+    }
+  ],
+  "entries": [
+    {
+      "id": "math/0507420v1",
+      "title": "Generalizations of the Familywise Error Rate",
+      "published": "2005-07-21",
+      "category": "math.ST",
+      "summary": "Consider the problem of simultaneously testing null hypotheses H_1,...,H_s. The usual approach to dealing with the multiplicity problem is to restrict attention to procedures that control the familywise error rate (FWER), the probability of even one false rejection. In many applications, particularly if s is large, one might be willing to tolerate more than one false rejection provided the number of such cases is controlled, thereby increasing the ability of the procedure to detect false null hypotheses. This suggests replacing control of the FWER by controlling the probability of k or more false rejections, which we call the k-FWER. We derive both single-step and stepdown procedures that control the k-FWER, without making any assumptions concerning the dependence structure of the p-values of the individual tests. In particular, we derive a stepdown procedure that is quite simple to apply, and prove that it cannot be improved without violation of control of the k-FWER. We also consider the false discovery proportion (FDP) defined by the number of false rejections divided by the total number of rejections (defined to be 0 if there are no rejections). The false discovery rate proposed by Benjamini and Hochberg [J. Roy. Statist. Soc. Ser. B 57 (1995) 289-300] controls E(FDP). Here, we construct methods such that, for any γand α, P{FDP>γ}\\leα. Two stepdown methods are proposed. The first holds under mild conditions on the dependence structure of p-values, while the second is more conservative but holds without any dependence assumptions.",
+      "why": "Romano & Wolf's foundational gFWER paper: the k-FWER criterion and its single-step / step-down constructions are exactly the `subsamplingKfwer` family this project implements (cited in `financial-validation.md` section Z)."
+    },
+    {
+      "id": "math/0611266v1",
+      "title": "Stepup procedures for control of generalizations of the familywise error rate",
+      "published": "2006-11-09",
+      "category": "math.ST",
+      "summary": "Consider the multiple testing problem of testing null hypotheses $H_1,...,H_s$. A classical approach to dealing with the multiplicity problem is to restrict attention to procedures that control the familywise error rate ($\\mathit{FWER}$), the probability of even one false rejection. But if $s$ is large, control of the $\\mathit{FWER}$ is so stringent that the ability of a procedure that controls the $\\mathit{FWER}$ to detect false null hypotheses is limited. It is therefore desirable to consider other measures of error control. This article considers two generalizations of the $\\mathit{FWER}$. The first is the $k-\\mathit{FWER}$, in which one is willing to tolerate $k$ or more false rejections for some fixed $k\\geq 1$. The second is based on the false discovery proportion ($\\mathit{FDP}$), defined to be the number of false rejections divided by the total number of rejections (and defined to be 0 if there are no rejections). Benjamini and Hochberg [J. Roy. Statist. Soc. Ser. B 57 (1995) 289--300] proposed control of the false discovery rate ($\\mathit{FDR}$), by which they meant that, for fixed $α$, $E(\\mathit{FDP})\\leqα$. Here, we consider control of the $\\mathit{FDP}$ in the sense that, for fixed $γ$ and $α$, $P\\{\\mathit{FDP}>γ\\}\\leq α$. Beginning with any nondecreasing sequence of constants and $p$-values for the individual tests, we derive stepup procedures that control each of these two measures of error control without imposing any assumptions on the dependence structure of the $p$-values. We use our results to point out a few interesting connections with some closely related stepdown procedures. We then compare and contrast two $\\mathit{FDP}$-controlling procedures obtained using our results with the stepup procedure for control of the $\\mathit{FDR}$ of Benjamini and Yekutieli [Ann. Statist. 29 (2001) 1165--1188].",
+      "why": "Stepup/stepdown procedures for gFWER control — the theory behind choosing between the single-step k-FWER (`subsamplingKfwer`) and the step-down FDP path; confirms the step-down is a valid *stepwise* construction but with weaker guarantees than single-step k-FWER."
+    },
+    {
+      "id": "0810.5004v1",
+      "title": "On Stepwise Control of the Generalized Familywise Error Rate",
+      "published": "2008-10-28",
+      "category": "math.ST",
+      "summary": "A classical approach for dealing with the multiple testing problem is to restrict attention to procedures that control the familywise error rate (FWER), the probability of at least one false rejection. In many applications, one might be willing to tolerate more than one false rejection provided the number of such cases is controlled, thereby increasing the ability of the procedure to detect false null hypotheses. This suggests replacing control of the FWER by controlling the probability of $k$ or more false rejections, which is called the $k$-FWER. In this article, a unified approach is presented for deriving the $k$-FWER controlling procedures. We first generalize the well-known closure principle in the context of the FWER to the case of controlling the $k$-FWER. Then, we discuss how to derive the $k$-FWER controlling stepwise (stepdown or stepup) procedures based on marginal $p$-values using this principle. We show that, under certain conditions, generalized closed testing procedures can be reduced to stepwise procedures, and any stepwise procedure is equivalent to a generalized closed testing procedure. Finally, we generalize the well-known Hommel procedure in two directions, and show that any generalized Hommel procedure is equivalent to a generalized closed testing procedure with the same critical values.",
+      "why": "Stepwise control of the gFWER — the general stepwise scheme our FDP step-down instantiates; grounds why the reference must be taken over the full family rather than a survivor set."
+    },
+    {
+      "id": "2504.17611v1",
+      "title": "Some Results on Generalized Familywise Error Rate Controlling Procedures under Dependence",
+      "published": "2025-04-24",
+      "category": "math.ST",
+      "summary": "The topic of multiple hypotheses testing now has a potpourri of novel theories and ubiquitous applications in diverse scientific fields. However, the universal utility of this field often hinders the possibility of having a generalized theory that accommodates every scenario. This tradeoff is better reflected through the lens of dependence, a central piece behind the theoretical and applied developments of multiple testing. Although omnipresent in many scientific avenues, the nature and extent of dependence vary substantially with the context and complexity of the particular scenario. Positive dependence is the norm in testing many treatments versus a single control or in spatial statistics. On the contrary, negative dependence arises naturally in tests based on split samples and in cyclical, ordered comparisons. In GWAS, the SNP markers are generally considered to be weakly dependent. Generalized familywise error rate (k-FWER) control has been one of the prominent frequentist approaches in simultaneous inference. However, the performances of k-FWER controlling procedures are yet unexplored under different dependencies. This paper revisits the classical testing problem of normal means in different correlated frameworks. We establish upper bounds on the generalized familywise error rates under each dependence, consequently giving rise to improved testing procedures. Towards this, we present improved probability inequalities, which are of independent theoretical interest",
+      "why": "2025 results on gFWER-controlling procedures UNDER DEPENDENCE — directly grounds that k-FWER control remains available for the correlated walk-forward family (the reason `subsamplingKfwer` references the full family on the shared window grid)."
+    },
+    {
+      "id": "math/0610843v1",
+      "title": "On stepdown control of the false discovery proportion",
+      "published": "2006-10-27",
+      "category": "math.ST",
+      "summary": "Consider the problem of testing multiple null hypotheses. A classical approach to dealing with the multiplicity problem is to restrict attention to procedures that control the familywise error rate ($FWER$), the probability of even one false rejection. However, if $s$ is large, control of the $FWER$ is so stringent that the ability of a procedure which controls the $FWER$ to detect false null hypotheses is limited. Consequently, it is desirable to consider other measures of error control. We will consider methods based on control of the false discovery proportion ($FDP$) defined by the number of false rejections divided by the total number of rejections (defined to be 0 if there are no rejections). The false discovery rate proposed by Benjamini and Hochberg (1995) controls $E(FDP)$. Here, we construct methods such that, for any $γ$ and $α$, $P\\{FDP>γ\\}\\le α$. Based on $p$-values of individual tests, we consider stepdown procedures that control the $FDP$, without imposing dependence assumptions on the joint distribution of the $p$-values. A greatly improved version of a method given in Lehmann and Romano \\citer10 is derived and generalized to provide a means by which any sequence of nondecreasing constants can be rescaled to ensure control of the $FDP$. We also provide a stepdown procedure that controls the $FDR$ under a dependence assumption.",
+      "why": "Step-down control of the false discovery proportion — the procedure family `subsamplingFdp` belongs to; grounds the 'step down in descending-t and apply a growing-k reference' construction."
+    },
+    {
+      "id": "1406.0266v1",
+      "title": "Further results on controlling the false discovery proportion",
+      "published": "2014-06-02",
+      "category": "math.ST",
+      "summary": "The probability of false discovery proportion (FDP) exceeding $γ\\in[0,1)$, defined as $γ$-FDP, has received much attention as a measure of false discoveries in multiple testing. Although this measure has received acceptance due to its relevance under dependency, not much progress has been made yet advancing its theory under such dependency in a nonasymptotic setting, which motivates our research in this article. We provide a larger class of procedures containing the stepup analog of, and hence more powerful than, the stepdown procedure in Lehmann and Romano [Ann. Statist. 33 (2005) 1138-1154] controlling the $γ$-FDP under similar positive dependence condition assumed in that paper. We offer better alternatives of the stepdown and stepup procedures in Romano and Shaikh [IMS Lecture Notes Monogr. Ser. 49 (2006a) 33-50, Ann. Statist. 34 (2006b) 1850-1873] using pairwise joint distributions of the null $p$-values. We generalize the notion of $γ$-FDP making it appropriate in situations where one is willing to tolerate a few false rejections or, due to high dependency, some false rejections are inevitable, and provide methods that control this generalized $γ$-FDP in two different scenarios: (i) only the marginal $p$-values are available and (ii) the marginal $p$-values as well as the common pairwise joint distributions of the null $p$-values are available, and assuming both positive dependence and arbitrary dependence conditions on the $p$-values in each scenario. Our theoretical findings are being supported through numerical studies.",
+      "why": "Further results on controlling the FDP (gamma-FDP) — the finite-sample limits of step-down FDP control that motivate labelling `subsamplingFdp` EXPERIMENTAL rather than LOCKED-exact."
+    },
+    {
+      "id": "1901.04885v3",
+      "title": "Only Closed Testing Procedures are Admissible for Controlling False Discovery Proportions",
+      "published": "2019-01-15",
+      "category": "math.ST",
+      "summary": "We consider the class of all multiple testing methods controlling tail probabilities of the false discovery proportion, either for one random set or simultaneously for many such sets. This class encompasses methods controlling familywise error rate, generalized familywise error rate, false discovery exceedance, joint error rate, simultaneous control of all false discovery proportions, and others, as well as seemingly unrelated methods such as gene set testing in genomics and cluster inference methods in neuroimaging. We show that all such methods are either equivalent to a closed testing method, or are uniformly improved by one. Moreover, we show that a closed testing method is admissible as a method controlling tail probabilities of false discovery proportions if and only if all its local tests are admissible. This implies that, when designing such methods, it is sufficient to restrict attention to closed testing methods only. We demonstrate the practical usefulness of this design principle by constructing a uniform improvement of a recently proposed method.",
+      "why": "Only CLOSED testing procedures are admissible for controlling FDP — the clean theoretical reason our step-down heuristic is not rigorously FDP-controlling; grounds the EXPERIMENTAL flag honestly."
+    },
+    {
+      "id": "2207.00926v1",
+      "title": "Asymptotic Uncertainty of False Discovery Proportion",
+      "published": "2022-07-03",
+      "category": "math.ST",
+      "summary": "Multiple testing has been a popular topic in statistical research. Although vast works have been done, controlling the false discoveries remains a challenging task when the corresponding test statistics are dependent. Various methods have been proposed to estimate the false discovery proportion (FDP) under arbitrary dependence among the test statistics. One of the main ideas is to reduce arbitrary dependence to weak dependence and then to establish theoretically the strong consistency of the FDP and false discovery rate (FDR) under weak dependence. As a consequence, FDPs share the same asymptotic limit in the framework of weak dependence. We observe that the asymptotic variance of the FDP, however, may rely heavily on the dependence structure of the corresponding test statistics even when they are only weakly dependent; and it is of great practical value to quantify this variability, as it can serve as an indicator of the quality of the FDP estimate from the given data. As far as we are aware, the research on this respect is still limited in the literature. In this paper, we first derive the asymptotic expansion of FDP under mild regularity conditions and then examine how the asymptotic variance of FDP varies under different dependence structures both theoretically and numerically. With the observations in this study, we recommend that in a multiple testing performed by an FDP procedure, we may report both the mean and the variance estimates of FDP to enrich the study outcome.",
+      "why": "Asymptotic uncertainty of the realized FDP — grounds reporting `estimatedFdp` as a point estimate with dependence-driven uncertainty rather than a guaranteed bound."
+    },
+    {
+      "id": "2207.01619v1",
+      "title": "Asymptotic Uncertainty of False Discovery Proportion for Dependent $t$-Tests",
+      "published": "2022-07-03",
+      "category": "math.ST",
+      "summary": "Multiple testing is a fundamental problem in high-dimensional statistical inference. Although many methods have been proposed to control false discoveries, it is still a challenging task when the tests are correlated to each other. To overcome this challenge, various methods have been proposed to estimate the false discovery rate (FDR) and/or the false discovery proportion (FDP) under arbitrary covariance among the test statistics. An interesting finding of these works is that the estimation of FDP and FDR under weak dependence is identical to that under independence. However, Mei et al. (2021) pointed out that unlike FDR, the asymptotic variance of FDP can still differ drastically from that under independence, and the difference depends on the covariance structure among the test statistics. In this paper, we further extend this result from $z$-tests to $t$-tests when the marginal variances are unknown and need to be estimated. With weakly dependent $t$-tests, we show that FDP still converges to a fixed quantity unrelated to the dependence structure, and further derive the asymptotic expansion and uncertainty of FDP leading to similar results as in Mei et al. (2021). In addition, we develop an approximation method to efficiently evaluate the asymptotic variance of FDP for dependent $t$-tests. We examine how the asymptotic variance of FDP varies as well as the performance of its estimators under different dependence structures through simulations and a real-data study.",
+      "why": "FDP uncertainty for DEPENDENT t-tests — the exact regime of the walk-forward family (correlated candidate return streams), reinforcing why the FDP estimate needs a dependence caveat."
+    },
+    {
+      "id": "1010.6056v2",
+      "title": "Estimating False Discovery Proportion Under Arbitrary Covariance Dependence",
+      "published": "2010-10-28",
+      "category": "stat.ME",
+      "summary": "Multiple hypothesis testing is a fundamental problem in high dimensional inference, with wide applications in many scientific fields. In genome-wide association studies, tens of thousands of tests are performed simultaneously to find if any SNPs are associated with some traits and those tests are correlated. When test statistics are correlated, false discovery control becomes very challenging under arbitrary dependence. In the current paper, we propose a novel method based on principal factor approximation, which successfully subtracts the common dependence and weakens significantly the correlation structure, to deal with an arbitrary dependence structure. We derive an approximate expression for false discovery proportion (FDP) in large scale multiple testing when a common threshold is used and provide a consistent estimate of realized FDP. This result has important applications in controlling FDR and FDP. Our estimate of realized FDP compares favorably with Efron (2007)'s approach, as demonstrated in the simulated examples. Our approach is further illustrated by some real data applications. We also propose a dependence-adjusted procedure, which is more powerful than the fixed threshold procedure.",
+      "why": "Estimating FDP under arbitrary covariance dependence — the estimator family behind a dependence-robust FDP; candidate follow-up for a future dependence-aware `estimatedFdp`."
+    },
+    {
+      "id": "1305.7007v2",
+      "title": "Estimation of False Discovery Proportion with Unknown Dependence",
+      "published": "2013-05-30",
+      "category": "stat.ME",
+      "summary": "Large-scale multiple testing with highly correlated test statistics arises frequently in many scientific research. Incorporating correlation information in estimating false discovery proportion has attracted increasing attention in recent years. When the covariance matrix of test statistics is known, Fan, Han & Gu (2012) provided a consistent estimate of False Discovery Proportion (FDP) under arbitrary dependence structure. However, the covariance matrix is often unknown in many applications and such dependence information has to be estimated before estimating FDP (Efron, 2010). The estimation accuracy can greatly affect the convergence result of FDP or even violate its consistency. In the current paper, we provide methodological modification and theoretical investigations for estimation of FDP with unknown covariance. First we develop requirements for estimates of eigenvalues and eigenvectors such that we can obtain a consistent estimate of FDP. Secondly we give conditions on the dependence structures such that the estimate of FDP is consistent. Such dependence structures include sparse covariance matrices, which have been popularly considered in the contemporary random matrix theory. When data are sampled from an approximate factor model, which encompasses most practical situations, we provide a consistent estimate of FDP via exploiting this specific dependence structure. The results are further demonstrated by simulation studies and some real data applications.",
+      "why": "FDP estimation with UNKNOWN dependence — the realistic case for returns (the covariance is not known); grounds the caution around the FDP estimate."
+    },
+    {
+      "id": "0803.1971v1",
+      "title": "On false discovery control under dependence",
+      "published": "2008-03-13",
+      "category": "math.ST",
+      "summary": "A popular framework for false discovery control is the random effects model in which the null hypotheses are assumed to be independent. This paper generalizes the random effects model to a conditional dependence model which allows dependence between null hypotheses. The dependence can be useful to characterize the spatial structure of the null hypotheses. Asymptotic properties of false discovery proportions and numbers of rejected hypotheses are explored and a large-sample distributional theory is obtained.",
+      "why": "False discovery control under dependence — complements the k-FWER theory with an FDR/FDP view under correlation."
+    },
+    {
+      "id": "2303.07631v4",
+      "title": "Multiple Testing under High-dimensional Dynamic Factor Model",
+      "published": "2023-03-14",
+      "category": "math.ST",
+      "summary": "Large-scale multiple testing under static factor models is widely used to detect sparse signals in high-dimensional data. However, static factor models are arguably too stringent because they ignore serial correlation, which seriously distorts error rate control in large-scale inference. In this manuscript, we propose a new multiple testing procedure under dynamic factor models that is robust to nonlinear serial dependence. The idea is to integrate a new sample-splitting strategy based on chronological order and a two-pass Fama--Macbeth regression to form a series of test statistics with marginal symmetry properties and then to use these properties to obtain a data-driven threshold. We show that our procedure can control the false discovery rate asymptotically under high-dimensional dynamic factor models. {As a byproduct of independent interest, we establish a new exponential-type deviation inequality for the sum of random variables over various functionals of linear and nonlinear processes.} Our numerical results, including a case study on hedge fund selection, demonstrate the advantage of our proposed method over several state-of-the-art methods.",
+      "why": "Multiple testing under a high-dimensional DYNAMIC FACTOR model — the structure that emerges as the candidate universe grows (features share market factors), grounding item 10's 'candidate-universe growth'."
+    },
+    {
+      "id": "2601.10279v1",
+      "title": "Selecting and Testing Asset Pricing Models: A Stepwise Approach",
+      "published": "2026-01-15",
+      "category": "econ.EM",
+      "summary": "The asset pricing literature emphasizes factor models that minimize pricing errors but overlooks unselected candidate factors that could enhance the performance of test assets. This paper proposes a framework for factor model selection and testing by (i) selecting the optimal model that spans the joint efficient frontier of test assets and all candidate factors, and (ii) testing pricing performance on both test assets and unselected candidate factors. Our framework updates a baseline model (e.g., CAPM) sequentially by adding or removing factors based on asset pricing tests. Ensuring model selection consistency, our framework utilizes the asset pricing duality: minimizing cross-sectionally unexplained pricing errors aligns with maximizing the Sharpe ratio of the selected factor model. Empirical evidence shows that workhorse factor models fail asset pricing tests, whereas our proposed 8-factor model is not rejected and exhibits robust out-of-sample performance.",
+      "why": "Selecting and testing ASSET PRICING models with a STEPWISE approach (2026) — the finance-domain analogue of growing the candidate universe and applying a stepwise multiple-testing screen, grounding item 10."
+    },
+    {
+      "id": "2211.11959v2",
+      "title": "Robust High-dimensional Tuning Free Multiple Testing",
+      "published": "2022-11-22",
+      "category": "math.ST",
+      "summary": "A stylized feature of high-dimensional data is that many variables have heavy tails, and robust statistical inference is critical for valid large-scale statistical inference. Yet, the existing developments such as Winsorization, Huberization and median of means require the bounded second moments and involve variable-dependent tuning parameters, which hamper their fidelity in applications to large-scale problems. To liberate these constraints, this paper revisits the celebrated Hodges-Lehmann (HL) estimator for estimating location parameters in both the one- and two-sample problems, from a non-asymptotic perspective. Our study develops Berry-Esseen inequality and Cramér type moderate deviation for the HL estimator based on newly developed non-asymptotic Bahadur representation, and builds data-driven confidence intervals via a weighted bootstrap approach. These results allow us to extend the HL estimator to large-scale studies and propose \\emph{tuning-free} and \\emph{moment-free} high-dimensional inference procedures for testing global null and for large-scale multiple testing with false discovery proportion control. It is convincingly shown that the resulting tuning-free and moment-free methods control false discovery proportion at a prescribed level. The simulation studies lend further support to our developed theory.",
+      "why": "Tuning-free robust high-dimensional multiple testing — relevant because candle-return test statistics are heavy-tailed, so the reference distribution must not assume normality."
+    },
+    {
+      "id": "2301.10392v1",
+      "title": "Statistical Inference and Large-scale Multiple Testing for High-dimensional Regression Models",
+      "published": "2023-01-25",
+      "category": "stat.ME",
+      "summary": "This paper presents a selective survey of recent developments in statistical inference and multiple testing for high-dimensional regression models, including linear and logistic regression. We examine the construction of confidence intervals and hypothesis tests for various low-dimensional objectives such as regression coefficients and linear and quadratic functionals. The key technique is to generate debiased and desparsified estimators for the targeted low-dimensional objectives and estimate their uncertainty. In addition to covering the motivations for and intuitions behind these statistical methods, we also discuss their optimality and adaptivity in the context of high-dimensional inference. In addition, we review the recent development of statistical inference based on multiple regression models and the advancement of large-scale multiple testing for high-dimensional regression. The R package SIHR has implemented some of the high-dimensional inference methods discussed in this paper.",
+      "why": "Survey of inference + large-scale multiple testing for high-dimensional regression — ties the family-wise machinery to the controller's regression/feature structure."
+    },
+    {
+      "id": "1603.09000v3",
+      "title": "Online Rules for Control of False Discovery Rate and False Discovery Exceedance",
+      "published": "2016-03-29",
+      "category": "math.ST",
+      "summary": "Multiple hypothesis testing is a core problem in statistical inference and arises in almost every scientific field. Given a set of null hypotheses $\\mathcal{H}(n) = (H_1,\\dotsc, H_n)$, Benjamini and Hochberg introduced the false discovery rate (FDR), which is the expected proportion of false positives among rejected null hypotheses, and proposed a testing procedure that controls FDR below a pre-assigned significance level. Nowadays FDR is the criterion of choice for large scale multiple hypothesis testing. In this paper we consider the problem of controlling FDR in an \"online manner\". Concretely, we consider an ordered --possibly infinite-- sequence of null hypotheses $\\mathcal{H} = (H_1,H_2,H_3,\\dots )$ where, at each step $i$, the statistician must decide whether to reject hypothesis $H_i$ having access only to the previous decisions. This model was introduced by Foster and Stine. We study a class of \"generalized alpha-investing\" procedures and prove that any rule in this class controls online FDR, provided $p$-values corresponding to true nulls are independent from the other $p$-values. (Earlier work only established mFDR control.) Next, we obtain conditions under which generalized alpha-investing controls FDR in the presence of general $p$-values dependencies. Finally, we develop a modified set of procedures that also allow to control the false discovery exceedance (the tail of the proportion of false discoveries). Numerical simulations and analytical results indicate that online procedures do not incur a large loss in statistical power with respect to offline approaches, such as Benjamini-Hochberg.",
+      "why": "Online rules controlling FDR and false-discovery EXCEEDANCE — the natural extension if the gate ever runs online rather than over a fixed window grid."
+    },
+    {
+      "id": "2501.16985v3",
+      "title": "Nonparametric methods controlling the median of the false discovery proportion",
+      "published": "2025-01-28",
+      "category": "stat.ME",
+      "summary": "When testing many hypotheses, often we do not have strong expectations about the directions of the effects. In some situations however, the alternative hypotheses are that the parameters lie in a certain direction or interval, and it is in fact expected that most hypotheses are false. This is often the case when researchers perform multiple noninferiority or equivalence tests, e.g. when testing food safety with metabolite data. The goal is then to use data to corroborate the expectation that most hypotheses are false. We propose a nonparametric multiple testing approach that is powerful in such situations. If the user's expectations are wrong, our approach will still be valid but have low power. Of course all multiple testing methods become more powerful when appropriate one-sided instead of two-sided tests are used, but our approach often has superior power then. The proposed methods are not at all limited to safety testing and can be used for testing hypotheses about various kinds of parameters, such as coefficients of a model. The methods in this paper control the median of the false discovery proportion (FDP), which is the fraction of false discoveries among the rejected hypotheses. This approach is comparable to false discovery rate control, where one ensures that the mean rather than the median of the FDP is small. Our procedures make use of a symmetry property of the test statistics, do not require independence and have finite-sample properties.",
+      "why": "Controlling the MEDIAN of the FDP nonparametrically — a robust relaxation target should `subsamplingFdp` prove too liberal under dependence."
+    },
+    {
+      "id": "2608.23808v2",
+      "title": "Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade",
+      "published": "2026-08-24",
+      "category": "q-fin.ST",
+      "summary": "Backtests of trading strategies are often selected after many parameter trials. A strong historical result can therefore reflect search luck rather than a persistent signal. Standard summaries such as return, Sharpe ratio, and drawdown do not record how many candidates were tried, whether the selected rule survives out-of-sample validation, or whether the available history is long enough to support the result. This paper describes the MinervaScore, a post-selection robustness grade for trading strategies. The score combines four established validation quantities: Deflated Sharpe Ratio, Probability of Backtest Overfitting, Superior Predictive Ability, and Minimum Track Record Length, with a regime-stability diagnostic. These components are converted into signed margins from their admissibility thresholds, aggregated into a raw score, and then mapped to a 0-100 display. The display is tied to a binary Robustness Seal: scores of 80 or higher are shown only when all five gates pass. The calibration uses 359,062 production backtest records. The score is intended to rank statistical support, not to estimate the probability of future profit. In synthetic markets with known ground truth, the MinervaScore separates true signal from lucky backtest outcomes, with an AUROC of 0.989 at the headline difficulty. Its improvement over the GT-Score proxy and the gates-passed baseline is modest, and it remains close to the corrected DSR-alone baseline. In a pre-registered test on unseen real-market data, the score showed no significant forward relationship in a population with limited surviving edge (Spearman rho_s = 0.013, one-sided permutation p = 0.40). We therefore present the MinervaScore as an auditable validation and reporting layer, rather than as evidence of demonstrated real-market predictability.",
+      "why": "MinervaScore carry-over — search luck vs persistent edge; the reporting layer the family-wise p-values feed into."
+    },
+    {
+      "id": "1910.04900v2",
+      "title": "Online control of the familywise error rate",
+      "published": "2019-10-10",
+      "category": "stat.ME",
+      "summary": "Biological research often involves testing a growing number of null hypotheses as new data is accumulated over time. We study the problem of online control of the familywise error rate (FWER), that is testing an apriori unbounded sequence of hypotheses (p-values) one by one over time without knowing the future, such that with high probability there are no false discoveries in the entire sequence. This paper unifies algorithmic concepts developed for offline (single batch) FWER control and online false discovery rate control to develop novel online FWER control methods. Though many offline FWER methods (e.g. Bonferroni, fallback procedures and Sidak's method) can trivially be extended to the online setting, our main contribution is the design of new, powerful, adaptive online algorithms that control the FWER when the p-values are independent or locally dependent in time. Our experiments demonstrate substantial gains in power, that are also formally proved in a Gaussian sequence model. Multiple testing, FWER control, online setting.",
+      "why": "Online control of the FWER — the realtime/online extension of the family-wise gate."
+    }
+  ]
+}

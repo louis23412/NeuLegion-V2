@@ -1,0 +1,129 @@
+{
+  "generatedAt": "2026-09-19T12:42:39.667Z",
+  "note": "Round 13 literature refresh (broad relevance-query sweep, sortBy=relevance), targeting the data-aware-hashing front behind the new `memory/binarypc.js` (TODO item 2: PCA-aligned LSH hyperplanes) and the LSH index in general. Headline: 2608.04405 (BinaryPC — training-free hashing via binary principal components, the module's grounding) and 2609.02155 (exact limits of RANDOM projections for distance/rank/covariance preservation — the theoretical reason a data-aware basis is worth a flag). Also the data-dependent-hashing family (1303.0339, 1810.01008), the hashing surveys/taxonomy (1408.2927, 1612.07545, 2102.08942), stronger/time-varying hash families (1602.06922 cross-polytope, 2006.11284 projected-NN) and two 2026 high-dimensional extensions (2603.19724 hyperbolic LSH, 2609.09427 ultra-high-dimensional l-infinity ANN).",
+  "purpose": "Ground docs/TODO.md item 2 (PCA-aligned LSH hyperplanes; engine shipped Round 13) and evolve docs/research/lsh-ann.md.",
+  "queries": [
+    {
+      "file": "binary-principal-components-hashing",
+      "query": "all:binary principal components hashing"
+    },
+    {
+      "file": "learning-to-hash-nearest-neighbor",
+      "query": "all:learning to hash nearest neighbor"
+    },
+    {
+      "file": "data-dependent-hashing-similarity-search",
+      "query": "all:data dependent hashing similarity search"
+    },
+    {
+      "file": "pca-hashing-locality-sensitive",
+      "query": "all:PCA hashing locality sensitive"
+    },
+    {
+      "file": "iterative-quantization-hashing",
+      "query": "all:iterative quantization hashing"
+    },
+    {
+      "file": "locality-sensitive-hashing-transformer-memory",
+      "query": "all:locality sensitive hashing transformer memory"
+    },
+    {
+      "file": "random-projection-recall-nearest-neighbour",
+      "query": "all:random projection recall nearest neighbour"
+    },
+    {
+      "file": "approximate-nearest-neighbor-high-dimensional",
+      "query": "all:approximate nearest neighbor high dimensional"
+    }
+  ],
+  "entries": [
+    {
+      "id": "2608.04405v1",
+      "title": "Training-Free Hashing-Based Attention via Binary Principal Components",
+      "published": "2026-08-05",
+      "category": "cs.LG",
+      "summary": "Long-context large language models (LLMs) are increasingly deployed in real-world applications, yet self-attention remains a major efficiency bottleneck -- especially during decoding -- due to the necessity of repeatedly processing ever-growing key-value (KV) caches. Existing sparse attention reduce computation by attending to fewer KV pairs, but often suffer from substantial accuracy degradation, require additional training, or rely on expensive hashing. In this work, we present BinaryPC, a training-free, data-aware hashing-based sparse attention for long-context LLMs. BinaryPC constructs compact binary hash codes and corresponding hash function by computing binary principal components of data. Unlike Locality-Sensitive Hashing (LSH) with data-independent random projections or learned non-linear hashing methods, BinaryPC constructs binary codes that explicitly preserve the structural information of data without requiring gradient-based training. Comprehensive experiments across multiple model families and long-context benchmarks show that BinaryPC preserves accuracy relative to full attention while achieving superior performance among sparse and hashing-based baselines. On modern GPUs, BinaryPC improves end-to-end decoding throughput by 3.56$\\times$ over the FlashAttention kernel. Our code is available at https://github.com/yudaohai666/BPC.",
+      "why": "The grounding: training-free, data-aware hashing via binary principal components — use the data's PCs as the hash hyperplanes. `memory/binarypc.js` implements exactly this and proves the Eckart-Young dominance."
+    },
+    {
+      "id": "2609.02155v1",
+      "title": "Exact Limits of Random Projections for Preserving Geometry: Distance Recovery, Nearest-Neighbor Rankings, and Covariance Shape in Gaussian Models",
+      "published": "2026-09-02",
+      "category": "cs.LG",
+      "summary": "The Johnson-Lindenstrauss (JL) lemma guarantees that a random projection of $n$ points to $m=O(\\varepsilon^{-2}\\log n)$ dimensions preserves pairwise squared distances within relative error $\\varepsilon$ with high probability, and this dimension order is asymptotically optimal. In high dimensions, however, distances concentrate around a baseline while key geometric information lies in much smaller fluctuations. We show that the JL bound can therefore be uninformative about retained geometry: an independent Gaussian replacement map can satisfy it even though the replacement cloud is independent of the original data. We then ask how well any decoder can recover a feature $f(D)$ of a squared distance $D$ from a linear sketch. Under squared-error loss, the optimal decoder is conditional expectation, so recovery defines a linear operator whose singular values quantify feature recovery. For isotropic Gaussian data ($Σ=σ^2 I_d$), we diagonalize this operator in closed form. For fixed $k$ with $m,d-m\\to\\infty$, its $k$th singular value satisfies $\\ell_k\\approx(m/ d)^{k/2}$. This yields three sharp consequences. A rank-$m$ sketch retains at most an $m/d$ fraction of the variance of any feature of one squared distance. If $m\\to\\infty$ and $m/d\\to0$, the expected Kendall correlation is $\\frac{2}π\\sqrt{m/d}(1+o(1))$; for fixed $q$, nearest- neighbor agreement tends to $1/q$. Yet one projection can satisfy the JL bound while mean Kendall correlation vanishes when $\\log n\\ll m\\ll d$. After removing scale, Haar-averaged retained covariance-shape information is $(m/d)^2$. Thus JL distance preservation does not quantify the geometry available for comparison or inference.",
+      "why": "The theoretical counterpart: exact limits of RANDOM projections for preserving distances / nearest-neighbour rankings / covariance shape in Gaussian models — the precise sense in which random hyperplanes are lossy, motivating the data-aware (PCA-aligned) alternative."
+    },
+    {
+      "id": "1602.06922v3",
+      "title": "Fast Cross-Polytope Locality-Sensitive Hashing",
+      "published": "2016-02-22",
+      "category": "cs.DS",
+      "summary": "We provide a variant of cross-polytope locality sensitive hashing with respect to angular distance which is provably optimal in asymptotic sensitivity and enjoys $\\mathcal{O}(d \\ln d )$ hash computation time. Building on a recent result (by Andoni, Indyk, Laarhoven, Razenshteyn, Schmidt, 2015), we show that optimal asymptotic sensitivity for cross-polytope LSH is retained even when the dense Gaussian matrix is replaced by a fast Johnson-Lindenstrauss transform followed by discrete pseudo-rotation, reducing the hash computation time from $\\mathcal{O}(d^2)$ to $\\mathcal{O}(d \\ln d )$. Moreover, our scheme achieves the optimal rate of convergence for sensitivity. By incorporating a low-randomness Johnson-Lindenstrauss transform, our scheme can be modified to require only $\\mathcal{O}(\\ln^9(d))$ random bits",
+      "why": "Cross-polytope LSH (Andoni et al.) — a stronger hash family than SimHash for some metrics; a recorded alternative to the random-hyperplane baseline."
+    },
+    {
+      "id": "1303.0339v1",
+      "title": "Learning Hash Functions Using Column Generation",
+      "published": "2013-03-02",
+      "category": "cs.LG",
+      "summary": "Fast nearest neighbor searching is becoming an increasingly important tool in solving many large-scale problems. Recently a number of approaches to learning data-dependent hash functions have been developed. In this work, we propose a column generation based method for learning data-dependent hash functions on the basis of proximity comparison information. Given a set of triplets that encode the pairwise proximity comparison information, our method learns hash functions that preserve the relative comparison relationships in the data as well as possible within the large-margin learning framework. The learning procedure is implemented using column generation and hence is named CGHash. At each iteration of the column generation procedure, the best hash function is selected. Unlike most other hashing methods, our method generalizes to new data points naturally; and has a training objective which is convex, thus ensuring that the global optimum can be identified. Experiments demonstrate that the proposed method learns compact binary codes and that its retrieval performance compares favorably with state-of-the-art methods when tested on a few benchmark datasets.",
+      "why": "Learning hash functions by column generation — the data-dependent hashing optimisation view behind PCA-aligned hashing."
+    },
+    {
+      "id": "1810.01008v1",
+      "title": "Learning Hash Codes via Hamming Distance Targets",
+      "published": "2018-10-01",
+      "category": "cs.LG",
+      "summary": "We present a powerful new loss function and training scheme for learning binary hash codes with any differentiable model and similarity function. Our loss function improves over prior methods by using log likelihood loss on top of an accurate approximation for the probability that two inputs fall within a Hamming distance target. Our novel training scheme obtains a good estimate of the true gradient by better sampling inputs and evaluating loss terms between all pairs of inputs in each minibatch. To fully leverage the resulting hashes, we use multi-indexing. We demonstrate that these techniques provide large improvements to a similarity search tasks. We report the best results to date on competitive information retrieval tasks for ImageNet and SIFT 1M, improving MAP from 73% to 84% and reducing query cost by a factor of 2-8, respectively.",
+      "why": "Learning hash codes via Hamming-distance targets — data-dependent code learning; grounds the 'hash for the data' principle."
+    },
+    {
+      "id": "1612.07545v6",
+      "title": "A Revisit of Hashing Algorithms for Approximate Nearest Neighbor Search",
+      "published": "2016-12-22",
+      "category": "cs.CV",
+      "summary": "Approximate Nearest Neighbor Search (ANNS) is a fundamental problem in many areas of machine learning and data mining. During the past decade, numerous hashing algorithms are proposed to solve this problem. Every proposed algorithm claims outperform other state-of-the-art hashing methods. However, the evaluation of these hashing papers was not thorough enough, and those claims should be re-examined. The ultimate goal of an ANNS method is returning the most accurate answers (nearest neighbors) in the shortest time. If implemented correctly, almost all the hashing methods will have their performance improved as the code length increases. However, many existing hashing papers only report the performance with the code length shorter than 128. In this paper, we carefully revisit the problem of search with a hash index, and analyze the pros and cons of two popular hash index search procedures. Then we proposed a very simple but effective two level index structures and make a thorough comparison of eleven popular hashing algorithms. Surprisingly, the random-projection-based Locality Sensitive Hashing (LSH) is the best performed algorithm, which is in contradiction to the claims in all the other ten hashing papers. Despite the extreme simplicity of random-projection-based LSH, our results show that the capability of this algorithm has been far underestimated. For the sake of reproducibility, all the codes used in the paper are released on GitHub, which can be used as a testing platform for a fair comparison between various hashing algorithms.",
+      "why": "A revisit of hashing algorithms for ANN — empirical/structural comparison of hashing families; grounds the choice among SimHash / PCA / learned codes."
+    },
+    {
+      "id": "2006.11284v1",
+      "title": "Improving Locality Sensitive Hashing by Efficiently Finding Projected Nearest Neighbors",
+      "published": "2020-06-19",
+      "category": "cs.DB",
+      "summary": "Similarity search in high-dimensional spaces is an important task for many multimedia applications. Due to the notorious curse of dimensionality, approximate nearest neighbor techniques are preferred over exact searching techniques since they can return good enough results at a much better speed. Locality Sensitive Hashing (LSH) is a very popular random hashing technique for finding approximate nearest neighbors. Existing state-of-the-art Locality Sensitive Hashing techniques that focus on improving performance of the overall process, mainly focus on minimizing the total number of IOs while sacrificing the overall processing time. The main time-consuming process in LSH techniques is the process of finding neighboring points in projected spaces. We present a novel index structure called radius-optimized Locality Sensitive Hashing (roLSH). With the help of sampling techniques and Neural Networks, we present two techniques to find neighboring points in projected spaces efficiently, without sacrificing the accuracy of the results. Our extensive experimental analysis on real datasets shows the performance benefit of roLSH over existing state-of-the-art LSH techniques.",
+      "why": "Improving LSH by efficiently finding projected nearest neighbours — data-aware probe/index structure on top of a random base."
+    },
+    {
+      "id": "2102.08942v1",
+      "title": "A Survey on Locality Sensitive Hashing Algorithms and their Applications",
+      "published": "2021-02-17",
+      "category": "cs.DB",
+      "summary": "Finding nearest neighbors in high-dimensional spaces is a fundamental operation in many diverse application domains. Locality Sensitive Hashing (LSH) is one of the most popular techniques for finding approximate nearest neighbor searches in high-dimensional spaces. The main benefits of LSH are its sub-linear query performance and theoretical guarantees on the query accuracy. In this survey paper, we provide a review of state-of-the-art LSH and Distributed LSH techniques. Most importantly, unlike any other prior survey, we present how Locality Sensitive Hashing is utilized in different application domains.",
+      "why": "A survey of LSH algorithms and applications — the reference map for the lsh bag."
+    },
+    {
+      "id": "1408.2927v1",
+      "title": "Hashing for Similarity Search: A Survey",
+      "published": "2014-08-13",
+      "category": "cs.DS",
+      "summary": "Similarity search (nearest neighbor search) is a problem of pursuing the data items whose distances to a query item are the smallest from a large database. Various methods have been developed to address this problem, and recently a lot of efforts have been devoted to approximate search. In this paper, we present a survey on one of the main solutions, hashing, which has been widely studied since the pioneering work locality sensitive hashing. We divide the hashing algorithms two main categories: locality sensitive hashing, which designs hash functions without exploring the data distribution and learning to hash, which learns hash functions according the data distribution, and review them from various aspects, including hash function design and distance measure and search scheme in the hash coding space.",
+      "why": "Hashing for similarity search: a survey — the classic taxonomy (random vs data-dependent) the binarypc module sits in."
+    },
+    {
+      "id": "2603.19724v1",
+      "title": "Locality Sensitive Hashing in Hyperbolic Space",
+      "published": "2026-03-20",
+      "category": "cs.CG",
+      "summary": "For a metric space $(X, d)$, a family $\\mathcal{H}$ of locality sensitive hash functions is called $(r, cr, p_1, p_2)$ sensitive if a randomly chosen function $h\\in \\mathcal{H}$ has probability at least $p_1$ (at most $p_2$) to map any $a, b\\in X$ in the same hash bucket if $d(a, b)\\leq r$ (or $d(a, b)\\geq cr$). Locality Sensitive Hashing (LSH) is one of the most popular techniques for approximate nearest-neighbor search in high-dimensional spaces, and has been studied extensively for Hamming, Euclidean, and spherical geometries. An $(r, cr, p_1, p_2)$-sensitive hash function enables approximate nearest neighbor search (i.e., returning a point within distance $cr$ from a query $q$ if there exists a point within distance $r$ from $q$) with space $O(n^{1+ρ})$ and query time $O(n^ρ)$ where $ρ=\\frac{\\log 1/p_1}{\\log 1/p_2}$. But LSH for hyperbolic spaces $\\mathbb{H}^d$ remains largely unexplored. In this work, we present the first LSH construction native to hyperbolic space. For the hyperbolic plane $(d=2)$, we show a construction achieving $ρ\\leq 1/c$, based on the hyperplane rounding scheme. For general hyperbolic spaces $(d \\geq 3)$, we use dimension reduction from $\\mathbb{H}^d$ to $\\mathbb{H}^2$ and the 2D hyperbolic LSH to get $ρ\\leq 1.59/c$. On the lower bound side, we show that the lower bound on $ρ$ of Euclidean LSH extends to the hyperbolic setting via local isometry, therefore giving $ρ\\geq 1/c^2$.",
+      "why": "Locality-sensitive hashing in hyperbolic space (2026) — a non-Euclidean extension, recorded for completeness."
+    },
+    {
+      "id": "2609.09427v1",
+      "title": "Approximate Nearest Neighbor in Ultra-High Dimensional $\\ell_\\infty$",
+      "published": "2026-09-08",
+      "category": "cs.DS",
+      "summary": "We study the approximate nearest neighbor problem under $\\ell_\\infty$ in the ultra-high dimensional setting where the dimension $d$ is significantly larger than the number of points $n$. Thus, we desire data structures with no dependence on $d$ in the query time. [Herold-Nanongkai-Spoerhase-Varma-Wu, SoCG 2025] introduce this problem and give data structures in $\\ell_p$: for $p=1,2$, they give $(1+\\varepsilon)$-approximation data structures with space $\\tilde{O}(n\\log d/\\text{poly}(\\varepsilon))$ and query time $\\tilde{O}(n/\\text{poly}(\\varepsilon))$. Since any data structure must have query time $Ω(\\min \\{n,d\\})$, this query time is nearly tight. However, their results are inefficient for $\\ell_\\infty$, with query time $Ω(nd)$. In order to handle the challenges of $\\ell_\\infty$, we introduce a notion of subset embeddings, which embed points by simply selecting a subset of dimensions. In particular, we show one may preserve all pairwise distances of an $n$ point dataset up to a factor of $O(c)$ by computing distances on only $n^{1+1/c}$ coordinates. We also show a matching lower bound: for any $c > 1$, there exists a set of $n$ points in $\\mathbb{R}^{d}$ such that any subset embedding for the set with approximation $c$ must have at least $n^{1+Ω(1/c)}$ coordinates. Using our subset embeddings, we give data structures for approximate nearest neighbor in $\\ell_\\infty$ with space $O(n^2\\log d)$, query time $\\tilde{O}(n^{1+1/c})$, and approximation $O(c\\log\\log n)$ for any $c \\geq 1$. Finally, we give another data structure for the approximate nearest neighbor under $\\ell_\\infty$ with the same space and query time as our subset embedding approach, but with approximation $O(c^{\\log_2 3}) \\approx O(c^{1.58})$. This allows us to achieve $O(1)$-approximation with query time e.g.~$n^{1.01}$",
+      "why": "ANN in ultra-high-dimensional l-infinity (2026) — the worst-case metric regime; recorded as the next index tier boundary."
+    }
+  ]
+}

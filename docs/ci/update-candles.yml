@@ -1,0 +1,50 @@
+# update-candles.yml
+#
+# NOTE: the workspace file API rejects a literal `.github` directory, so this
+# workflow lives here as source-of-truth. To enable it, copy it to
+#   .github/workflows/update-candles.yml
+# in the repo (e.g. `mkdir -p .github/workflows && cp docs/ci/update-candles.yml
+# .github/workflows/`). It is kept in-tree so it survives sessions.
+#
+# It keeps the shipped candle files fresh. The basket updater uses only Node
+# built-ins + local ESM (no npm install needed), so this workflow is fast and
+# cannot be broken by a native-dependency build failure.
+#
+# It only commits when the data actually changed. Configure the schedule to a
+# cadence that matches the 1h interval; running every 6 hours keeps the tail of
+# every series within a few bars of live without hammering the exchange.
+
+name: update-candles
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Incrementally update every candle file
+        run: node src/update_candles_basket.js --quiet
+
+      - name: Commit changes
+        run: |
+          if git diff --quiet; then
+            echo "No candle changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore(candles): scheduled incremental update"
+          git push

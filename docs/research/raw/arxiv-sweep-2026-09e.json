@@ -1,0 +1,106 @@
+{
+  "generatedAt": "2026-09-20T10:12:00.000Z",
+  "note": "Round 4 literature refresh (quoted-phrase queries, sortBy=relevance). Existing corpus kept; this refresh targets the multiple-testing / data-snooping front that reality_check.js implements (White's Reality Check + Hansen's SPA). The headline find is 2608.23808 (MinervaScore): an independent 2026 production study (359,062 backtest records) that grades strategy robustness by combining exactly Deflated Sharpe Ratio + Probability of Backtest Overfitting + Superior Predictive Ability + Minimum Track Record Length — the same four-test battery this project now ships. Also 2409.12662 quantifies why a dependence-aware predictive-ability test is needed (Diebold-Mariano power collapses under autocorrelation), which is exactly why SPA is studentized by a stationary-bootstrap standard error rather than an i.i.d. one.",
+  "queries": [
+    {
+      "file": "deflated-sharpe-ratio",
+      "query": "\"deflated sharpe ratio\"",
+      "totalResults": 2,
+      "count": 1,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2608.23808v2",
+          "title": "Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade",
+          "published": "2026-08-26",
+          "category": "q-fin.ST",
+          "summary": "A post-selection robustness grade for trading strategies that combines Deflated Sharpe Ratio, Probability of Backtest Overfitting, Superior Predictive Ability and Minimum Track Record Length with a regime-stability diagnostic; calibrated on 359,062 production backtest records (AUROC 0.989 on synthetic ground truth). Directly validates the four-test honest-evaluation battery implemented across performance.js (DSR/MinTRL), overfitting.js (PBO) and reality_check.js (SPA/RC)."
+        }
+      ]
+    },
+    {
+      "file": "superior-predictive-ability",
+      "query": "\"superior predictive ability\"",
+      "totalResults": 8,
+      "count": 1,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2409.12662v1",
+          "title": "Testing for equal predictive accuracy with strong dependence",
+          "published": "2024-09-18",
+          "category": "econ.EM",
+          "summary": "Shows the power of the Diebold-Mariano predictive-accuracy test decreases as autocorrelation in the loss differential increases, and past a threshold the test has no power while spuriously rejecting the null. The empirical justification for studentizing SPA with a stationary-bootstrap (dependence-aware) standard error instead of an i.i.d. sample standard deviation."
+        }
+      ]
+    },
+    {
+      "file": "data-snooping",
+      "query": "\"data snooping\"",
+      "totalResults": 8,
+      "count": 3,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2603.14288v2",
+          "title": "Beyond Prompting: An Autonomous Framework for Systematic Factor Investing via Agentic AI",
+          "published": "2026-03-15",
+          "category": "q-fin.PM",
+          "summary": "An autonomous factor-investing loop that mitigates data snooping with strict out-of-sample validation and an economic-rationale requirement, rather than relying on a single in-sample statistic."
+        },
+        {
+          "id": "http://arxiv.org/abs/2602.00080v1",
+          "title": "The GT-Score: A Robust Objective Function for Reducing Overfitting in Data-Driven Trading Strategies",
+          "published": "2026-01-22",
+          "category": "q-fin.ST",
+          "summary": "A composite objective integrating performance, statistical significance, consistency and downside risk; improves the walk-forward generalization ratio by 98% over baseline objectives, i.e. anti-overfitting structure must be embedded in the search, not only in the report."
+        },
+        {
+          "id": "http://arxiv.org/abs/1811.06766v2",
+          "title": "Technical Analysis and Discrete False Discovery Rate: Evidence from MSCI Indices",
+          "published": "2018-11-16",
+          "category": "q-fin.ST",
+          "summary": "Introduces DFRD+/- (discrete, adaptive false-discovery control) over 21,000 technical rules; the FDR flavour of the multiple-testing correction that RC/SPA complement with a bootstrap max-statistic."
+        }
+      ]
+    },
+    {
+      "file": "false-discovery-trading-strategies",
+      "query": "\"false discovery\" trading strategies",
+      "totalResults": 8,
+      "count": 0,
+      "entries": []
+    },
+    {
+      "file": "reality-check-test-multiple-hypotheses",
+      "query": "\"reality check\" test multiple hypotheses",
+      "totalResults": 8,
+      "count": 1,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2511.01680v4",
+          "title": "Making Interpretable Discoveries from Unstructured Data: A High-Dimensional Multiple Hypothesis Testing Approach",
+          "published": "2025-11-03",
+          "category": "econ.EM",
+          "summary": "A high-dimensional multiple-testing discovery framework that is explicitly robust to data snooping / post-selection inference; the selective-inference counterpart of the bootstrap reality-check approach, for the many-candidate regime."
+        }
+      ]
+    },
+    {
+      "file": "stepwise-multiple-testing",
+      "query": "\"stepwise multiple testing\"",
+      "totalResults": 4,
+      "count": 1,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2212.08372v2",
+          "title": "On Asymptotic Behaviors of Stepwise Multiple Testing Procedures",
+          "published": "2022-12-16",
+          "category": "math.ST",
+          "summary": "Asymptotics for stepwise procedures; the StepM (Romano-Wolf) family that identifies WHICH candidates beat the benchmark after the reality-check gate — the documented follow-up to reality_check.js."
+        }
+      ]
+    }
+  ],
+  "followups": [
+    "Implement Romano-Wolf StepM (step-down max-t with the same stationary-bootstrap draws already produced by bootstrapRelativeMeans) to name the individually-significant candidates after RC/SPA.",
+    "Add Hansen's consistent SPA_c variant (the recentring threshold A_n*sqrt(log log n)/sqrt n that discards clearly-inferior candidates)."
+  ]
+}

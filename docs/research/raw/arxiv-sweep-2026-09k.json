@@ -1,0 +1,101 @@
+{
+  "generatedAt": "2026-09-19T13:01:57.468Z",
+  "note": "Round 14 literature refresh (broad relevance-query sweep, sortBy=relevance). Target: the data-aware-hashing front now WIRED into `memory/lsh.js#_refreshLshHyperplanes` (behind the default-off `_pcaHashConfig`) and the recorded section-I finding that only the HIGH-variance principal directions should be aligned (the low-variance tail is noise). Headline: 1501.01062 (Andoni-Indyk-Laarhoven — OPTIMAL data-dependent hashing beats the best data-independent LSH for every c>1, the optimality grounding for the whole direction), 1205.2930 (Density Sensitive Hashing — data-adaptive directions), 1605.09784 (DrusillaHash — data-selected projection bases) and 2009.08591 (weighted Hamming distance — bits are not equally reliable). Scaling: 0809.2274 (randomised PCA) and 1508.04535 (bit-scalable hashing). Fresh 2026 theory: 2609.07681 (recall scaling laws via hashing) and 2602.19259 (sketch/ANN limits).",
+  "purpose": "Ground and evolve docs/research/lsh-ann.md and docs/TODO.md item 2 after Round 14 wired the PCA-aligned hyperplane refresh.",
+  "queries": [
+    {
+      "file": "data-dependent-hashing-ann",
+      "query": "all:data dependent hashing approximate nearest neighbor"
+    },
+    {
+      "file": "learning-data-dependent-hash",
+      "query": "all:locality sensitive hashing recall learning"
+    },
+    {
+      "file": "pca-binary-code-hashing",
+      "query": "all:principal component analysis hashing binary code"
+    },
+    {
+      "file": "random-projection-variance",
+      "query": "all:random projection hash variance explained"
+    },
+    {
+      "file": "bit-balance-hashing",
+      "query": "all:bit balance learning to hash retrieval"
+    },
+    {
+      "file": "marchenko-pastur-pca",
+      "query": "all:Marchenko Pastur eigenvalue signal noise PCA denoising"
+    },
+    {
+      "file": "weighted-hamming-binary",
+      "query": "all:balanced binary code hamming distance search"
+    }
+  ],
+  "entries": [
+    {
+      "id": "1501.01062",
+      "title": "Optimal Data-Dependent Hashing for Approximate Near Neighbors",
+      "published": "2015-01-06",
+      "category": "cs.DS",
+      "summary": "We show an optimal data-dependent hashing scheme for the approximate near neighbor problem. For an $n$-point data set in a $d$-dimensional space our data structure achieves query time $O(d n^{ρ+o(1)})$ and space $O(n^{1+ρ+o(1)} + dn)$, where $ρ=\\tfrac{1}{2c^2-1}$ for the Euclidean space and approximation $c&gt;1$. For the Hamming space, we obtain an exponent of $ρ=\\tfrac{1}{2c-1}$. Our result completes the direction set forth in [AINR14] who gave a proof-of-concept that data-dependent hashing can outperform classical Locality Sensitive Hashing (LSH). In contrast to [AINR14], the new bound is not only optimal, but in fact improves over the best (optimal) LSH data structures [IM98,AI06] for all approximation factors $c&gt;1$. From the technical perspective, we proceed by decomposing an arbitrary dataset into several subsets that are, in a certain sense, pseudo-random.",
+      "why": "The theoretical capstone for data-aware hashing: an OPTIMAL data-dependent scheme beats the best data-independent LSH for every approximation factor c > 1 (rho = 1/(2c^2-1) Euclidean, 1/(2c-1) Hamming). Grounds the whole \"learn the hash from the data\" direction that `memory/binarypc.js` + `_refreshLshHyperplanes` implement."
+    },
+    {
+      "id": "1605.09784",
+      "title": "Fast approximate furthest neighbors with data-dependent hashing",
+      "published": "2016-05-31",
+      "category": "cs.DS",
+      "summary": "We present a novel hashing strategy for approximate furthest neighbor search that selects projection bases using the data distribution. This strategy leads to an algorithm, which we call DrusillaHash, that is able to outperform existing approximate furthest neighbor strategies. Our strategy is motivated by an empirical study of the behavior of the furthest neighbor search problem, which lends intuition for where our algorithm is most useful. We also present a variant of the algorithm that gives an absolute approximation guarantee; to our knowledge, this is the first such approximate furthest neighbor hashing approach to give such a guarantee. Performance studies indicate that DrusillaHash can achieve comparable levels of approximation to other algorithms while giving up to an order of magnitude speedup. An implementation is available in the mlpack machine learning library (found at http://www.mlpack.org).",
+      "why": "DrusillaHash: projection bases SELECTED FROM THE DATA DISTRIBUTION for approximate search — the same data-aware-basis principle, for furthest-neighbour search."
+    },
+    {
+      "id": "2602.19259",
+      "title": "Quantum Sketches, Hashing, and Approximate Nearest Neighbors",
+      "published": "2026-02-22",
+      "category": "quant-ph",
+      "summary": "Motivated by Johnson--Lindenstrauss dimension reduction, amplitude encoding, and the view of measurements as hash-like primitives, one might hope to compress an $n$-point approximate nearest neighbor (ANN) data structure into $O(\\log n)$ qubits. We rule out this possibility in a broad quantum sketch model, the dataset $P$ is encoded as an $m$-qubit state $ρ_P$, and each query is answered by an arbitrary query-dependent measurement on a fresh copy of $ρ_P$. For every approximation factor $c\\ge 1$ and constant success probability $p&gt;1/2$, we exhibit $n$-point instances in Hamming space $\\{0,1\\}^d$ with $d=Θ(\\log n)$ for which any such sketch requires $m=Ω(n)$ qubits, via a reduction to quantum random access codes and Nayak's lower bound. These memory lower bounds coexist with potential quantum query-time gains and in candidate-scanning abstractions of hashing-based ANN, amplitude amplification yields a quadratic reduction in candidate checks, which is essentially optimal by Grover/BBBV-type bounds.",
+      "why": "Quantum sketches/hashing and ANN (2026): defines the limits of sketch-based ANN, recorded as the theoretical boundary of the random-sketch family."
+    },
+    {
+      "id": "2609.07681",
+      "title": "On the Recall Scaling Laws in Mamba: A Theoretical and Mechanistic Study via Hashing",
+      "published": "2026-09-07",
+      "category": "cs.LG",
+      "summary": "Associative Recall (AR) is the cognitive ability to learn and retrieve links between items in memory. In NLP, AR is used as a benchmark for evaluating the in-context memory capacity of architectures such as Mamba, and has been found to strongly correlate with language modeling performance. This paper explores AR from the perspective of mechanistic interpretability, aiming to reverse-engineer the exact internal algorithm used by Mamba to perform recall. Our key insight is that Mamba performs recall by implicitly learning linear hash functions, and we identify the low-level circuit that enables this behavior. Building on these findings and inspired by theoretical tools in similarity-preserving hashing, such as the Johnson-Lindenstrauss lemma, we develop a theoretical framework for analyzing AR, which we term Recall Scaling Laws. Given the vocabulary size and the number of facts in context, this framework allows us to (1) predict the embedding and state dimensions required for Mamba to achieve perfect recall, (2) predict recall success probability given the model dimensions, and (3) analyze multi-layer models and multi-head SSM patterns. Empirical results show that our theoretical findings are accurate and predictive, offering insights into how AR capacity scales with vocabulary, state, embedding size, and architecture.",
+      "why": "A 2026 theoretical/mechanistic study of associative recall via hashing (recall scaling laws) — direct, fresh grounding for the recall-vs-width question the section-I sweep measures."
+    },
+    {
+      "id": "1205.2930",
+      "title": "Density Sensitive Hashing",
+      "published": "2012-05-14",
+      "category": "cs.IR",
+      "summary": "Nearest neighbors search is a fundamental problem in various research fields like machine learning, data mining and pattern recognition. Recently, hashing-based approaches, e.g., Locality Sensitive Hashing (LSH), are proved to be effective for scalable high dimensional nearest neighbors search. Many hashing algorithms found their theoretic root in random projection. Since these algorithms generate the hash tables (projections) randomly, a large number of hash tables (i.e., long codewords) are required in order to achieve both high precision and recall. To address this limitation, we propose a novel hashing algorithm called {\\em Density Sensitive Hashing} (DSH) in this paper. DSH can be regarded as an extension of LSH. By exploring the geometric structure of the data, DSH avoids the purely random projections selection and uses those projective functions which best agree with the distribution of the data. Extensive experimental results on real-world data sets have shown that the proposed method achieves better performance compared to the state-of-the-art hashing approaches.",
+      "why": "Density Sensitive Hashing: data-dependent hash directions chosen from the data density rather than only the covariance — the research relative of the measured noise-tail finding (aligning to low-variance directions dedicates bits to a noise-dominated region)."
+    },
+    {
+      "id": "0809.2274",
+      "title": "A randomized algorithm for principal component analysis",
+      "published": "2008-09-12",
+      "category": "stat.CO",
+      "summary": "Principal component analysis (PCA) requires the computation of a low-rank approximation to a matrix containing the data being analyzed. In many applications of PCA, the best possible accuracy of any rank-deficient approximation is at most a few digits (measured in the spectral norm, relative to the spectral norm of the matrix being approximated). In such circumstances, efficient algorithms have not come with guarantees of good accuracy, unless one or both dimensions of the matrix being approximated are small. We describe an efficient algorithm for the low-rank approximation of matrices that produces accuracy very close to the best possible, for matrices of arbitrary sizes. We illustrate our theoretical results via several numerical examples.",
+      "why": "The randomised PCA algorithm (Halko, Martinsson & Tropp): compute the top components with a randomised range finder instead of O(dim^3) eigendecomposition. The scaling path for `_refreshLshHyperplanes` if the aligned rank is ever taken large."
+    },
+    {
+      "id": "1508.04535",
+      "title": "Bit-Scalable Deep Hashing with Regularized Similarity Learning for Image Retrieval and Person Re-identification",
+      "published": "2015-08-19",
+      "category": "cs.CV",
+      "summary": "Extracting informative image features and learning effective approximate hashing functions are two crucial steps in image retrieval . Conventional methods often study these two steps separately, e.g., learning hash functions from a predefined hand-crafted feature space. Meanwhile, the bit lengths of output hashing codes are preset in most previous methods, neglecting the significance level of different bits and restricting their practical flexibility. To address these issues, we propose a supervised learning framework to generate compact and bit-scalable hashing codes directly from raw images. We pose hashing learning as a problem of regularized similarity learning. Specifically, we organize the training images into a batch of triplet samples, each sample containing two images with the same label and one with a different label. With these triplet samples, we maximize the margin between matched pairs and mismatched pairs in the Hamming space. In addition, a regularization term is introduced to enforce the adjacency consistency, i.e., images of similar appearances should have similar codes. The deep convolutional neural network is utilized to train the model in an end-to-end fashion, where discriminative image features and hash functions are simultaneously optimized. Furthermore, each bit of our hashing codes is unequally weighted so that we can manipulate the code lengths by truncating the insignificant bits. Our framework outperforms state-of-the-arts on public benchmarks of similar image search and also achieves promising results in the application of person re-identification in surveillance. It is also shown that the generated bit-scalable hashing codes well preserve the discriminative powers with shorter code lengths.",
+      "why": "Bit-scalable deep hashing: the code length should be selected with the data, not fixed — grounds the \"oversubscribed hash width\" observation from section I."
+    },
+    {
+      "id": "2009.08591",
+      "title": "Fast Search on Binary Codes by Weighted Hamming Distance",
+      "published": "2020-09-18",
+      "category": "cs.CV",
+      "summary": "Weighted Hamming distance, as a similarity measure between binary codes and binary queries, provides superior accuracy in search tasks than Hamming distance. However, how to efficiently and accurately find $K$ binary codes that have the smallest weighted Hamming distance to the query remains an open issue. In this paper, a fast search algorithm is proposed to perform the non-exhaustive search for $K$ nearest binary codes by weighted Hamming distance. By using binary codes as direct bucket indices in a hash table, the search algorithm generates a sequence to probe the buckets based on the independence characteristic of the weights for each bit. Furthermore, a fast search framework based on the proposed search algorithm is designed to solve the problem of long binary codes. Specifically, long binary codes are split into substrings and multiple hash tables are built on them. Then, the search algorithm probes the buckets to obtain candidates according to the generated substring indices, and a merging algorithm is proposed to find the nearest binary codes by merging the candidates. Theoretical analysis and experimental results demonstrate that the search algorithm improves the search accuracy compared to other non-exhaustive algorithms and provides orders-of-magnitude faster search than the linear scan baseline.",
+      "why": "Fast search on binary codes by WEIGHTED Hamming distance: not all hash bits are equally reliable, so weight them. The research grounding for the measured result that aligning the low-variance tail hurts (those bits are noise) while the high-variance prefix helps — a natural next step is to weight or drop the tail bits."
+    }
+  ]
+}

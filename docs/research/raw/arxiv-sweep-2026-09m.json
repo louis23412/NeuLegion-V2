@@ -1,0 +1,52 @@
+{
+  "generated": "2026-09-18",
+  "round": 16,
+  "tool": "arXiv API (export.arxiv.org/api/query, sortBy=submittedDate) via the agent fetch tool",
+  "purpose": "query-adaptive probe budgeting for the binary LSH index — the query-side companion to the Round-15 bit-reliability model (memory/bitweight.js) and margin multi-probe (memory/multiprobe.js)",
+  "queries": [
+    "all:\"query-adaptive\" AND all:\"hashing\"",
+    "all:\"multi-probe\" AND all:\"locality-sensitive\"",
+    "all:\"learned hash\" AND all:\"retrieval\""
+  ],
+  "headline": [
+    {
+      "id": "2604.04603",
+      "title": "Cardinality Estimation for High Dimensional Similarity Queries with Adaptive Bucket Probing",
+      "published": "2026-04-06",
+      "note": "Adopts classical multi-probe LSH but explores neighbouring buckets with a budget adapted to the query and the distance threshold; the direct grounding for a per-query probe depth in memory/multiprobe.js."
+    },
+    {
+      "id": "2608.15438",
+      "title": "NeuRoute: Logit-Guided Neural Routing for Billion-Scale Vector Search with Sub-Hour Index Construction",
+      "published": "2026-08-15",
+      "note": "The query logits are an uncertainty signal: perturb only the bits the query is least sure of. Round-15 lead, implemented this round with the uncertainty read off the exact flip law instead of a learned head."
+    },
+    {
+      "id": "1904.08623",
+      "title": "Query-Adaptive Hash Code Ranking for Large-Scale Multi-View Visual Search",
+      "published": "2019-04-18",
+      "note": "Query-adaptive bitwise/tablewise weighting for RANKING — the sibling idea; not adopted because the Round-15 recorded negative shows weighted ranking does not beat plain Hamming on the rotation-based index."
+    }
+  ],
+  "supporting": [
+    {
+      "id": "2306.03612",
+      "title": "Constant Sequence Extension for Fast Search Using Weighted Hamming Distance",
+      "published": "2023-06-06",
+      "note": "Query-adaptive per-bit weights for WHD ranking, with a linear-time bucket-sequence extension — relevant if weighted ranking is ever revisited."
+    },
+    {
+      "id": "2103.05864",
+      "title": "MP-RW-LSH: An Efficient Multi-Probe LSH Solution to ANNS in L1 Distance",
+      "published": "2021-03-10",
+      "note": "Multi-probe for L1; explains why some LSH families resist multi-probe extension. Context for the margin-order requirement."
+    },
+    {
+      "id": "2605.23807",
+      "title": "Dynamic Query Modification for Binary Locality Sensitive Hashing",
+      "published": "2026-05-08",
+      "note": "The other open item-2 piece: change the query at query time using search feedback. Still unwired."
+    }
+  ],
+  "verdict": "Implemented as the default-off query-adaptive probe budget (adaptiveMultiProbeConfig): exact Poisson-binomial flip count, exact containment and recovery coverages, single-pass recovery depth, exhaustive enumeration over the probed depth, and sigma calibration from an observed Hamming distance. See docs/LOCKED.md and docs/research/lsh-ann.md."
+}

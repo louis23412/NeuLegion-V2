@@ -1,0 +1,368 @@
+{
+  "arxiv_ttt": [
+    {
+      "id": "2609.08162v1",
+      "date": "2026-09",
+      "title": "WorldAgen: Unified State-Action Prediction with Test-Time World Model Training"
+    },
+    {
+      "id": "2608.27448v1",
+      "date": "2026-08",
+      "title": "TTPO: Test-Time Policy Optimization"
+    },
+    {
+      "id": "2608.21308v2",
+      "date": "2026-08",
+      "title": "Rethinking Expressivity and Efficiency in Test-Time Training"
+    },
+    {
+      "id": "2608.09448v2",
+      "date": "2026-08",
+      "title": "VANE: Reliable Test-Time Training for Vision-Language-Action Models via Future Visual Representation Prediction"
+    },
+    {
+      "id": "2608.07110v1",
+      "date": "2026-08",
+      "title": "Modular TTT: Rethinking Test-Time Training as Composable Modules"
+    }
+  ],
+  "arxiv_ttmemory": [
+    {
+      "id": "2607.24667v1",
+      "date": "2026-07",
+      "title": "Eviction as Estimation: A Fixed-Lag Smoothing View of Test-Time Memory, and When Measuring Beats Accumulating"
+    },
+    {
+      "id": "2607.01043v4",
+      "date": "2026-09",
+      "title": "DART-VLN: Test-Time Memory Decay and Anti-Loop Regularization for Discrete Vision-Language Navigation"
+    },
+    {
+      "id": "2605.10537v1",
+      "date": "2026-05",
+      "title": "Mela: Test-Time Memory Consolidation based on Transformation Hypothesis"
+    },
+    {
+      "id": "2604.08216v3",
+      "date": "2026-05",
+      "title": "MemCoT: Test-Time Scaling through Memory-Driven Chain-of-Thought"
+    },
+    {
+      "id": "2603.09221v2",
+      "date": "2026-05",
+      "title": "Beyond Test-Time Memory: State-Space Optimal Control for LLM Reasoning"
+    },
+    {
+      "id": "2602.20323v6",
+      "date": "2026-05",
+      "title": "PhysMem: Scaling Test-Time Memory for Embodied Physical Reasoning"
+    },
+    {
+      "id": "2510.09551v1",
+      "date": "2025-10",
+      "title": "Titans Revisited: A Lightweight Reimplementation and Critical Analysis of a Test-Time Memory Model"
+    },
+    {
+      "id": "2506.14852v2",
+      "date": "2026-01",
+      "title": "Agentic Plan Caching: Test-Time Memory for Fast and Cost-Efficient LLM Agents"
+    }
+  ],
+  "arxiv_rope": [
+    {
+      "id": "2609.16871v1",
+      "date": "2026-09",
+      "title": "SPEAR NeXT Causal Latent Forecasting Across Multiple Horizons for Spectral Temporal Earth Representation Learning"
+    },
+    {
+      "id": "2609.13612v1",
+      "date": "2026-09",
+      "title": "AttnFuse: A Composable DSL for Compiling Attentions to Fused GPU Kernels"
+    },
+    {
+      "id": "2608.29715v1",
+      "date": "2026-08",
+      "title": "Higher-Dimensional Rotary Position Embedding"
+    },
+    {
+      "id": "2608.10021v1",
+      "date": "2026-08",
+      "title": "Position Encoding in Transformers: From Absolute and Relative Methods to Rotary Position Embeddings and Long-Context Scaling"
+    },
+    {
+      "id": "2608.02947v1",
+      "date": "2026-08",
+      "title": "ATFlash: Per-RoPE-Wavelength Attention Windows for Compute/Memory-Efficient LLM Inference"
+    }
+  ],
+  "arxiv_purged": [
+    {
+      "id": "2407.17645v1",
+      "date": "2024-07",
+      "title": "Hopfield Networks for Asset Allocation"
+    }
+  ],
+  "arxiv_moe2": [
+    {
+      "id": "2609.18315v1",
+      "date": "2026-09",
+      "title": "Multi-Appliance Non-Intrusive Load Monitoring via Label-Preserving Aggregate Recomposition and Prediction Consistency"
+    },
+    {
+      "id": "2609.18131v1",
+      "date": "2026-09",
+      "title": "Colla-Q: Toward Collaborative Experts in MoE Quantization via Minimax Precision Balancing"
+    },
+    {
+      "id": "2609.18110v1",
+      "date": "2026-09",
+      "title": "SSD-LLaMA: SSD-Native Inference for Trillion-Parameter MoE at 1+ Token/s on a Consumer PC"
+    },
+    {
+      "id": "2609.18063v2",
+      "date": "2026-09",
+      "title": "The Other Half of the Memory Wall: Serving 35B MoEs from SSD with Trained Routing Prediction"
+    }
+  ],
+  "arxiv_memory": [
+    {
+      "id": "2609.20772v1",
+      "date": "2026-09",
+      "title": "Conditional Independence Testing in Time Series"
+    },
+    {
+      "id": "2609.20700v1",
+      "date": "2026-09",
+      "title": "Should This Case Be Adapted? Prediction Fragmentation Controls Test-Time Adaptation"
+    }
+  ],
+  "arxiv_lsh2": [
+    {
+      "id": "2608.04405v1",
+      "date": "2026-08",
+      "title": "Training-Free Hashing-Based Attention via Binary Principal Components"
+    },
+    {
+      "id": "2607.09909v1",
+      "date": "2026-07",
+      "title": "Learning Partition Trees for Nearest Neighbor Search"
+    },
+    {
+      "id": "2606.20437v1",
+      "date": "2026-06",
+      "title": "HEPTv2: End-to-End Efficient Point Transformer for Charged Particle Reconstruction"
+    },
+    {
+      "id": "2607.19368v1",
+      "date": "2026-06",
+      "title": "Spectral-LSH: Sub-Quadratic Prompt Compression via Krylov-Projected Locality-Sensitive Hashing"
+    },
+    {
+      "id": "2606.03001v2",
+      "date": "2026-06",
+      "title": "FOLD: Fuzzy Online Deduplication for Very Large Evolving Datasets via Approximate Nearest Neighbor Search"
+    },
+    {
+      "id": "2605.23807v3",
+      "date": "2026-06",
+      "title": "Dynamic Query Modification for Binary Locality Sensitive Hashing"
+    },
+    {
+      "id": "2607.16211v1",
+      "date": "2026-05",
+      "title": "Accurate and Efficient Long-Term Memory for LLM Agents"
+    },
+    {
+      "id": "2605.09472v1",
+      "date": "2026-05",
+      "title": "Positional LSH: Binary Block Matrix Approximation for Attention with Linear Biases"
+    }
+  ],
+  "arxiv_linattn": [
+    {
+      "id": "2609.17997v1",
+      "date": "2026-09",
+      "title": "The Attention Within: Consensus Dynamics in Selective State Space Models"
+    },
+    {
+      "id": "2609.16183v1",
+      "date": "2026-09",
+      "title": "Anatomy of Associative Recall in Fixed-State Recurrences: A Matched-State Decomposition, an Interference Wall, and a Curriculum That Breaks It"
+    },
+    {
+      "id": "2609.14320v1",
+      "date": "2026-09",
+      "title": "SpectralShift: Effective Context Window Extension of Gated DeltaNet via Spectral Reparameterization"
+    },
+    {
+      "id": "2609.08189v1",
+      "date": "2026-09",
+      "title": "Do Dynamic Routers Need Memory? HeRo: History-Aware Routing for Efficient LLM Inference"
+    },
+    {
+      "id": "2609.07816v1",
+      "date": "2026-09",
+      "title": "Kalman Delta Networks: Uncertainty-aware Associative Memory"
+    },
+    {
+      "id": "2609.06341v1",
+      "date": "2026-09",
+      "title": "Linear Algebra Foundations of Efficient Attention: A Phase Reversal in Rank Collapse Under SVD Compression"
+    },
+    {
+      "id": "2609.04098v1",
+      "date": "2026-09",
+      "title": "Why Gated DeltaNet Survives 4-Bit Quantization: NVFP4 W4A4 for the Recurrent Half of a Hybrid 27B LLM"
+    },
+    {
+      "id": "2609.02986v1",
+      "date": "2026-09",
+      "title": "Modern Transformers Are Implicit Hybrids: From Functional Differentiation to Principled Hybrid Architecture Design"
+    },
+    {
+      "id": "2609.01282v1",
+      "date": "2026-09",
+      "title": "HiLRP: Toward One Trustworthy Explanation for Vision Transformer: Conservation-Valid Attribution via Attention Primitives"
+    }
+  ],
+  "arxiv_kd": [
+    {
+      "id": "2609.19964v1",
+      "date": "2026-09",
+      "title": "Enhanced Knowledge Distillation for Detection Transformer via Teacher Prediction Refinement"
+    },
+    {
+      "id": "2609.17284v1",
+      "date": "2026-09",
+      "title": "Personalized Federated Learning through Global Knowledge Distillation and Local Head Adaptation"
+    },
+    {
+      "id": "2609.15295v2",
+      "date": "2026-09",
+      "title": "Knowledge Distillation of a Normalising Flow for Real-Time Anomaly Detection at LHC Level-1 Trigger"
+    },
+    {
+      "id": "2609.13580v1",
+      "date": "2026-09",
+      "title": "FLoKD: Adaptive Knowledge Distillation for Federated Low-Rank LLM over Wireless Networks"
+    },
+    {
+      "id": "2609.12913v2",
+      "date": "2026-09",
+      "title": "Parameter-Efficient Retrievers for Polish and European Languages"
+    }
+  ],
+  "arxiv_finance": [
+    {
+      "id": "2609.20810v1",
+      "date": "2026-09",
+      "title": "A near-IR survey of luminous asymptotic giant branch stars in the satellites and stellar halo of M31"
+    },
+    {
+      "id": "2609.20805v1",
+      "date": "2026-09",
+      "title": "Universal completeness of exponentials"
+    },
+    {
+      "id": "2609.20795v1",
+      "date": "2026-09",
+      "title": "Systematic Effects of Hydrogen and Helium Atmosphere Mismatch on Radius Inference in PSR~J0740+6620-like Synthetic NICER Data"
+    }
+  ],
+  "arxiv_es": [
+    {
+      "id": "2609.10980v1",
+      "date": "2026-09",
+      "title": "EGGROLL, Unrolled: Understanding and Improving Low-Rank Evolution Strategies at Scale"
+    },
+    {
+      "id": "2608.28011v1",
+      "date": "2026-08",
+      "title": "Coverage, Not Credit: Failure-Credit Routing of Zeroth-Order Perturbation Budgets Does Not Improve On-Pool Sample Efficiency for LLM Agents"
+    },
+    {
+      "id": "2608.27351v2",
+      "date": "2026-08",
+      "title": "Understanding Evolution Strategies for LLM Reasoning: Broader Reasoning Coverage than GRPO"
+    },
+    {
+      "id": "2609.00023v1",
+      "date": "2026-08",
+      "title": "ES-AHD: An Evolution Strategy Framework for Automatic Heuristic Design"
+    },
+    {
+      "id": "2608.23714v1",
+      "date": "2026-08",
+      "title": "Integer Natural Evolution Strategies"
+    },
+    {
+      "id": "2608.15451v1",
+      "date": "2026-08",
+      "title": "Mental Model Management: An Operator-Based Framework for LLM Memory"
+    }
+  ],
+  "arxiv_ens": [
+    {
+      "id": "2608.11054v1",
+      "date": "2026-08",
+      "title": "Uncertainty-Aware Deep Learning for Genomics Applications: Insights from an Empirical Study"
+    },
+    {
+      "id": "2608.11280v1",
+      "date": "2026-08",
+      "title": "Uncertainty-Aware and Explainable Ensemble Deep Learning Framework for Multi-Class Skin Lesion Classification"
+    },
+    {
+      "id": "2608.01090v1",
+      "date": "2026-08",
+      "title": "Breaking Diversity Collapse in Spiking Pseudo-Ensembles for Efficient OOD Detection in Remote Sensing"
+    }
+  ],
+  "arxiv_cf": [
+    {
+      "id": "2609.19985v1",
+      "date": "2026-09",
+      "title": "Past, Future, All at Once: Mitigating Stability-Plasticity Dilemma via Post-hoc JANUS Rectification"
+    },
+    {
+      "id": "2609.17866v1",
+      "date": "2026-09",
+      "title": "Uncertainty-Aware Continual Learning for Open-World Intent Discovery Under an evolving Label Space"
+    },
+    {
+      "id": "2609.17141v1",
+      "date": "2026-09",
+      "title": "Continual Learning for Traversability Prediction with Uncertainty-Aware Adaptation"
+    },
+    {
+      "id": "2609.17026v1",
+      "date": "2026-09",
+      "title": "CLARE: Scalable Class-Incremental Continual Learning via a Sparsity-Based Framework"
+    },
+    {
+      "id": "2609.16537v1",
+      "date": "2026-09",
+      "title": "What Does Layer-Importance Reveal About Transformers and State-Space Models?"
+    },
+    {
+      "id": "2609.13771v1",
+      "date": "2026-09",
+      "title": "Homeostatic Continual Learning"
+    },
+    {
+      "id": "2609.12655v1",
+      "date": "2026-09",
+      "title": "LifeMem: Enabling Lifelong Experience Reuse for LLM Agents"
+    },
+    {
+      "id": "2609.12577v1",
+      "date": "2026-09",
+      "title": "SCORE: SubDistribution-aware Collaborative Knowledge Reinforcing for Cloth-Hybrid Lifelong Person Re-Identification"
+    },
+    {
+      "id": "2609.11447v1",
+      "date": "2026-09",
+      "title": "Investigating catastrophic forgetting in sound event classification"
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "generated": "2026-09-19",
+  "round": 17,
+  "tool": "arXiv API (export.arxiv.org/api/query, sortBy=submittedDate) via the agent fetch tool",
+  "purpose": "dynamic query modification for binary LSH (the query-side companion to the index-side recall fixes), plus the next-cycle lead sweep for angular ANN (locality-sensitive filtering) and associative-memory retrieval",
+  "queries": [
+    "all:\"locality sensitive hashing\"",
+    "all:\"hash-based attention\" OR all:\"hashing attention\"",
+    "all:\"associative memory retrieval\"",
+    "id_list=2604.24323",
+    "id_list=2602.11322"
+  ],
+  "implemented": [
+    {
+      "id": "2605.23807",
+      "title": "Dynamic Query Modification for Binary Locality Sensitive Hashing",
+      "published": "2026-06-30",
+      "note": "Round 17: the query is replaced by the l2-normalised centroid <c> of the neighbours found so far. The four results used as the module's grounding, all proved exactly in querymod.test.js — Theorem 1 (maximality of the centroid on sum_{x in S} x.u, with dotProductSum(<c>,S) = ||sum x|| = k||mean||), Theorem 2 (average collision probability, first-order 1/2 + sum x.u/(k pi), maximised at <c>), Appendix C.1 (average residual covariance const - ((sum x.u)/k)^2, minimised at +-<c>), and Section 6.4 (the centroid collides with a member of S on every hyperplane while a raw query need not) — plus the denoising result and the synthetic hash-width crossover. Wired behind the default-off _queryModConfig."
+    }
+  ],
+  "new_leads": [
+    {
+      "id": "2604.24323",
+      "title": "A Tour of Locality Sensitive Filtering on the Sphere",
+      "published": "2026-08-10",
+      "note": "Locality-Sensitive Filtering (LSF): asymmetric regions independently control queries and data updates, affording greater expressivity than LSH and a better exponent for angular distance. A self-contained treatment of angular distance under symmetric Gaussian filters on the unit sphere — the canonical setting monotonically equivalent to cosine similarity, i.e. exactly NeuLegion's projection space. The natural next index tier (a filter-based ANN) after the LSH/multi-probe/PCA-aligned stack; would give a different recall-vs-memory tradeoff than `_getGlobalLSHCandidates`."
+    },
+    {
+      "id": "2602.11322",
+      "title": "Predictive Associative Memory: Retrieval Beyond Similarity Through Temporal Co-occurrence",
+      "published": "2026-02-11",
+      "note": "Retrieval by temporal co-occurrence rather than representational similarity (a JEPA-style predictor navigates the associative structure). Directly relevant to NeuLegion's episodic/adaptive memory: the bank currently retrieves by projection cosine, but a trading stream's useful memories may be the ones that *followed* a similar state, not the states that look similar. A research direction for the memory-retrieval domain, though it needs a trained predictor (not a pure-function proof)."
+    },
+    {
+      "id": "2606.18492",
+      "title": "Dense Holographic Associative Memories",
+      "published": "2026-06-22",
+      "note": "Dense Hopfield-style associative recall via a volume-hologram analogy — capacity/denoising theory for the episodic bank. Related to the existing modern-Hopfield grounding (ramsauer2020hopfield)."
+    },
+    {
+      "id": "2606.28300",
+      "title": "Sinkhorn Based Associative Memory Retrieval Using Spherical Hellinger Kantorovich Dynamics",
+      "published": "2026-03-21",
+      "note": "Dense associative memory over empirical measures (weighted point clouds) with a debiased Sinkhorn/Hopfield energy. A heavier retrieval operator than cosine; recorded for the memory-retrieval domain."
+    },
+    {
+      "id": "2605.09472",
+      "title": "Positional LSH: Binary Block Matrix Approximation for Attention with Linear Biases",
+      "published": "2026-05-10",
+      "note": "Attention with positional bias through the LSH lens — relevant to the attention-kernels domain (RoPE / linear-bias attention), not the ANN index."
+    },
+    {
+      "id": "2604.21442",
+      "title": "2L-LSH: A Locality-Sensitive Hash Function-Based Method For Rapid Point Cloud Indexing",
+      "published": "2026-05-03",
+      "note": "A two-level LSH construction for rapid indexing; a candidate index-structure refinement."
+    },
+    {
+      "id": "2606.03001",
+      "title": "FOLD: Fuzzy Online Deduplication for Very Large Evolving Datasets via Approximate Nearest Neighbor Search",
+      "published": "2026-06-11",
+      "note": "Online dedup where exact-hash equality is replaced by an ANN similarity floor — the fuzzy variant of `_computeContentHash` suppression. Candidate for the memory-write path."
+    }
+  ],
+  "carry_over": [
+    "2608.04405 (BinaryPC data-aware hashing)",
+    "2605.11921 (LSH distortion of Ulam and Cayley similarities)",
+    "2607.19368 (Spectral-LSH: Krylov-projected LSH)",
+    "2607.09909 (learning partition trees for NN search)",
+    "2607.28999 (MESS: multi-graph HNSW)",
+    "2608.15438 (NeuRoute: query logits as an uncertainty signal)"
+  ]
+}

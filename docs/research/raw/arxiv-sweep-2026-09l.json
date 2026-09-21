@@ -1,0 +1,101 @@
+{
+  "generatedAt": "2026-09-19T14:07:31.579Z",
+  "note": "Round 15 literature refresh. Target: the bit-reliability model new in `src/hivemind/memory/bitweight.js` (the exact flip law P = arccos(sqrt(lambda/(lambda+sigma^2)))/pi, its information-theoretic reading, and the data-driven aligned-rank policy) plus the recorded section-I negative result on reliability-weighted candidate ranking. Headline fresh lead: 2608.15438 (NeuRoute — logit-based uncertain-bit perturbation, i.e. reliability-weighted probing). Also: 2603.24920 (PDET-LSH, index-construction efficiency), 2607.24567 (DSCH-loss, information-channel hashing), 2605.28034 (Clark Hash, float-query vs stored sketch), 2605.02030 (U-HNSW), 2601.09159 (isolation-kernel binary embeddings).",
+  "purpose": "Ground and evolve docs/research/lsh-ann.md and docs/TODO.md item 2 after Round 15 proved the bit-reliability law and wired the data-driven rank policy.",
+  "queries": [
+    {
+      "file": "lsh1b",
+      "query": "all:\"locality-sensitive hashing\""
+    },
+    {
+      "file": "hash2b",
+      "query": "all:\"binary hash codes\""
+    },
+    {
+      "file": "ann3b",
+      "query": "all:\"approximate nearest neighbor\" AND all:hashing"
+    }
+  ],
+  "entries": [
+    {
+      "id": "2608.15438",
+      "title": "NeuRoute: Logit-Guided Neural Routing for Billion-Scale Vector Search with Sub-Hour Index Construction",
+      "published": "2026-08-15",
+      "category": "cs.DB",
+      "summary": "Building approximate nearest neighbor (ANN) indexes at billion scale is often dominated by expensive global clustering or graph construction, making time-to-index a first-order systems concern. We present NeuRoute, a learned hashing index that turns short binary codes into an effective routing primitive for large-scale vector search. NeuRoute trains a lightweight neural network encoder with a selective similarity-preserving objective to produce well-balanced binary addresses. During construction, NeuRoute organizes vectors into buckets by their codes and performs bucket-local clustering in the encoder's low-dimensional space to form centroids. At query time, NeuRoute exploits the encoder logits as an uncertainty signal: it uses deviation-to-threshold scores to prioritize uncertain-bit perturbations for query-adaptive multi-bucket probing, scores bucket-local centroids by their distances ",
+      "why": "NeuRoute (2026): a learned hashing index that turns short binary codes into a routing primitive, and at query time uses the encoder logits as an UNCERTAINTY signal — deviation-to-threshold scores prioritize perturbing the bits the query is least certain about. That is exactly the reliability-weighted probe-order idea this round formalises (`flipProbabilityFromMargin`; margin order IS flip-probability order), and the strongest fresh lead for a weighted/adaptive probe budget."
+    },
+    {
+      "id": "2603.24920",
+      "title": "PDET-LSH: Scalable In-Memory Indexing for High-Dimensional Approximate Nearest Neighbor Search with Quality Guarantees",
+      "published": "2026-03-26",
+      "category": "cs.DB",
+      "summary": "Locality-sensitive hashing (LSH) is a well-known solution for approximate nearest neighbor (ANN) search with theoretical guarantees. Traditional LSH-based methods mainly focus on improving the efficiency and accuracy of query phase by designing different query strategies, but pay little attention to improving the efficiency of the indexing phase. They typically fine-tune existing data-oriented partitioning trees to index data points and support their query strategies. However, their strategy to directly partition the multidimensional space is time-consuming, and performance degrades as the space dimensionality increases. In this paper, we design an encoding-based tree called Dynamic Encoding Tree (DE-Tree) to improve the indexing efficiency and support efficient range queries. Based on DE-Tree, we propose a novel LSH scheme called DET-LSH. DET-LSH adopts a novel query strategy, which per",
+      "why": "PDET-LSH (2026): scalable in-memory LSH with quality guarantees; its contribution is on the INDEX-CONSTRUCTION side (partition/encoding efficiency) rather than the query side. Directly relevant to `_refreshLshHyperplanes` build cost and the multi-set/multi-table layout."
+    },
+    {
+      "id": "2605.09472",
+      "title": "Positional LSH: Binary Block Matrix Approximation for Attention with Linear Biases",
+      "published": "2026-05-10",
+      "category": "cs.LG",
+      "summary": "Positional encoding in transformers is commonly implemented through positional embeddings, attention masks, or bias terms, but formal connections between these mechanisms remain limited. We study attention with positional bias through the lens of locality-sensitive hashing (LSH), focusing on Attention with Linear Biases (ALiBi). We show that the ALiBi bias matrix is the expectation of contiguous block-diagonal binary masks induced by a ``positional LSH'' scheme. The empirical mean of masks sampled from this scheme yields spectral norm and max-norm approximation guarantees with bounded block sizes with high probability. This structural theorem implies a uniform approximation theorem for ALiBi-biased attention: with high probability over the sampled masks, the approximate attention output is accurate simultaneously for all query-key-value inputs and can be computed in near-linear time in t",
+      "why": "Positional LSH (2026): derives ALiBi attention as an LSH scheme. Context for the platform's hashing-based retrieval being formalisable, and for hash-width/recall trade-offs."
+    },
+    {
+      "id": "2607.24567",
+      "title": "DSCH-Loss: A Dynamic Semantic Channel Objective for Deep Semantic Hashing",
+      "published": "2026-07-27",
+      "category": "cs.AI",
+      "summary": "Semantic hashing methods for generating short binary hash codes that allow efficient approximate nearest neighbor search in high-dimensional data spaces have gained extensive consideration in recent years. Deep learning-based methods offer better semantic capturing capabilities than traditional approaches relying on manual feature engineering. Moreover, they enable a data-driven approach to semantic hashing across diverse data modalities, yielding high-quality cross-modal hash codes within a shared Hamming space. Previous work investigated the properties of this Hamming space and introduced a loss function based on predefined so-called semantic channels with fixed width and Hamming distances derived from label similarities. However, this formulation also introduced discontinuities into the loss landscape, complicating optimization. Based on these observations, we propose a newly designed",
+      "why": "DSCH-Loss (2026): a \"dynamic semantic channel\" objective for deep semantic hashing — an information-channel view of the hash bits, the same lens as the binary-symmetric-channel reliability weight (1 - H2(P(flip))) this round proves."
+    },
+    {
+      "id": "2605.28034",
+      "title": "Clark Hash: Stateless Sparse Johnson-Lindenstrauss Quantization for Neural Embeddings",
+      "published": "2026-05-27",
+      "category": "cs.AI",
+      "summary": "Clark Hash is a small method for storing neural embeddings in less space. It normalizes each database vector, applies a deterministic sparse signed Johnson-Lindenstrauss projection, clips the result, and stores a fixed-width scalar-quantized code. Queries stay in floating point and are scored against the stored sketches. In the default 384-dimensional sentence-embedding setting, Clark Hash stores a cosine-search vector in 48 bytes instead of 1536 bytes for dense f32 storage. This is 32x smaller. The method does not need a training pass, learned codebooks, rotations, or corpus statistics before new vectors can be stored. We describe the codec, the Rust implementation, and a multilingual sentence-similarity evaluation on 9,304 labeled pairs from 29 subsets. With a multilingual MiniLM encoder, the 48-byte sketches reached 0.910 and 0.946 macro Pearson correlation with dense cosine scores on",
+      "why": "Clark Hash (2026): stateless sparse Johnson-Lindenstrauss sketches where the QUERY stays in floating point and is scored against quantized stored sketches. Mirrors the platform's design of a binary bucket index plus an exact projection-cosine rescore — and explains why the candidate pool is already re-scored continuously (the recorded section-I negative result)."
+    },
+    {
+      "id": "2605.02030",
+      "title": "U-HNSW: An Efficient Graph-based Solution to ANNS Under Universal Lp Metrics",
+      "published": "2026-05-03",
+      "category": "cs.DB",
+      "summary": "Approximate nearest neighbor search under universal L_p metrics (ANNS-U-L_p) is an important and challenging research problem, as it requires answering queries under all possible p (0&lt;p &lt;= 2) values simultaneously without building an index for each possible p value. The state-of-the-art solution, called MLSH, is a Locality-Sensitive Hashing (LSH)-based ANNS method with barely acceptable query performance. In contrast, graph-based ANNS methods, which offer significantly improved query efficiency on the ANNS-L_p problem (with a fixed p-value), cannot be naively extended to the ANNS-U-$L_p$ problem. In this paper, we propose U-HNSW, the first graph-based method for ANNS-U-L_p. Our scheme uses HNSW graph indexes built on two base metrics ($L_1$ and $L_2$) to generate promising nearest neighbors candidates, and then verifies these candidates with an early-termination strategy that subst",
+      "why": "U-HNSW (2026): graph-based ANN under universal Lp metrics without rebuilding per p. The graph tier recorded as the next index tier if the bank grows past ~1e5 prototypes."
+    },
+    {
+      "id": "2601.09159",
+      "title": "LLMs Meet Isolation Kernel: Lightweight, Learning-free Binary Embeddings for Fast Retrieval",
+      "published": "2026-01-14",
+      "category": "cs.IR",
+      "summary": "Large language models (LLMs) have recently enabled remarkable progress in text representation. However, their embeddings are typically high-dimensional, leading to substantial storage and retrieval overhead. Although recent approaches such as Matryoshka Representation Learning (MRL) and Contrastive Sparse Representation (CSR) alleviate these issues to some extent, they still suffer from retrieval accuracy degradation. This paper proposes Isolation Kernel Embedding or IKE, a learning-free method that transforms an LLM embedding into a binary embedding using Isolation Kernel (IK). Lightweight and based on binary encoding, IKE offers a low memory footprint and fast bitwise computation, lowering retrieval latency. Experiments on multiple text retrieval datasets demonstrate that IKE offers up to 16.7x faster retrieval and 16x lower memory usage than the original LLM embeddings, while maintain",
+      "why": "Isolation Kernel binary embeddings (2026): lightweight, learning-free binary embeddings for fast retrieval — an alternative data-aware embedding family to PCA-aligned hashing."
+    },
+    {
+      "id": "2605.11921",
+      "title": "On the LSH Distortion of Ulam and Cayley Similarities",
+      "published": "2026-05-12",
+      "category": "cs.DS",
+      "summary": "Locality-sensitive hashing (LSH) has found widespread use as a fundamental primitive, particularly to accelerate nearest neighbor search. An LSH scheme for a similarity function $S:\\mathcal{X} \\times \\mathcal{X} \\to [0,1]$ is a distribution over hash functions on $\\mathcal{X}$ with the property that the probability of collision of any two elements $x,y\\in \\mathcal{X}$ is exactly equal to $S(x,y)$. However, not all similarity functions admit exact LSH schemes. The notion of LSH distortion measures how multiplicatively close a similarity function is to having an LSH scheme. In this work, we study the LSH distortion of the Ulam and Cayley similarities, which are popular similarity measures on permutations of $n$ elements. We show that the Ulam similarity admits a sublinear LSH distortion of $O(n / \\sqrt{\\log n})$; we also prove a lower bound of $Ω(n^{0.12})$ on the best LSH distortion achie",
+      "why": "LSH distortion of Ulam/Cayley similarities (2026): a formal distortion study of LSH for non-vector similarities; bounds-of-hashing context."
+    },
+    {
+      "id": "2605.23807",
+      "title": "Dynamic Query Modification for Binary Locality Sensitive Hashing",
+      "published": "2026-05-22",
+      "category": "cs.CG",
+      "summary": "Our context of interest is how binary locality sensitive hash (LSH) functions can be used to solve the approximate near neighbour (ANN) problem in hyperspherical spaces, which seeks to find the $k$ closest elements of some dataset $X \\subset \\mathbb{R}^d$ to some further point $\\mathbf{q} \\in \\mathbb{R}^d$ presented as a query. Binary locality sensitive function families $\\mathcal{H}$ are sets of functions each with signature $h: \\mathbf{x} \\in \\mathbb{R}^d \\rightarrow \\{ 0, 1 \\}$. A function is locality sensitive if the output of the function is more likely to be equal (a `hash collision') if two close vectors are used as input than if two far vectors are used. In this paper we introduce dynamic query modification. This procedure changes $\\mathbf{q}$ at query time using information acquired during search to approximate the point $\\langle \\mathbf{c} \\rangle$, which is the $\\ell_2$-normal",
+      "why": "Dynamic Query Modification for binary LSH (2026): the query-side companion to index-side alignment, already recorded in the Round-14 sweep; still the other open TODO item-2 remainder."
+    },
+    {
+      "id": "2608.04405",
+      "title": "Training-Free Hashing-Based Attention via Binary Principal Components",
+      "published": "2026-08-05",
+      "category": "cs.LG",
+      "summary": "Long-context large language models (LLMs) are increasingly deployed in real-world applications, yet self-attention remains a major efficiency bottleneck -- especially during decoding -- due to the necessity of repeatedly processing ever-growing key-value (KV) caches. Existing sparse attention reduce computation by attending to fewer KV pairs, but often suffer from substantial accuracy degradation, require additional training, or rely on expensive hashing. In this work, we present BinaryPC, a training-free, data-aware hashing-based sparse attention for long-context LLMs. BinaryPC constructs compact binary hash codes and corresponding hash function by computing binary principal components of data. Unlike Locality-Sensitive Hashing (LSH) with data-independent random projections or learned non-linear hashing methods, BinaryPC constructs binary codes that explicitly preserve the structural in",
+      "why": "BinaryPC (2026): the training-free data-aware hashing this round extends with `tableVariances` + the data-driven rank policy."
+    }
+  ]
+}

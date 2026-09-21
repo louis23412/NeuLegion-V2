@@ -1,0 +1,201 @@
+{
+  "generatedAt": "2026-09-19T10:07:27.044Z",
+  "note": "Round 5 literature refresh (quoted-phrase queries, sortBy=relevance), targeting the block-bootstrap / multiple-testing front that reality_check.js implements (White RC, Hansen SPA, consistent SPA_c, Romano-Wolf StepM). Purpose: ground the automatic block-length follow-up and confirm nothing newer supersedes the stationary-bootstrap max-t. Headline finds: 0903.0474 (\"A note on the stationary bootstrap's variance\") explains the larger asymptotic variance of the stationary bootstrap versus other block bootstraps — consistent with the measured size distortion of the RC/SPA bootstrap on i.i.d. noise being driven by block resampling, not the studentization; 1403.3275 (\"Convergence rates of empirical block length selectors for block bootstrap\") gives the convergence rates for the Hall-Horowitz-Jing and Politis-White block-length selectors, grounding the `blockLength: \"auto\"` follow-up in docs/TODO.md; 2212.08372 (\"On Asymptotic Behaviors of Stepwise Multiple Testing Procedures\") grounds the Romano-Wolf step-down asymptotics. Entries are lightly filtered to bootstrap / multiple-testing / data-snooping relevance.",
+  "queries": [
+    {
+      "file": "stationary-bootstrap",
+      "query": "\"stationary bootstrap\"",
+      "totalResults": 16,
+      "count": 4,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/0903.0474v1",
+          "title": "A note on the stationary bootstrap's variance",
+          "published": "2009-03-03",
+          "category": "math.ST",
+          "summary": "Because the stationary bootstrap resamples data blocks of random length, this method has been thought to have the largest asymptotic variance among block bootstraps Lahiri [Ann. Statist. 27 (1999) 386--404]. It is shown here that the variance of the stationary bootstrap surprisingly matches that of a block bootstrap based on nonrandom, nonoverlapping blocks. This argument translates the variance expansion into the frequency domain and provides a unified wa"
+        },
+        {
+          "id": "http://arxiv.org/abs/2112.11837v1",
+          "title": "Stationary Bootstrap: A Refined Error Estimation for Equilibrium Time Series",
+          "published": "2021-12-22",
+          "category": "cond-mat.stat-mech",
+          "summary": "In Markov-chain Monte Carlo simulations, estimating statistical errors or confidence intervals of numerically obtained values is an essential task. In this paper, we review several methods for error estimation, such as simple empirical estimation with multiple independent runs, the blocking method, and the stationary bootstrap method. We then study their performance when applied to an actual Monte-Carlo time series. We find that the stationary bootstrap me"
+        },
+        {
+          "id": "http://arxiv.org/abs/1107.5592v1",
+          "title": "Estimating Extremal Dependence in Univariate and Multivariate Time Series via the Extremogram",
+          "published": "2011-07-27",
+          "category": "stat.ME",
+          "summary": "Davis and Mikosch [7] introduced the extremogram as a flexible quantitative tool for measuring various types of extremal dependence in a stationary time series. There we showed some standard statistical properties of the sample extremogram. A major difficulty was the construction of credible confidence bands for the extremogram. In this paper, we employ the stationary bootstrap to overcome this problem. Moreover, we introduce the cross extremogram as a mea"
+        },
+        {
+          "id": "http://arxiv.org/abs/2212.08160v1",
+          "title": "Skip-sampling: subsampling in the frequency domain",
+          "published": "2022-12-15",
+          "category": "stat.ME",
+          "summary": "Over the last 35 years, several bootstrap methods for time series have been proposed. Popular `time-domain' methods include the block-bootstrap, the stationary bootstrap, the linear process bootstrap, etc.; subsampling for time series is also available, and is closely related to the block-bootstrap. `Frequency-domain' bootstrap has been performed either by resampling the periodogram ordinates or by resampling the ordinates of the Discrete Fourier Transform"
+        }
+      ]
+    },
+    {
+      "file": "block-length",
+      "query": "\"block length\" bootstrap",
+      "totalResults": 10186,
+      "count": 4,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/1605.01440v2",
+          "title": "Second Order Correctness of Perturbation Bootstrap M-Estimator of Multiple Linear Regression Parameter",
+          "published": "2016-05-04",
+          "category": "math.ST",
+          "summary": "Consider the multiple linear regression model $y_{i} = \\boldsymbol{x}'_{i} \\boldsymbolβ + ε_{i}$, where $ε_i$'s are independent and identically distributed random variables, $\\mathbf{x}_i$'s are known design vectors and $\\boldsymbolβ$ is the $p \\times 1$ vector of parameters. An effective way of approximating the distribution of the M-estimator $\\boldsymbol{\\barβ}_n$, after proper centering and scaling, is the Perturbation Bootstrap Method. In this current"
+        },
+        {
+          "id": "http://arxiv.org/abs/2109.08033v2",
+          "title": "Bootstrap Method in Harmonic Oscillator",
+          "published": "2021-09-16",
+          "category": "hep-th",
+          "summary": "Recently, an application of the numerical bootstrap method to quantum mechanics was proposed, and it successfully reproduces the eigenstates of various systems. However, it is unclear why this method works. In order to understand this question, we study the bootstrap method in harmonic oscillators. We find that the problem reduces to the Dirac's ladder operator problem and is exactly solvable analytically. Our result suggests that the bootstrap method may "
+        },
+        {
+          "id": "http://arxiv.org/abs/2303.14088v2",
+          "title": "On the failure of the bootstrap for Chatterjee's rank correlation",
+          "published": "2023-03-24",
+          "category": "math.ST",
+          "summary": "While researchers commonly use the bootstrap for statistical inference, many of us have realized that the standard bootstrap, in general, does not work for Chatterjee's rank correlation. In this paper, we provide proof of this issue under an additional independence assumption, and complement our theory with simulation evidence for general settings. Chatterjee's rank correlation thus falls into a category of statistics that are asymptotically normal but boo"
+        },
+        {
+          "id": "http://arxiv.org/abs/1403.3275v1",
+          "title": "Convergence rates of empirical block length selectors for block bootstrap",
+          "published": "2014-03-13",
+          "category": "math.ST",
+          "summary": "We investigate the accuracy of two general non-parametric methods for estimating optimal block lengths for block bootstraps with time series - the first proposed in the seminal paper of Hall, Horowitz and Jing (Biometrika 82 (1995) 561-574) and the second from Lahiri et al. (Stat. Methodol. 4 (2007) 292-321). The relative performances of these general methods have been unknown and, to provide a comparison, we focus on rates of convergence for these block l"
+        }
+      ]
+    },
+    {
+      "file": "stepwise-multiple-testing",
+      "query": "\"stepwise multiple testing\"",
+      "totalResults": 4,
+      "count": 4,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2212.08372v2",
+          "title": "On Asymptotic Behaviors of Stepwise Multiple Testing Procedures",
+          "published": "2022-12-16",
+          "category": "math.ST",
+          "summary": "Stepwise multiple testing procedures have attracted several statisticians for decades and are also quite popular with statistics users because of their technical simplicity. The Bonferroni procedure has been one of the earliest and most prominent testing rules for controlling the familywise error rate (FWER). A recent article established that the FWER for the Bonferroni method asymptotically (i.e., when the number of hypotheses becomes arbitrarily large) a"
+        },
+        {
+          "id": "http://arxiv.org/abs/1207.5655v1",
+          "title": "The Interval Property in Multiple Testing of Pairwise Differences",
+          "published": "2012-07-24",
+          "category": "stat.ME",
+          "summary": "The usual step-down and step-up multiple testing procedures most often lack an important intuitive, practical, and theoretical property called the interval property. In short, the interval property is simply that for an individual hypothesis, among the several to be tested, the acceptance sections of relevant statistics are intervals. Lack of the interval property is a serious shortcoming. This shortcoming is demonstrated for testing various pairwise compa"
+        },
+        {
+          "id": "http://arxiv.org/abs/1602.02854v1",
+          "title": "On Stepwise Control of Directional Errors under Independence and Some Dependence",
+          "published": "2016-02-09",
+          "category": "math.ST",
+          "summary": "In this paper, the problem of error control of stepwise multiple testing procedures is considered. For two-sided hypotheses, control of both type 1 and type 3 (or directional) errors is required, and thus mixed directional familywise error rate control and mixed directional false discovery rate control are each considered by incorporating both types of errors in the error rate. Mixed directional familywise error rate control of stepwise methods in multiple"
+        },
+        {
+          "id": "http://arxiv.org/abs/0805.3008v1",
+          "title": "Multiple tests of association with biological annotation metadata",
+          "published": "2008-05-20",
+          "category": "stat.AP",
+          "summary": "We propose a general and formal statistical framework for multiple tests of association between known fixed features of a genome and unknown parameters of the distribution of variable features of this genome in a population of interest. The known gene-annotation profiles, corresponding to the fixed features of the genome, may concern Gene Ontology (GO) annotation, pathway membership, regulation by particular transcription factors, nucleotide sequences, or "
+        }
+      ]
+    },
+    {
+      "file": "step-down-fwer",
+      "query": "\"step-down\" \"familywise error rate\"",
+      "totalResults": 229,
+      "count": 4,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2002.08545v4",
+          "title": "Familywise Error Rate Control by Interactive Unmasking",
+          "published": "2020-02-20",
+          "category": "stat.ME",
+          "summary": "We propose a method for multiple hypothesis testing with familywise error rate (FWER) control, called the i-FWER test. Most testing methods are predefined algorithms that do not allow modifications after observing the data. However, in practice, analysts tend to choose a promising algorithm after observing the data; unfortunately, this violates the validity of the conclusion. The i-FWER test allows much flexibility: a human (or a computer program acting on"
+        },
+        {
+          "id": "http://arxiv.org/abs/1910.04900v2",
+          "title": "Online control of the familywise error rate",
+          "published": "2019-10-10",
+          "category": "stat.ME",
+          "summary": "Biological research often involves testing a growing number of null hypotheses as new data is accumulated over time. We study the problem of online control of the familywise error rate (FWER), that is testing an apriori unbounded sequence of hypotheses (p-values) one by one over time without knowing the future, such that with high probability there are no false discoveries in the entire sequence. This paper unifies algorithmic concepts developed for offlin"
+        },
+        {
+          "id": "http://arxiv.org/abs/2204.05734v1",
+          "title": "Familywise error rate control for block response-adaptive randomization",
+          "published": "2022-04-12",
+          "category": "stat.ME",
+          "summary": "Response-adaptive randomization allows the probabilities of allocating patients to treatments in a clinical trial to change based on the previously observed response data, in order to achieve different experimental goals. One concern over the use of such designs in practice, particularly from a regulatory viewpoint, is controlling the type I error rate. To address this, Robertson and Wason (Biometrics, 2019) proposed methodology that guarantees familywise "
+        },
+        {
+          "id": "http://arxiv.org/abs/1505.06549v3",
+          "title": "Familywise Error Rate Control via Knockoffs",
+          "published": "2015-05-25",
+          "category": "stat.ME",
+          "summary": "We present a novel method for controlling the $k$-familywise error rate ($k$-FWER) in the linear regression setting using the knockoffs framework first introduced by Barber and Candès. Our procedure, which we also refer to as knockoffs, can be applied with any design matrix with at least as many observations as variables, and does not require knowing the noise variance. Unlike other multiple testing procedures which act directly on $p$-values, knockoffs is"
+        }
+      ]
+    },
+    {
+      "file": "reality-check-predictive",
+      "query": "\"reality check\" \"predictive ability\"",
+      "totalResults": 664,
+      "count": 4,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2402.02068v2",
+          "title": "Modeling local predictive ability using power-transformed Gaussian processes",
+          "published": "2024-02-03",
+          "category": "stat.ME",
+          "summary": "A Gaussian process is proposed as a model for the posterior distribution of the local predictive ability of a model or expert, conditional on a vector of covariates, from historical predictions in the form of log predictive scores. Assuming Gaussian expert predictions and a Gaussian data generating process, a linear transformation of the predictive score follows a noncentral chi-squared distribution with one degree of freedom. Motivated by this we develop "
+        },
+        {
+          "id": "http://arxiv.org/abs/2106.11104v1",
+          "title": "On Testing Equal Conditional Predictive Ability Under Measurement Error",
+          "published": "2021-06-21",
+          "category": "econ.EM",
+          "summary": "Loss functions are widely used to compare several competing forecasts. However, forecast comparisons are often based on mismeasured proxy variables for the true target. We introduce the concept of exact robustness to measurement error for loss functions and fully characterize this class of loss functions as the Bregman class. For such exactly robust loss functions, forecast loss differences are on average unaffected by the use of proxy variables and, thus,"
+        },
+        {
+          "id": "http://arxiv.org/abs/2402.07439v1",
+          "title": "Joint estimation of the predictive ability of experts using a multi-output Gaussian process",
+          "published": "2024-02-12",
+          "category": "stat.ME",
+          "summary": "A multi-output Gaussian process (GP) is introduced as a model for the joint posterior distribution of the local predictive ability of set of models and/or experts, conditional on a vector of covariates, from historical predictions in the form of log predictive scores. Following a power transformation of the log scores, a GP with Gaussian noise can be used, which allows faster computation by first using Hamiltonian Monte Carlo to sample the hyper-parameters"
+        },
+        {
+          "id": "http://arxiv.org/abs/2305.13260v1",
+          "title": "Predictive ability comparison of different versions of some well known degree dependent topological indices",
+          "published": "2023-05-11",
+          "category": "physics.chem-ph",
+          "summary": "To avoid extensive lab work on properties of chemical compounds, QSPR/QSAR analysis for topological descriptors is a productive statistical approach to analyze various physicochemical properties of chemical compounds. Many researchers have investigated on correlation of degree-based topological descriptors. In this article we present the predictive ability of 6 well known degree dependant topological indices of 22 lower poly cyclic aromatic hydrocarbons in"
+        }
+      ]
+    },
+    {
+      "file": "data-snooping-finance",
+      "query": "\"data snooping\" finance",
+      "totalResults": 34512,
+      "count": 1,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2412.02048v2",
+          "title": "Impact of Data Snooping on Deep Learning Models for Locating Vulnerabilities in Lifted Code",
+          "published": "2024-12-03",
+          "category": "cs.CR",
+          "summary": "This study examines the impact of data snooping on neural networks used to detect vulnerabilities in lifted code, and builds on previous research that used word2vec and unidirectional and bidirectional transformer-based embeddings. The research specifically focuses on how model performance is affected when embedding models are trained with datasets, which include samples used for neural network training and validation. The results show that introducing dat"
+        }
+      ]
+    }
+  ]
+}

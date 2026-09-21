@@ -1,0 +1,187 @@
+{
+  "generated": "2026-09-18",
+  "note": "Refresh sweep; relevant hits only (see raw/README.md). Diffs against arxiv-sweep-2026-09.json.",
+  "arxiv_homeostatic": [
+    {
+      "id": "2608.28431v1",
+      "date": "2026-08",
+      "title": "Adaptive self-organized criticality in deep neural networks"
+    },
+    {
+      "id": "2607.21622v1",
+      "date": "2026-07",
+      "title": "Local Synaptic Rules Can Implement a SIGReg Gradient Without Backpropagation"
+    },
+    {
+      "id": "2509.11545v2",
+      "date": "2025-09",
+      "title": "Representational drift under spontaneous activity -- self-organized criticality enhances representational reliability"
+    }
+  ],
+  "arxiv_synaptic": [
+    {
+      "id": "2601.11261v1",
+      "date": "2026-01",
+      "title": "Effects of Introducing Synaptic Scaling on Spiking Neural Network Learning"
+    },
+    {
+      "id": "2101.10665v1",
+      "date": "2021-01",
+      "title": "Local homeostatic regulation of the spectral radius of echo-state networks"
+    },
+    {
+      "id": "2011.12067v2",
+      "date": "2020-11",
+      "title": "Dendritic trafficking: synaptic scaling and structural plasticity"
+    }
+  ],
+  "arxiv_lowrank_es": [
+    {
+      "id": "2609.10980v1",
+      "date": "2026-09",
+      "title": "EGGROLL, Unrolled: Understanding and Improving Low-Rank Evolution Strategies at Scale"
+    },
+    {
+      "id": "2605.30361v2",
+      "date": "2026-05",
+      "title": "Gradient-Free Training of Spiking Neural Networks via Low-Rank Evolution Strategies"
+    }
+  ],
+  "arxiv_ttmemory": [
+    {
+      "id": "2607.24667v1",
+      "date": "2026-07",
+      "title": "Eviction as Estimation: A Fixed-Lag Smoothing View of Test-Time Memory, and When Measuring Beats Accumulating"
+    },
+    {
+      "id": "2607.02303v1",
+      "date": "2026-07",
+      "title": "A Hippocampus for Linear Attention: An Exact Memory for What the Recurrent State Forgets"
+    },
+    {
+      "id": "2606.30639v2",
+      "date": "2026-06",
+      "title": "Self-Evolving World Models for LLM Agent Planning"
+    },
+    {
+      "id": "2606.08573v1",
+      "date": "2026-06",
+      "title": "Titans-as-a-Layer: Test-Time Memory for Conversational Speech Emotion Recognition"
+    },
+    {
+      "id": "2605.10537v1",
+      "date": "2026-05",
+      "title": "Mela: Test-Time Memory Consolidation based on Transformation Hypothesis"
+    }
+  ],
+  "arxiv_continual": [
+    {
+      "id": "2609.19985v1",
+      "date": "2026-09",
+      "title": "Past, Future, All at Once: Mitigating Stability-Plasticity Dilemma via Post-hoc JANUS Rectification"
+    },
+    {
+      "id": "2609.18444v1",
+      "date": "2026-09",
+      "title": "DR.WILSS: Diffusion-Based Replay for Weakly Supervised Continual Semantic Segmentation"
+    },
+    {
+      "id": "2609.19201v1",
+      "date": "2026-09",
+      "title": "EvoSherlock: Towards Agentic Lifelong Evolution for Unseen Long-Tailed Security-Critical Events in Videos"
+    },
+    {
+      "id": "2609.17866v1",
+      "date": "2026-09",
+      "title": "Uncertainty-Aware Continual Learning for Open-World Intent Discovery Under an evolving Label Space"
+    },
+    {
+      "id": "2609.17026v1",
+      "date": "2026-09",
+      "title": "CLARE: Scalable Class-Incremental Continual Learning via a Sparsity-Based Framework"
+    },
+    {
+      "id": "2609.16537v1",
+      "date": "2026-09",
+      "title": "What Does Layer-Importance Reveal About Transformers and State-Space Models?"
+    }
+  ],
+  "arxiv_finance": [
+    {
+      "id": "2608.23808v2",
+      "date": "2026-08",
+      "title": "Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade"
+    },
+    {
+      "id": "2607.17555v1",
+      "date": "2026-07",
+      "title": "Volatility-Aware Extreme Event Detection in High-Frequency Financial Markets"
+    },
+    {
+      "id": "2605.23959v1",
+      "date": "2026-05",
+      "title": "When Alpha Disappears: A One-Switch Benchmark for Decision-Time Leakage in Financial Backtests"
+    },
+    {
+      "id": "2604.15531v1",
+      "date": "2026-04",
+      "title": "Spurious Predictability in Financial Machine Learning"
+    },
+    {
+      "id": "2604.14498v1",
+      "date": "2026-04",
+      "title": "Improving Machine Learning Performance with Synthetic Augmentation"
+    }
+  ],
+  "arxiv_triple_barrier": [
+    {
+      "id": "2504.02249v2",
+      "date": "2025-04",
+      "title": "Stock Price Prediction Using Triple Barrier Labeling and Raw OHLCV Data: Evidence from Korean Markets"
+    },
+    {
+      "id": "2411.12753v2",
+      "date": "2024-11",
+      "title": "Supervised Autoencoders with Fractionally Differentiated Features and Triple Barrier Labelling Enhance Predictions on Noisy Data"
+    }
+  ],
+  "arxiv_lsh": [
+    {
+      "id": "2608.04405v1",
+      "date": "2026-08",
+      "title": "Training-Free Hashing-Based Attention via Binary Principal Components"
+    },
+    {
+      "id": "2607.28999v2",
+      "date": "2026-07",
+      "title": "MESS: Fast and Private Semantic Search on Multi-Graph HNSW"
+    },
+    {
+      "id": "2607.09909v1",
+      "date": "2026-07",
+      "title": "Learning Partition Trees for Nearest Neighbor Search"
+    }
+  ],
+  "arxiv_rope": [
+    {
+      "id": "2609.07971v1",
+      "date": "2026-09",
+      "title": "MeRoTune: RoPE-Safe Merging with a Tunable Dial"
+    },
+    {
+      "id": "2609.07314v2",
+      "date": "2026-09",
+      "title": "Content-Based Addressing for Long Context"
+    },
+    {
+      "id": "2609.06712v2",
+      "date": "2026-09",
+      "title": "RoLA: Rotary-Positioned Low-Rank Linear Attention for Efficient Diffusion Transformers"
+    },
+    {
+      "id": "2608.29715v1",
+      "date": "2026-08",
+      "title": "Higher-Dimensional Rotary Position Embedding"
+    }
+  ]
+}

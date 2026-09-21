@@ -1,0 +1,696 @@
+{
+  "generatedAt": "2026-09-19T08:53:52.193Z",
+  "note": "Round 3 literature refresh (quoted-phrase queries). Existing corpus kept; this adds/refreshes backtest-overfitting, walk-forward, scaling-law, test-time-training, multi-probe LSH, deep-ensemble, synaptic-scaling and knowledge-distillation fronts.",
+  "queries": [
+    {
+      "file": "pbo-cscv",
+      "totalResults": 3,
+      "count": 3,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2608.27734v1",
+          "title": "What survives honest evaluation? Leakage-safe, search-aware assessment of LLM-driven trading strategy discovery",
+          "published": "2026-08-27",
+          "summary": "Large language models (LLMs) are increasingly used to discover trading strategies, and much of the resulting literature shares a methodological weakness: many candidate strategies are generated, the best is reported, and neither look-ahead bias nor the intensity of the search behind the reported result is corrected for"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.23808v2",
+          "title": "Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade",
+          "published": "2026-08-26",
+          "summary": "Backtests of trading strategies are often selected after many parameter trials. A strong historical result can therefore reflect search luck rather than a persistent signal. Standard summaries such as return, Sharpe ratio, and drawdown do not record how many candidates were tried, whether the selected rule survives out"
+        },
+        {
+          "id": "http://arxiv.org/abs/1910.05555v1",
+          "title": "Systematic Asset Allocation using Flexible Views for South African Markets",
+          "published": "2019-10-12",
+          "summary": "We implement a systematic asset allocation model using the Historical Simulation with Flexible Probabilities (HS-FP) framework developed by Meucci. The HS-FP framework is a flexible non-parametric estimation approach that considers future asset class behavior to be conditional on time and market environments, and deriv"
+        }
+      ]
+    },
+    {
+      "file": "cpcv",
+      "totalResults": 1,
+      "count": 1,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2407.17645v1",
+          "title": "Hopfield Networks for Asset Allocation",
+          "published": "2024-07-24",
+          "summary": "We present the first application of modern Hopfield networks to the problem of portfolio optimization. We performed an extensive study based on combinatorial purged cross-validation over several datasets and compared our results to both traditional and deep-learning-based methods for portfolio selection. Compared to st"
+        }
+      ]
+    },
+    {
+      "file": "dsr",
+      "totalResults": 2,
+      "count": 2,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2608.23808v2",
+          "title": "Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade",
+          "published": "2026-08-26",
+          "summary": "Backtests of trading strategies are often selected after many parameter trials. A strong historical result can therefore reflect search luck rather than a persistent signal. Standard summaries such as return, Sharpe ratio, and drawdown do not record how many candidates were tried, whether the selected rule survives out"
+        },
+        {
+          "id": "http://arxiv.org/abs/2008.09481v1",
+          "title": "Learning low-frequency temporal patterns for quantitative trading",
+          "published": "2020-08-12",
+          "summary": "We consider the viability of a modularised mechanistic online machine learning framework to learn signals in low-frequency financial time series data. The framework is proved on daily sampled closing time-series data from JSE equity markets. The input patterns are vectors of pre-processed sequences of daily, weekly and"
+        }
+      ]
+    },
+    {
+      "file": "purgedcv",
+      "totalResults": 1,
+      "count": 1,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2407.17645v1",
+          "title": "Hopfield Networks for Asset Allocation",
+          "published": "2024-07-24",
+          "summary": "We present the first application of modern Hopfield networks to the problem of portfolio optimization. We performed an extensive study based on combinatorial purged cross-validation over several datasets and compared our results to both traditional and deep-learning-based methods for portfolio selection. Compared to st"
+        }
+      ]
+    },
+    {
+      "file": "walkforward2",
+      "totalResults": 5,
+      "count": 5,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2603.09219v1",
+          "title": "AlgoXpert Alpha Research Framework. A Rigorous IS WFA OOS Protocol for Mitigating Overfitting in Quantitative Strategies",
+          "published": "2026-03-10",
+          "summary": "Transitioning a strategy from backtest to live trading is a common failure point for quantitative systems due to parameter overfitting, selection bias, and sensitivity to regime changes. This paper presents the AlgoXpert Alpha Research Framework, a standardized protocol that evaluates strategies across three stages: In"
+        },
+        {
+          "id": "http://arxiv.org/abs/2412.14361v2",
+          "title": "Refining and Robust Backtesting of A Century of Profitable Industry Trends",
+          "published": "2024-12-20",
+          "summary": "We revisit the long-only trend-following strategy presented in A Century of Profitable Industry Trends by Zarattini and Antonacci, which achieved exceptional historical performance with an 18.2% annualized return and a Sharpe Ratio of 1.39. While the results outperformed benchmarks, practical implementation raises conc"
+        },
+        {
+          "id": "http://arxiv.org/abs/2412.08756v1",
+          "title": "High-dimensional covariance matrix estimators on simulated portfolios with complex structures",
+          "published": "2024-12-11",
+          "summary": "We study the allocation of synthetic portfolios under hierarchical nested, one-factor, and diagonal structures of the population covariance matrix in a high-dimensional scenario. The noise reduction approaches for the sample realizations are based on random matrices, free probability, deterministic equivalents, and the"
+        },
+        {
+          "id": "http://arxiv.org/abs/2104.10483v2",
+          "title": "Adaptive learning for financial markets mixing model-based and model-free RL for volatility targeting",
+          "published": "2021-04-22",
+          "summary": "Model-Free Reinforcement Learning has achieved meaningful results in stable environments but, to this day, it remains problematic in regime changing environments like financial markets. In contrast, model-based RL is able to capture some fundamental and dynamical concepts of the environment but suffer from cognitive bi"
+        },
+        {
+          "id": "http://arxiv.org/abs/2010.08497v1",
+          "title": "AAMDRL: Augmented Asset Management with Deep Reinforcement Learning",
+          "published": "2020-09-30",
+          "summary": "Can an agent learn efficiently in a noisy and self adapting environment with sequential, non-stationary and non-homogeneous observations? Through trading bots, we illustrate how Deep Reinforcement Learning (DRL) can tackle this challenge. Our contributions are threefold: (i) the use of contextual information also refer"
+        }
+      ]
+    },
+    {
+      "file": "scaling2",
+      "totalResults": 146,
+      "count": 15,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2609.03533v2",
+          "title": "Coupled Scaling: A Representational Accessibility Framework for Neural Scaling Laws",
+          "published": "2026-09-13",
+          "summary": "We ask when two learning systems trained on the same task under a common resource protocol should share a scaling rate and when their rates should differ. Coupled Scaling answers this through representational accessibility: the task-relevant geometry that a specified architecture-optimization system can reach and how t"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.07222v1",
+          "title": "Skaling: Chinchilla's Exponents Meet Kaplan's Coupling",
+          "published": "2026-08-07",
+          "summary": "Neural scaling laws are foundational for language model development, yet standard formulations systematically under- and overestimate loss at data-scarce and overtraining extremes. This failure originates in the underlying assumption that model size and training data impact the loss independently. To address this, we i"
+        },
+        {
+          "id": "http://arxiv.org/abs/2607.23050v1",
+          "title": "The Entropic Bound for Transformers: Why Static Rank Fails and Attention-Native Rank Recovers",
+          "published": "2026-07-25",
+          "summary": "Neural scaling laws describe how loss decreases as models, data, and compute grow, but they do not answer a prior question: for a fixed task, what is the minimum model capacity required to solve it? We study this through the Entropic Bound, a spectral notion of task-intrinsic capacity for Transformers. We first prove t"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.25010v1",
+          "title": "Emergent Capabilities Arise Randomly from Learning Sparse Attention Patterns",
+          "published": "2026-06-23",
+          "summary": "Neural scaling laws for transformer language models predict smooth improvements in pretraining loss with increasing parameters, but downstream capabilities such as in-context learning are known to emerge abruptly past a certain model scale. In this paper, we show that emergent capabilities arise stochastically througho"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.25008v1",
+          "title": "Neural Scaling Universality: If Exponents Are Fixed, Time to Understand Coefficients",
+          "published": "2026-06-23",
+          "summary": "Neural scaling laws describe how pre-training loss decays as power laws with training time, model size, and compute. This position paper argues that the exponents of these power laws are fixed by generic mechanisms: a one-third time scaling due to the strong nonlinearity of Softmax, an inverse width scaling due to repr"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.20299v2",
+          "title": "Statistical Properties of Training & Generalization",
+          "published": "2026-07-01",
+          "summary": "Deep learning has managed to evade numerous intuitions from classical statistics to achieve unprecedented performance on a number of real-world tasks. In this article, we investigate the key features and surprises of deep learning from a physics-informed perspective, taking care to point out and justify where possible "
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.19781v2",
+          "title": "Towards Engineering Scaling Laws with Pretraining Data Composition",
+          "published": "2026-06-28",
+          "summary": "Neural scaling laws describe how model performance improves as a power law in compute, model size, and dataset size. While well-established for large language models, these relationships are emerging for large models in particle physics. As with language, empirical studies show that the performance scales as a power la"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.08167v3",
+          "title": "Explaining Data Mixing Scaling Laws",
+          "published": "2026-07-30",
+          "summary": "Recent research has established empirical scaling laws to predict model performance on multi-domain data mixtures. However, a theoretical understanding of these model loss behaviors remains absent. In this work, we propose a unified framework to explain the underlying mechanics of data mixing. Our approach extends theo"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.06725v1",
+          "title": "Compute-Optimal Network Design for Echocardiography Myocardial Segmentation and Perfusion Quantification using Neural Scaling Laws",
+          "published": "2026-06-04",
+          "summary": "Myocardial perfusion quantification using contrast-enhanced ultrasound offers a bedside non-ionizing alternative to nuclear imaging modalities. However, its clinical adoption is hindered by time-consuming manual labelling. Automated segmentation has proved challenging due to a paucity of in-domain training data. Adapti"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.01806v1",
+          "title": "ProbeScale: Probing Analysis to Optimize Neural Scaling Laws for Efficient Small Language Model Inference",
+          "published": "2026-06-01",
+          "summary": "Small Language Models (SLMs) offer a balance between capability and computational feasibility. Neural scaling laws inform their optimal training, suggesting that they possess rich internal representations that scale with their size. However, deploying even these SLMs can be challenging under strict resource constraints"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.00729v2",
+          "title": "AI Sovereignty as National Learning Capacity: A Human-Centered Learning Mechanics Viewpoint on France, the United States, and China",
+          "published": "2026-06-17",
+          "summary": "Artificial intelligence in France is often discussed through separate dimensions such as investment, compute, regulation, employment, sovereignty, and education. This viewpoint paper proposes a unified interpretation: France can be analyzed as a national AI learning system. Building on Human-Centered Learning Mechanics"
+        },
+        {
+          "id": "http://arxiv.org/abs/2605.31244v2",
+          "title": "Spectral Reach: Understanding Neural Scaling as Progress into the Spectral Tail",
+          "published": "2026-08-03",
+          "summary": "Neural scaling laws describe predictable power-law relationships between model size, dataset size, compute, and performance. While these laws guide the development of modern foundation models, the mechanisms underpinning them remain poorly understood, in part due to the absence of scalable analysis tools. To close this"
+        },
+        {
+          "id": "http://arxiv.org/abs/2605.29448v2",
+          "title": "How Much Is a Dataset Worth? Scaling Laws, the Vendi Score, and Matrix Spectral Functions",
+          "published": "2026-07-18",
+          "summary": "Neural scaling laws appraise data through dataset size, while the Vendi Score uses quantum entropy to measure dataset value. We show both that common neural-scaling-law objectives and the Vendi Score are submodular. We further show that the Vendi Score is a special case of a broader class of submodular objectives that "
+        },
+        {
+          "id": "http://arxiv.org/abs/2605.29387v1",
+          "title": "On the Optimizer Dependence of Neural Scaling Laws",
+          "published": "2026-05-28",
+          "summary": "The scaling exponent $α$ in neural scaling laws $L(N) \\propto N^{-α}$ is commonly treated as a fixed constant set by architecture and data. We present evidence that $α$ depends systematically on the optimizer. In controlled random-feature regression experiments -- the canonical theoretical framework for neural scaling "
+        },
+        {
+          "id": "http://arxiv.org/abs/2605.28940v1",
+          "title": "Neural Scaling Laws for Jet Generation",
+          "published": "2026-05-27",
+          "summary": "Recently observed empirical scaling laws describe the performance of foundation-type models as three independent key quantities -- dataset size, compute, and model parameters -- are modified. Extracting these scaling laws informs the training of large complex models for which the tuning of hyperparameters in traditiona"
+        }
+      ]
+    },
+    {
+      "file": "ttt2",
+      "totalResults": 280,
+      "count": 15,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2609.15307v1",
+          "title": "Learning from Reliable Negatives: Confidence-Anchored Test-Time Adaptation for GUI Grounding",
+          "published": "2026-09-14",
+          "summary": "Graphical User Interface (GUI) grounding is essential for autonomous agents to map natural language instructions to precise screen coordinates. However, existing supervised fine-tuning and reinforcement learning methods are constrained by the high cost of annotation, creating a scalability bottleneck. In this paper, we"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.13296v1",
+          "title": "Harnessing Image Question Dependence for Better VLM Test-time Reinforcement Learning",
+          "published": "2026-09-09",
+          "summary": "Test-time reinforcement learning can adapt vision-language models (VLMs) to unlabeled target data, but its effectiveness is fundamentally limited by the reliability of self-generated learning signals. To assess the reliability of consensus-based learning signals, we analyze VLM test-time reinforcement learning across d"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.09477v1",
+          "title": "LeCor: Learning to Be Corrected by Meta-Learned Test-Time Training for Interactive 3D Lung-Tumour Segmentation",
+          "published": "2026-09-08",
+          "summary": "Delineating lung tumours on computed tomography (CT) takes a considerable share of the time spent on radiotherapy planning, and a contour proposed by a model can be refined interactively by the clinician. Promptable foundation models such as SAM 3 support this workflow by writing each correction into a session memory t"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.08162v1",
+          "title": "WorldAgen: Unified State-Action Prediction with Test-Time World Model Training",
+          "published": "2026-09-08",
+          "summary": "How can vision-language-action (VLA) models adapt to new environments where world dynamics shift? While recent research has combined world modeling and action prediction to improve VLA performance, existing methods largely rely on pretraining on static datasets, without mechanisms for active adaptation at deployment ti"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.05363v1",
+          "title": "Distill Globally, Adapt Locally: Reasoning Distillation and Product-Type Test-Time Training for Scalable Trade-Up Recommendation",
+          "published": "2026-09-04",
+          "summary": "Trade-up recommendation identifies higher-quality alternatives that preserve a customer's purchase intent while offering upgraded benefits. Large language models (LLMs) can reason about such distinctions, but applying them directly to hundreds of millions of product pairs is operationally impractical. We introduce a tw"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.05579v1",
+          "title": "ViT3Flow: A Test-Time Training Transformer MeanFlow for Postoperative Radiograph Synthesis in Scoliosis",
+          "published": "2026-09-04",
+          "summary": "Predicting postoperative spinal morphology from preoperative radiographs could provide valuable support for scoliosis surgical planning, but remains challenging because surgical correction induces large spatial changes while anatomical structures must be faithfully retained. We formulate this problem as postoperative s"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.30635v1",
+          "title": "Test-time Reinforcement Learning in Imperfect Information Games",
+          "published": "2026-08-31",
+          "summary": "Test-time reasoning has significantly improved performance in domains ranging from games to language models. However, test-time policy changes with formal guarantees on the performance of the resulting strategy remain a challenge in two-player zero-sum imperfect-information games. Existing solutions are limited to tabu"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.29305v1",
+          "title": "Learning Simple Test-Time Environments for LLM Web Agents",
+          "published": "2026-08-29",
+          "summary": "Large language model (LLM) agents have demonstrated remarkable proficiency in manually constructed environments, yet their performance frequently collapses when transitioned to complex real-world settings. Existing research largely attribute this degradation to the compositional generalization gaps in LLMs on combinati"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.27448v1",
+          "title": "TTPO: Test-Time Policy Optimization",
+          "published": "2026-08-27",
+          "summary": "Recent prominent post-training methods, such as Reinforcement Learning (RL) and On-Policy Self-Distillation (OPSD), have driven rapid progress in mathematical reasoning for large language models, yet their reliance on ground-truth labels precludes test-time training (TTT). Replacing ground truth with majority-vote pseu"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.25729v1",
+          "title": "LongVU-TTT: Causal Test-Time Training for Visual Resampling in Long Video Understanding",
+          "published": "2026-08-26",
+          "summary": "Long-video MLLMs must model temporal change before a limited visual-token budget removes most frame evidence. We introduce LongVU-TTT, which inserts a convolutional Test-Time Training (TTT) resampler with causal fast-weight updates between the vision encoder and the LLM. Its grouped 2D fast weights adapt to each video "
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.22193v1",
+          "title": "SAM3Dual: A 3rd Place Solution to the MOSEv2 Track, 8th LSVOS Challenge",
+          "published": "2026-08-23",
+          "summary": "We present SAM3Dual, our third-place solution to the MOSEv2 track of the 8th Large-scale Video Object Segmentation (LSVOS) Challenge at ECCV 2026. SAM3Dual is a training-free inference extension of pretrained SAM 3 that explicitly separates temporal memory into a short-term branch for recent observations and a long-ter"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.21308v2",
+          "title": "Rethinking Expressivity and Efficiency in Test-Time Training",
+          "published": "2026-08-26",
+          "summary": "Test-Time Training (TTT) enables long-context processing via continuous weight updates during inference, but current methods struggle to balance the expressivity of per-token update dynamics with the hardware efficiency of chunk-wise approximations. We propose E$^2$-TTT (Expressive and Efficient TTT) to bridge this gap"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.10413v1",
+          "title": "DriveVLA-M0: Failure-Aware Memory Augmentation for Autonomous Driving",
+          "published": "2026-08-11",
+          "summary": "Vision-Language-Action (VLA) models have recently emerged as a promising paradigm for end-to-end autonomous driving by enabling unified reasoning across perception, language, and planning. However, existing approaches lack mechanisms to exploit past failures or adapt to distribution shifts, causing the model to persist"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.09448v2",
+          "title": "VANE: Reliable Test-Time Training for Vision-Language-Action Models via Future Visual Representation Prediction",
+          "published": "2026-08-12",
+          "summary": "Test-time training (TTT) offers a lightweight way to adapt vision--language--action (VLA) policies from unlabeled deployment streams, but it remains difficult to use reliably in closed-loop manipulation. A shared adaptation space can mix incompatible task corrections, while an online update can alter subsequent actions"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.07110v1",
+          "title": "Modular TTT: Rethinking Test-Time Training as Composable Modules",
+          "published": "2026-08-07",
+          "summary": "Test-time training (TTT) views sequence modeling as an online learning problem in which fast weights are updated by an internal learning rule. Despite the growing number of TTT variants, existing approaches typically hard-code each variant separately, which makes it difficult to design new TTT methods and to isolate th"
+        }
+      ]
+    },
+    {
+      "file": "multiprobe2",
+      "totalResults": 4,
+      "count": 4,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2604.04603v1",
+          "title": "Cardinality Estimation for High Dimensional Similarity Queries with Adaptive Bucket Probing",
+          "published": "2026-04-06",
+          "summary": "In this work, we address the problem of cardinality estimation for similarity search in high-dimensional spaces. Our goal is to design a framework that is lightweight, easy to construct, and capable of providing accurate estimates with satisfying online efficiency. We leverage locality-sensitive hashing (LSH) to partit"
+        },
+        {
+          "id": "http://arxiv.org/abs/2103.05864v1",
+          "title": "MP-RW-LSH: An Efficient Multi-Probe LSH Solution to ANNS in $L_1$ Distance",
+          "published": "2021-03-10",
+          "summary": "Approximate Nearest Neighbor Search (ANNS) is a fundamental algorithmic problem, with numerous applications in many areas of computer science. Locality-sensitive hashing (LSH) is one of the most popular solution approaches for ANNS. A common shortcoming of many LSH schemes is that since they probe only a single bucket "
+        },
+        {
+          "id": "http://arxiv.org/abs/1708.02976v2",
+          "title": "Random Binary Trees for Approximate Nearest Neighbour Search in Binary Space",
+          "published": "2019-03-24",
+          "summary": "Approximate nearest neighbour (ANN) search is one of the most important problems in computer science fields such as data mining or computer vision. In this paper, we focus on ANN for high-dimensional binary vectors and we propose a simple yet powerful search method that uses Random Binary Search Trees (RBST). We apply "
+        },
+        {
+          "id": "http://arxiv.org/abs/1506.03163v4",
+          "title": "Permutation Search Methods are Efficient, Yet Faster Search is Possible",
+          "published": "2016-10-31",
+          "summary": "We survey permutation-based methods for approximate k-nearest neighbor search. In these methods, every data point is represented by a ranked list of pivots sorted by the distance to this point. Such ranked lists are called permutations. The underpinning assumption is that, for both metric and non-metric spaces, the dis"
+        }
+      ]
+    },
+    {
+      "file": "deepens2",
+      "totalResults": 567,
+      "count": 15,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2609.13655v1",
+          "title": "Online Bayesian Node Classification on Inductive Graphs under Distribution Shift",
+          "published": "2026-09-12",
+          "summary": "On evolving graphs, node classifiers must satisfy two key requirements: inductive generalization to newly arriving nodes under distribution shift and calibrated uncertainty for safety-sensitive applications. Standard graph neural networks (GNNs) are typically trained once and address neither requirement. We adapt the B"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.04948v1",
+          "title": "VICAL: Vicinal Consistency Alignment for Long-Tailed Visual Recognition",
+          "published": "2026-09-04",
+          "summary": "Multi-expert models have become the dominant paradigm for long-tailed learning, largely attributed to their presumed ability to benefit from expert diversity. However, we revisit this central assumption and reveal that diversity induced by logit adjustment or explicit regularizers does not guarantee better ensemble acc"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.03981v1",
+          "title": "Sharpening the Ensemble: An SSIM-Aligned Residual Refiner for Brain-MRI Inpainting Post-Processing",
+          "published": "2026-09-03",
+          "summary": "Brain-MRI inpainting replaces a masked region of a scan with synthesized, anatomically plausible healthy tissue, so that analysis tools built for healthy brains can be applied to images they would otherwise reject. On the BraTS local-synthesis benchmark, which ranks submissions on the structural similarity index (SSIM)"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.02988v1",
+          "title": "Mesh-Native Physics-Informed Graph Surrogates for TCAD-in-the-Loop Design Space Exploration",
+          "published": "2026-09-02",
+          "summary": "High-fidelity TCAD simulation of drift-diffusion transport remains the workhorse of emerging FinFET device design, but it is computationally expensive, especially for 3D structures where runtime escalates steeply with mesh complexity. This sharply limits multi-objective design space exploration. Existing machine-learni"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.24626v1",
+          "title": "Towards Reliable AI-Based Histological Staining: A Systematic Study of Scaling and Uncertainty in Unpaired Generative Models",
+          "published": "2026-08-25",
+          "summary": "Liver fibrosis, the principal predictor of long-term outcome in chronic liver disease, is staged from histological estimates of collagen content. Sirius Red (SR) provides the standard quantitative readout (collagen proportionate area, CPA) but is not acquired at every clinical centre and consumes tissue, time, and reag"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.16614v1",
+          "title": "Beyond Accuracy: Assessing Calibration of Geospatial Foundation Models and Their Sensitivity to Distribution Shifts",
+          "published": "2026-08-17",
+          "summary": "Geospatial Foundation Models (GeoFMs) are most commonly ranked and selected by accuracy on standard benchmark conditions via averaged ranks. We show that this protocol is too narrow: the promised deployment in critical EO tasks requires further angles of analysis, mainly calibration, the agreement between a model's con"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.14373v2",
+          "title": "Boosting Data Augmentation with Stochastic Weight Averaging",
+          "published": "2026-09-04",
+          "summary": "The symmetries of a learning task have become an important factor in designing modern deep learning solutions. Data augmentation is a straightforward and effective way of incorporating symmetries into a generic neural network. Recent results show that infinitely large deep ensembles show perfect symmetry when trained o"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.14768v1",
+          "title": "Uncertainty Identifies Difficult Samples Across Methods: A Multi-Task Study on a Heterogeneous Skin Lesion Dataset",
+          "published": "2026-08-14",
+          "summary": "Skin lesion classifiers can be confidently wrong on the cases that matter most, so knowing when a prediction should not be trusted is clinically as useful as the prediction. We study uncertainty quantification on a dataset pooled from many ISIC sources, with a shared backbone and two jointly learned heads: a binary mal"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.14766v1",
+          "title": "Beyond Boundary Noise: Aggregated Aleatoric Uncertainty Fails to Capture Presence Ambiguity in 3D Lung Nodule Segmentation",
+          "published": "2026-08-14",
+          "summary": "Uncertainty estimation is critical for the safe clinical deployment of deep learning in medical image segmentation, with aleatoric uncertainty theoretically designed to capture irreducible data ambiguity. However, whether entropy-based measures reflect clinically meaningful ambiguity, i.e. case-level disagreement about"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.13223v2",
+          "title": "Reliability analysis for BraTS-GoAT segmentation: a controlled robustness study of deep-ensemble uncertainty",
+          "published": "2026-08-26",
+          "summary": "Deep networks segment brain tumours accurately in-distribution, but can fail silently when the input differs from their training data. That risk is central to clinical deployment and is the premise of the BraTS-GoAT generalizability task. We ask not only how well a model segments, but whether its uncertainty knows when"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.12624v1",
+          "title": "Structure-preserving uncertainty quantification for GENERIC dynamics",
+          "published": "2026-08-12",
+          "summary": "Structure-preserving machine learning embeds physical structure directly into model architectures, yet uncertainty quantification (UQ) for such hard-constrained models remains limited because standard UQ methods may violate the encoded admissibility conditions, require architectural modifications, or impose substantial"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.11054v1",
+          "title": "Uncertainty-Aware Deep Learning for Genomics Applications: Insights from an Empirical Study",
+          "published": "2026-08-11",
+          "summary": "Deep learning models have emerged as the standard computational tool for a wide range of applications in genomics. Yet, uncertainty quantification (UQ) -- and more specifically, the reliability of different uncertainty estimates in this domain -- has received little systematic attention. This work presents an empirical"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.11280v1",
+          "title": "Uncertainty-Aware and Explainable Ensemble Deep Learning Framework for Multi-Class Skin Lesion Classification",
+          "published": "2026-08-11",
+          "summary": "Skin cancer diagnosis from dermoscopic images remains challenging due to high intra-class variability, inter-class similarity, class imbalance, and the limited interpretability of deep learning models. This paper proposes an uncertainty-aware and explainable deep learning framework for multi-class skin lesion classific"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.08165v1",
+          "title": "Predicting blood clot growth from sparse post-onset measurements with latent neural differential equations",
+          "published": "2026-08-08",
+          "summary": "Computational models of blood clotting improve understanding of thrombus formation, but their clinical application remains limited because many model inputs are difficult to measure and patient-specific data are often sparse. We present a computational framework based on latent neural differential equations that infers"
+        },
+        {
+          "id": "http://arxiv.org/abs/2608.01090v1",
+          "title": "Breaking Diversity Collapse in Spiking Pseudo-Ensembles for Efficient OOD Detection in Remote Sensing",
+          "published": "2026-08-02",
+          "summary": "Spiking Neural Networks (SNNs) are attractive for resource-constrained remote-sensing systems, but reliable out-of-distribution (OOD) detection remains challenging. Deep ensembles provide strong predictive uncertainty, yet require multiple complete models and backbone evaluations. We propose an efficient spiking pseudo"
+        }
+      ]
+    },
+    {
+      "file": "synscale2",
+      "totalResults": 10,
+      "count": 10,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2601.11261v1",
+          "title": "Effects of Introducing Synaptic Scaling on Spiking Neural Network Learning",
+          "published": "2026-01-16",
+          "summary": "Spiking neural networks (SNNs) employing unsupervised learning methods inspired by neural plasticity are expected to be a new framework for artificial intelligence. In this study, we investigated the effect of multiple types of neural plasticity, such as spike-time-dependent plasticity (STDP) and synaptic scaling, on t"
+        },
+        {
+          "id": "http://arxiv.org/abs/2306.07416v1",
+          "title": "Synaptic Scaling and Optimal Bias Adjustments for Power Reduction in Neuromorphic Systems",
+          "published": "2023-06-12",
+          "summary": "Recent animal studies have shown that biological brains can enter a low power mode in times of food scarcity. This paper explores the possibility of applying similar mechanisms to a broad class of neuromorphic systems where power consumption is strongly dependent on the magnitude of synaptic weights. In particular, we "
+        },
+        {
+          "id": "http://arxiv.org/abs/2104.11739v2",
+          "title": "Memory retrieval dynamics and storage capacity of a modular network model of association cortex with featural decomposition",
+          "published": "2021-12-07",
+          "summary": "The primate heteromodal cortex presents an evident functional modularity at a mesoscopic level, with physiological and anatomical evidence pointing to it as likely substrate of long-term memory. In order to investigate some of its properties, a model of multimodular autoassociator is studied. Each of the many modules r"
+        },
+        {
+          "id": "http://arxiv.org/abs/2101.10665v1",
+          "title": "Local homeostatic regulation of the spectral radius of echo-state networks",
+          "published": "2021-01-26",
+          "summary": "Recurrent cortical networks provide reservoirs of states that are thought to play a crucial role for sequential information processing in the brain. However, classical reservoir computing requires manual adjustments of global network parameters, particularly of the spectral radius of the recurrent synaptic weight matri"
+        },
+        {
+          "id": "http://arxiv.org/abs/2011.12067v2",
+          "title": "Dendritic trafficking: synaptic scaling and structural plasticity",
+          "published": "2021-04-06",
+          "summary": "Neuronal circuits internally regulate electrical signaling via a host of homeostatic mechanisms. Two prominent mechanisms, synaptic scaling and structural plasticity, are believed to maintain average activity within an operating range by modifying the strength and spatial extent of network connectivity using negative f"
+        },
+        {
+          "id": "http://arxiv.org/abs/2008.11674v3",
+          "title": "Searching for long time scales without fine tuning",
+          "published": "2024-08-22",
+          "summary": "Most of animal and human behavior occurs on time scales much longer than the response times of individual neurons. In many cases, it is plausible that these long time scales emerge from the recurrent dynamics of electrical activity in networks of neurons. In linear models, time scales are set by the eigenvalues of a dy"
+        },
+        {
+          "id": "http://arxiv.org/abs/1908.07412v1",
+          "title": "Automatic gain control of ultra-low leakage synaptic scaling homeostatic plasticity circuits",
+          "published": "2019-08-19",
+          "summary": "Homeostatic plasticity is a stabilizing mechanism that allows neural systems to maintain their activity around a functional operating point. This is an extremely useful mechanism for neuromorphic computing systems, as it can be used to compensate for chronic shifts, for example due to changes in the network structure. "
+        },
+        {
+          "id": "http://arxiv.org/abs/1812.06574v3",
+          "title": "A Biologically Plausible Supervised Learning Method for Spiking Neural Networks Using the Symmetric STDP Rule",
+          "published": "2019-10-06",
+          "summary": "Spiking neural networks (SNNs) possess energy-efficient potential due to event-based computation. However, supervised training of SNNs remains a challenge as spike activities are non-differentiable. Previous SNNs training methods can be generally categorized into two basic classes, i.e., backpropagation-like training m"
+        },
+        {
+          "id": "http://arxiv.org/abs/1709.05633v3",
+          "title": "An Ultralow Leakage Synaptic Scaling Homeostatic Plasticity Circuit With Configurable Time Scales up to 100 ks",
+          "published": "2017-11-15",
+          "summary": "Homeostatic plasticity is a stabilizing mechanism commonly observed in real neural systems that allows neurons to maintain their activity around a functional operating point. This phenomenon can be used in neuromorphic systems to compensate for slowly changing conditions or chronic shifts in the system configuration. H"
+        },
+        {
+          "id": "http://arxiv.org/abs/1304.2266v1",
+          "title": "Synaptic Scaling Balances Learning in a Spiking Model of Neocortex",
+          "published": "2013-04-08",
+          "summary": "Learning in the brain requires complementary mechanisms: potentiation and activity-dependent homeostatic scaling. We introduce synaptic scaling to a biologically-realistic spiking model of neocortex which can learn changes in oscillatory rhythms using STDP, and show that scaling is necessary to balance both positive an"
+        }
+      ]
+    },
+    {
+      "file": "kd2b",
+      "totalResults": 5408,
+      "count": 15,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2609.19964v1",
+          "title": "Enhanced Knowledge Distillation for Detection Transformer via Teacher Prediction Refinement",
+          "published": "2026-09-17",
+          "summary": "Detection Transformers (DETRs) achieve strong performance in object detection but remain challenging to deploy on edge devices due to their high computational cost. Existing DETR distillation methods mainly focus on aligning distillation points, while largely overlooking the quality of the teacher's supervision itself."
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.18686v1",
+          "title": "Multi-Teacher Distillation for Cross-Domain Streaming Electrolaryngeal Speech Encoding",
+          "published": "2026-09-16",
+          "summary": "Self-supervised learning (SSL) has improved speech representations, yet performance degrades in pathological domains such as electrolaryngeal (EL) speech, and the computational footprint of SSL models limits their applicability in real-time, on-device deployment. We propose a multi-teacher knowledge distillation framew"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.19216v1",
+          "title": "4D Radar Perception Algorithms for Autonomous Driving: A Review",
+          "published": "2026-09-16",
+          "summary": "Research on 4D millimeter-wave radar perception algorithms has flourished in recent years, extending from signal processing and object detection to semantic segmentation, motion estimation, occupancy prediction, and dynamic scene reconstruction. This review organizes the field according to the evolution of perception t"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.18516v1",
+          "title": "Align, Integrate, and Fire: Efficient Token-Level Alignment for Zero-Shot SpeechLLMs",
+          "published": "2026-09-16",
+          "summary": "While Large Language Models excel in natural language processing, efficiently extending their capabilities to spoken input remains a significant challenge. Existing methods for building SpeechLLMs often rely on computationally expensive full-model fine-tuning, or employ parameter-efficient projectors that suffer from i"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.18304v2",
+          "title": "Rollback the World, Keep the Reflection: Rollback-Induced Reflection for Long-Horizon LLM Agents",
+          "published": "2026-09-17",
+          "summary": "Large language model (LLM) agents increasingly tackle long-horizon tasks through multi-step environment interaction, yet a single erroneous action can alter subsequent states and observations, causing errors to compound over time. Existing methods either correct the context without repairing altered environment states "
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.18040v1",
+          "title": "Task-oriented neural FOA encoding for SELD from irregular microphone arrays",
+          "published": "2026-09-16",
+          "summary": "Sound event localization and detection (SELD) systems often rely on first-order Ambisonics (FOA) input, whereas obtaining useful FOA representations from irregular microphone arrays remains challenging. This paper proposes a two-stage SELD framework that learns a task-oriented, FOA-compatible representation from microp"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.17646v1",
+          "title": "Robust and Efficient AI Frameworks for Scalable Material Design and Property Prediction",
+          "published": "2026-09-15",
+          "summary": "This thesis develops robust and efficient AI frameworks for accelerating crystalline materials discovery by addressing both major stages of the materials-design pipeline: crystal property prediction and crystal structure generation. Motivated by the high computational cost of Density Functional Theory (DFT) and the lim"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.17284v1",
+          "title": "Personalized Federated Learning through Global Knowledge Distillation and Local Head Adaptation",
+          "published": "2026-09-15",
+          "summary": "Statistical heterogeneity limits federated learning when a single global classifier cannot represent client-specific label distributions. In this work, we propose Personalized Federated Knowledge Distillation with Head Adaptation (pFedKDH), which aggregates only the shared backbone, keeps persistent client-specific hea"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.16535v1",
+          "title": "Multimodal Emergency Vehicle Classification via Audio-Visual Transformers and Knowledge Distillation",
+          "published": "2026-09-15",
+          "summary": "Emergency vehicle detection in autonomous driving is a safety-critical perception task that demands robustness under diverse and adverse real-world conditions. Existing approaches rely on a single modality, either audio or video, which leads to systematic failure when that modality is degraded: microphone-based systems"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.15295v2",
+          "title": "Knowledge Distillation of a Normalising Flow for Real-Time Anomaly Detection at LHC Level-1 Trigger",
+          "published": "2026-09-17",
+          "summary": "We present a new strategy for unsupervised anomaly detection at the hardware-based first stage of event processing (Level-1 trigger) of the Large Hadron Collider (LHC). A normalising flow trained exclusively on Standard Model (SM) events provides a teacher anomaly score based on its exact negative log-likelihood, which"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.15285v1",
+          "title": "AlignUS: MRI-Guided Ultrasound Representation Learning for ALS Classification from Tongue Images",
+          "published": "2026-09-14",
+          "summary": "Amyotrophic lateral sclerosis (ALS) is a progressive neurodegenerative disease in which early assessment remains challenging, particularly in low-resource settings where MRI is often unavailable. High-resolution ultrasound (HRUS) of the tongue offers a portable and low-cost alternative for evaluating bulbar involvement"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.13580v1",
+          "title": "FLoKD: Adaptive Knowledge Distillation for Federated Low-Rank LLM over Wireless Networks",
+          "published": "2026-09-11",
+          "summary": "Large language models (LLMs) have demonstrated strong capabilities across a wide range of natural language processing tasks. However, conventional fine-tuning typically relies on centralized data collection, bringing in privacy concerns. Federated learning (FL) enables collaborative LLM fine-tuning without sharing raw "
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.13405v1",
+          "title": "Krum-Inspired Central Teacher Selection and Residual Channel Bottlenecks for Efficient DeepSC",
+          "published": "2026-09-11",
+          "summary": "Deploying transformer-based semantic communication models on edge devices requires compression that preserves semantic fidelity under channel variability. We study a compressed deep semantic communication (DeepSC) student trained by multi-teacher knowledge distillation and combine two ideas: (i) a residual channel bott"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.13024v1",
+          "title": "Label-Guided Knowledge Distillation for 3D-CNNs in Action Recognition",
+          "published": "2026-09-11",
+          "summary": "As a key model compression technique, knowledge distillation aims to transfer knowledge from a high-capacity teacher model to a lightweight student model for enhancing the latter's performance. In this work, we reviewed the feature knowledge distillation for 3D-CNNs and observed that most feature distillation methods i"
+        },
+        {
+          "id": "http://arxiv.org/abs/2609.12913v2",
+          "title": "Parameter-Efficient Retrievers for Polish and European Languages",
+          "published": "2026-09-16",
+          "summary": "Dense retrieval systems increasingly rely on multi-billion-parameter language models, whose memory and computational requirements make large-scale indexing, frequent corpus updates, and low-latency serving costly. We present a three-stage training pipeline for developing compact and efficient retrievers that remain com"
+        }
+      ]
+    },
+    {
+      "file": "lsh2b",
+      "totalResults": 449,
+      "count": 15,
+      "entries": [
+        {
+          "id": "http://arxiv.org/abs/2608.04405v1",
+          "title": "Training-Free Hashing-Based Attention via Binary Principal Components",
+          "published": "2026-08-05",
+          "summary": "Long-context large language models (LLMs) are increasingly deployed in real-world applications, yet self-attention remains a major efficiency bottleneck -- especially during decoding -- due to the necessity of repeatedly processing ever-growing key-value (KV) caches. Existing sparse attention reduce computation by atte"
+        },
+        {
+          "id": "http://arxiv.org/abs/2607.28999v2",
+          "title": "MESS: Fast and Private Semantic Search on Multi-Graph HNSW",
+          "published": "2026-08-04",
+          "summary": "Semantic search systems map data to a high-dimensional vector space and support retrieval of similar data via approximate nearest neighbor search. When the system is hosted by an untrusted cloud provider, there is no privacy for the data or the query. Our goal is to design a system with three properties: privacy, accur"
+        },
+        {
+          "id": "http://arxiv.org/abs/2607.09909v1",
+          "title": "Learning Partition Trees for Nearest Neighbor Search",
+          "published": "2026-07-10",
+          "summary": "We study nearest neighbor search from the perspective of data-driven algorithm design: given a dataset $P \\subset \\mathbb{R}^d$ of size $n$ and sample access to a query distribution over $\\mathbb{R}^d$, the goal is to learn a data structure optimized for queries drawn from that specific distribution. We focus on the cl"
+        },
+        {
+          "id": "http://arxiv.org/abs/2607.01445v1",
+          "title": "Hamm-Grams: An Algorithm for Mining Regular Expressions of Bytes",
+          "published": "2026-07-01",
+          "summary": "Malware poses a critical and ever-evolving threat, and robust and effective systems for detecting and classifying malware are of essential importance. $n$-grams features are among the common static features used in effective machine learning systems for malware, but these features are inherently brittle. We propose an "
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.30516v1",
+          "title": "HASTE: A Framework for Training-Free, Dynamic, and Steerable Compression of Pre-Trained Convolutional Neural Networks",
+          "published": "2026-06-29",
+          "summary": "Deploying large convolutional neural networks (CNNs) on resource-constrained devices is challenging due to their high computational cost. While dynamic execution methods are promising, existing approaches for CNNs typically require specialized training or fine-tuning, limiting their effectiveness when applied to pre-tr"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.28300v1",
+          "title": "CacheMPC: Certified Cached Model Predictive Control for Quadruped Locomotion",
+          "published": "2026-06-26",
+          "summary": "Model Predictive Control (MPC) is the standard predictive layer in hierarchical quadruped controllers, but the per-cycle QP solve limits the update rate achievable on embedded processors. Because legged gaits revisit a bounded region of state space, MPC solutions admit caching and reuse. This paper proposes \\emph{Certi"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.24737v1",
+          "title": "VSANet: View-aware Sparse Attention Network for Light Field Image Denoising",
+          "published": "2026-06-23",
+          "summary": "Light field (LF) image denoising is challenging due to the high-dimensional structure of LF data. While noise is independent across sub-aperture images, scene content exhibits strong cross-view correlations. We introduce VSANet, a view-aware sparse attention network for LF denoising. Specifically, we propose a view-awa"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.20437v1",
+          "title": "HEPTv2: End-to-End Efficient Point Transformer for Charged Particle Reconstruction",
+          "published": "2026-06-18",
+          "summary": "Charged-particle tracking -- reconstructing trajectories from sparse detector measurements -- is a fundamental high-energy-physics inference problem and a canonical example of learning under extreme combinatorial ambiguity. At the High-Luminosity Large Hadron Collider (HL-LHC), tracking must remain accurate and efficie"
+        },
+        {
+          "id": "http://arxiv.org/abs/2607.19368v1",
+          "title": "Spectral-LSH: Sub-Quadratic Prompt Compression via Krylov-Projected Locality-Sensitive Hashing",
+          "published": "2026-06-12",
+          "summary": "Long-prompt inference remains expensive because prefill attention scales quadratically with sequence length. We propose Spectral-LSH, a training-free prompt compression method that operates before the prompt enters the language model. Spectral-LSH approximates the dominant components of an implicit attention-kernel ope"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.03001v2",
+          "title": "FOLD: Fuzzy Online Deduplication for Very Large Evolving Datasets via Approximate Nearest Neighbor Search",
+          "published": "2026-06-11",
+          "summary": "Fuzzy deduplication is key to constructing large language model training corpora. However, classic Locality-Sensitive Hashing (LSH) pipelines scale poorly as corpora grow and are ill-suited to continuous ingestion. The main issue is that each new document batch must be checked against the admitted corpus before inserti"
+        },
+        {
+          "id": "http://arxiv.org/abs/2606.01413v1",
+          "title": "Differentially Private Datastore Generation for Retrieval-Augmented Inference",
+          "published": "2026-05-31",
+          "summary": "It is crucial for modern on-device AI systems that rely on retrieval-augmented inference to release and share datastores without compromising individual privacy. This can be achieved using Differential Privacy (DP), which provides a formal guarantee that ensures individual contributions remain indistinguishable, even u"
+        },
+        {
+          "id": "http://arxiv.org/abs/2605.23807v3",
+          "title": "Dynamic Query Modification for Binary Locality Sensitive Hashing",
+          "published": "2026-06-30",
+          "summary": "Our context of interest is how binary locality sensitive hash (LSH) functions can be used to solve the approximate near neighbour (ANN) problem in hyperspherical spaces, which seeks to find the $k$ closest elements of some dataset $X \\subset \\mathbb{R}^d$ to some further point $\\mathbf{q} \\in \\mathbb{R}^d$ presented as"
+        },
+        {
+          "id": "http://arxiv.org/abs/2607.16211v1",
+          "title": "Accurate and Efficient Long-Term Memory for LLM Agents",
+          "published": "2026-05-15",
+          "summary": "LLM agents augmented with persistent memory can recall past interactions, but existing systems suffer from two limitations: flat, unstructured storage loses relational context needed for multi-hop and temporal reasoning, and reliance on expensive LLM-based classification makes them impractical for latency-sensitive dep"
+        },
+        {
+          "id": "http://arxiv.org/abs/2605.11921v1",
+          "title": "On the LSH Distortion of Ulam and Cayley Similarities",
+          "published": "2026-05-12",
+          "summary": "Locality-sensitive hashing (LSH) has found widespread use as a fundamental primitive, particularly to accelerate nearest neighbor search. An LSH scheme for a similarity function $S:\\mathcal{X} \\times \\mathcal{X} \\to [0,1]$ is a distribution over hash functions on $\\mathcal{X}$ with the property that the probability of "
+        },
+        {
+          "id": "http://arxiv.org/abs/2605.09472v1",
+          "title": "Positional LSH: Binary Block Matrix Approximation for Attention with Linear Biases",
+          "published": "2026-05-10",
+          "summary": "Positional encoding in transformers is commonly implemented through positional embeddings, attention masks, or bias terms, but formal connections between these mechanisms remain limited. We study attention with positional bias through the lens of locality-sensitive hashing (LSH), focusing on Attention with Linear Biase"
+        }
+      ]
+    }
+  ]
+}

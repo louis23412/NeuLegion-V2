@@ -1,0 +1,46 @@
+{
+  "generated": "2026-09-19",
+  "note": "Finance-validation refresh (Cycle M). Relevant hits only (see raw/README.md). Focus: walk-forward protocol, combinatorial purged CV, deflated Sharpe, and leakage detection.",
+  "arxiv_cpcv": [
+    {
+      "id": "2407.17645v1",
+      "date": "2024-07",
+      "title": "Hopfield Networks for Asset Allocation",
+      "why": "Uses combinatorial purged cross-validation over several datasets for portfolio selection; the CPCV reference already recorded in financial-validation.md."
+    }
+  ],
+  "arxiv_walkforward": [
+    {
+      "id": "2603.09219v1",
+      "date": "2026-03",
+      "title": "AlgoXpert Alpha Research Framework. A Rigorous IS WFA OOS Protocol for Mitigating Overfitting in Quantitative Strategies",
+      "why": "An in-sample / walk-forward-analysis / out-of-sample protocol; independent 2026 validation that the deploy-order walk-forward is the overfitting control, matching walkforward.js."
+    },
+    {
+      "id": "2602.00080v1",
+      "date": "2026-01",
+      "title": "The GT-Score: A Robust Objective Function for Reducing Overfitting in Data-Driven Trading Strategies",
+      "why": "A robust objective for strategy selection; candidate framing for a promotion objective beyond pooled Sharpe/DSR."
+    },
+    {
+      "id": "2606.31251v1",
+      "date": "2026-06",
+      "title": "Regime-Conditional Distributional Comparison of Trading Strategies: A GAMLSS/ZAGA Framework Applied to the S&P 500",
+      "why": "Distributional strategy comparison conditioned on regime; a candidate extension of promoteDecision (per-regime fold conditioning)."
+    }
+  ],
+  "arxiv_dsr": [
+    {
+      "id": "2608.27734v1",
+      "date": "2026-08",
+      "title": "What survives honest evaluation? Leakage-safe, search-aware assessment of LLM-driven trading strategy discovery",
+      "why": "CENTRAL: a deliberately leaky oracle posting Sharpe 35 SURVIVES Deflated Sharpe and probability-of-backtest-overfitting testing. Statistical correction (DSR/PBO) is not redundant with a structural look-ahead guardrail — the empirical justification for walkforward.js auditNoLookahead."
+    },
+    {
+      "id": "2608.23808v2",
+      "date": "2026-08",
+      "title": "Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade",
+      "why": "Already recorded; a complementary robustness grade to DSR/PSR."
+    }
+  ]
+}

@@ -1,0 +1,177 @@
+{
+  "generatedAt": "2026-09-19T10:47:57.218Z",
+  "note": "Round 7/8 literature refresh (broad relevance-query sweep, sortBy=relevance), targeting docs/TODO.md item 8: wiring the variance-consistent subsampling SPA / Romano-Wolf StepM decision into the walk-forward report + promotion gate, and running an A-B on the shipped candles. Headline finds: 2608.23808 (MinervaScore: backtests selected after many trials; a robustness grade separating search luck from persistent signal) and 2603.09219 (IS/WFA/OOS protocol) frame the promotion gate; 2603.17226 (LRV estimation for MEAN-SHIFT series) grounds the segment-aware long-run variance needed because the pooled walk-forward OOS series is a concatenation of fold segments with different mean levels (the SE analogue of the fold-boundary problem); 2512.14131 (exact FWER control) and 2212.08372/1311.4030/0710.2258 extend the stepwise family. Carry-overs from 09g: 2606.17369 (zero-lugsail kernels), 1809.04541 (lugsail negative bias under positive correlation), 1204.1035 (fixed-b subsampling p-value calibration). (1809.04541 and 1204.1035 re-fetched by id_list to replace the missing carry-over placeholders; 09g remains the authoritative record for the block-length sweep.)",
+  "purpose": "Ground docs/TODO.md item 8 (family-wise subsampling on the honest-evaluation path).",
+  "queries": [
+    {
+      "file": "snooping-mt",
+      "query": "all:data snooping multiple testing"
+    },
+    {
+      "file": "backtest-overfit",
+      "query": "all:backtest overfitting"
+    },
+    {
+      "file": "subsampling-ts",
+      "query": "all:subsampling stationary time series"
+    },
+    {
+      "file": "lugsail-lrv",
+      "query": "all:lugsail long run variance"
+    },
+    {
+      "file": "fwer-financial",
+      "query": "all:family-wise error rate financial"
+    },
+    {
+      "file": "walkforward-trading",
+      "query": "all:walk-forward validation trading"
+    },
+    {
+      "file": "fdr-trading",
+      "query": "all:false discovery trading strategies"
+    },
+    {
+      "file": "mt-sharpe",
+      "query": "all:multiple testing Sharpe ratio"
+    },
+    {
+      "file": "reality-check-spa",
+      "query": "all:reality check predictive ability test"
+    },
+    {
+      "file": "break-block-boot",
+      "query": "all:structural break block bootstrap"
+    },
+    {
+      "file": "stepwise-romano-wolf",
+      "query": "all:stepwise multiple testing Romano Wolf"
+    },
+    {
+      "file": "purged-cv-ml",
+      "query": "all:purged cross-validation financial machine learning"
+    }
+  ],
+  "entries": [
+    {
+      "id": "2608.23808v2",
+      "title": "Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade",
+      "published": "2026-08-24",
+      "category": "q-fin.ST",
+      "summary": "Backtests of trading strategies are often selected after many parameter trials. A strong historical result can therefore reflect search luck rather than a persistent signal. Standard summaries such as return, Sharpe ratio, and drawdown do not record how many candidates were tried, whether the selected rule survives out-of-sample validation, or whether the available history is long enough to support the result. This paper describes the MinervaScore, a post-selection robustness grade for trading strategies. The score combines four established validation quantities: Deflated Sharpe Ratio, Probability of Backtest Overfitting, Superior Predictive Ability, and Minimum Track Record Length, with a regime-stability diagnostic. These components are converted into signed margins from their admissibility thresholds, aggregated into a raw score, and then mapped to a 0-100 display. The display is tied to a binary Robustness Seal: scores of 80 or higher are shown only when all five gates pass. The calibration uses 359,062 production backtest records. The score is intended to rank statistical support, not to estimate the probability of future profit. In synthetic markets with known ground truth, the MinervaScore separates true signal from lucky backtest outcomes, with an AUROC of 0.989 at the headline difficulty. Its improvement over the GT-Score proxy and the gates-passed baseline is modest, and it remains close to the corrected DSR-alone baseline. In a pre-registered test on unseen real-market data, the score showed no significant forward relationship in a population with limited surviving edge (Spearman rho_s = 0.013, one-sided permutation p = 0.40). We therefore present the MinervaScore as an auditable validation and reporting layer, rather than as evidence of demonstrated real-market predictability.",
+      "why": "Directly on the walk-forward promotion question: backtests selected after many parameter trials, and a robustness grade that separates search luck from persistent signal. Grounds reporting a search-corrected p-value alongside DSR."
+    },
+    {
+      "id": "2603.09219v1",
+      "title": "AlgoXpert Alpha Research Framework. A Rigorous IS WFA OOS Protocol for Mitigating Overfitting in Quantitative Strategies",
+      "published": "2026-03-10",
+      "category": "q-fin.PM",
+      "summary": "Transitioning a strategy from backtest to live trading is a common failure point for quantitative systems due to parameter overfitting, selection bias, and sensitivity to regime changes. This paper presents the AlgoXpert Alpha Research Framework, a standardized protocol that evaluates strategies across three stages: In Sample (IS), which focuses on stable parameter regions instead of single optima; Walk Forward Analysis (WFA) using rolling windows and purge gaps to reduce information leakage, supported by majority pass and catastrophic veto rules; and Out of Sample (OOS) testing under strict parameter lock with no further tuning. The framework applies a defense in depth structure that includes structural safeguards such as cliff veto, execution controls such as spread and leverage guards, and equity protection mechanisms such as circuit breakers and a kill switch. A case study on USDJPY M5 intraday data demonstrates how to detect overfitting through performance decay and drawdown behavior across chronological stages. A post validation comparison of four alpha variants (v1 to v4) shows rank reversal when the objective changes from maximizing Sharpe to minimizing maximum drawdown, highlighting the trade off between risk adjusted performance and tail risk control.",
+      "why": "IS / walk-forward-analysis / OOS protocol for mitigating overfitting: warns that fold boundaries are an artificial interface (the IS->OOS transition), i.e. the pooled OOS series is a concatenation of separate segments — the motivation for segment-aware subsampling."
+    },
+    {
+      "id": "2512.12924v1",
+      "title": "Interpretable Hypothesis-Driven Trading:A Rigorous Walk-Forward Validation Framework for Market Microstructure Signals",
+      "published": "2025-12-15",
+      "category": "q-fin.TR",
+      "summary": "We develop a rigorous walk-forward validation framework for algorithmic trading designed to mitigate overfitting and lookahead bias. Our methodology combines interpretable hypothesis-driven signal generation with reinforcement learning and strict out-of-sample testing. The framework enforces strict information set discipline, employs rolling window validation across 34 independent test periods, maintains complete interpretability through natural language hypothesis explanations, and incorporates realistic transaction costs and position constraints. Validating five market microstructure patterns across 100 US equities from 2015 to 2024, the system yields modest annualized returns (0.55%, Sharpe ratio 0.33) with exceptional downside protection (maximum drawdown -2.76%) and market-neutral characteristics (beta = 0.058). Performance exhibits strong regime dependence, generating positive returns during high-volatility periods (0.60% quarterly, 2020-2024) while underperforming in stable markets (-0.16%, 2015-2019). We report statistically insignificant aggregate results (p-value 0.34) to demonstrate a reproducible, honest validation protocol that prioritizes interpretability and extends naturally to advanced hypothesis generators, including large language models. The key empirical finding reveals that daily OHLCV-based microstructure signals require elevated information arrival and trading activity to function effectively. The framework provides complete mathematical specifications and open-source implementation, establishing a template for rigorous trading system evaluation that addresses the reproducibility crisis in quantitative finance research. For researchers, practitioners, and regulators, this work demonstrates that interpretable algorithmic trading strategies can be rigorously validated without sacrificing transparency or regulatory compliance.",
+      "why": "Rigorous walk-forward validation framework for trading signals (overfitting + lookahead): the deployment-honest protocol the promotion gate sits inside."
+    },
+    {
+      "id": "2602.10785v1",
+      "title": "A novel approach to trading strategy parameter optimization using double out-of-sample data and walk-forward techniques",
+      "published": "2026-02-11",
+      "category": "q-fin.TR",
+      "summary": "This study introduces a novel approach to walk-forward optimization by parameterizing the lengths of training and testing windows. We demonstrate that the performance of a trading strategy using the Exponential Moving Average (EMA) evaluated within a walk-forward procedure based on the Robust Sharpe Ratio is highly dependent on the chosen window size. We investigated the strategy on intraday Bitcoin data at six frequencies (1 minute to 60 minutes) using 81 combinations of walk-forward window lengths (1 day to 28 days) over a 19-month training period. The two best-performing parameter sets from the training data were applied to a 21-month out-of-sample testing period to ensure data independence. The strategy was only executed once during the testing period. To further validate the framework, strategy parameters estimated on Bitcoin were applied to Binance Coin and Ethereum. Our results suggest the robustness of our custom approach. In the training period for Bitcoin, all combinations of walk-forward windows outperformed a Buy-and-Hold strategy. During the testing period, the strategy performed similarly to Buy-and-Hold but with lower drawdown and a higher Information Ratio. Similar results were observed for Binance Coin and Ethereum. The real strength was demonstrated when a portfolio combining Buy-and-Hold with our strategies outperformed all individual strategies and Buy-and-Hold alone, achieving the highest overall performance and a 50 percent reduction in drawdown. A conservative fee of 0.1 percent per transaction was included in all calculations. A cost sensitivity analysis was performed as a sanity check, revealing that the strategy's break-even point was around 0.4 percent per transaction. This research highlights the importance of optimizing walk-forward window lengths and emphasizing the value of single-time out-of-sample testing for reliable strategy evaluation.",
+      "why": "Walk-forward optimisation with parameterised train/test window lengths — window-length sensitivity of the WFA; supports exposing windowLength as an explicit knob rather than a hidden default."
+    },
+    {
+      "id": "2606.00060v1",
+      "title": "Machine Learning-Based Bitcoin Trading Under Transaction Costs: Evidence From Walk-Forward Forecasting",
+      "published": "2026-05-19",
+      "category": "q-fin.TR",
+      "summary": "This paper investigates whether machine learning forecasts of hourly BTC-USDT returns can be converted into economically meaningful trading performance after transaction costs. Using approximately 70,000 hourly observations from 2018-2026, XGBoost, LSTM, and iTransformer are evaluated in a 27-fold walk-forward protocol. All three models produce positive gross trading performance in selected configurations, but naive sign-based strategies fail once transaction costs of ten basis points are imposed. A cost-aware execution filter, which prevents trades only when the forecast magnitude exceeds a transaction-cost-based threshold, sharply reduces turnover and restores profitability in selected configurations. The strongest long-only XGBoost strategy produces annualised returns above 65% with a Sharpe ratio above one. Additional tests show that technical indicators improve performance in selected cases, EGARCH-derived features do not provide uniformly robust gains, and XGBoost is descriptively stronger than the neural alternatives, although bootstrap evidence does not support formal statistical dominance. Loss-function and model-selection effects are secondary and statistically fragile. The results show that the main obstacle in hourly cryptocurrency trading is not only weak predictability, but also the way forecasts are converted into trades.",
+      "why": "ML BTC trading with walk-forward forecasting under transaction costs: an example of the pooled-OOS-return series that the family-wise test should consume."
+    },
+    {
+      "id": "2603.17226v1",
+      "title": "Difference-Based High-Dimensional Long-Run Covariance Matrix Estimation for Mean-shift Time Series",
+      "published": "2026-03-18",
+      "category": "stat.ME",
+      "summary": "We consider estimation of high-dimensional long-run covariance matrices for time series with nonconstant means, a setting in which conventional estimators can be severely biased. To address this difficulty, we propose a difference-based initial estimator that is robust to a broad class of mean variations, and combine it with hard thresholding, soft thresholding, and tapering to obtain sparse long-run covariance estimators for high-dimensional data. We derive convergence rates for the resulting estimators under general temporal dependence and time-varying mean structures, showing explicitly how the rates depend on covariance sparsity, mean variation, dimension, and sample size. Numerical experiments show that the proposed methods perform favorably in high dimensions, especially when the mean evolves over time.",
+      "why": "Tracks the bias of long-run covariance estimation for mean-shift series — the SE analogue of the fold-boundary problem: segments with different mean levels break the single-window HAC estimate. Grounds a segment-aware (grouped) long-run variance."
+    },
+    {
+      "id": "2606.17369v1",
+      "title": "Inference Optimal Long Run Variance Estimation with Lugsail Kernels",
+      "published": "2026-06-15",
+      "category": "math.ST",
+      "summary": "For datasets with unknown but stationary serial dependence, a robust long run variance estimator is essential to handle diverse scenarios. Spectral variance estimators are commonly used but tend to exhibit significant negative bias in the presence of positive correlation. To overcome this, zero lugsail estimators have been introduced, offering zero asymptotic bias regardless of the correlation structure. However, there are currently no guidelines for selecting the optimal bandwidth for lugsail estimators, a critical component in the estimation process. We propose an inference optimal bandwidth rule for lugsail estimators, based on nonstandard fixed-smoothing limiting distributions developed in our study. This approach significantly improves bias correction, accounts for variability, and provides an estimator optimized for robust inference. Our theoretical findings are supported by a simulation study.",
+      "why": "Zero-lugsail LRV kernels: zero asymptotic bias regardless of correlation strength, with inference-optimal bandwidths. The bias fix for the studentisation that the block bootstrap under-estimates (see 1809.04541)."
+    },
+    {
+      "id": "2512.14131v1",
+      "title": "Most Powerful Test with Exact Family-Wise Error Rate Control: Necessary Conditions and a Path to Fast Computing",
+      "published": "2025-12-16",
+      "category": "stat.ME",
+      "summary": "Identifying the most powerful test in multiple hypothesis testing under strong family-wise error rate (FWER) control is a fundamental problem in statistical methodology. State-of-the-art approaches formulate this as a constrained optimisation problem, for which a dual problem with strong duality has been established in a general sense. However, a constructive method for solving the dual problem is lacking, leaving a significant computational gap. This paper fills this gap by deriving novel, necessary optimality conditions for the dual optimisation. We show that these conditions motivate an efficient coordinate-wise algorithm for computing the optimal dual solution, which, in turn, provides the most powerful test for the primal problem. We prove the linear convergence of our algorithm, i.e., the computational complexity of our proposed algorithm is proportional to the logarithm of the reciprocal of the target error. To the best of our knowledge, this is the first time such a fast and computationally efficient algorithm has been proposed for finding the most powerful test with family-wise error rate control. The method's superior power is demonstrated through simulation studies, and its practical utility is shown by identifying new, significant findings in both clinical and financial data applications.",
+      "why": "Most powerful test with EXACT family-wise error rate control: necessary conditions + fast computing — the theory front behind wanting an exactly-sized FWER procedure (the subsampling StepM here)."
+    },
+    {
+      "id": "2212.08372v2",
+      "title": "On Asymptotic Behaviors of Stepwise Multiple Testing Procedures",
+      "published": "2022-12-16",
+      "category": "math.ST",
+      "summary": "Stepwise multiple testing procedures have attracted several statisticians for decades and are also quite popular with statistics users because of their technical simplicity. The Bonferroni procedure has been one of the earliest and most prominent testing rules for controlling the familywise error rate (FWER). A recent article established that the FWER for the Bonferroni method asymptotically (i.e., when the number of hypotheses becomes arbitrarily large) approaches zero under any positively equicorrelated multivariate normal framework. However, similar results for the limiting behaviors of FWER of general stepwise procedures are nonexistent. The present work addresses this gap in a unified manner by studying the limiting behaviors of the FWER of several stepwise testing rules for correlated normal setups. Specifically, we show that the limiting FWER approaches zero for any step-down rule (e.g., Holm's method) provided the infimum of the correlations is strictly positive. We also establish similar limiting zero results on FWER of other popular multiple testing rules, e.g., Hochberg's and Hommel's procedures. We then extend these results to any configuration of true and false null hypotheses. It turns out that, within our chosen asymptotic framework, the Benjamini-Hochberg method can hold the FWER at a strictly positive level asymptotically under the equicorrelated normality. We finally discuss the limiting powers of various procedures.",
+      "why": "Asymptotic behaviour of stepwise multiple testing procedures — the step-down/step-up family the Romano-Wolf StepM belongs to; useful for reasoning about its FWER/power asymptotics."
+    },
+    {
+      "id": "1311.4030v3",
+      "title": "New procedures controlling the false discovery proportion via Romano-Wolf's heuristic",
+      "published": "2013-11-16",
+      "category": "math.ST",
+      "summary": "The false discovery proportion (FDP) is a convenient way to account for false positives when a large number $m$ of tests are performed simultaneously. Romano and Wolf [Ann. Statist. 35 (2007) 1378-1408] have proposed a general principle that builds FDP controlling procedures from $k$-family-wise error rate controlling procedures while incorporating dependencies in an appropriate manner; see Korn et al. [J. Statist. Plann. Inference 124 (2004) 379-398]; Romano and Wolf (2007). However, the theoretical validity of the latter is still largely unknown. This paper provides a careful study of this heuristic: first, we extend this approach by using a notion of \"bounding device\" that allows us to cover a wide range of critical values, including those that adapt to $m\\_0$, the number of true null hypotheses. Second, the theoretical validity of the latter is investigated both nonasymptotically and asymptotically. Third, we introduce suitable modifications of this heuristic that provide new methods, overcoming the existing procedures with a proven FDP control.",
+      "why": "False-discovery-proportion procedures via Romano-Wolf after the first rejection — extends the step-down to FDP when the family is large; the natural next step if the candidate universe grows past a handful."
+    },
+    {
+      "id": "1905.08042v2",
+      "title": "Testing Sharpe ratio: luck or skill?",
+      "published": "2019-05-20",
+      "category": "q-fin.RM",
+      "summary": "Sharpe ratio (sometimes also referred to as information ratio) is widely used in asset management to compare and benchmark funds and asset managers. It computes the ratio of the (excess) net return over the strategy standard deviation. However, the elements to compute the Sharpe ratio, namely, the expected returns and the volatilities are unknown numbers and need to be estimated statistically. This means that the Sharpe ratio used by funds is likely to be error prone because of statistical estimation errors. In this paper, we provide various tests to measure the quality of the Sharpe ratios. By quality, we are aiming at measuring whether a manager was indeed lucky of skillful. The test assesses this through the statistical significance of the Sharpe ratio. We not only look at the traditional Sharpe ratio but also compute a modified Sharpe insensitive to used Capital. We provide various statistical tests that can be used to precisely quantify the fact that the Sharpe is statistically significant. We illustrate in particular the number of trades for a given Sharpe level that provides statistical significance as well as the impact of auto-correlation by providing reference tables that provides the minimum required Sharpe ratio for a given time period and correlation. We also provide for a Sharpe ratio of 0.5, 1.0, 1.5 and 2.0 the skill percentage given the auto-correlation level.",
+      "why": "Testing the Sharpe ratio: luck or skill — the single-statistic counterpart of the DSR floor; frames what the family-wise test adds over a per-strategy Sharpe test."
+    },
+    {
+      "id": "1911.04090v3",
+      "title": "A post hoc test on the Sharpe ratio",
+      "published": "2019-11-11",
+      "category": "stat.ME",
+      "summary": "We describe a post hoc test for the Sharpe ratio, analogous to Tukey's test for pairwise equality of means. The test can be applied after rejection of the hypothesis that all population Signal-Noise ratios are equal. The test is applicable under a simple correlation structure among asset returns. Simulations indicate the test maintains nominal type I rate under a wide range of conditions and is moderately powerful under reasonable alternatives.",
+      "why": "A post hoc test on the Sharpe ratio (Tukey-style pairwise) — pairwise Sharpe comparisons after a global rejection; the analogue of StepM rejecting WHICH candidate beats the baseline."
+    },
+    {
+      "id": "0710.2258v1",
+      "title": "Control of generalized error rates in multiple testing",
+      "published": "2007-10-11",
+      "category": "math.ST",
+      "summary": "Consider the problem of testing $s$ hypotheses simultaneously. The usual approach restricts attention to procedures that control the probability of even one false rejection, the familywise error rate (FWER). If $s$ is large, one might be willing to tolerate more than one false rejection, thereby increasing the ability of the procedure to correctly reject false null hypotheses. One possibility is to replace control of the FWER by control of the probability of $k$ or more false rejections, which is called the $k$-FWER. We derive both single-step and step-down procedures that control the $k$-FWER in finite samples or asymptotically, depending on the situation. We also consider the false discovery proportion (FDP) defined as the number of false rejections divided by the total number of rejections (and defined to be 0 if there are no rejections). The false discovery rate proposed by Benjamini and Hochberg [J. Roy. Statist. Soc. Ser. B 57 (1995) 289--300] controls $E(FDP)$. Here, the goal is to construct methods which satisfy, for a given $γ$ and $α$, $P\\{FDP>γ\\}\\le α$, at least asymptotically. In contrast to the proposals of Lehmann and Romano [Ann. Statist. 33 (2005) 1138--1154], we construct methods that implicitly take into account the dependence structure of the individual test statistics in order to further increase the ability to detect false null hypotheses. This feature is also shared by related work of van der Laan, Dudoit and Pollard [Stat. Appl. Genet. Mol. Biol. 3 (2004) article 15], but our methodology is quite different. Like the work of Pollard and van der Laan [Proc. 2003 International Multi-Conference in Computer Science and Engineering, METMBS'03 Conference (2003) 3--9] and Dudoit, van der Laan and Pollard [Stat. Appl. Genet. Mol. Biol. 3 (2004) article 13], we employ resampling methods to achieve our goals. Some simulations compare finite sample performance to currently available methods.",
+      "why": "Control of generalized error rates in multiple testing (k-FWER/FDP) — the relaxation used when the family is large and strict FWER costs too much power."
+    },
+    {
+      "id": "1204.1035v1",
+      "why": "Fixed-b subsampling and p-value calibration: bandwidth sensitivity of subsampling p-values, and the calibration that makes them size-correct — grounding for pinning ONE bandwidth shared by window and full scales (section X).",
+      "title": "Fixed-b Subsampling and Block Bootstrap: Improved Confidence Sets Based on P-value Calibration",
+      "published": "2012-04-04",
+      "category": "math.ST",
+      "summary": "Subsampling and block-based bootstrap methods have been used in a wide range of inference problems for time series. To accommodate the dependence, these resampling methods involve a bandwidth parameter, such as subsampling window width and block size in the block-based bootstrap. In empirical work, using different bandwidth parameters could lead to different inference results, but the traditional first order asymptotic theory does not capture the choice of the bandwidth. In this article, we propose to adopt the fixed-b approach, as advocated by Kiefer and Vogelsang (2005) in the heteroscedasticity-autocorrelation robust testing context, to account for the influence of the bandwidth on the inference. Under the fixed-b asymptotic framework, we derive the asymptotic null distribution of the p-values for subsampling and the moving block bootstrap, and further propose a calibration of the traditional small-b based confidence intervals (regions, bands) and tests. Our treatment is fairly general as it includes both finite dimensional parameters and infinite dimensional parameters, such as marginal distribution function and normalized spectral distribution function. Simulation results show that the fixed-b approach is more accurate than the traditional small-b approach in terms of approximating the finite sample distribution, and that the calibrated confidence sets tend to have smaller coverage errors than the uncalibrated counterparts."
+    },
+    {
+      "id": "1809.04541v3",
+      "title": "Lugsail lag windows for estimating time-average covariance matrices",
+      "published": "2018-09-12",
+      "category": "stat.CO",
+      "summary": "Lag windows are commonly used in time series, econometrics, steady-state simulation, and Markov chain Monte Carlo to estimate time-average covariance matrices. In the presence of positive correlation of the underlying process, estimators of this matrix almost always exhibit significant negative bias, leading to undesirable finite-sample properties. We propose a new family of lag windows specifically designed to improve finite-sample performance by offsetting this negative bias. Any existing lag window can be adapted into a lugsail equivalent with no additional assumptions. We use these lag windows within spectral variance estimators and demonstrate its advantages in a linear regression model with autocorrelated and heteroskedastic residuals. We further employ the lugsail lag windows in weighted batch means estimators due to their computational efficiency on large simulation output. We obtain bias and variance results for these multivariate estimators and significantly weaken the mixing condition on the process. Superior finite-sample properties are illustrated in a vector autoregressive process and a Bayesian logistic regression model.",
+      "why": "Carry-over from the 09g sweep (block-length / long-run-variance front)."
+    }
+  ]
+}
