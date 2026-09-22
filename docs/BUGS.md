@@ -6,21 +6,35 @@ described in `OPTIMIZATION.md`; see `../test/browser/entries/sanity.test.js`
 for the regression checks that now guard the first two entries.
 
 The codebase is largely hand-rolled numerical code, so most of the defects
-below are silent-wrong-answer bugs rather than crashes. **The five entries under
-`## Found by the attempt-3 power run` (#26-#30) are all fixed in round 25** —
+below are silent-wrong-answer bugs rather than crashes. **The seven entries under
+`## Found by the attempt-3 power run` (#26-#32) are all fixed in round 25** —
 #26/#27 were report-honesty defects found by forensics, #28/#29 were arithmetic and
-gate-logic defects found by the round-25 tests, and #30 was a silent-output wiring
-defect found in the post-implementation review. If you change anything
+gate-logic defects found by the round-25 tests, #30 was a silent-output wiring
+defect found in the post-implementation review, and #31/#32 were a JSON-provenance
+defect and a structurally wrong cost model, both found by auditing the
+`20260921T062511-seed1` signal-family run. **#33, #34, #35, #36 and #37 are all
+FIXED** — found by the
+round-26 controller/A-B fidelity sweep (`## Found by the round-26 controller /
+A-B fidelity sweep` below); **#38, #39, #40 and #41** were found by the round-26b
+implementation review and are also FIXED (`## Found by the round-26b
+implementation review` below), and **#42** was found by the first native `npm test`
+after that review and is FIXED (`## Found by the native npm test after the
+round-26b review` below),
+and #33 in particular changes the *reading* of every `npm run analyze` number ever
+produced: the driver fed the controller the whole growing candle prefix where
+production feeds it a fixed window, so the controller's trade bookkeeping saw
+ancient candles and trained on mislabelled trades. Do not size or interpret a run
+until #33 is fixed. If you change anything
 under `src/`, run the full browser suite before and after
-(**2070 checks**: `sanity` 59, `core` 20, `indicators` 75, `features` 11,
+(**2289 checks**: `sanity` 59, `core` 42, `indicators` 75, `features` 11,
 `consolidation` 48, `consolidation_worker` 18, `fetcher` 101,
-`golden` 23 (bit-exactness), `modules` 50 (assembly), `legion` 57,
-`candles` 95, `locks` 41, `analysis` 437, `price_precision` 29,
+`golden` 23 (bit-exactness), `modules` 51 (assembly), `legion` 57,
+`candles` 95, `locks` 41, `analysis` 562, `price_precision` 29,
 `multisymbol` 28, `lsh` 69, `surprise` 32, `sample_weights` 36,
 `homeostasis` 30, `evolve` 36, `multiprobe` 77, `binarypc` 39,
 `bitweight` 69, `querymod` 51, `walkforward` 62,
-`dimensions` 185, `guards` 58 (run integrity), `observer` 76 (legion health),
-`analyze` 158 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25)) — plus `golden` on
+`dimensions` 185, `guards` 65 (run integrity), `observer` 76 (legion health),
+`analyze` 222 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26)) — plus `golden` on
 its own after any `hivemind/` edit, `multisymbol` after any change to the
 controller's trade/target arithmetic, `lsh` after any change to the memory index,
 `surprise` after any change to the memory write path, `sample_weights` after
@@ -735,7 +749,7 @@ path rather than the mathematics:
 2. **Unreclaimed per-fit state.** Each fold runs four fits (the scored pass plus
    the audit's base pass plus `auditProbesPerFold` probes — see `RUN-ANALYSIS.md`
    §1.4) and `make{Controller,HiveMind}ModelFactory` gives *each* one a fresh,
-   never-deleted state directory (`src/analyze.js:191` for the bare factory, `:254` for the controller one). Measured
+   never-deleted state directory (`src/analyze.js:238` for the bare factory, `:452` for the controller one). Measured
    footprint: **1,381,600,976 B for 1,862 fits = 0.708 MiB/fit**, i.e. **~11.9 GiB
    for one full 15-variant run**, multiplied by the 20 retained run directories
    (`CONFIG` retention). `src/analyze.js` contains no `rmSync`/`unlink` and never
@@ -833,7 +847,7 @@ is provably unchanged (identical promote/keep-off set and audit with
 Proved by `analyze.test.js` §R (8 checks) plus the power-honesty checks in
 `analyze`/`walkforward`/`analysis`; `analyze` 129 → 143, `walkforward` 48 → 49.
 
-## Found by the attempt-3 power run — fixed in round 25 (#26, #27), plus defects found while fixing them (#28, #29) and in review (#30)
+## Found by the attempt-3 power run — fixed in round 25 (#26, #27), plus defects found while fixing them (#28, #29) and in review (#30-#32)
 
 The first four entries below were found by forensics on the **attempt-3 power run**
 (`20260920T144633-seed1`), by recomputing its decision offline from the journal, or
@@ -923,7 +937,7 @@ gate's fold-consistency hurdle is a significance statement:
 referenced to t(C−1) plus the **exact** sign test over the same fold-window
 clusters (Demsar 2006; Ledoit & Wolf 2008), and `promoteDecision` gains
 `requireSharpeDiff`/`requireBreadth`/`minDsrAdjusted` — each recorded in the
-returned `gate` as `applied` | `skipped-no-panel` | `not-needed` | `off`. The
+returned `gate` as `applied` | `skipped-no-panel` | `not-needed` | `off`. **Round 26 (R26-7)** then replaced the breadth half of that gate: the exact sign test is still computed and reported (`promotionTest.breadth`) but is no longer a hurdle, and the shipped dependence gate is the magnitude floor (`requireSharpeDiff`) plus a **cluster-stability** requirement (`requireClusterStability`) — the paired Sharpe difference must stay positive when any single fold-window cluster is deleted. The
 search concentration that made the 0.5 threshold unreadable is now a named
 diagnostic (`familyCorrelation`: mean pairwise excess correlation, the strongest
 pair, an effective trial count) — a diagnostic ONLY, because substituting an
@@ -1008,8 +1022,524 @@ used, so it is now §AD with every reference updated; three Node-mirror failure
 messages still cited the pre-round-25 check counts (49/143/390) while asserting the
 new ones (62/158/437), contradicting the RUNBOOK §6 ledger; the `dependence.js`
 row had silently failed to insert into `docs/LOCKED.md`; and this file's
-indicator-processor audit content had lost its section heading (restored as
-`## Hand-rolled indicators — audit findings`).
+indicator-processor audit content had lost its section heading (restored below).
+
+### 31. `evaluateAB`'s candidate projection dropped `elapsedMs`/`streams`, so `report.json` always carried a null per-candidate wall time
+
+`evaluateAB` computes `elapsedMs` for every variant (round 25's observability fix)
+and the report's `timings` block carries it, but the returned `candidates` were
+rebuilt as `{variant, report, skipped, decision, search}` — **dropping
+`elapsedMs`**. `candidateRow` then read `entry.elapsedMs ?? null`, so every
+`report.json` `candidates[].elapsedMs` was null while `timings[].elapsedMs` held
+the real value: the two views of the same quantity silently disagreed. The trial
+count K that every DSR was deflated by was also never surfaced in `report.json`
+(top level or per candidate), so a reader could not see the trial count the verdict
+assumed without inferring it from `familywise.K` or `costLadder.trials`.
+
+Found by auditing `20260921T062511-seed1/report.json`: `candidates[0].elapsedMs`
+was `null` beside `timings[0].elapsedMs === 96890845`.
+
+**Fixed:** the projection carries `elapsedMs` and `streams`; `candidateRow` gains
+`streams` and `trials`; the report and the partial-report checkpoints gain a
+top-level `trials`. Pinned by `analyze.test.js` §N (the timings/trials check).
+
+### 32. The documented and emitted cost model was linear in bars; the runner is O(n²) per stream (a ~27-hour run was planned at ~7)
+
+Round 25 recorded the controller cost as "10.5-10.7 s per controller fit,
+**independent of the stream length**" — in `docs/RUN-ANALYSIS.md` §4,
+`docs/RUNBOOK.md`, `docs/ROADMAP.md`, `docs/TODO.md`, `docs/OPTIMIZATION.md`, the
+`test/lock-registry.js` note, and the `report.json`/`partial-report.json`
+`reader` strings. The `--bars=2200` signal run falsified it: the same runner took
+**42.6 s per fold-pass at 142 folds/stream** versus 10.7 s at 36, so the run cost
+26.9 h where the documented linear model (and the sizing advice built on it) said
+≈7.
+
+Cause: the model fit warms an online controller by replaying all history —
+`for (i = 1..testStart) getSignal(candles.slice(0, i))` in `analyze.js` `fit()` —
+so the number of warm-up calls per fold grows with the fold index, and a run is
+**O(n²) per stream**, not linear in bars. The two power-scale runs pin the law:
+`time ≈ 0.035 s × Σ_f(testStart_f) × streams × passes × mechanismVariants`
+(33.2 ms per warm-up call at 36 folds/stream, 38.2 ms at 142).
+
+**Fixed (documentation):** §4 of `RUN-ANALYSIS.md` now carries the corrected law
+and its planning consequences (cost ∝ `pooledBars × folds-per-stream`, so many
+short streams are far cheaper than a few long ones); `OPTIMIZATION.md` "Round 25b"
+quantifies the parallelisation opportunity; the inline comments and both `reader`
+strings were corrected. **Deliberately not "fixed":** the O(n²) itself — replaying
+history *is* the online training, so removing it would change the model. The
+enabling change is parallelism, which is semantics-preserving.
+
+## Found by the round-26 controller / A-B fidelity sweep (#33-#37 all fixed)
+
+Round 25b explained the `20260921T062511-seed1` run's 26.9 h wall clock with the
+O(n²) cost law and concluded that the ceiling was economic, not statistical. The
+round-26 plan then proposed to attack turnover and buy diverse streams. Before
+planning more compute, the sweep below re-audited the *caller* side of the
+controller — what the A/B actually feeds `getSignal` — against what production
+feeds it (`legion/runner.js` → `legion/workers.js#runWorker`). It found that the
+A/B does **not** reproduce the production input shape, so the controller's trade
+bookkeeping and training labels in every `npm run analyze` run to date are not the
+shipped model's.
+
+A **second pass** (round 26b, the user's re-run of the same request) then re-ran
+the sweep against the plan's own assumptions. It added #36 and #37, and it
+**corrected #33's cost claim by measuring the control** (a production-shaped window
+costs the same per call as the prefix, so the re-insert churn is *not* the large
+term round 25c said it was). The corrected numbers and the two new defects are in
+the entries below; the plan itself is `ROADMAP.md` round 26, "Revision 2".
+
+### 33. The A/B streams the whole growing candle prefix into the controller, so its trade bookkeeping sees ancient bars and trains on corrupted labels
+
+**Production feeds a fixed window.** `legion/runner.js:90-95` pushes one candle at
+a time, keeps `state.cache` at `maxCache`, and dispatches once it is full;
+`legion/workers.js:39` then passes `state.cache.slice(-cacheSize)` — i.e. the
+**last `cacheSize` candles** — to `getSignal`. The controller's own candle table
+is trimmed to `cacheSize` by `_getRecentCandles`, so on a production call the
+candles it has not seen are exactly the newly-arrived one(s), and the
+`recentCandles` list it hands to `_updateOpenTrades` is one candle long.
+
+**The A/B feeds the entire prefix.** `analyze.js` `makeControllerModelFactory`:
+
+```js
+for (let i = 1; i <= testStart; i++) ctl.getSignal(candles.slice(0, i), 1);   // fit
+... ctl.getSignal(candles.slice(0, t + 1), 1)                                 // predict
+```
+
+Every call passes the whole prefix. `_getRecentCandles` inserts the input with
+`INSERT OR IGNORE`, but the cleanup immediately before it deleted every candle
+older than the `cacheSize` newest — so the next call **re-inserts the entire
+trimmed history**, and those re-inserted candles become `recentCandles`:
+
+```sql
+DELETE FROM candles WHERE timestamp NOT IN (
+    SELECT timestamp FROM candles ORDER BY timestamp DESC LIMIT ${cacheSize})
+```
+
+Measured in the browser harness (`hiveMindController`, `cacheSize = 120`, 260
+synthetic bars), instrumenting `_getRecentCandles`:
+
+| call | `recentCandles.length` (prefix, current) | (production window) |
+| ---: | ---: | ---: |
+| 1 | 1 | 1 |
+| 130 | 10 | 1 |
+| 200 | 80 | 1 |
+| 260 | 140 | 1 |
+
+`_updateOpenTrades(candles)` (`hivemind/controller/trades.js:14`) checks **every
+open trade against every candle in the list** and closes it on the first candle
+whose high/low crosses its take-profit or stop-loss — with no timestamp guard. So
+in the A/B a trade opened at bar `t` is immediately tested against bars
+`0 … t-121`, whose price levels are unrelated to the trade's entry: for a long,
+an old low is almost always below a stop set from the *current* price, so the
+trade is closed as a loss within a call or two.
+
+**This is not a timing artefact — it changes the labels.** Same seed, same 260
+candles, same controller, only the input window differing:
+
+| | `recentCandles` max | wins | losses | `trainingSteps` | open trades at end |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| prefix (current A/B) | 140 | **78** | **144** | 233 | 1 |
+| window (production-shaped) | 1 | **156** | **64** | 231 | 10 |
+
+The win/loss split inverts (36 % → 71 % wins), i.e. the A/B's controller was
+trained on a systematically mislabelled trade stream. On a 600-bar replay the
+probability stream also differs (`fracOutsideDeadZone` 0.328 prefix vs 0.224
+window; `probStd` 2.55 vs 2.27), which is exactly the quantity every reported
+Sharpe, DSR and break-even is built from. So **every number in
+`RUN-ANALYSIS.md` §7 that involves the `baseline` row must be re-derived**; the
+signal-family rows are unaffected (they are pure array math on the view and never
+reach the controller), which is why the section-7 verdict — "no signal promotes,
+and the economics kill them anyway" — survives, while its *baseline* comparison
+("the controller is a no-op") does not.
+
+**Fix (driver, semantics-restoring).** Pass the same window production passes:
+
+```js
+const from = Math.max(0, i - cacheSize);
+ctl.getSignal(candles.slice(from, i), 1);   // fit: i = 1..testStart
+ctl.getSignal(candles.slice(Math.max(0, t + 1 - cacheSize), t + 1), 1);  // predict
+```
+
+The controller's features are computed from its cached window either way, so this
+does not change what the model *reads*; it changes only the `recentCandles`
+increment, which is the intended production semantics. **Secondary payoff: not
+measured.** Round 25c claimed the re-insert churn was a large part of the per-call
+cost; the second sweep pass measured the control and found a production-shaped
+window costs **the same** per call as the prefix in the shim (56.6 vs 55.4 ms/call
+at calls 150-200, and equal in every earlier block — the ramp both show is
+early-run warm-up, not the churn). The churn term is real but ≤ 8 % over a 600-bar
+run (600 bars: 51.2 vs 55.1 ms/call). So the fix is a *correctness* fix, its speed
+benefit is unmeasured, and the native constant must be re-measured after it lands
+before it sizes anything. See `OPTIMIZATION.md` "Round 26b".
+Residual churn that the fix does *not* remove: a window that reaches **older** than
+the cached set still mass-re-inserts (measured `recentCandles = 80` when a
+back-in-time window is supplied) and is then deleted again by the same
+transaction's cleanup — pure churn. The driver's window advances, so production
+never does this, but it is now an explicit sweep invariant (R26-1 suspect 16): the
+A/B's per-call input must be the *contiguous, advancing* production window. One residual
+difference remains and is recorded as a sweep item, not fixed here: production's
+*first* dispatch already carries a full `cacheSize` window (the runner waits for
+`maxCache` before processing), whereas a fold's `i = 1..cacheSize` calls carry
+1..120 bars. So an early fold's controller is colder than production's would be at
+the same bar; whether that should be reconciled (e.g. require `testStart >=
+cacheSize`, or warm from bar 0 with a full first window) is a deliberate decision
+for R26-1, not an accident of the fix.
+
+**Hardening (component, defence in depth).** `_updateOpenTrades` should ignore any
+candle whose timestamp is not strictly after the open trade's timestamp, so an
+out-of-order or over-wide window can never close a trade before its entry. This is
+a no-op for production input (one new candle per call) and must not move a golden
+fingerprint. Related, latent: `insertTradeStmt.run` is not wrapped, and
+`open_trades.timestamp` is a PRIMARY KEY, so a duplicate-timestamp window would
+throw out of `getSignal` instead of degrading.
+
+**Why no test caught it.** There was no test of the A/B's *input contract*: the
+existing `analyze.test.js` controller sections assert a finite position series,
+the audit's teeth and the determinism of two identical runs — all of which hold
+whether the window is right or wrong. The regression guard is the first item in
+`ROADMAP.md` round 26 (`test/…/analyze.test.js`: assert `recentCandles.length <= 1`
+and an input length `<= cacheSize` on a multi-hundred-bar fold).
+
+**Status: FIXED in round 26 (R26-0).** What landed, and one deviation from the
+plan worth recording:
+
+- `analyze.js` `makeControllerModelFactory` now feeds
+  `candles.slice(max(0, i - cacheSize), i)` in `fit()` and
+  `candles.slice(max(0, t + 1 - cacheSize), t + 1)` in `predict()` — the same shape
+  `legion/workers.js` passes. `analyze.test.js` gained two contract checks with a
+  recording controller: every input is `<= cacheSize` candles, and each input is
+  exactly the contiguous, advancing production window (which also pins suspect 16 —
+  no back-in-time window).
+- `_updateOpenTrades` gained the entry-timestamp guard (a trade is only closed by a
+  bar strictly **after** its entry; a timestamp that cannot be ordered falls back to
+  the old scan rather than freezing the book). `core.test.js` gained three guard
+  checks (before-entry, entry-bar, later-closes), two window-churn checks
+  (`recentCandles <= 1` for the window, `> 1` for the prefix — so the guard test is
+  not vacuous), and one duplicate-open-trade check.
+- The open-trade insert in `getSignal` is wrapped: a duplicate timestamp (or any
+  write failure) is counted in `_globalAccuracy.openTradeWriteErrors` and warned,
+  never thrown out of `getSignal`. `core.test.js` proves it by forcing a collision.
+- **Deviation — three controller fingerprints were deliberately re-frozen.**
+  `golden.test.js`'s controller block was fed the whole growing candle prefix (the
+  #33 input shape itself). The guard makes that shape behave exactly like the window
+  (verified: prefix-with-guard and window produce *identical* `ctl:*` hashes), so
+  the block was switched to the production window and `ctl:finalSignal`,
+  `ctl:signalTrajectory` and `ctl:accuracyTotals` were re-frozen
+  (`224a8b19/17d78ef3/a0ece37d` → `a7b13a39/5d341253/09d8fb5a`). `ctl:signalCount`
+  and `ctl:lastTrainingStep` are unchanged and all six `hm:*` fingerprints are
+  untouched. The old values pinned the mislabelled stream, so re-freezing is the
+  correct outcome; the plan had assumed the guard would be a no-op on every input,
+  which this measurement disproved. Recorded in `RUNBOOK.md` §6.
+
+### 34. The two candidate families are mapped to positions by two incomparable policies, so turnover/participation comparisons confound the mapping with the signal
+
+The controller path emits `probToPosition(prob, { deadZone: 0.05, scale: 1 })`
+(`walkforward.js:88`) — a dead zone that abstains below ±5 % confidence and a
+linear rescale above it. The signal family emits `clampPosition(z, { saturation:
+2 })` (`analysis/features.js`) — `z/2`, clamped, with **no dead zone**. Neither
+`--position-policy` nor `positionPolicy` reaches the signals (`makeSignalForVariant`
+returns `variant.signal(view, test)` directly). Consequences: the reported
+`nonZeroFraction` / `meanAbsPosition` / `turnover` / `breakEvenCostBps` of a signal
+and of the controller are measured under different mappings, so §7.4's "signals
+trade 17-64× the baseline" is partly the policy difference rather than the signal,
+and §7.5's "meanAbsPos 0.0375" is the dead zone plus a low-confidence model. Any
+turnover experiment must first put both families through one documented
+confidence→position pipeline. **Not fixed**; it is round-26 item R26-3.
+
+**Status: FIXED in round 26 (R26-3).** There is now ONE pipeline: signals emit a
+clamped causal z-score as a *signed confidence* in [-1, 1], the controller emits
+`(prob−50)/50`, and both go through the SAME
+`confidenceToPosition(confidence, policy)` (`analysis/walkforward.js`) with a single
+run-level `POSITION_POLICY = {deadZone: 0.05, scale: 1}`. `probToPosition` is
+re-expressed through it (byte-identical on the whole controller domain, pinned).
+The raw pre-policy confidence is journaled beside the emitted positions in
+`folds.jsonl`, every run records a `policyRoundTrip` certificate, and
+`restateReportAtPolicy(report, policy)` lets a dead-zone/scale/holding sweep be pure
+post-processing (pinned: the scored policy reproduces the emitted positions and the
+pooled Sharpe exactly). Proved by `analysis.test.js` (the exact pipeline, the
+prob-domain equivalence, the round-trip detector) and `analyze.test.js` (the
+journaled confidence, the certificate, a wider dead zone abstaining more).
+
+### 35. The A/B 'controller' rows never say whether the model trained, whether it abstained, or whether the warm-up threw
+
+`makeControllerModelFactory` computes `warmErrors`, `folds`, `undertrained`,
+`trainingSteps` and `quarantinedRows` in `stats()`, and nothing reads it: the
+report has no model diagnostics. So "the baseline has no edge" cannot be
+distinguished from "the baseline never trained" (or "every warm-up call threw",
+which #33 makes a live possibility) from the artifact alone — the exact gap
+§7.5 flagged. The `undertrained` guard is also `testStart >= warmup` (40) rather
+than the model's own readiness signal (`trainingSteps > 0`), so with the default
+`trainSize = 60` it can never fire. **Not fixed**; round-26 item R26-2.
+
+**Status: FIXED in round 26 (R26-2).** The readiness gate is now
+`trainingSteps > 0` (a fold whose controller never trained abstains); `warmup` is
+kept as a *reported* statistic (`stats().undertrained`) rather than a gate.
+`stats()` also reports the label base rate, the resolved-barrier split, a proper
+Brier skill score against the base-rate forecast, a chance-corrected accuracy, the
+quarantined-row and dropped-candle counts, and a three-state `status`;
+`makeSignalForVariant` hands each fold's stats to the driver, which pools them
+into a per-variant `model` block in `report.json` (null for a pure signal
+candidate) and a `models:` summary line in the run summary. Proved by
+`core.test.js` section I (label counters + SQLite round-trip + dropped-candle
+diagnostic) and the `analyze.test.js` R26-2 checks (base-rate vs skilful vs
+not-trained, the readiness abstention, and the report/summary block).
+
+### 36. The two-barrier trade labeler resolves an unresolvable bar to the take-profit, fills a gapped stop at the stop price, and never labels a trade that does not trigger a barrier
+
+`hivemind/controller/trades.js#_updateOpenTrades` decides a trade's label from the
+first candle that crosses either barrier:
+
+```js
+const hitTakeProfit = isLong ? candle.high >= trade.sellPrice : candle.low  <= trade.sellPrice;
+const hitStopLoss   = isLong ? candle.low  <= trade.stopLoss  : candle.high >= trade.stopLoss;
+if (hitTakeProfit || hitStopLoss) {
+    const exitPrice = hitTakeProfit ? trade.sellPrice : trade.stopLoss;
+    const outcome   = hitTakeProfit ? 1 : 0;
+```
+
+Three consequences, all one-sided:
+
+1. **A bar that spans both barriers is booked as a win.** The take-profit is tested
+   first, so a candle whose range contains both the TP and the SL is labelled
+   `outcome = 1` — but with TP = `atrFactor`·ATR and SL = `stopFactor`·ATR and the
+   shipped factors (`legion/config.js`: `baseAtr: 2`, `baseStop: 1`) the stop is
+   *half as far*, so the stop is the likelier intrabar touch. The OHLC bar cannot
+   resolve the order, and the code resolves it optimistically. Measured on the 7
+   audited 1h symbol files (ATR14, entry at the previous close): **0.028 % of bars
+   (1 in ~3,600)** have both `entry + 2·ATR` and `entry − 1·ATR` inside their range,
+   and **1.0 %** span ≥ 3·ATR. Small, but strictly a mislabel of the same class as
+   #33, and it grows with volatility clustering.
+2. **A gapped stop is filled at the stop price.** `exitPrice = trade.stopLoss`
+   assumes a stop order fills exactly at its trigger, so every loser is recorded
+   at −`stopFactor`·ATR even when the bar opened or traded far through it. That is
+   the classic optimistic-backtest fill assumption; it biases the *labels* (not the
+   scored PnL — positions are scored on bar returns, so the barrier prices never
+   enter a reported Sharpe) toward under-stating losses.
+3. **A trade that never touches either barrier is never closed and never labelled.**
+   `_updateOpenTrades` only closes on a trigger, and `_processClosedTrades` only
+   trains on rows in `closed_trades`, so an untriggered trade is an open row that
+   trains nothing, forever. `open_trades` therefore has no cap (measured 7-20 rows
+   warm on 600 synthetic bars; a long production run accumulates them), and each
+   `getSignal` runs two full-table `SELECT`s (`open_trades`, `closed_trades`) plus a
+   per-open-trade scan. The standard remedy is a **time barrier** — the third
+   barrier of the triple-barrier label (López de Prado 2018, ch. 3; the project
+   already cites the triple-barrier label literature): close at the horizon's
+   expiry and label from its return.
+
+**Status: FIXED in round 26 (R26-11).** The labeler is now policy-aware
+(`_labelPolicy` ∈ {`optimistic`, `conservative`, `triple`} plus the run-level
+`_labelHorizonBars`) and each policy addresses one consequence above:
+
+1. **`optimistic`** is the shipped two-barrier rule, unchanged and still the
+   default, so every golden fingerprint is untouched (the round-26 invariant: a
+   default-behaviour change is forbidden);
+2. **`conservative`** resolves a both-barrier bar to the STOP (stop-first tie-break)
+   and fills a gapped stop at the bar's worst traded price
+   (`isLong ? Math.min(stopLoss, open) : Math.max(stopLoss, open)`) instead of the
+   trigger price;
+3. **`triple`** is `conservative` plus a time barrier at `_labelHorizonBars`: an
+   untriggered trade closes at the horizon bar's close and is labelled from its
+   return (the third barrier of the triple-barrier label, López de Prado 2018, ch. 3),
+   so an untriggered trade is no longer an open row that trains nothing forever.
+
+Because a label change is a *training-set* change, the two non-default policies ship
+as opt-in A/B **variants** (`label-conservative`, `label-triple`; `kind: 'label'`,
+controller-scoped), never in the default 15-candidate roster: `--label-policies`
+appends exactly them, `--label-policy=<name>` sets the run default, and
+`--label-horizon=<bars>` sets the time barrier. The shipped labeler, the default
+roster and all 11 golden fingerprints are unchanged. The trade's holding period and
+time-barrier resolution are counted (`heldBarsSum`/`heldBarsCount`/`heldBarsMax`,
+`resolvedTimeBarrier`) and persisted, so the label *lifecycle* is observable (see
+#37/R26-2). Pinned by `core.test.js` section J (browser + native SQLite) and
+`analyze.test.js` (the variant rostering, the controller-level policy override, the
+recorded `labelPolicy`/`labelHorizonBars`, and the named error on an unknown
+policy).
+
+### 37. The A/B never reports the label base rate, so a model's 'accuracy' has no reference point
+
+With the shipped factors the take-profit is twice as far as the stop, so the stop
+triggers first far more often: over 600 synthetic bars, same seed and data, the
+production-shaped window gives **155 wins / 411 losses** (base rate ≈ 27 % TP),
+and the prefix gives 322/248 — the base rate itself is a function of the #33
+window. `getSignal` computes `tradeAcc = wins/total` and `trueAcc =
+realPoints/totalPoints` into every signal, but the A/B neither carries them into
+`report.json` nor gives them a reference, so "the baseline's accuracy is 71 %"
+cannot be read as skill or as the base rate. (The bookkeeping arithmetic is
+correct — `realPoints` accumulates exactly `y·conf + (1−y)·(100−conf)`, the linear
+proper scoring rule `1 − |y − p|` — it is the missing *baseline* that makes it
+uninformative.) This is #35's sibling: #35 is "we cannot tell whether it trained",
+#37 is "we cannot tell whether what it learned is better than the majority class".
+Fixed with R26-2/R26-8: the per-fold label counts and the base rate, a **skill
+score** against the base-rate forecast (Brier skill score; Heidke-style
+chance-correction), and the calibration reading, all reported beside the accuracy.
+
+**Status: FIXED in round 26 (R26-2).** Every scored closed trade now contributes
+to `resolvedTakeProfit`/`resolvedStopLoss` and to the Brier components
+(`brierSum`/`brierCount`), persisted with the existing accuracy counters. The A/B
+computes, per fold and pooled across folds, the **label base rate**, the Brier
+skill score against the base-rate forecast (`1 − BS/BS_base`, a *proper* score, so
+hedging to the majority class cannot earn skill) and a chance-corrected accuracy,
+with a three-state `status` (`not-trained` | `base-rate` | `skilful`). The
+`analyze.test.js` R26-2 checks pin all three states and the base-rate reference
+directly; `core.test.js` section I pins the underlying counters and their SQLite
+round-trip.
+
+### Checked clean by the sweep (recorded, not defects)
+
+- **`wins`/`losses`/`realPoints`** are a correct linear proper scoring rule, as
+  decomposed above (verified by reading; the `confidence < 0` untrained rows are
+  excluded from the accuracy counters but still trained, which is the documented
+  intent).
+- **`insertTradeStmt`'s duplicate-timestamp PRIMARY KEY** on `open_trades` is not
+  reachable through the driver contract: a trade is only opened when a candle was
+  newly inserted, and a repeated window re-inserts nothing, so no second trade with
+  the same timestamp is written. A probe calling `getSignal` twice with an
+  identical window threw nothing (the second call's `recentCandles` was empty). It
+  remains reachable only via the back-in-time window the driver forbids (suspect
+  16), so it stays a hardening item under R26-0 rather than a live defect.
+- **`_updateOpenTrades` closes nothing before its entry** under the production
+  window: measured 0 pre-entry closes over 600 window-shaped calls (the counter
+  only moves under the prefix shape or a back-in-time window).
+- **Only the `positive` polarity is exercised by the A/B**, while production
+  selects over `positive` and `negative` (verified by reading: the factory
+  hard-codes `'positive'`). Recorded as a coverage limitation and a sweep
+  invariant, not a defect.
+
+## Found by the round-26b implementation review (#38, #39, #40, #41 — all fixed)
+
+The final review of the round-26 code read the *shape* of every value flowing
+between the new layers, rather than only the numbers the tests pinned, and found
+four defects that no existing check could see because every fixture was too easy
+(each passed a shape the product never produces). #38/#39/#40 are value defects;
+#41 is a structurally-unreachable field whose reader promised the opposite.
+
+### 38. The decision-grade magnitude readout read the paired difference as a scalar, so its cheapest-flip branch was dead in production
+
+`nextRunPlan`'s `cheapestFlip` (R26-8) offers a *magnitude* hint when the binding
+hurdle is the paired cluster Sharpe difference: "the test needs roughly
+`1.96 × seCluster`, your difference is `d`". It gated that branch on
+`isNum(check.sharpeDifference)` — but `pairedPromotionTest` returns
+`sharpeDifference` as the whole `pairedClusterTest` block
+(`{ available, value, se, t, df, ... }`), not a scalar. `isNum(<object>)` is
+always false, so on every real report the branch never fired and the fallback
+("the binding hurdle is: …") was returned instead. The `analysis.test.js` fixture
+had passed `sharpeDifference: 0.05` (a number), so the test exercised a shape the
+product never produces. **Fixed:** `cheapestFlip` reads `.value` (still accepting
+a bare number), and the fixture now carries the real object
+(`{ value, se, nClusters }`) so the branch is proved on the production shape. A new
+`analyze.test.js` check also drives a real **2-stream** `runAnalysis` and asserts the
+decision block's `nextRunPlan.pairedUnits` (and the journal decay and the
+leave-one-fold range) are genuinely populated end-to-end — the integration shape
+this defect hid behind.
+
+### 39. `pairedClusterSignTest` compared `all-but-cluster-c`, so the "breadth" sign test was a leave-one-out stability test, not the per-window test it documents
+
+The breadth statistic replaced the raw `>= 0.5` win-fraction hurdle and its own
+comment/reader say "**on each cluster**, did the candidate's statistic beat the
+baseline's?". The implementation copied `pairedClusterTest`'s leave-one-out call
+`statistic(concatClusters(clusters, c))` — which is "every cluster EXCEPT c", the
+jackknife input — so it computed a sign test over leave-one-out panels. That is
+the *stability* question (now `clusterStability`, R26-7), not the win-count
+question, and it would not have changed a promotion (round 26 moved
+`requireBreadth` out of the shipped gate), but it corrupted every reported
+`promotionTest.breadth` number and the "passed 8/8, hit its 2⁻ⁿ floor" reading of
+the round-25 runs. The `analysis.test.js` fixture was a degenerate all-A=1 vs
+all-B=0 panel, for which the per-window and leave-one-out forms give the same
+5/5, so it could not see the defect. **Fixed:** `pairedClusterSignTest` compares
+`statistic(clustersA[c])` to `statistic(clustersB[c])` (ties dropped), and the
+fixture is now discriminating — 4 wins / 1 loss / 1 tie on a panel where the
+leave-one-out form reads 6/6. The breadth numbers recorded in `RUN-ANALYSIS.md`
+§7 were produced by the old form and are superseded.
+
+### 40. `decisionReport`'s `training.labelDistribution` read a field the model summary never produces, so it was always null
+
+The training block (R26-8 clause 1) carries `labelDistribution` to state the label
+base rate, the resolved-barrier split and the holding distribution. It read
+`candidate.model.labelDistribution` — but `summarizeModelStats`/`labelDiagnostics`
+expose those as `baseRate`, `resolved {takeProfit, stopLoss, total}`, `heldBars
+{count, sum, max, mean}` and `status`; nothing in the codebase ever sets a
+`labelDistribution` field, so the value was a silent `null` on every report (exactly
+the "a null a reader could mistake for a healthy zero" failure the module exists to
+prevent — and the same shape-mismatch class as #38). The data was still available
+inside `training.model`, so no verdict moved, but the field was dead. **Fixed:**
+`training.labelDistribution` is now derived from the model diagnostics
+(`status`, `baseRate`, `resolved`, `heldBars`) and remains an explicit `null` only
+for a pure-signal candidate that has no model block at all; pinned by a new
+`analysis.test.js` §AK check.
+
+### 41. The decision report's `family` seed fields read a `replication` shape no producer supplies, so they were unreachable and their readers promised the opposite
+
+The `family` block (R26-8 question 5) carries `seedDistribution`,
+`varianceComponents` and `pairedVarianceRatio` — the R26-13 cross-seed summary —
+reading `replication.seedDistribution` / `.varianceComponents` /
+`.pairedVarianceRatio`. But the only caller (`analyze.js:runAnalysis`) hard-codes
+`replication: null`, and the actual producer, `replicateAnalysis`, returns
+`{ seeds, variants, byVariant, commonRandomNumbers, reader }` — keyed `byVariant`,
+with the variance decomposition **nested** as `seedDistribution(...).components`
+and no aggregate `pairedVarianceRatio` at all. So even had the aggregate been
+threaded into a report, the reads would still have missed, and every real report
+showed all three as `na('a single-seed run has no seed distribution (use
+--seeds=a,b,c)')` — a reason that tells the user a `--seeds` run *populates the
+report's field*, which it does not (the aggregate is written to a separate
+`replication.json`). Same shape-mismatch class as #38/#40, and the same dead-field
+pattern; no information is lost (`replication.json` genuinely carries the
+aggregate), but the report's reader lied about where to find it. **Fixed:** the
+three `na` reasons and the block's `reader` now say the cross-seed distribution is
+aggregated into `replication.json` by a multi-seed run (not into the per-seed
+report), the module header no longer claims "the `family` block prints the seed
+distribution when a multi-seed run supplied one", and the §AK check now feeds the
+**real** `byVariant` producer shape and asserts it does not silently populate the
+fields (plus that each reason points at `replication.json`).
+
+### Note (not a defect): the `netSharpe || -Infinity` ranking in `analyze.js`
+
+The decision block's featured-row selection ranked by
+`b.pooledMetrics.netSharpe || -Infinity`. A candidate whose pooled net Sharpe is
+exactly `0` is falsy, so it was ranked as `-Infinity` and could lose to a
+negative-Sharpe candidate. The value is almost never exactly zero (and the
+featured row is normally the promoted candidate), so this never bit a real run,
+but it is now `Number.isFinite(x) ? x : -Infinity`.
+
+### Documented gap (not a defect): the entry-to-training age is not yet measured
+
+R26-11's spec asks the label lifecycle to surface the **entry-to-training age**
+distribution — the gap between a trade's entry bar and the bar at which
+`_processClosedTrades` actually consumes (labels) it — because that is what makes
+the drain's `processCount = 1` FIFO lag visible. What landed and is reported is the
+**entry-to-close holding period** (`heldBarsSum`/`heldBarsCount`/`heldBarsMax` in
+`trades.js#_updateOpenTrades`, persisted with the accuracy bag in
+`hiveMindController.js`), which is the labeller's own horizon — a *related but
+different* quantity. The training-age metric needs the current candle timestamp
+threaded into `_processClosedTrades`' hot path (a state-affecting change to a locked
+module), so it was **not** implemented blind; it is tracked as `TODO.md` #62. The
+`decision.js` `training.reader` string, `ROADMAP.md` (R26-11 spec + *Landed*) and
+`TODO.md` item 56 now say so explicitly. No metric or verdict moves.
+
+## Found by the native `npm test` after the round-26b review (#42 — fixed)
+
+### 42. The concurrent A/B dropped the in-process signal function, so any `concurrency > 1` run with the audit on (the default) crashed
+
+`evaluateABAsync` (R26-4) lets the SCORED fold-pass run in a worker
+(`foldExecutorFor`), and to avoid the serial path it nulled `signalForFold`
+whenever an executor existed (`signalForFold: executor ? null : foldFor`). But
+`walkForwardEvaluateAsync`'s look-ahead audit always runs **in-process**, because
+it re-fits the signal on PERTURBED views and a fold executor has no view channel.
+So `auditNoLookahead` called `signalForFold(...)` on `null` and threw
+`TypeError: signalForFold is not a function` — every `npm run analyze` with
+`--concurrency > 1` (and `audit` on, which is the default) died at the first fold.
+The native acceptance test `test/node/parallel_folds.test.js` caught it (it is the
+only test that runs a real worker-backed `runAnalysis` with the audit on); the
+browser suite missed it because its `evaluateABAsync` fixture used `audit: false`
+and its `walkForwardEvaluateAsync` fixture passed a `signalForFold` alongside the
+executor. **Fixed:** `evaluateABAsync` now always builds the folded signal function
+(`signalForVariant(variant)` — a cheap closure over the shared factory) and passes
+it as `signalForFold`; the executor still owns the scored pass, and only the audit
+calls the in-process function. `walkForwardEvaluateAsync` also now throws a **named**
+error when `audit` is requested with only a `foldExecutor` (instead of a bare
+`TypeError` mid-audit). The browser R26-4 concurrency check was strengthened to run
+the audit ON as well as off (folded into the existing check), so the path is now
+covered without a `node` run. No count moved (`analysis` 562, `analyze` 222,
+ledger 2289).
 
 ## Hand-rolled indicators — audit findings
 
@@ -1146,6 +1676,36 @@ they are recorded so a future run does not chase them as product bugs.
    to a fresh directory makes the reload read an empty database and fails the
    round-trip with a `protos=0/<n>` detail (fixed bug #15, item 2). Node mirrors
    must use `labelledStateDir` from `test/node/helpers.js`.
+
+5. **A replaced (seeded) `Math.random` can alias two sql.js databases, defeating
+   the shim's path isolation.** sql.js names every in-memory database after
+   `Math.random()` — `this.filename = "dbfile_" + (4294967295 * Math.random() >>> 0)`
+   (sql.js 1.11.0) — so when a test substitutes a seeded stream (as
+   `withSeed`-style helpers do) two `new Database()` calls can draw the same name,
+   land on the same MEMFS file, and share one underlying database even though the
+   shim's `registry` holds two distinct paths. **Observed directly** while
+   proving R26-12: with `Math.random` reset to the same seed before each
+   construction, a `HiveMindController` built in a *fresh* directory came up with
+   `_globalAccuracy.trainingSteps = 78` and its `candles` table already holding
+   the earlier controller's 60 bars (the first controller was clean at `0/0`);
+   the digest is exactly the earlier controller's state. Resetting to a *different*
+   seed, or not resetting at all, stayed clean — i.e. the collision is
+   seed-specific and silent. Consequences and rules:
+   - **Do not compare two controllers in one Worker while `Math.random` is
+     seeded.** Prove a throttle/flag/interval hypothesis with a deterministic
+     model *stand-in* (no RNG) instead — that is what `core.test.js` section H
+     (R26-12) does — or add a node-only suite (`test/node/checkpoint_throttle.test.js`).
+   - **`golden.test.js`'s controller block is verified NOT affected**: its two
+     databases carry distinct sql.js filenames, and its fingerprints are unchanged
+     by the isolation experiment below.
+   - **A fix exists but must not be applied blindly.** Forcing each sql.js
+     construction to a unique, counter-based filename (still consuming one draw
+     from the app's stream, so the seeded position is preserved) removed the
+     aliasing — but it also **moved five `golden` `ctl:*` fingerprints**. Why a
+     change that only renames an internal MEMFS file moves the numeric trajectory
+     is not yet understood, so the patch was reverted. Anyone re-attempting it must
+     first obtain a native golden re-freeze (the node mirror is the authority) and
+     record the re-freeze in `RUNBOOK.md` §6.
 
 ---
 

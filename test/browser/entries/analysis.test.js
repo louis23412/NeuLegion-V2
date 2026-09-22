@@ -23,21 +23,44 @@ import {
 } from '../../../src/analysis/uniqueness.js';
 import {
     positionsFromSignals, turnover, strategyReturns, equityCurve, maxDrawdown,
-    hitRate, tradeCount, backtestMetrics, purgedCVBacktest, annualizedReturn, poolFolds,
+    hitRate, tradeCount, backtestMetrics, purgedCVBacktest, purgedCVBacktestAsync, annualizedReturn, poolFolds,
 } from '../../../src/analysis/backtest.js';
+import { scheduleUnits, normaliseConcurrency, makeFoldExecutor } from '../../../src/analysis/parallel.js';
 import {
     barReturns, logReturns, probToPosition, isCausalFold, aggregateFolds,
-    foldWinFraction, auditNoLookahead, walkForwardEvaluate, promoteDecision,
+    foldWinFraction, auditNoLookahead, walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision,
     formatReport, familywiseSearch, walkForwardSearch,
     sharpeStandardError as wfSharpeStandardError, minimumDetectableSharpe, poolReports,
     dependenceSummary, clustersOf, pairedPromotionTest, restateReportAtCost, costLadder,
     familyCorrelation, DEPENDENCE_GATE_READER,
+    confidenceToPosition, confidenceFromProb, verifyPolicyRoundTrip, restateReportAtPolicy,
+    positionSeriesFromConfidence,
 } from '../../../src/analysis/walkforward.js';
+import {
+    DEFAULT_TURNOVER_GRID, turnoverSweep, bestTurnoverPolicy, formatTurnoverSweep,
+} from '../../../src/analysis/holding.js';
+import {
+    resampleCandles, designEffectOfStreams, selectStreams, formatStreamSelection,
+} from '../../../src/analysis/streams.js';
+import {
+    interquartileMean, stratifiedBootstrapCI, varianceComponents,
+    seedDistribution, pairedVarianceRatio, formatSeedReplication,
+} from '../../../src/analysis/replication.js';
+import {
+    forecastPairs, brierBinIndex, brierScore, logScore, brierDecomposition, brierLosses,
+    bootstrapMeans, dieboldMariano, modelConfidenceSet, forecastComparison, formatForecast,
+} from '../../../src/analysis/forecast.js';
+import {
+    foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision,
+} from '../../../src/analysis/decision.js';
+import {
+    halvingRounds, halvingSchedule, successiveHalving, formatRace,
+} from '../../../src/analysis/race.js';
 import {
     pearsonCorrelation, meanPairwiseCorrelation, equicorrelationDesignEffect,
     equicorrelationEffectiveSize, foldWindowClusters, concatClusters, clusterJackknife,
     pairedClusterTest, pairedClusterSignTest, signTest, signTestFloor,
-    regularizedIncompleteBeta, studentTPValue, studentTCdf,
+    regularizedIncompleteBeta, studentTPValue, studentTCdf, clusterStability,
 } from '../../../src/analysis/dependence.js';
 import {
     DEFAULT_SHOCK, shockFactor, shockCandles, makeCandleViewFor, worldFromCandles,
@@ -399,6 +422,50 @@ export async function run() {
             `p60=${probToPosition(60, { deadZone: 0.1 })}`);
         check('probToPosition clamps out-of-range p (and direction flips sign)',
             probToPosition(150) === 1 && probToPosition(-20) === -1 && probToPosition(100, { direction: -1 }) === -1);
+
+        // --- R26-3: the one confidence -> position pipeline ------------------
+        check('R26-3: confidenceFromProb is the exact clamped (prob-50)/50',
+            confidenceFromProb(50) === 0 && confidenceFromProb(100) === 1 && confidenceFromProb(0) === -1 &&
+            confidenceFromProb(150) === 1 && confidenceFromProb(-10) === -1);
+        check('R26-3: confidenceToPosition generalises probToPosition on the whole controller domain',
+            (() => {
+                for (let p = 0; p <= 100; p += 0.5) {
+                    if (probToPosition(p, { deadZone: 0.05, scale: 1 }) !== confidenceToPosition(confidenceFromProb(p), { deadZone: 0.05, scale: 1 })) return false;
+                }
+                return true;
+            })());
+        check('R26-3: confidenceToPosition is sign-preserving, bounded, dead-zoned and finite-safe',
+            confidenceToPosition(1) === 1 && confidenceToPosition(-1) === -1 &&
+            confidenceToPosition(0.5, { scale: 0.5 }) === 0.25 &&
+            confidenceToPosition(0.4, { deadZone: 0.5 }) === 0 &&
+            confidenceToPosition(NaN) === 0 && confidenceToPosition(Infinity) === 0 &&
+            confidenceToPosition(2) === 1 && confidenceToPosition(-2) === -1);
+        check('R26-3: verifyPolicyRoundTrip rejects a wrong policy and accepts the scored one',
+            (() => {
+                const rep = {
+                    foldInputs: [{
+                        returns: [0.01, -0.01],
+                        signals: [confidenceToPosition(0.3, { deadZone: 0.05 }), 0],
+                        confidence: [0.3, 0.01],
+                    }],
+                };
+                return verifyPolicyRoundTrip(rep, { deadZone: 0.05 }).ok === true &&
+                    verifyPolicyRoundTrip(rep, { deadZone: 0.5 }).mismatch > 0;
+            })());
+        check('R26-3: restateReportAtPolicy reproduces the scored positions and reshapes participation with the dead zone',
+            (() => {
+                const conf = [0.02, 0.3, -0.4, 0.01];
+                const scored = { deadZone: 0.05, scale: 1 };
+                const foldInputs = [{ returns: [0.01, 0.02, -0.03, 0.001], signals: conf.map((c) => confidenceToPosition(c, scored)), confidence: conf }];
+                const report = {
+                    foldInputs, folds: [{ testStart: 0, testEnd: 3 }], streamFoldLengths: [[4]],
+                };
+                const wide = restateReportAtPolicy(report, { deadZone: 0.5, scale: 1 });
+                const same = restateReportAtPolicy(report, scored);
+                return same.positions[0].every((p, i) => p === foldInputs[0].signals[i]) &&
+                    wide.positions[0][0] === 0 && wide.positions[0][1] === 0 &&
+                    wide.pooledMetrics.nonZeroFraction <= same.pooledMetrics.nonZeroFraction;
+            })());
 
         check('walk-forward folds are causal', walkForwardSplit({ n: 20, trainSize: 5, testSize: 3 }).every(isCausalFold));
         check('purged K-fold folds are (correctly) not all causal',
@@ -2022,10 +2089,14 @@ export async function run() {
                 })());
 
             // --- the exact sign test over clusters (Demsar 2006) -------------
-            const abSweep = pairedClusterSignTest({ clustersA: [[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]], clustersB: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]], statistic: abMean });
-            check('AD: pairedClusterSignTest is an exact binomial tail over the winning clusters',
-                abSweep.available && abSweep.wins === 5 && abSweep.losses === 0 && abSweep.n === 5 &&
-                abClose(abSweep.pValue, 1 / 32, 1e-15) && abSweep.significant === true);
+            // A discriminating fixture: per-window the candidate wins 4 of the 6
+            // windows (one loss, one tie), while the delete-one-cluster statistic
+            // would compare all-but-c and report 6/6. This pins the sign test as the
+            // PER-WINDOW test its reader claims (not a leave-one-out stability test).
+            const abSweep = pairedClusterSignTest({ clustersA: [[2], [2], [2], [2], [0], [1]], clustersB: [[1], [1], [1], [1], [1], [1]], statistic: abMean });
+            check('AD: pairedClusterSignTest is an exact PER-WINDOW binomial tail (ties dropped)',
+                abSweep.available && abSweep.wins === 4 && abSweep.losses === 1 && abSweep.ties === 1 &&
+                abSweep.n === 5 && abClose(abSweep.pValue, 3 / 16, 1e-15) && abSweep.significant === false);
             check('AD: signTest is exact at hand-computed tails (3/4 = 5/16, 5/5 = 1/32, 36/36 = 2^-36, 0/5 = 1)',
                 abClose(signTest({ wins: 3, n: 4 }).pValue, 5 / 16, 1e-15) &&
                 abClose(signTest({ wins: 5, n: 5 }).pValue, 1 / 32, 1e-15) &&
@@ -2248,6 +2319,835 @@ export async function run() {
                 })());
         }
     }
+    // ---- AE. R26-4: the concurrent fold scheduler ---------------------------
+    // The scheduler's contract is order-preserving bounded concurrency, and the
+    // async backtest/walk-forward twins must then be byte-identical to the serial
+    // ones — same arithmetic, same emit order, only wall time moves.
+    try {
+        check('R26-4: normaliseConcurrency treats a non-finite / non-positive width as serial',
+            normaliseConcurrency(0) === 1 && normaliseConcurrency(-3) === 1 &&
+            normaliseConcurrency(NaN) === 1 && normaliseConcurrency(Infinity) === 1 &&
+            normaliseConcurrency(1) === 1 && normaliseConcurrency(2.9) === 2 && normaliseConcurrency(1e6) === 64,
+            JSON.stringify({ zero: normaliseConcurrency(0), two: normaliseConcurrency(2.9), cap: normaliseConcurrency(1e6) }));
+
+        const schedOrder = await scheduleUnits(
+            Array.from({ length: 12 }, (_, i) => i),
+            { concurrency: 4, exec: async (u) => { await new Promise((r) => setTimeout(r, (12 - u) % 5)); return u * 10; } },
+        );
+        check('R26-4: scheduleUnits returns results in unit order regardless of completion order',
+            JSON.stringify(schedOrder) === JSON.stringify(Array.from({ length: 12 }, (_, i) => i * 10)),
+            JSON.stringify(schedOrder));
+
+        let inFlight = 0; let peak = 0;
+        await scheduleUnits(Array.from({ length: 20 }, (_, i) => i), {
+            concurrency: 4,
+            exec: async () => { inFlight++; peak = Math.max(peak, inFlight); await new Promise((r) => setTimeout(r, 1)); inFlight--; },
+        });
+        check('R26-4: scheduleUnits never exceeds the requested concurrency', peak <= 4 && peak > 1, `peak=${peak}`);
+
+        const startedUnits = [];
+        let firstError = false;
+        try {
+            await scheduleUnits(Array.from({ length: 20 }, (_, i) => i), {
+                concurrency: 3,
+                exec: async (u) => { startedUnits.push(u); if (u === 5) throw new Error('boom'); await new Promise((r) => setTimeout(r, 1)); return u; },
+            });
+        } catch (err) { firstError = /boom/.test(String(err && err.message)); }
+        check('R26-4: scheduleUnits rejects with the first error and starts no new units after it',
+            firstError && !startedUnits.includes(17), `started=${startedUnits.join(',')}`);
+
+        check('R26-4: scheduleUnits over no units is the empty array',
+            JSON.stringify(await scheduleUnits([], { exec: async () => 1 })) === '[]');
+
+        let badReplyFailed = false;
+        try { await makeFoldExecutor({ dispatch: async () => ({ nope: 1 }) })({ variantId: 'v', foldIndex: 0 }); } catch { badReplyFailed = true; }
+        check('R26-4: a malformed executor reply is rejected, never used as positions', badReplyFailed);
+        check('R26-4: the executor reply preserves the confidence and stats channels',
+            await (async () => {
+                const ex = makeFoldExecutor({ dispatch: async () => ({ positions: [1, 0, -1], confidence: [0.5, 0, -0.5], stats: { folds: 1 } }) });
+                const r = await ex({ variantId: 'v', foldIndex: 0 });
+                return JSON.stringify(r.signals) === '[1,0,-1]' && r.stats && r.stats.folds === 1;
+            })());
+
+        // Byte-identity: the async twins reproduce the serial report exactly.
+        const parReturns = (() => { const r = new Array(120).fill(0); for (let t = 1; t < 120; t++) r[t] = Math.floor(t / 12) % 2 === 0 ? 0.01 : -0.002; return r; })();
+        const parFolds = walkForwardSplit({ n: 120, trainSize: 60, testSize: 10 });
+        const parSignal = (tr, te) => te.map((t) => Math.sign((parReturns[t - 1] ?? 0) + (parReturns[t - 2] ?? 0)));
+        const parConf = (tr, te) => te.map((t) => 0.5 * Math.sign((parReturns[t - 1] ?? 0)));
+        const serialCv = purgedCVBacktest({ returns: parReturns, folds: parFolds, signalForFold: parSignal, confidenceForFold: parConf, costBps: 1, trials: 3 });
+        const asyncCv = await purgedCVBacktestAsync({
+            returns: parReturns, folds: parFolds, costBps: 1, trials: 3, concurrency: 4,
+            foldExecutor: async ({ train, test }) => ({ signals: parSignal(train, test), confidence: parConf(train, test) }),
+        });
+        check('R26-4: purgedCVBacktestAsync is byte-identical to purgedCVBacktest (concurrency 4)',
+            JSON.stringify(asyncCv) === JSON.stringify(serialCv),
+            `folds=${asyncCv.folds.length}`);
+        check('R26-4: the concurrent path journals the raw confidence identically',
+            JSON.stringify(asyncCv.foldInputs.map((f) => f.confidence)) === JSON.stringify(serialCv.foldInputs.map((f) => f.confidence)));
+
+        const serialWfEvents = [];
+        const serialWf = walkForwardEvaluate({
+            returns: parReturns, folds: parFolds, signalForFold: parSignal, confidenceForFold: parConf,
+            costBps: 1, trials: 3, audit: true, auditProbesPerFold: 1, onEvent: (e) => serialWfEvents.push(e),
+        });
+        const asyncWfEvents = [];
+        const asyncWf = await walkForwardEvaluateAsync({
+            returns: parReturns, folds: parFolds, signalForFold: parSignal, confidenceForFold: parConf,
+            costBps: 1, trials: 3, audit: true, auditProbesPerFold: 1, concurrency: 5, onEvent: (e) => asyncWfEvents.push(e),
+        });
+        check('R26-4: walkForwardEvaluateAsync reproduces walkForwardEvaluate exactly (scored folds, audit and power)',
+            JSON.stringify(asyncWf) === JSON.stringify(serialWf),
+            `folds=${asyncWf.folds.length} audit=${JSON.stringify(asyncWf.audit && asyncWf.audit.clean)}`);
+        check('R26-4: the concurrent path emits fold events in the identical order (scored folds, then audit passes)',
+            JSON.stringify(asyncWfEvents.map((e) => [e.t, e.stage || '', e.foldIndex ?? ''])) === JSON.stringify(serialWfEvents.map((e) => [e.t, e.stage || '', e.foldIndex ?? ''])),
+            `${asyncWfEvents.length} events`);
+    } catch (e) {
+        check('R26-4 concurrent-scheduler checks completed', false, e.stack);
+    }
+
+    // ---- AF. R26-5: the turnover attack (holding / hysteresis policy) ---------
+    // The confidence->position layer is pointwise, so it cannot express a
+    // no-trade band that depends on the *current* position — which is what a
+    // proportional cost makes optimal (Constantinides 1986; Gârleanu & Pedersen
+    // 2013). `positionSeriesFromConfidence` adds exactly that, and must be
+    // byte-identical to the pointwise map when no holding rule is set so that
+    // every default path (and the R26-3 round-trip certificate) is unchanged.
+    try {
+        const plain = [0.02, 0.3, -0.4, 0.01, 0.9, -0.9];
+        check('R26-5: positionSeriesFromConfidence with no holding rule is byte-identical to the pointwise map',
+            JSON.stringify(positionSeriesFromConfidence(plain, {})) === JSON.stringify(plain.map((c) => confidenceToPosition(c))) &&
+            JSON.stringify(positionSeriesFromConfidence(plain, { deadZone: 0.1, scale: 0.5 })) === JSON.stringify(plain.map((c) => confidenceToPosition(c, { deadZone: 0.1, scale: 0.5 }))),
+            JSON.stringify(positionSeriesFromConfidence(plain, { deadZone: 0.1, scale: 0.5 })));
+
+        // Enter at |c| >= 0.3, do not leave until |c| <= 0.1: the position must
+        // survive the whole narrow band (bars 1-4) and only flip on a decisive
+        // opposite signal (bar 5).
+        const bandSeries = [0.5, 0.2, -0.2, 0.15, -0.15, -0.4, 0.05];
+        check('R26-5: hysteresis holds through the no-trade band and flips only on a decisive opposite signal',
+            JSON.stringify(positionSeriesFromConfidence(bandSeries, { enter: 0.3, exit: 0.1 })) === JSON.stringify([1, 1, 1, 1, 1, -1, 0]));
+
+        // A minimum holding period must suppress both the exit AND the flip until
+        // it has elapsed.
+        check('R26-5: a minimum holding period suppresses the exit (and the flip) until it elapses',
+            JSON.stringify(positionSeriesFromConfidence([0.5, -0.4, 0, 0, 0, 0], { enter: 0.3, exit: 0.1, minHold: 3 })) === JSON.stringify([1, 1, 1, 0, 0, 0]));
+
+        // The grid is data, and must be a valid, non-empty cross product.
+        check('R26-5: DEFAULT_TURNOVER_GRID is a non-empty frozen cross product including a no-hold policy',
+            Object.isFrozen(DEFAULT_TURNOVER_GRID) &&
+            DEFAULT_TURNOVER_GRID.deadZones.length > 0 && DEFAULT_TURNOVER_GRID.scales.length > 0 &&
+            DEFAULT_TURNOVER_GRID.holdings.length > 0 && DEFAULT_TURNOVER_GRID.holdings.includes(null));
+
+        // A synthetic report (one stream, one fold) already in `foldInputs` form.
+        const makeReport = (conf, returns, id) => ({
+            id,
+            foldInputs: [{
+                returns,
+                signals: conf.map((c) => confidenceToPosition(c, { deadZone: 0 })),
+                confidence: conf,
+            }],
+            folds: [{ testStart: 0, testEnd: returns.length - 1 }],
+            streamFoldLengths: [[returns.length]],
+            trials: 1,
+        });
+        const sconf = [];
+        const sret = [];
+        for (let i = 0; i < 80; i++) { const s = Math.sin(i * 0.7); sconf.push(s * 0.6); sret.push(s * 0.01); }
+        const sBase = makeReport(sconf, sret, 'base');
+        const sCand = makeReport(sconf.map((c, i) => (i % 2 ? c : c * 0.9)), sret.map((r, i) => (i % 2 ? r * 1.1 : r)), 'cand');
+
+        const sweep = turnoverSweep({
+            baseline: sBase, candidates: [sCand],
+            deadZones: [0, 0.5], scales: [1],
+            holdings: [null, { enter: 0.3, exit: 0.1 }],
+            trials: 2, decisionOptions: {},
+        });
+        check('R26-5: turnoverSweep is available on a report with fold inputs and enumerates the grid',
+            sweep.available === true && sweep.rows.length === 4 && sweep.byId.cand != null,
+            `rows=${sweep.rows ? sweep.rows.length : 'n/a'}`);
+        check('R26-5: turnoverSweep rows are sorted by break-even cost (descending)',
+            sweep.rows.every((r, i) => i === 0 || (sweep.rows[i - 1].breakEvenCostBps ?? -Infinity) >= (r.breakEvenCostBps ?? -Infinity)),
+            JSON.stringify(sweep.rows.map((r) => r.breakEvenCostBps)));
+        check('R26-5: a wide dead zone abstains more than a narrow one (participation and turnover fall)',
+            (() => {
+                const wide = sweep.rows.find((r) => r.policy.deadZone === 0.5 && r.policy.enter == null);
+                const narrow = sweep.rows.find((r) => r.policy.deadZone === 0 && r.policy.enter == null);
+                return wide && narrow && wide.nonZeroFraction <= narrow.nonZeroFraction && wide.turnover <= narrow.turnover;
+            })());
+        check('R26-5: bestTurnoverPolicy prefers a promoting row and targetMet is a boolean',
+            (() => {
+                const b = bestTurnoverPolicy(sweep, 'cand');
+                return b != null && (b.promote || b.breakEvenCostBps != null) && typeof sweep.targetMet === 'boolean' && bestTurnoverPolicy(sweep, 'absent') === null;
+            })());
+        check('R26-5: formatTurnoverSweep names each candidate and the target',
+            (() => { const s = formatTurnoverSweep(sweep); return typeof s === 'string' && s.includes('turnover cand:') && s.includes('target'); })());
+        check('R26-5: turnoverSweep reports unavailable (not a throw) when the baseline has no fold inputs',
+            (() => { const s = turnoverSweep({ baseline: { folds: [] }, candidates: [sCand] }); return s.available === false && typeof s.reason === 'string'; })());
+    } catch (e) {
+        check('R26-5 turnover-attack checks completed', false, e.stack);
+    }
+
+    // ---- AG. R26-6: effective independence (resample + stream selection) ------
+    // Grinold (1989): the information ratio scales with sqrt(breadth), and breadth
+    // is the number of INDEPENDENT forecasts. Kish (1965) converts a raw count into
+    // an effective one (`DE = 1+(K-1)*rbar`). These checks pin the resampler's exact
+    // OHLCV arithmetic and the design-effect / selection outcomes.
+    try {
+        const bars = [];
+        for (let i = 0; i < 8; i++) bars.push({ timestamp: i, open: 100 + i, high: 101 + i, low: 99 + i, close: 100.5 + i, volume: 10 + i });
+        const agg4 = resampleCandles(bars, { factor: 4 });
+        check('R26-6: resampleCandles aggregates exact OHLCV (open first, close last, high max, low min, volume sum)',
+            agg4.length === 2 &&
+            JSON.stringify(agg4[0]) === JSON.stringify({ timestamp: 0, open: 100, high: 104, low: 99, close: 103.5, volume: 46 }) &&
+            JSON.stringify(agg4[1]) === JSON.stringify({ timestamp: 4, open: 104, high: 108, low: 103, close: 107.5, volume: 62 }),
+            JSON.stringify(agg4));
+        check('R26-6: resampleCandles at factor 1 is a shallow copy and never mutates its input',
+            resampleCandles(bars, { factor: 1 }).length === 8 &&
+            resampleCandles(bars, { factor: 1 })[0] === bars[0] &&
+            JSON.stringify(bars[0]) === JSON.stringify({ timestamp: 0, open: 100, high: 101, low: 99, close: 100.5, volume: 10 }));
+        const ten = bars.concat([{ timestamp: 8, open: 108, high: 109, low: 107, close: 108.5, volume: 18 }, { timestamp: 9, open: 109, high: 110, low: 108, close: 109.5, volume: 19 }]);
+        check('R26-6: resampleCandles drops a trailing partial group unless asked to keep it',
+            resampleCandles(ten, { factor: 4 }).length === 2 &&
+            resampleCandles(ten, { factor: 4, keepIncomplete: true }).length === 3);
+        check('R26-6: resampleCandles rejects a non-positive / non-integer factor',
+            [0, -1, 1.5, NaN].every((f) => { try { resampleCandles(bars, { factor: f }); return false; } catch { return true; } }));
+
+        // Identical streams are one bet: DE = 2, effectiveStreams = 1.
+        const a = Array.from({ length: 200 }, (_, i) => 0.01 * Math.sin(i * 0.37) + 0.002 * Math.sin(i * 1.9));
+        const b = a.slice();
+        const de2 = designEffectOfStreams({ a, b });
+        check('R26-6: two identical streams are one bet (DE=2, effectiveStreams=1, effectiveBars=rawBars/2)',
+            de2.available && de2.K === 2 && Math.abs(de2.meanPairwiseCorr - 1) < 1e-12 &&
+            de2.designEffect === 2 && Math.abs(de2.effectiveStreams - 1) < 1e-12 &&
+            Math.abs(de2.effectiveBars - de2.rawBars / 2) < 1e-9,
+            JSON.stringify({ rbar: de2.meanPairwiseCorr, DE: de2.designEffect }));
+        const c = Array.from({ length: 200 }, (_, i) => 0.01 * Math.sin(i * 0.37 + 2.1) + 0.002 * Math.sin(i * 1.9 + 1.7));
+        const de3 = designEffectOfStreams({ a, b: c, c: Array.from({ length: 200 }, (_, i) => 0.01 * Math.sin(i * 0.37 + 4.7)) });
+        check('R26-6: the design effect is exactly 1+(K-1)*rbar (Kish 1965) and effectiveStreams=K/DE',
+            de3.available && de3.K === 3 && de3.designEffect === 1 + 2 * de3.meanPairwiseCorr &&
+            Math.abs(de3.effectiveStreams - 3 / de3.designEffect) < 1e-12,
+            JSON.stringify({ rbar: de3.meanPairwiseCorr, DE: de3.designEffect }));
+        check('R26-6: a single stream is the trivial panel (K=1, DE=1) and a perfectly hedging pair is flagged degenerate',
+            designEffectOfStreams({ a }).available && designEffectOfStreams({ a }).designEffect === 1 &&
+            designEffectOfStreams({ a, anti: a.map((v) => -v) }).available === false);
+        check('R26-6: designEffectOfStreams refuses a panel with fewer than three common bars',
+            designEffectOfStreams({ a: [1, 2], b: [1, 2] }).available === false);
+
+        // Selection: redundant partners are rejected in favour of diversifying ones.
+        const sel = selectStreams({ seriesByLabel: { a, b: a.slice(), c, d: Array.from({ length: 200 }, (_, i) => 0.01 * Math.sin(i * 0.37 + 4.7) + 0.002 * Math.sin(i * 1.9 + 3.3)) } });
+        check('R26-6: selectStreams greedily keeps the diversifying stream and rejects the redundant copy',
+            sel.available && sel.chosen[0] === 'a' && sel.chosen.includes('c') &&
+            (!sel.chosen.includes('b') || sel.chosen.indexOf('c') < sel.chosen.indexOf('b')) &&
+            sel.curve.length === sel.chosen.length && sel.curve[0].K === 1,
+            JSON.stringify(sel.chosen));
+        check('R26-6: a fully redundant pool stops after one stream (no effective bars to buy)',
+            JSON.stringify(selectStreams({ seriesByLabel: { x: a, y: a.slice(), z: a.slice() } }).chosen) === JSON.stringify(['x']));
+        check('R26-6: selectStreams honours maxStreams and is deterministic',
+            selectStreams({ seriesByLabel: { a, c, d: c }, maxStreams: 2 }).chosen.length === 2 &&
+            JSON.stringify(selectStreams({ seriesByLabel: { a, c } }).chosen) === JSON.stringify(selectStreams({ seriesByLabel: { a, c } }).chosen));
+        check('R26-6: formatStreamSelection names the panel and its effective size',
+            (() => { const s = formatStreamSelection(sel); return typeof s === 'string' && s.includes('streams: ') && s.includes('designEffect='); })());
+    } catch (e) {
+        check('R26-6 effective-independence checks completed', false, e.stack);
+    }
+
+    // ---- AH. R26-13: seed replication + common random numbers -----------------
+    // A single seed is not a ranking (Bouthillier et al. 2019; Henderson et al.
+    // 2018). These checks pin the exact statistics the replication layer reports:
+    // the interquartile mean (Agarwal et al. 2021), the stratified bootstrap CI,
+    // the seed/fold/residual variance split, and the CRN paired-variance
+    // criterion (Glasserman & Yao 1992).
+    try {
+        // IQM: drop the lowest and highest quarters, average the middle. Nine
+        // sorted values -> drop 2 either side; the middle five of
+        // [0,0,0,0,1,1,1,1,100] is [0,1,1,1,1] -> 0.8.
+        check('R26-13: interquartileMean drops the best/worst quarter exactly',
+            Math.abs(interquartileMean([0, 0, 0, 0, 1, 1, 1, 1, 100]) - 0.6) < 1e-12 &&
+            interquartileMean([1, 2, 3, 4, 5, 6, 7, 8]) === 4.5);
+        check('R26-13: interquartileMean falls back to the mean below four values and ignores non-finite ones',
+            interquartileMean([1, 2, 3]) === 2 && Number.isNaN(interquartileMean([])) &&
+            interquartileMean([1, NaN, 2, 3, Infinity]) === 2);
+
+        // Constant, unequal strata: because the bootstrap preserves each stratum's
+        // size, every replicate is identical -> a zero-width interval. That is the
+        // proof it resamples WITHIN strata rather than pooling them.
+        const flatCi = stratifiedBootstrapCI({ strata: [[0, 0, 0, 0, 0], [10, 10, 10]], statistic: (x) => x.reduce((a, b) => a + b, 0) / x.length, seed: 1 });
+        check('R26-13: the stratified bootstrap resamples within strata (constant unequal strata -> zero-width CI)',
+            flatCi.available && flatCi.lo === 3.75 && flatCi.hi === 3.75, JSON.stringify(flatCi));
+        const varCi = stratifiedBootstrapCI({ strata: [[1, 2, 3], [10, 20, 30]], statistic: interquartileMean, seed: 99 });
+        const varCi2 = stratifiedBootstrapCI({ strata: [[1, 2, 3], [10, 20, 30]], statistic: interquartileMean, seed: 99 });
+        check('R26-13: the bootstrap CI is deterministic for a fixed seed, ordered, and resamples the requested count',
+            varCi.available && varCi.lo <= varCi.hi && varCi.points > 0 &&
+            JSON.stringify(varCi) === JSON.stringify(varCi2), JSON.stringify({ lo: varCi.lo, hi: varCi.hi }));
+        check('R26-13: the bootstrap reports unavailable (never throws) with no finite observations',
+            stratifiedBootstrapCI({ strata: [[], []] }).available === false);
+
+        // Variance decomposition, hand-computed.
+        const uniform = varianceComponents({ cells: [
+            { seed: 1, fold: 0, value: 1 }, { seed: 1, fold: 1, value: 1 },
+            { seed: 2, fold: 0, value: 1 }, { seed: 2, fold: 1, value: 1 },
+            { seed: 3, fold: 0, value: 5 }, { seed: 3, fold: 1, value: 5 },
+        ] });
+        check('R26-13: varianceComponents attributes a pure between-seed spread to the seed fraction',
+            uniform.available && Math.abs(uniform.seedFraction - 1) < 1e-12 &&
+            Math.abs(uniform.foldFraction) < 1e-12 && Math.abs(uniform.residualFraction) < 1e-12,
+            JSON.stringify({ s: uniform.seedFraction, f: uniform.foldFraction }));
+        const foldOnly = varianceComponents({ cells: [
+            { seed: 1, fold: 0, value: 0 }, { seed: 1, fold: 1, value: 2 },
+            { seed: 2, fold: 0, value: 0 }, { seed: 2, fold: 1, value: 2 },
+        ] });
+        check('R26-13: varianceComponents attributes a pure within-seed (fold) spread to the fold fraction',
+            Math.abs(foldOnly.seedFraction) < 1e-12 && Math.abs(foldOnly.foldFraction - 1) < 1e-12);
+        const mixed = varianceComponents({ cells: [
+            { seed: 1, fold: 0, value: 0 }, { seed: 1, fold: 1, value: 2 },
+            { seed: 2, fold: 0, value: 1 }, { seed: 2, fold: 1, value: 3 },
+        ] });
+        check('R26-13: varianceComponents splits a mixed panel exactly (seed 0.2 / fold 0.8), fractions summing to 1',
+            Math.abs(mixed.seedFraction - 0.2) < 1e-12 && Math.abs(mixed.foldFraction - 0.8) < 1e-12 &&
+            Math.abs(mixed.seedFraction + mixed.foldFraction + mixed.residualFraction - 1) < 1e-12,
+            JSON.stringify({ s: mixed.seedFraction, f: mixed.foldFraction }));
+        const residual = varianceComponents({ cells: [
+            { seed: 1, fold: 0, value: 0 }, { seed: 1, fold: 0, value: 2 },
+            { seed: 2, fold: 0, value: 0 }, { seed: 2, fold: 0, value: 2 },
+        ] });
+        check('R26-13: varianceComponents isolates a repeated-cell residual fraction',
+            Math.abs(residual.residualFraction - 1) < 1e-12 && Math.abs(residual.foldFraction) < 1e-12);
+        check('R26-13: varianceComponents reports unavailable below two observations',
+            varianceComponents({ cells: [{ seed: 1, fold: 0, value: 1 }] }).available === false);
+
+        // The distribution block: exact IQM/mean over a crafted panel, plus the CI
+        // and the component split.
+        const dist = seedDistribution({ perSeed: [
+            { seed: 1, values: [0, 0, 0, 0] }, { seed: 2, values: [1, 1, 1, 1] }, { seed: 3, values: [100] },
+        ] });
+        check('R26-13: seedDistribution reports the exact flat mean + IQM and a CI/component split',
+            dist.available && dist.n === 9 && dist.seeds.length === 3 &&
+            Math.abs(dist.iqm - 0.6) < 1e-12 && Math.abs(dist.statistic - 0.6) < 1e-12 &&
+            dist.ci.available && dist.components.available &&
+            dist.perSeedMean.length === 3 && JSON.stringify(dist.foldsPerSeed) === JSON.stringify([4, 4, 1]),
+            JSON.stringify({ iqm: dist.iqm, mean: dist.mean }));
+        check('R26-13: seedDistribution reports unavailable with no finite values',
+            seedDistribution({ perSeed: [{ seed: 1, values: [] }] }).available === false);
+
+        // CRN criterion: with common random numbers the variance of the paired
+        // DIFFERENCE should be below the unpaired one.
+        const crn = pairedVarianceRatio({
+            paired: [1.0, 1.02, 0.98, 1.01, 0.99, 1.0],
+            unpaired: [1, -1, 3, -3, 2, -2],
+        });
+        check('R26-13: pairedVarianceRatio shows a variance reduction when the differences are paired on the draws',
+            crn.available && crn.varianceRatio < 1 && crn.varianceReduction > 0 &&
+            Math.abs(crn.varianceReduction - (1 - crn.varianceRatio)) < 1e-12,
+            JSON.stringify({ ratio: crn.varianceRatio }));
+        check('R26-13: pairedVarianceRatio reports unavailable on too-few or zero-variance samples',
+            pairedVarianceRatio({ paired: [1], unpaired: [1, 2] }).available === false &&
+            pairedVarianceRatio({ paired: [1, 1], unpaired: [2, 2] }).available === false);
+
+        check('R26-13: formatSeedReplication names the variant, level and interval',
+            (() => {
+                const s = formatSeedReplication({ label: 'seeds baseline', dist });
+                return typeof s === 'string' && s.includes('seeds baseline:') && s.includes('IQM=') && s.includes('CI=');
+            })());
+        check('R26-13: formatSeedReplication states unavailability instead of rendering NaN',
+            formatSeedReplication({ label: 'x', dist: { available: false, reason: 'none' } }).includes('unavailable'));
+    } catch (e) {
+        check('R26-13 replication checks completed', false, e.stack);
+    }
+
+    // ---- AI. R26-14: forecast proper scores, Diebold–Mariano, Model Confidence Set
+    // The family compared as *forecasters*: proper scores cannot be earned by
+    // hedging toward the base rate (Gneiting & Raftery 2007), the paired DM test
+    // says whether a candidate's loss really differs (Diebold & Mariano 1995), and
+    // the MCS returns the set of families that cannot be distinguished from the
+    // best (Hansen, Lunde & Nason 2011) instead of crowning the sample-best.
+    try {
+        // The per-bar pair: a signed confidence in [-1,1] predicts the NEXT bar's
+        // sign; the last bar of each fold is dropped (its outcome is outside).
+        const pairs = forecastPairs([{ returns: [0.01, -0.02, 0.03], confidence: [0.5, -0.5, 0.9] }]);
+        check('R26-14: forecastPairs maps confidence -> probability and next-bar sign, dropping each fold\'s last bar',
+            pairs.bars === 2 && pairs.forecasts[0] === 0.75 && pairs.outcomes[0] === 0 &&
+            pairs.forecasts[1] === 0.25 && pairs.outcomes[1] === 1,
+            JSON.stringify(pairs));
+        check('R26-14: forecastPairs skips non-finite pairs and an absent confidence',
+            forecastPairs([{ returns: [0.01, 0.02], confidence: [null, 0.1] }]).bars === 0 &&
+            forecastPairs([{ returns: [0.01, 0.02] }]).bars === 0 &&
+            forecastPairs(null).bars === 0);
+        check('R26-14: brierBinIndex puts 0, 0.5 (10 bins) and 1 in the right equal-width bin',
+            brierBinIndex(0, 10) === 0 && brierBinIndex(0.5, 10) === 5 && brierBinIndex(1, 10) === 9);
+
+        // Proper scores, hand-computed.
+        check('R26-14: brierScore is the exact mean squared probability error',
+            Math.abs(brierScore([0.2, 0.8], [0, 1]) - 0.04) < 1e-12 &&
+            Number.isNaN(brierScore([], [])) &&
+            Math.abs(brierScore([0.5, 0.5, NaN], [1, 0, 1]) - 0.25) < 1e-12);
+        check('R26-14: logScore is the exact mean negative log-likelihood',
+            Math.abs(logScore([0.5, 0.5], [0, 1]) - Math.log(2)) < 1e-12 &&
+            Math.abs(logScore([0.9, 0.9], [1, 1]) - (-Math.log(0.9))) < 1e-12);
+        check('R26-14: logScore clips a confidently-wrong forecast instead of returning Infinity',
+            Number.isFinite(logScore([0, 1], [1, 0])));
+
+        // Murphy's partition: BS_binned = REL - RES + UNC, exactly.
+        const d1 = brierDecomposition({ forecasts: [0.2, 0.8], outcomes: [0, 1], bins: 2 });
+        check('R26-14: brierDecomposition reproduces the exact REL/RES/UNC and the identity (one point per bin)',
+            Math.abs(d1.reliability - 0.04) < 1e-12 && Math.abs(d1.resolution - 0.25) < 1e-12 &&
+            Math.abs(d1.uncertainty - 0.25) < 1e-12 && Math.abs(d1.brierBinned - 0.04) < 1e-12 &&
+            Math.abs(d1.identityResidual) < 1e-12 && Math.abs(d1.brier - 0.04) < 1e-12,
+            JSON.stringify(d1));
+        const d2 = brierDecomposition({ forecasts: [0.2, 0.4], outcomes: [0, 1], bins: 2 });
+        check('R26-14: brierDecomposition accounts for within-bin variance (both in one bin)',
+            Math.abs(d2.reliability - 0.04) < 1e-12 && Math.abs(d2.resolution) < 1e-12 &&
+            Math.abs(d2.brierBinned - 0.29) < 1e-12 && Math.abs(d2.brier - 0.20) < 1e-12 &&
+            Math.abs(d2.identityResidual) < 1e-12,
+            JSON.stringify({ binned: d2.brierBinned, rel: d2.reliability }));
+        check('R26-14: brierLosses is the per-bar squared error',
+            JSON.stringify(brierLosses([0.5, 0.5], [1, 0])) === JSON.stringify([0.25, 0.25]));
+
+        // Bootstrap determinism.
+        const bsSeries = [[1, 2, 3, 4, 5, 6, 7, 8].map((x) => x / 10), [2, 3, 4, 5, 6, 7, 8, 9].map((x) => x / 10)];
+        const bs1 = bootstrapMeans(bsSeries, { nBoot: 200, seed: 3 });
+        const bs2 = bootstrapMeans(bsSeries, { nBoot: 200, seed: 3 });
+        check('R26-14: bootstrapMeans is deterministic for a fixed seed and reports its block length',
+            bs1.available && JSON.stringify([...bs1.means]) === JSON.stringify([...bs2.means]) && bs1.blockLength >= 1 && bs1.K === 2,
+            JSON.stringify({ b: bs1.blockLength }));
+        check('R26-14: bootstrapMeans reports unavailable on empty input',
+            bootstrapMeans([]).available === false && bootstrapMeans([[]]).available === false);
+
+        // Diebold–Mariano, exact degenerate cases.
+        const dmConst = dieboldMariano({
+            lossA: [0.3, 0.3, 0.3, 0.3], lossB: [0.2, 0.2, 0.2, 0.2], nBoot: 200, seed: 1,
+        });
+        check('R26-14: a constant positive loss differential is rejected with p=0 (candidate A worse => favored B)',
+            dmConst.available && dmConst.meanDifferential > 0 && dmConst.pValue === 0 &&
+            dmConst.statistic === Infinity && dmConst.favored === 'B', JSON.stringify(dmConst));
+        const dmZero = dieboldMariano({ lossA: [0.2, 0.2], lossB: [0.2, 0.2], nBoot: 100, seed: 1 });
+        check('R26-14: a zero differential is not rejected (statistic 0, p=1, favored null)',
+            dmZero.available && dmZero.statistic === 0 && dmZero.pValue === 1 && dmZero.favored === null);
+        const dmNoisy = dieboldMariano({
+            lossA: Array.from({ length: 48 }, (_, i) => 0.25 + 0.02 * Math.sin(i)),
+            lossB: Array.from({ length: 48 }, (_, i) => 0.22 + 0.02 * Math.cos(i)),
+            nBoot: 400, seed: 5,
+        });
+        const dmNoisy2 = dieboldMariano({
+            lossA: Array.from({ length: 48 }, (_, i) => 0.25 + 0.02 * Math.sin(i)),
+            lossB: Array.from({ length: 48 }, (_, i) => 0.22 + 0.02 * Math.cos(i)),
+            nBoot: 400, seed: 5,
+        });
+        check('R26-14: the DM test is deterministic, reports a finite SE and a p in (0,1], favoring the lower-loss side',
+            dmNoisy.available && dmNoisy.se > 0 && dmNoisy.pValue > 0 && dmNoisy.pValue <= 1 &&
+            dmNoisy.favored === 'B' && JSON.stringify(dmNoisy) === JSON.stringify(dmNoisy2),
+            JSON.stringify({ se: dmNoisy.se, p: dmNoisy.pValue }));
+        check('R26-14: the DM test reports unavailable on too few paired observations',
+            dieboldMariano({ lossA: [0.1], lossB: [0.2] }).available === false);
+
+        // Model Confidence Set: a strictly-worse model is eliminated; the identical
+        // pair survives.
+        const baseLoss = Array.from({ length: 60 }, (_, i) => 0.20 + 0.05 * Math.sin(i * 0.7));
+        const worse = baseLoss.map((x) => x + 0.1);
+        const mcs = modelConfidenceSet({ losses: [baseLoss, worse, baseLoss.slice()], ids: ['a', 'b', 'c'], alpha: 0.10, nBoot: 400, seed: 7 });
+        check('R26-14: the MCS eliminates the uniformly worse model and keeps the indistinguishable pair',
+            mcs.available && JSON.stringify(mcs.memberIds) === JSON.stringify(['a', 'c']) &&
+            mcs.eliminated.length === 1 && mcs.eliminated[0].id === 'b',
+            JSON.stringify({ members: mcs.memberIds, elim: mcs.eliminated }));
+        check('R26-14: the MCS is deterministic and reports the eliminated step + p-value',
+            JSON.stringify(modelConfidenceSet({ losses: [baseLoss, worse, baseLoss.slice()], ids: ['a', 'b', 'c'], alpha: 0.10, nBoot: 400, seed: 7 })) === JSON.stringify(mcs) &&
+            typeof mcs.eliminated[0].pValue === 'number');
+        const graded = [0, 1, 2, 3].map((k) => baseLoss.map((x) => x + k * 0.03 + 0.02 * Math.sin(k + 1)));
+        const m90 = modelConfidenceSet({ losses: graded, ids: ['g0', 'g1', 'g2', 'g3'], alpha: 0.10, nBoot: 400, seed: 11 });
+        const m95 = modelConfidenceSet({ losses: graded, ids: ['g0', 'g1', 'g2', 'g3'], alpha: 0.05, nBoot: 400, seed: 11 });
+        check('R26-14: a higher confidence level yields a superset MCS (membership is monotone)',
+            m90.available && m95.available &&
+            m90.memberIds.every((id) => m95.memberIds.includes(id)) &&
+            m95.memberIds.length >= m90.memberIds.length,
+            JSON.stringify({ at90: m90.memberIds, at95: m95.memberIds }));
+        check('R26-14: the MCS handles the degenerate sizes (one model is its own set; none is unavailable)',
+            JSON.stringify(modelConfidenceSet({ losses: [baseLoss], ids: ['solo'] }).memberIds) === JSON.stringify(['solo']) &&
+            modelConfidenceSet({ losses: [] }).available === false);
+
+        // The whole layer over a journal.
+        const fcRet = Array.from({ length: 40 }, (_, i) => 0.01 * Math.sin(i * 0.5));
+        const fcBase = [{ returns: fcRet.slice(), confidence: fcRet.map((_, i) => 0.3 * Math.sin(i * 0.5)) }];
+        // The forecast at bar j predicts the sign of bar j+1, so a "perfect"
+        // forecaster is aligned to returns[j+1] (not returns[j]).
+        const fcGood = [{ returns: fcRet.slice(), confidence: fcRet.map((_, j) => (j + 1 < fcRet.length ? (fcRet[j + 1] > 0 ? 0.9 : -0.9) : 0)) }];
+        const fcBad = [{ returns: fcRet.slice(), confidence: fcGood[0].confidence.map((c) => -c) }];
+        const cmp = forecastComparison({
+            baseline: fcBase, candidates: [{ id: 'good', foldInputs: fcGood }, { id: 'bad', foldInputs: fcBad }],
+            nBoot: 300, seed: 13,
+        });
+        check('R26-14: forecastComparison scores every variant and names the MCS members',
+            cmp.available && cmp.bars === 39 && !!cmp.byId.baseline && !!cmp.byId.good && !!cmp.byId.bad &&
+            cmp.mcs.at90.available && cmp.mcs.at95.available && cmp.mcs.at90.memberIds.length > 0 &&
+            cmp.mcs.at90.memberIds.every((id) => ['baseline', 'good', 'bad'].includes(id)),
+            JSON.stringify(cmp.mcs.at90.memberIds));
+        check('R26-14: a perfect forecaster has a lower Brier/log score than the lagging baseline (and the MCS keeps it, dropping the inverted one)',
+            cmp.byId.good.brier < cmp.byId.baseline.brier && cmp.byId.good.logScore < cmp.byId.baseline.logScore &&
+            cmp.mcs.at90.memberIds.includes('good') && !cmp.mcs.at90.memberIds.includes('bad') &&
+            cmp.byId.bad.brier > cmp.byId.baseline.brier,
+            JSON.stringify({ base: cmp.byId.baseline.brier, good: cmp.byId.good.brier, bad: cmp.byId.bad.brier }));
+        check('R26-14: forecastComparison refuses a mismatched window rather than comparing unpaired',
+            forecastComparison({ baseline: fcBase, candidates: [{ id: 'short', foldInputs: [{ returns: [0.1, 0.2], confidence: [0.1, 0.2] }] }] }).available === false);
+        check('R26-14: formatForecast renders the level, the baseline scores and both MCS sets',
+            (() => { const s = formatForecast(cmp); return typeof s === 'string' && s.includes('forecast:') && s.includes('mcs90=[') && s.includes('mcs95=['); })());
+        check('R26-14: formatForecast states unavailability rather than rendering NaN',
+            formatForecast({ available: false, reason: 'none' }).includes('unavailable'));
+    } catch (e) {
+        check('R26-14 forecast checks completed', false, e.stack);
+    }
+
+    // ---- AJ. R26-7: give the gate discriminating power -------------------------
+    // The sign-test `requireBreadth` hurdle passed every candidate and hit its 2^-n
+    // floor, so it separated nothing about magnitude. The shipped dependence gate
+    // now uses the magnitude floor (`requireSharpeDiff`, already present) plus a
+    // cluster-STABILITY requirement (`clusterStability`): the paired Sharpe
+    // difference must survive deleting any single fold-window cluster, so an edge
+    // carried by a handful of folds cannot pass. Breadth stays REPORTED.
+    try {
+        // The stability primitive against hand-computed panels.
+        const meanStat = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+        const st = clusterStability({
+            clustersA: [[1, 1], [1, 1], [1, 1], [1, 1]], clustersB: [[0, 0], [0, 0], [0, 0], [0, 0]], statistic: meanStat,
+        });
+        check('R26-7: clusterStability reports a uniformly positive panel as stable (every leave-one-out delta > 0)',
+            st.available && st.stable && st.fractionPositive === 1 && st.nClusters === 4 && st.worstDelta === 1 && st.full === 1,
+            JSON.stringify({ worst: st.worstDelta, frac: st.fractionPositive }));
+        const frag = clusterStability({ clustersA: [[0], [10], [0], [0]], clustersB: [[0], [0], [0], [0]], statistic: meanStat });
+        check('R26-7: clusterStability flags an edge carried by one window (dropping it leaves delta 0, not positive)',
+            frag.available && !frag.stable && Math.abs(frag.fractionPositive - 0.75) < 1e-12 &&
+            frag.worstCluster === 1 && frag.worstDelta === 0 && frag.full === 2.5,
+            JSON.stringify({ frac: frag.fractionPositive, worst: frag.worstDelta }));
+        check('R26-7: clusterStability reports unavailable below two clusters (never throws)',
+            clusterStability({ clustersA: [[1]], clustersB: [[0]], statistic: meanStat }).available === false &&
+            clusterStability({ clustersA: [[1], [2]], clustersB: [[1]], statistic: meanStat }).available === false);
+
+        // The gate on a panel. A tiny per-window edge: the sign test passes 6/6, but
+        // the paired magnitude test does not clear alpha — so breadth alone would
+        // promote while the magnitude floor rejects.
+        const panelFromClusters = (clusters, q) => {
+            const streams = [new Array(clusters.length * q).fill(0), new Array(clusters.length * q).fill(0)];
+            clusters.forEach((vals, c) => {
+                for (let i = 0; i < q; i++) { streams[0][c * q + i] = vals[i]; streams[1][c * q + i] = vals[q + i]; }
+            });
+            return { streamReturns: streams, dependence: { available: true, foldLength: q } };
+        };
+        const mkReport = (clusters, q) => ({
+            aggregate: { mean: 1, positiveFraction: 1 },
+            pooledMetrics: { dsr: 0.99, dsrAdjusted: 0.99, effectiveBars: 1000 },
+            folds: [], audit: null,
+            ...panelFromClusters(clusters, q),
+        });
+        const C = 6; const q = 3;
+        const base = (c) => {
+            const pulse = [0.01, -0.004, 0.007, 0.002, -0.006, 0.005];
+            const k = (c % 3) - 1;
+            return pulse.map((x, i) => x + 0.001 * k * (i + 1));
+        };
+        const baselineClusters = Array.from({ length: C }, (_, c) => base(c));
+        const repB = mkReport(baselineClusters, q);
+        const gateOpts = {
+            requireCleanAudit: false, minSharpeDelta: 0, minDsrDelta: 0, minDsr: 0,
+            requireSharpeDiff: true, requireClusterStability: true, minDsrAdjusted: null, alpha: 0.05,
+        };
+        const decTiny = promoteDecision(repB, mkReport(baselineClusters.map((vals, c) => vals.map((x) => x + (c % 2 === 0 ? 0.0002 : 0.02))), q), gateOpts);
+        check('R26-7: a candidate that wins every window with a magnitude inside the noise FAILS the magnitude floor',
+            !decTiny.promote && decTiny.gate.requireSharpeDiff === 'applied' &&
+            decTiny.reasons.some((r) => /Sharpe difference not significant/.test(r)) &&
+            decTiny.promotionTest.breadth.significant === true,
+            JSON.stringify({ reasons: decTiny.reasons, breadthP: decTiny.promotionTest.breadth.pValue }));
+        const decReal = promoteDecision(repB, mkReport(baselineClusters.map((vals, c) => vals.map((x) => x + 0.02 + 0.002 * c)), q), gateOpts);
+        check('R26-7: a genuine, stable edge passes the magnitude floor and the stability hurdle',
+            decReal.promote && decReal.gate.requireSharpeDiff === 'applied' && decReal.gate.requireClusterStability === 'applied' &&
+            decReal.promotionTest.stability.stable === true, JSON.stringify(decReal.reasons));
+        const decFrag = promoteDecision(repB, mkReport(baselineClusters.map((vals, c) => c === 5 ? vals.map((x) => x + 0.5) : vals.map((x) => x - 0.004)), q), gateOpts);
+        check('R26-7: an edge carried by ONE window fails the stability hurdle even though the full-sample difference is positive',
+            !decFrag.promote && decFrag.gate.requireClusterStability === 'applied' &&
+            decFrag.promotionTest.stability.stable === false &&
+            decFrag.reasons.some((r) => /cluster stability/.test(r)),
+            JSON.stringify({ reasons: decFrag.reasons, st: decFrag.promotionTest.stability }));
+        // No panel: both dependence hurdles are SKIPPED, not failed.
+        const noPanel = { aggregate: { mean: 1, positiveFraction: 1 }, pooledMetrics: { dsr: 0.99 }, folds: [], audit: null };
+        const decNoPanel = promoteDecision(noPanel, noPanel, gateOpts);
+        check('R26-7: a single-stream / no-panel report SKIPS the dependence hurdles (never claims them)',
+            decNoPanel.promote && decNoPanel.gate.requireSharpeDiff === 'skipped-no-panel' &&
+            decNoPanel.gate.requireClusterStability === 'skipped-no-panel' && decNoPanel.gate.requireBreadth === 'off');
+        check('R26-7: the shipped dependence reader names the stability half and that breadth is reported-only',
+            DEPENDENCE_GATE_READER.includes('STABLE') && DEPENDENCE_GATE_READER.includes('sign test') &&
+            DEPENDENCE_GATE_READER.includes('dsrAdjusted') && DEPENDENCE_GATE_READER.includes('no longer a gate'));
+    } catch (e) {
+        check('R26-7 gate checks completed', false, e.stack);
+    }
+
+    // ---- AK. R26-8: the decision-grade report ----------------------------------
+    // The six-question composition. Primitive-level exact reference vectors, then
+    // the composer and the formatter. Nothing here computes a new strategy
+    // statistic: `foldConcentration` restates the scored folds and the retained
+    // `foldInputs`, and `nextRunPlan` reads the measured power.
+    try {
+        // (a) top-K share / signed sums, from the per-fold metrics alone.
+        const mkFolds = (gross) => gross.map((g) => ({ metrics: { grossPnl: g, netSharpe: g, bars: 2, turnover: 0, totalCost: 0 } }));
+        const concA = foldConcentration({ folds: mkFolds([0.10, 0.05, 0.02, -0.01]), topKs: [1, 2, 4] });
+        check('R26-8: foldConcentration sums gross/positive/negative exactly',
+            concA.available && Math.abs(concA.grossTotal - 0.16) < 1e-12 &&
+            Math.abs(concA.positiveSum - 0.17) < 1e-12 && Math.abs(concA.negativeSum - (-0.01)) < 1e-12,
+            JSON.stringify(concA));
+        check('R26-8: foldConcentration top-K shares are exact and saturate at 1',
+            Math.abs(concA.topKs[0].share - 0.625) < 1e-12 &&
+            Math.abs(concA.topKs[1].share - 0.9375) < 1e-12 && Math.abs(concA.topKs[2].share - 1) < 1e-12);
+        check('R26-8: foldConcentration without foldInputs reports the leave-one-out readouts as explicit unavailable',
+            concA.deleteOneCluster.available === false && concA.marginal.available === false &&
+            typeof concA.deleteOneCluster.reason === 'string' && typeof concA.marginal.reason === 'string');
+
+        // (b) the leave-one-fold-out Sharpe range and per-fold marginal
+        // contribution against an INDEPENDENTLY recomputed sweep.
+        const sig = (n) => new Array(n).fill(1);
+        const rawA = [[0.03, 0.01, 0.02], [0.01, -0.01, 0.02], [0.02, 0.02, -0.01]];
+        const foldInputs = rawA.map((r) => ({ returns: r, signals: sig(r.length), confidence: null }));
+        const nets = foldInputs.map((fi) => strategyReturns({ returns: fi.returns, signals: fi.signals, costBps: 0 }).returns);
+        const expectFull = sharpeRatio([].concat(...nets), { periodsPerYear: 252 });
+        const expectLOO = nets.map((_, i) => sharpeRatio([].concat(...nets.slice(0, i), ...nets.slice(i + 1)), { periodsPerYear: 252 }));
+        const concB = foldConcentration({ folds: mkFolds(nets.map((n) => n.reduce((a, b) => a + b, 0))), foldInputs, costBps: 0 });
+        check('R26-8: foldConcentration deleteOneCluster range/marginals match an independent leave-one-out sweep',
+            concB.deleteOneCluster.available && concB.marginal.available &&
+            Math.abs(concB.deleteOneCluster.full - expectFull) < 1e-12 &&
+            concB.deleteOneCluster.min === Math.min(...expectLOO) && concB.deleteOneCluster.max === Math.max(...expectLOO) &&
+            concB.marginal.values.every((v, i) => Math.abs(v - (expectFull - expectLOO[i])) < 1e-12),
+            JSON.stringify({ full: concB.deleteOneCluster.full, expectFull }));
+        const worst = expectLOO.indexOf(Math.min(...expectLOO));
+        check('R26-8: the deleteOneCluster worst index names the fold whose removal drops the Sharpe most',
+            concB.deleteOneCluster.worstIndex === worst && concB.deleteOneCluster.range >= 0);
+
+        // (c) confidence persistence — exact lag-1 cases.
+        check('R26-8: confidencePersistence is unavailable without a confidence journal',
+            confidencePersistence({ foldInputs: [{ returns: [], signals: [] }] }).available === false);
+        const alt = confidencePersistence({ foldInputs: [{ confidence: [0, 1, 0, 1] }] });
+        check('R26-8: confidencePersistence gives lag1 = -1 (and no half-life) on an alternating series',
+            alt.available && Math.abs(alt.lag1 + 1) < 1e-12 && alt.halfLife === null && alt.pairs === 3);
+        const mono = confidencePersistence({ foldInputs: [{ confidence: [0, 1, 2, 3] }] });
+        check('R26-8: confidencePersistence gives lag1 = 1 (no half-life) on a monotone series',
+            Math.abs(mono.lag1 - 1) < 1e-12 && mono.halfLife === null);
+        const rho = confidencePersistence({ foldInputs: [{ confidence: [0, 0, 1, 1, 1] }] });
+        check('R26-8: confidencePersistence half-life is exact (lag1 = 1/sqrt(3), halfLife = 2 ln2 / ln3)',
+            Math.abs(rho.lag1 - 1 / Math.sqrt(3)) < 1e-12 &&
+            Math.abs(rho.halfLife - (2 * Math.log(2) / Math.log(3))) < 1e-12,
+            JSON.stringify({ lag1: rho.lag1, halfLife: rho.halfLife }));
+        const seg = confidencePersistence({ foldInputs: [{ confidence: [0, 1] }, { confidence: [100, 200] }] });
+        check('R26-8: confidencePersistence counts adjacent pairs WITHIN folds (a fold boundary is not a time step)',
+            seg.available && seg.pairs === 2 && seg.bars === 4);
+
+        // (d) next-run sizing against a frozen fixture.
+        const power = { observedSharpe: 1, mdeSharpe: 0.5, mdeSharpeDependent: 0.9, underpowered: false, underpoweredDependent: true, barsToDetect1: 969, effectiveBars: 4000 };
+        const dependence = { designEffect: 4, effectiveBars: 4000, seCluster: 0.1 };
+        const cand = {
+            id: 'sig:x', promote: false, reasons: ['pooled Sharpe difference not significant'],
+            gate: { requireSharpeDiff: 'applied', requireClusterStability: 'applied' },
+            promotionTest: { available: true, sharpeDifference: { available: true, value: 0.05, se: 0.1, nClusters: 40 } },
+            pooledMetrics: { breakEvenCostBps: 3 },
+        };
+        const nr = nextRunPlan({ power, dependence, candidate: cand, levels: [0, 2, 5, 10], periodsPerYear: 252, durationMs: 60000, folds: 100, streams: 8 });
+        check('R26-8: nextRunPlan carries the effective sample and both MDEs',
+            nr.available && nr.designEffect === 4 && nr.effectiveBars === 4000 &&
+            nr.mde95 === 0.5 && nr.mde95Dependent === 0.9 && nr.underpowered===false && nr.underpoweredDependent === true);
+        check('R26-8: nextRunPlan bars-to-detect are exact at the measured design effect',
+            nr.barsToDetect1 === 969 && nr.barsToDetectObserved === 969 && nr.barsToDetectDependent === 3876,
+            JSON.stringify({ o: nr.barsToDetectObserved, d: nr.barsToDetectDependent }));
+        check('R26-8: nextRunPlan break-even is compared against every tested cost level',
+            nr.breakEvenBps === 3 && nr.clearsBps[0] === true && nr.clearsBps[2] === true &&
+            nr.clearsBps[5] === false && nr.clearsBps[10] === false);
+        check('R26-8: nextRunPlan measures the per-fold wall time and projects a doubled fold count',
+            nr.measuredPerFoldMs === 600 && nr.projected.folds === 200 && Math.abs(nr.projected.ms - 120000) < 1e-9);
+        check('R26-8: the magnitude cheapest-flip is exact (required = 1.96 x seCluster, factor = required/difference)',
+            nr.cheapestFlip.available && nr.cheapestFlip.kind === 'magnitude' &&
+            Math.abs(nr.cheapestFlip.requiredSharpeDifference - 1.959964 * 0.1) < 1e-9 &&
+            Math.abs(nr.cheapestFlip.factor - (1.959964 * 0.1) / 0.05) < 1e-9);
+        check('R26-8: nextRunPlan sizes a PAIRED comparison from the paired SE and the cluster count (R26-13)',
+            nr.pairedUnits.available && nr.pairedUnits.se === 0.1 && nr.pairedUnits.nClusters === 40 &&
+            nr.pairedUnits.required.observed === 615 && nr.pairedUnits.required.mde95Dependent === 2,
+            JSON.stringify(nr.pairedUnits));
+        // The branches the first fixture left untested: the round-26 stability hint
+        // (the R26-7 feature) and the gate/search fallbacks.
+        const nrStab = nextRunPlan({
+            candidate: {
+                promote: false, reasons: ['r'], pooledMetrics: { breakEvenCostBps: 5 },
+                promotionTest: { available: true, stability: { available: true, stable: false, worstCluster: 2, worstDelta: 0.01 } },
+                gate: { requireSharpeDiff: 'applied', requireClusterStability: 'applied' },
+            },
+            dependence: { seCluster: 0.1 }, levels: [0, 2, 5, 10],
+        });
+        const nrGate = nextRunPlan({
+            candidate: {
+                promote: false, reasons: ['r1'], pooledMetrics: { breakEvenCostBps: 5 },
+                promotionTest: { available: true, stability: { available: true, stable: true, worstDelta: 0.1 } },
+                gate: { requireSharpeDiff: 'off' },
+            },
+            levels: [0, 2, 5, 10],
+        });
+        const nrSearch = nextRunPlan({ candidate: { promote: false, reasons: [], pooledMetrics: null, promotionTest: null, gate: null }, levels: [0, 2, 5, 10] });
+        check('R26-8: the stability, gate and search cheapest-flip branches each name their binding lever',
+            nrStab.cheapestFlip.kind === 'stability' && nrStab.cheapestFlip.binding === 'r' && /window 2/.test(nrStab.cheapestFlip.reader) &&
+            nrGate.cheapestFlip.kind === 'gate' && nrGate.cheapestFlip.binding === 'r1' &&
+            nrSearch.cheapestFlip.kind === 'search' && nrSearch.cheapestFlip.binding === null);
+        const nrCost = nextRunPlan({ candidate: { promote: false, reasons: ['x'], pooledMetrics: { breakEvenCostBps: -0.5 }, promotionTest: null, gate: null }, levels: [0, 2, 5, 10] });
+        check('R26-8: a negative break-even is reported as the cost-bound cheapest flip',
+            nrCost.cheapestFlip.kind === 'cost' && /bps/.test(nrCost.cheapestFlip.reader));
+        const nrPromoted = nextRunPlan({ candidate: { promote: true, reasons: [], pooledMetrics: { breakEvenCostBps: 6 }, promotionTest: null, gate: null } });
+        check('R26-8: a promoted candidate has no cheapest flip to make',
+            nrPromoted.cheapestFlip.kind === 'none');
+        check('R26-8: nextRunPlan without a candidate reports the flip as unavailable',
+            nextRunPlan({ power }).cheapestFlip.available === false);
+
+        // (e) the composer: all six question blocks present, missing inputs explicit.
+        const dec = decisionReport({ candidate: { id: 'sig:x', promote: false, reasons: ['r'], model: null } });
+        check('R26-8: decisionReport returns all six question blocks under one schema',
+            dec.schema === 'nl.decision.v1' && !!dec.training && !!dec.edge && !!dec.concentration &&
+            !!dec.economics && !!dec.family && !!dec.nextRun && dec.verdict.promote === false);
+        // BUGS #41: feed the REAL producer shape (`replicateAnalysis`'s aggregate is
+        // keyed `byVariant`, with the component split nested as `.components`) — the
+        // family seed fields accept a supplied aggregate but this producer does not
+        // populate them, so they stay `na` and the readers now say where it lives.
+        const decRep = decisionReport({ candidate: { id: 'sig:x', promote: false, reasons: ['r'], model: null }, replication: { seeds: [1, 2, 3], variants: ['baseline', 'sig:x'], commonRandomNumbers: true, byVariant: { 'sig:x': { available: true, mean: 0.1, components: { seedFraction: 0.2 } } } } });
+        check('R26-8: absent inputs become explicit { available:false, reason } blocks, never bare null',
+            dec.training.model.available === false && typeof dec.training.model.reason === 'string' &&
+            dec.concentration.available === false && dec.economics.costLadder.available === false &&
+            dec.family.seedDistribution.available === false && dec.nextRun.available === false &&
+            // BUGS #41: the cross-seed fields must point at `replication.json` (the
+            // per-seed report cannot summarize its siblings), not promise that
+            // `--seeds` populates them here.
+            /replication\.json/.test(dec.family.seedDistribution.reason) &&
+            /replication\.json/.test(dec.family.varianceComponents.reason) &&
+            /replication\.json/.test(dec.family.pairedVarianceRatio.reason) &&
+            // ...and the real `byVariant` producer shape must not silently populate
+            // them (the shape-mismatch the fields were written against, BUGS #41).
+            decRep.family.seedDistribution.available === false &&
+            decRep.family.varianceComponents.available === false &&
+            decRep.family.pairedVarianceRatio.available === false);
+        check('R26-8: the edge block names the binding hurdle and keeps the verdict',
+            dec.edge.bindingHurdle === 'r' && dec.edge.promote === false && Array.isArray(dec.edge.reasons));
+        const passedConcentration = foldConcentration({ folds: mkFolds([0.1, -0.1]), topKs: [1] });
+        const dec2 = decisionReport({ candidate: { id: 'c', promote: true, reasons: [] }, concentration: passedConcentration, nextRun: nr });
+        check('R26-8: decisionReport passes a provided block through by reference',
+            dec2.concentration === passedConcentration && dec2.nextRun === nr && dec2.verdict.promote === true);
+        const decModel = decisionReport({ candidate: { id: 'm', promote: false, reasons: [], model: { status: 'base-rate', baseRate: 0.27, resolved: { takeProfit: 1, stopLoss: 3, total: 4 }, heldBars: { count: 4, mean: 2 } } } });
+        check('R26-8: training.labelDistribution is derived from the model diagnostics (never the unproduced model.labelDistribution field)',
+            decModel.training.labelDistribution.baseRate === 0.27 && decModel.training.labelDistribution.status === 'base-rate' &&
+            decModel.training.labelDistribution.resolved.total === 4 && decModel.training.labelDistribution.heldBars.mean === 2 &&
+            decisionReport({ candidate: { id: 's', promote: false, reasons: [], model: null } }).training.labelDistribution === null);
+
+        // (f) the formatter.
+        const line = formatDecision(dec);
+        check('R26-8: formatDecision names the verdict, the concentration readout and the next-run knobs',
+            /decision: keep-off/.test(line) && /concentration:/.test(line) && /nextRun:/.test(line),
+            line);
+        check('R26-8: formatDecision renders an unavailable decision instead of throwing',
+            formatDecision(null) === 'decision: unavailable');
+    } catch (e) {
+        check('R26-8 decision checks completed', false, e.stack);
+    }
+
+    // ---- AL. R26-9: the correlated-fold null (why the scored path replays) ------
+    // The method decision recorded in `docs/METHOD.md`: the scored walk-forward
+    // keeps the per-fold full replay, because a warm per-stream snapshot would make
+    // the fold outcomes share one fitted state and the cluster inference reads the
+    // fold windows as the sample's independent unit. This fixture measures the
+    // consequence directly: under the null (no edge) the exact sign test over C
+    // windows is calibrated at ~alpha only when the windows are independent; a
+    // positive common component inflates its size.
+    try {
+        const lcg = (seed) => {
+            let s = seed >>> 0;
+            return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+        };
+        const rand = lcg(12345);
+        const normal = () => {
+            let u = 0;
+            while (u === 0) u = rand();
+            const v = rand();
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        };
+        const C = 40;
+        const reps = 400;
+        const rate = (rho) => {
+            let rej = 0;
+            for (let r = 0; r < reps; r++) {
+                const common = normal();
+                let wins = 0;
+                for (let i = 0; i < C; i++) {
+                    const x = Math.sqrt(rho) * common + Math.sqrt(1 - rho) * normal();
+                    if (x > 0) wins += 1;
+                }
+                if (signTest({ wins, n: C, alpha: 0.05 }).significant) rej += 1;
+            }
+            return rej / reps;
+        };
+        const fresh = rate(0);
+        const rho25 = rate(0.25);
+        const rho50 = rate(0.5);
+        check('R26-9: independent fold windows keep the exact sign test at ~alpha under the null',
+            fresh >= 0.01 && fresh <= 0.10, String(fresh));
+        check('R26-9: a positive common fold component (the warm-snapshot regime) inflates the sign test size',
+            rho50 > fresh + 0.15 && rho25 > fresh + 0.10 && rho50 >= rho25,
+            JSON.stringify({ fresh, rho25, rho50 }));
+        check('R26-9: the correlated-fold null variance is the equicorrelation design effect 1+(C-1)rho',
+            Math.abs(equicorrelationDesignEffect(C, 0.25) - (1 + (C - 1) * 0.25)) < 1e-12 &&
+            Math.abs(equicorrelationDesignEffect(C, 0.5) - (1 + (C - 1) * 0.5)) < 1e-12);
+    } catch (e) {
+        check('R26-9 method checks completed', false, e.stack);
+    }
+
+    // ---- AM. R26-15: the successive-halving engine (gated; engine only) ---------
+    // R26-15 is gated on an economics/diversity win and the shipped driver has no
+    // `--race` flag. The engine is built and validated anyway, so the gate can be
+    // revisited cheaply and the correctness requirement is a test: a racing budget
+    // must not change the DECIDED set versus scoring every arm at the top budget.
+    try {
+        const mkArms = () => [
+            { id: 'a', q: 3.0 }, { id: 'b', q: 2.6 }, { id: 'c', q: 2.2 },
+            { id: 'd', q: 1.8 }, { id: 'e', q: 1.4 }, { id: 'f', q: 1.0 },
+            { id: 'g', q: 0.6 }, { id: 'h', q: 0.2 }, { id: 'i', q: -0.2 },
+        ];
+        // More budget => less noise (the SHA premise), deterministic.
+        const evaluate = (arm, budget) => arm.q + (arm.q > 0 ? 0.05 : -0.05) / budget;
+
+        check('R26-15: halvingRounds is exact for eta = 3 and eta = 2',
+            halvingRounds({ maxBudget: 9, minBudget: 1, eta: 3 }) === 3 &&
+            halvingRounds({ maxBudget: 9, minBudget: 1, eta: 2 }) === 4);
+        const sched = halvingSchedule({ arms: mkArms(), maxBudget: 9, eta: 3 });
+        check('R26-15: halvingSchedule eliminates 1/eta per rung on an exact schedule',
+            sched.length === 2 &&
+            sched[0].budget === 1 && sched[0].arms === 9 && sched[0].keep === 3 &&
+            sched[1].budget === 3 && sched[1].arms === 3 && sched[1].keep === 1,
+            JSON.stringify(sched));
+
+        const race = await successiveHalving({ arms: mkArms(), evaluate, maxBudget: 9, eta: 3 });
+        check('R26-15: the race keeps the true best arm and spends less budget than a full grid',
+            race.available && race.winnerId === 'a' &&
+            race.evaluated === 12 && race.spentBudget === 18 && race.gridBudget === 81 &&
+            race.spentBudget < race.gridBudget,
+            JSON.stringify({ w: race.winnerId, ev: race.evaluated, sb: race.spentBudget, gb: race.gridBudget }));
+        check('R26-15: the first rung scores every arm and keeps exactly the top third',
+            race.rounds[0].scored.length === 9 && race.rounds[0].survivorIds.join(',') === 'a,b,c' &&
+            race.rounds[0].lostIds.length === 6);
+        const oracle = mkArms().map((arm) => ({ arm, v: evaluate(arm, 9) })).sort((x, y) => y.v - x.v)[0].arm.id;
+        check('R26-15: the race winner agrees with the full-grid oracle (a budget must not change the decided set)',
+            race.winnerId === oracle, JSON.stringify({ race: race.winnerId, oracle }));
+        const nonFinite = await successiveHalving({
+            arms: mkArms(), maxBudget: 9, eta: 3,
+            evaluate: (arm, budget) => (arm.id === 'a' ? NaN : evaluate(arm, budget)),
+        });
+        check('R26-15: a non-finite evaluation is eliminated, never silently ranked',
+            nonFinite.available && nonFinite.winnerId === 'b' && nonFinite.rounds[0].nonFinite.includes('a'),
+            JSON.stringify({ w: nonFinite.winnerId, nf: nonFinite.rounds[0].nonFinite }));
+
+        const minrace = await successiveHalving({ arms: mkArms(), evaluate: (arm) => arm.q, maxBudget: 9, eta: 3, maximize: false });
+        check('R26-15: maximize=false selects the lowest score (a cost-minimising race)',
+            minrace.winnerId === 'i' && minrace.rounds[0].survivorIds.join(',') === 'i,h,g');
+        check('R26-15: the engine refuses an empty arm list, a missing evaluator and a bad budget',
+            (await successiveHalving({ arms: [], evaluate })).available === false &&
+            (await successiveHalving({ arms: mkArms(), maxBudget: 9 })).available === false &&
+            (await successiveHalving({ arms: mkArms(), evaluate, maxBudget: NaN })).available === false);
+        check('R26-15: formatRace names the winner, the rungs and the evaluations spent',
+            formatRace(race) === 'race: winner=a rungs=1x9 -> 3x3 evals=12/9 arms', formatRace(race));
+    } catch (e) {
+        check('R26-15 race checks completed', false, e.stack);
+    }
+
     const failed = checks.filter((c) => !c.pass);
     return { total: checks.length, failed: failed.length, failures: failed, checks };
 }

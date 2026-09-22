@@ -144,7 +144,7 @@ catalogue, **not** a schedule.
    are `RUN-ANALYSIS.md` §5. `query-mod` (DSR 0.9992), `sig:momentum` (Sharpe
    1.1059) and `sig:acceleration` (1.0502) miss only the fold-consistency hurdles.
    Nothing promoted ⇒ **no golden re-frozen**. Two report-honesty defects found
-   (`BUGS.md` #26/#27) ⇒ round 25, items 31-36.
+   (`BUGS.md` #26/#27) ⇒ round 25, items 31-37.
    **Attempt 1 (2026-09-20, seed 1) ran out of road and produced NO verdict** —
    forensics in `RUN-ANALYSIS.md` §1: the manifest was exactly the intended power
    run, but the process died inside the second candidate (1,862 of ~17,280 fits,
@@ -192,8 +192,10 @@ catalogue, **not** a schedule.
    uploaded (never `models/`), and the journal was verified offline end to end
    (`RUN-ANALYSIS.md` §5.3). Its forensics also produced the measured cost model
    (**10.7 s/controller fit** — `RUN-ANALYSIS.md` §4, ~2× the old 5.23 s estimate,
-   correcting the "~6 h" plan to 11.98 h) and two new open defects
-   (`BUGS.md` #26/#27 ⇒ items 31-36).
+   correcting the "~6 h" plan to 11.98 h — **SUPERSEDED in round 25b**: that figure
+   is only the *average* at 36 folds/stream, the cost grows with the fold index and
+   a run is O(n²) per stream; see `RUN-ANALYSIS.md` §4 and round-26 item R26-4) and two new open defects
+   (`BUGS.md` #26/#27 ⇒ items 31-37).
 24. [x] **P1 · Determinism smoke test** — delivered as `analyze.test.js` §Q (two
    identical runs give an identical `summary` and baseline pooled Sharpe) and
    documented in `RUNBOOK.md` §6. (`RUN-ANALYSIS.md` §1.7: repeated controller
@@ -268,6 +270,376 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    elapsed ms + `kind` (`mechanism|signal`) — the attempt-3 `run.log` reads as if 8
    variants took 0.66 s (`RUN-ANALYSIS.md` §5.4); serialise
    `minTrackRecordLength: Infinity` explicitly rather than as `null`.
+
+**Round 26 — correctness first, then the economics (from the `20260921T062511-seed1` signal run and the round-26 controller/A-B fidelity sweep; `RUN-ANALYSIS.md` §7 + §8, `BUGS.md` #33-#37). Full plan: `ROADMAP.md` round 26.**
+
+> The draft of this round put throughput and economics first. The requested
+> controller sweep found a **blocking** defect first (`BUGS.md` #33: the A/B feeds
+> the controller the whole candle prefix where production feeds a fixed window, so
+> its trade bookkeeping sees ancient bars and its training labels are wrong —
+> measured 78/144 wins vs 156/64 with the production window). Nothing can be
+> measured until that is fixed, so the items are re-ordered: **A** correctness,
+> **B** throughput, **C** economics, **D** decision quality, **E** method.
+>
+> The user then asked for the same request again (round 26b: another sweep,
+> coherence + research check, tests, and an analyse-run optimisation). That second
+> pass added two measured label defects (#36 optimistic intrabar tie-break / gapped
+> stop fill / unlabelled trades, #37 missing base rate + skill score), **withdrew
+> round 25c's cost claim** (a production-shaped window costs the same per call as
+> the prefix, so the churn is not the large term), measured where the per-call cost
+> actually is (inference ≈ 54 %, full-state checkpoint ≈ 25 %, training ≈ 14 %),
+> and added the family-search half: **G** family search (R26-13 seeds/CRN,
+> R26-14 forecast + MCS, R26-15 gated racing) plus R26-11 (label policy variants)
+> and R26-12 (checkpoint throttle).
+
+44. [x] **R26-0 · Restore the A/B's controller input to the production window
+   (BLOCKING).** `fit()`/`predict()` must pass `candles.slice(max(0, i -
+   cacheSize), i)` (what `legion/workers.js` passes), not `slice(0, i)`; harden
+   `_updateOpenTrades` with a timestamp guard and wrap the open-trade insert (both
+   production no-ops, all 11 golden fingerprints unmoved); re-derive §7's baseline
+   numbers and re-measure the cost constant **before sizing anything** — the shim
+   shows *no* per-call drop between the prefix and a production-shaped window (56.6
+   vs 55.4 ms/call), so the fix's speed benefit is unmeasured and round 25c's churn
+   attribution is withdrawn (`OPTIMIZATION.md` "Round 26b"). Proof: the
+   `analyze.test.js` window-contract test (`≤ cacheSize` input,
+   `recentCandles.length ≤ 1` per call) plus the contiguous-window test.
+45. [x] **R26-1 · The controller sweep, as a repeatable procedure.** Inventory every
+   stateful component (`HiveMindController`/`HiveMind`, `legion/*`,
+   `consolidation_worker`, `observer/*`) and check the ten invariants (input-shape
+   fidelity, ordering/timestamp guards, read-vs-write, counter provenance, boundary
+   degradation, seeded determinism, resource bounds, dead guards, label realism &
+   lifecycle, cost & persistence attribution) with the boundary-degradation
+   fixtures. Starts from the sixteen verified suspects in
+   `ROADMAP.md`; every finding becomes a `BUGS.md` entry or a "checked clean" note,
+   and every invariant a contract test. Output: the sweep matrix in
+   `RUN-ANALYSIS.md` §9 (§8 is the finding, §9 the standing matrix).
+   **DONE (round 26):** `RUN-ANALYSIS.md` §9 is the standing matrix — the component
+   inventory (§9.1), the ten invariants (§9.2), the invariant × component-class
+   status grid (§9.3), the sixteen suspects each resolved as *fixed*/*clean*/
+   *documented*/*pending* (§9.4), and the R26-10 contract-test map with every
+   pending cell owned by an item (§9.5). The reading-invalidating defect (#33) and
+   the two unfair-comparison defects (#34/#35) are fixed and pinned; #36/#37 are
+   fixed or made opt-in; the documented items (polarity scope, purge exclusions,
+   the default backlog, the pending tests) are recorded by name.
+46. [x] **R26-2 · Surface the model's readiness/training diagnostics.** Per-variant
+   `model` block (from `stats()`: `trainingSteps`/`folds`/`undertrained`/
+   `warmErrors`/`quarantinedRows`) + per-fold label counts + a summary `model:` line;
+   annotate `trainingSteps === 0` or `warmErrors > 0`; replace the dead
+   `undertrained` guard with the readiness signal (`BUGS.md` #35). **Extend:** the
+   block also carries the **label base rate** (≈ 27 % TP at the shipped factors),
+   a **skill score** referenced to it (Brier skill score + chance-corrected
+   accuracy), and the label lifecycle — so *trained & skilful* is distinct from
+   *trained & no better than the base rate* (`BUGS.md` #37).
+   **DONE (round 26):** `HiveMindController` accumulates and persists
+   `resolved_take_profit`/`resolved_stop_loss`, the Brier components
+   (`brier_sum`/`brier_count`) and a `dropped_candles` count; the factory's
+   `stats()` reports `baseRate`, `brier`/`brierBaseline`/`brierSkill`,
+   `accuracy`/`chanceAccuracy`/`accuracySkill` and a three-state `status`
+   (`not-trained` | `base-rate` | `skilful`), plus the raw counters for pooling;
+   `predict()` is gated on readiness (`trainingSteps > 0`), not on the dead
+   `testStart >= warmup` guard (kept as a reported statistic);
+   `makeSignalForVariant` takes an `onStats` hook and `runAnalysis` pools the
+   per-fold stats into a per-variant `model` block in `report.json` (null for a
+   pure signal candidate) and a `models:` summary line. Proved by
+   `core.test.js` section I (4 checks) and `analyze.test.js` R26-2 checks
+   (7 checks).
+47. [x] **R26-3 · One confidence→position pipeline + journal the pre-policy value.**
+   The controller's `probToPosition(prob, {deadZone, scale})` and the signals'
+   `clampPosition(z)` are incomparable (`BUGS.md` #34), so every turnover/participation
+   comparison is confounded. Define one signed-confidence space and one mapping for
+   both families; journal the raw per-test-bar value so a policy sweep is
+   `restateReportAtPolicy(journal, policy)` and reproduces the emitted positions
+   byte-for-byte.
+   **DONE (round 26):** `walkforward#confidenceFromProb` (the controller's
+   `(prob−50)/50`) and `confidenceToPosition(c, policy)` (dead zone + scale) are the
+   one pipeline, with `probToPosition` re-expressed through both (byte-identical on
+   the whole controller domain); `POSITION_POLICY = {deadZone:0.05, scale:1}` is
+   applied to BOTH families (`IDENTITY_POSITION_POLICY` is the direct-call default,
+   so existing calls are unchanged). The model factories expose `rawConfidence()`;
+   `walkForwardEvaluate`/`purgedCVBacktest` journal the raw pre-policy confidence in
+   `folds.jsonl`; `restateReportAtPolicy`/`verifyPolicyRoundTrip` restate and verify
+   offline, and every run records a `policyRoundTrip` certificate in `report.json`.
+   Proved by new `analysis.test.js` (5) and `analyze.test.js` (4) checks.
+48. [x] **R26-4 · Parallelise the fold loop (the throughput enabler).** Unit of work
+   = `(variant, stream, fold, pass, probeIndex)`; dispatch via
+   `legion/workers.js#runWorkerThread`; results buffered and emitted in fold order.
+   Semantics-preserving (per-fold seed already scheduling-independent); acceptance =
+   byte-identical `folds.jsonl` serial vs parallel. 8-16× on a desktop.
+   **DONE (round 26):** `analysis/parallel.js` (`scheduleUnits` order-preserving
+   bounded concurrency, `makeFoldExecutor` reply contract) + `analysis/fold_worker.js`
+   (one fold per worker, reconstructing the same seeded signal function from the same
+   data) + `backtest.js#purgedCVBacktestAsync` / `walkforward.js#walkForwardEvaluateAsync`
+   (sharing `scoreFold`/`poolFolds` with the serial path) + `analyze.js#evaluateABAsync`
+   (sharing `finalizeAB` with `evaluateAB`, so the drivers cannot drift) +
+   `runAnalysis({concurrency})` / `--concurrency=<n>` (recorded in
+   `run.json`/`report.json`; default `1` is byte-identical). The worker reports the
+   fold's model diagnostics, so the R26-2 `model` block survives. Proved in the
+   browser (injected inline executor == serial report; analysis 442 → 453, analyze
+   184 → 191) and natively by the node-only `parallel_folds.test.js` (real
+   `worker_threads`; byte-identical `folds.jsonl` + verdict serial vs 2-way).
+49. [x] **R26-5 · Attack turnover (offline).** Sweep `deadZone` × `scale`, then add a
+   holding/hysteresis rule (enter `≥ enter`, exit `≤ exit < enter`, optional minimum
+   hold), targeting a break-even above 5-10 bps at a Sharpe indistinguishable from
+   costless. Evidence: every signal needs 0.09-3.47 bps and trades ~93 % invested
+   with no dead zone. Grounding: Constantinides 1986 / Davis & Norman 1990 /
+   Gârleanu & Pedersen 2013 (no-trade region), arXiv 2101.09936 (region asymptotics),
+   arXiv 2502.04284 (alpha decay + costs ⇒ past signal values matter), arXiv
+   2509.04541 (turnover regularization), arXiv 1904.04912 (learned position sizing).
+   **DONE (round 26):** `analysis/holding.js` (`DEFAULT_TURNOVER_GRID` = 8 dead zones
+   × 1 scale × 6 holdings; `turnoverSweep`/`bestTurnoverPolicy`/`formatTurnoverSweep`,
+   pure over `restateReportAtPolicy`) + `walkforward.js#positionSeriesFromConfidence`
+   (byte-identical to the pointwise map with no holding rule, so the R26-3 round trip
+   is unchanged) + `analyze.js` opt-in `--turnover-sweep`/`--turnover-target=<bps>`
+   (off by default, recorded in `run.json`/`report.json`, rendered in the summary).
+   Proved in the browser (analysis 453 → 463, analyze 191 → 198) and natively by the
+   node-only `analyze_cli.test.js` (the spawned CLI documents and threads both flags).
+50. [x] **R26-6 · Buy effective independence, not bars.** Select streams by the
+   *measured* design effect (second bar interval and/or lower-correlation symbols),
+   maximising `effectiveBars` per unit of compute; report per-stream and pooled
+   `designEffect` before/after. Grounding: Grinold 1989 (breadth), Kish 1965, Harvey,
+   Liu & Zhu 2016.
+   **DONE (round 26):** `analysis/streams.js` (`resampleCandles` exact OHLCV
+   aggregation, `designEffectOfStreams` Kish design effect over the streams' returns
+   or per-fold Sharpes with the K=1/degenerate cases handled, `selectStreams` greedy
+   marginal-efficiency selection, `formatStreamSelection`) + `analyze.js` opt-in
+   `--interval=<n>` and `--select-streams[=<n>]` (recorded in `run.json`/`report.json`,
+   rendered in the summary; both design-only). Registered `LOCKED-invariant`. Proved
+   in the browser (analysis 463 → 475, analyze 198 → 204).
+51. [x] **R26-7 · Give the gate discriminating power.** Replace the sign-test
+   `requireBreadth` (passed 8/8, hit its 2⁻¹⁴² floor on three candidates) with a
+   **magnitude floor** on the paired cluster Sharpe difference (the sign test stays a
+   reported statistic) **plus** a **cluster-stability** requirement (the edge must
+   survive deleting any single fold-window cluster). Grounding: Demšar 2006, Ledoit &
+   Wolf 2008, Cameron & Miller 2015, Künsch 1989, Pardo 2008.
+   **DONE (round 26):** `analysis/dependence.js` adds `clusterStability`
+   (leave-one-cluster-out positivity of the pooled paired statistic, default
+   `minFraction=1`), `analysis/walkforward.js`'s `pairedPromotionTest` returns
+   `stability` and `promoteDecision` gains `requireClusterStability`/
+   `minStableFraction` (default off, so the classic gate is bit-identical) with its
+   own `gate` state and reason, the shipped `DEPENDENCE_GATE_READER` is now
+   magnitude + stability + `dsrAdjusted` with breadth REPORTED-only, and `analyze.js`'s
+   dependence `gateOptions` set `requireClusterStability` instead of `requireBreadth`.
+   Proved in the browser (analysis 515 → 523, section AJ; `analyze.test.js` asserts the
+   driver's `gateOptions`); ledger 2229 → 2237.
+52. [x] **R26-8 · A decision-grade report.** Every field non-null or `n/a (reason)`:
+   (1) did the models train and on what (R26-2; **plus the label base rate, the
+   skill score and the entry-to-close holding-period distribution, #37/R26-11 —
+   the spec's entry-to-training age is deferred, see #62**, and the
+   per-stage timing split); (2) is the edge real (dependence + promotionTest + gate +
+   family correlation + family-wise search, binding hurdle named); (3) a new
+   `concentration` block (top-K folds' share of gross, pos/neg sums,
+   delete-one-cluster pooled-Sharpe range, per-fold marginal contribution);
+   (4) does it pay (cost ladder + break-even + participation under the unified
+   policy); (5) **is it the best family, or just the best of these** — a `forecast`
+   block (Brier/reliability/resolution, Diebold–Mariano) + the family `mcs`
+   membership set (R26-14) + the seed distribution and variance decomposition
+   (R26-13); (6) a machine-readable `nextRun` block (honest MDE95/effectiveBars,
+   `barsToDetect`, required break-even at 5/10 bps, projected cost from the
+   re-measured constant, the seeds a paired test would need, the single cheapest
+   change that would flip the verdict).
+   **DONE (round 26):** `analysis/decision.js` — `foldConcentration` (top-K share of
+   gross, signed fold sums, the leave-one-fold-out pooled-Sharpe range and each
+   fold's marginal contribution, restated from the retained `foldInputs`),
+   `confidencePersistence` (lag-1 autocorrelation of the journaled confidence +
+   half-life), `nextRunPlan` (effective bars/MDE i.i.d. and dependence-corrected,
+   bars-to-detect at the measured design effect, break-even vs 0/2/5/10 bps, the
+   measured per-fold wall time, the cheapest flip) and `decisionReport`/
+   `formatDecision` (the six questions, every field a value or `{available:false,
+   reason}`). `analyze.js` emits it by default (recorded in `run.json`/`report.json`,
+   `--decision=0` disables) and adds the `decision:`/`concentration:`/`nextRun:`
+   summary lines. Proved in the browser (analysis 523 → 547 section AK, analyze
+   216 → 220) and by a third node-only `analyze_cli.test.js` block; ledger 2237 →
+   2265.
+53. [x] **R26-9 · Method decision (no code until decided): per-fold replay vs
+   per-stream snapshot.** Replay keeps fold independence at O(n²); a warmed snapshot
+   is O(n) but correlates the folds the cluster inference reads. Needs a written
+   justification and a size/power re-derivation under the correlated-fold null.
+   Grounding: López de Prado 2018 (purging/embargo), Pardo 2008, Cawley & Talbot
+   2010 (selection bias from reusing one fitted model), arXiv 2412.10545 (drift ⇒
+   retraining).
+   **DONE (round 26):** `docs/METHOD.md` §1 records the decision — the scored path
+   **keeps the per-fold full replay** (the fold window is the cluster-inference unit;
+   a warm snapshot's common component invalidates the gate's size) — with the
+   re-derivation (win-count variance `C/4·(1+(C-1)ρ)`, i.e. the Kish design effect)
+   and the fixture (`analysis.test.js` §AL: an exact sign test over 40 independent
+   windows rejects at ≈0.043, but ≈0.31 / 0.36 when the windows share a common
+   component at ρ = 0.25 / 0.5). A snapshot may only ever be a separate, labelled
+   report that carries the measured fold correlation and never feeds the gate. No
+   shipped code; `analysis.test.js` 547 → 550, ledger 2265 → 2268.
+54. [x] **R26-10 · Tests added to `npm test`.** The **sixteen** contract tests in
+   `ROADMAP.md` round 26 Part F (window contract, contiguous window, no pre-entry
+   close, unified policy + journal round-trip, readiness surfacing, base rate +
+   skill, concentration reference vectors, breadth replacement, parallel = serial,
+   checkpoint equivalence, paired seeds (CRN), forecast + MCS, sweep boundary
+   fixtures, label-policy fixtures, dead-guard audit, report completeness). Node
+   mirrors + exact-count ledgers + `RUNBOOK.md` §6 and the README counts re-synced
+   in the same commit.
+   **DONE (round 26):** all sixteen cells landed — see the `ROADMAP.md` Part F
+   table and `RUN-ANALYSIS.md` §9.5. The last two added in this item: the reader's
+   boundary-degradation matrix (`guards.test.js` section K: empty / short / corrupt
+   row / NaN / duplicate timestamp / shuffled order / `maxBars`) and the
+   report-completeness contract over the R26-8 decision block (`analyze.test.js`).
+   `guards.test.js` 58 → 65, `analyze.test.js` 220 → 221, ledger 2268 → 2276.
+55. [ ] **Gated research leads (only after R26-5/R26-6 give evidence).** (a) rank
+   candidates by raw-confidence half-life × gross edge per unit turnover (alpha
+   decay, arXiv 2502.04284) — measurement first, then a selection criterion;
+   (b) a **cross-sectional** candidate family (rank the basket, long the leaders /
+   short the laggards), which buys independence by construction and is the cheapest
+   answer to the design effect (Moskowitz & Grinblatt 1999; Moskowitz, Ooi &
+   Pedersen 2012; Asness, Moskowitz & Pedersen 2013); (c) a weakly-correlated
+   **composite** candidate (Grinold 1989); (d) turnover-regularised *training*
+   (arXiv 2509.04541) and learned position sizing (arXiv 1904.04912) — deferred
+   because they change the training arithmetic and need their own A/B + golden
+   decision. Detail: `ROADMAP.md` round 26 "Research leads that could change the
+   family".
+
+56. [x] **R26-11 · Make the trade labeller a variant dimension, and report the label
+   lifecycle (round 26b; `BUGS.md` #36).** `labelPolicy` ∈ {`optimistic` (current),
+   `conservative` (SL-first tie-break on a bar spanning both barriers; a gapped stop
+   fills at the bar's worst traded price), `triple` (conservative + a time barrier
+   at `horizonBars`, so every trade is labelled and `open_trades` is bounded)},
+   default `optimistic` ⇒ all 11 goldens untouched. Also surface the per-fold base
+   rate, the resolved/unresolved counts and the entry-to-training age distribution
+   (which makes `_processClosedTrades`' `processCount = 1` FIFO lag visible).
+   **Partial:** the landed build reports the entry-to-close **holding period**, not
+   the entry-to-training age — see the gap note in the `DONE` text below (#62).
+   Grounding: López de Prado 2018 ch. 3 (the triple barrier).
+   **DONE (round 26):** `_updateOpenTrades` is policy-aware (`optimistic` is
+   byte-identical, pinned by golden; `conservative` stop-first + worst-price gapped
+   fill; `triple` adds a time barrier at `_labelHorizonBars`). The holding period and
+   time-barrier resolution are counted (`heldBarsSum`/`heldBarsCount`/`heldBarsMax`,
+   `resolvedTimeBarrier`) and persisted beside the accuracy bag. `LABEL_VARIANTS`
+   (`label-conservative`, `label-triple`; `kind:'label'`, controller-scoped) are
+   resolvable by id but never in the default 15-candidate roster; `--label-policies`
+   appends exactly them, `--label-policy=`/`--label-horizon=` set the run-level
+   policy (recorded in `run.json`/`report.json`, unknown names throw). Proved by
+   `core.test.js` section J (6 checks; browser + native) and `analyze.test.js`
+   (7 checks). **Gap (round 26b):** the reported lifecycle age is the
+   **entry-to-close holding period** (`heldBarsSum`/`heldBarsCount`/`heldBarsMax`),
+   not the entry-to-training age; the training-age/FIFO-drain-lag metric is
+   deferred to #62 (it needs the current candle timestamp threaded into
+   `_processClosedTrades`' hot path). No metric or verdict moves.
+57. [x] **R26-12 · Throttle the state checkpoint (round 26b; semantics-preserving).**
+   `HiveMind.dumpState()` rewrites the entire ensemble state on every call —
+   measured **24.6 %** of per-call time — and the A/B never reads it back. Add
+   `saveInterval` (default `1` ⇒ bit-exact); the A/B sets final-only, production
+   keeps a bounded interval (state *is* reloaded after a restart). Acceptance: a
+   byte-identical `folds.jsonl` at `saveInterval ∈ {1, ∞}`. Grounding: the
+   checkpoint-interval problem (Young 1974; Daly 2006). Detail:
+   `OPTIMIZATION.md` "Round 26b". **DONE (round 26):** `HiveMindController`
+   gained `_saveInterval`/`_saveTicks` (default `1` = the old per-call dump) plus
+   `flushState()`; `runAnalysis` defaults the A/B to `Infinity`, the CLI has
+   `--save-interval=<n>|inf`, and the interval is recorded in
+   `run.json`/`report.json`. Proven by `core.test.js` section H (identical signal
+   stream at `k = 1/3/∞` against a deterministic mind stand-in; exact dump counts)
+   and `analyze.test.js` (factory default/override, driver default, recorded
+   field, kept-fit flush). The acceptance byte-diff of `folds.jsonl` is
+   **node-only** (`test/node/checkpoint_throttle.test.js`, a real `runAnalysis` ×2
+   — the browser shim cannot compare two seeded controllers; see `BUGS.md`
+   "Test-harness limitations" item 5) and must be confirmed by a local run.
+58. [x] **R26-13 · Replicate across seeds with common random numbers, and report the
+   distribution (round 26b).** Make `foldSeed` variant-independent (`masterSeed +
+   testStart·977`) so variants are *paired* on the same random draws; run every
+   variant under ≥ 3 master seeds; report mean/IQM/stratified-bootstrap CI and a
+   seed/stream/fold variance decomposition. Grounding: Bouthillier et al. 2019
+   (ICML), Henderson et al. 2018 (arXiv 1709.06560), Agarwal et al. 2021
+   (arXiv 2108.13264), Glasserman & Yao 1992. This *does* change A/B numbers (that
+   is the point); goldens untouched.
+   **DONE (round 26):** `analysis/replication.js` (`interquartileMean`,
+   `stratifiedBootstrapCI` within-seed resampling, `varianceComponents`,
+   `seedDistribution`, `pairedVarianceRatio`, `formatSeedReplication`) + `analyze.js`
+   CRN on by default (variant-independent `foldSeed = seed + testStart*977`; `--crn=0`
+   restores the historical per-variant seed) + `replicateAnalysis`/`--seeds=a,b,c`,
+   which runs the A/B once per master seed with CRN and aggregates each variant's
+   mean/IQM/stratified-bootstrap CI plus a seed/fold/residual variance split into
+   `replication.json` beside the first run dir. Every baseline/candidate row now
+   carries its per-fold net-Sharpe series; `crn=<bool>` is recorded in
+   `run.json`/`report.json` and the summary. Registered `LOCKED-invariant`. Proved in
+   the browser (analysis 475 → 491, analyze 204 → 213) and by a second node-only
+   block in `analyze_cli.test.js` (the spawned CLI documents `--crn`/`--seeds`, writes
+   the aggregate, and records CRN honestly). **Note (round 26b, `BUGS.md` #41):** the
+   aggregate is `replication.json` only — the decision report's `family` seed fields
+   are `na` in every per-seed report (their readers now say so), because
+   `replicateAnalysis` keys the summary `byVariant`, not the field names the report
+   reads.
+59. [x] **R26-14 · Decide between families as forecasters: proper scores,
+   Diebold–Mariano, and the Model Confidence Set (round 26b).** From the R26-3
+   journal: Brier (with the reliability/resolution split) and log score per variant,
+   a block-bootstrapped paired DM test vs baseline, and an MCS at 90/95 % whose
+   membership is the headline answer to "which family is best". Measurement only —
+   a `forecast` block + `mcs` set in `report.json`. Grounding: Diebold & Mariano
+   1995; Hansen, Lunde & Nason 2011; Gneiting & Raftery 2007.
+   **DONE (round 26):** `analysis/forecast.js` (`forecastPairs`, `brierScore`,
+   `logScore`, `brierDecomposition` = Murphy REL/RES/UNC, `brierLosses`,
+   `bootstrapMeans`, `dieboldMariano`, `modelConfidenceSet`, `forecastComparison`,
+   `formatForecast`) + `analyze.js` default-on `forecast` block (`--forecast=0`
+   disables) built from the journaled confidence and rendered as a `forecast:`
+   summary line. Pure post-processing, so no scored number moves. Registered
+   `LOCKED-invariant`. Proved in the browser (analysis 491 → 515, analyze 213 → 216)
+   and by a fourth node-only `analyze_cli.test.js` block (`--forecast=0` nulls the
+   block).
+60. [x] **R26-15 · Search the family by racing (GATED).** An opt-in `--race` driver
+   using successive halving / Hyperband over variants × seeds, validated against the
+   full grid on one small run (a racing budget may not change the decided set).
+   Gated on R26-12 (cheap folds) + R26-13 (paired seeds) + an R26-5/R26-6 result
+   giving a reason to search a larger family. Grounding: Jamieson & Talwalkar 2016
+   (arXiv 1502.07943); Li et al. 2018 (arXiv 1603.06560).
+   **ENGINE LANDED; DRIVER GATED (round 26):** `analysis/race.js` implements
+   `halvingRounds`/`halvingSchedule`/`successiveHalving`/`formatRace` (deterministic,
+   evaluator-agnostic, non-finite-eliminating, budget-aware) and `analysis.test.js`
+   §AM validates the race winner against the brute-force full-grid oracle — the
+   precondition the plan attached to trusting it. The `--race` driver is **not
+   shipped**: the gate is **closed** (`RUN-ANALYSIS.md` §7 measured neither an
+   economics nor a diversity win; the family is cost-dead), so a wider search has no
+   reason yet. The gate conditions to open it are in `docs/METHOD.md` §2.
+   `analysis.test.js` 550 → 559, ledger 2276 → 2285.
+61. [x] **Round-26b final review (completes R26-8 clause 6; fixes `BUGS.md` #38/#39/#40/#41/#42).**
+   Re-read the *shape* of every value crossing the new round-26 layers and completed
+   the one R26-8 sub-clause the first pass had folded away: `nextRunPlan` now reports
+   the clusters/seeds a **paired** comparison would need for a target difference
+   (`pairedUnits`). Fixed #38 (the magnitude cheapest-flip read the paired difference
+   as a scalar, so on a real report the branch was dead — the fixture had passed a
+   number the product never produces) and #39 (`pairedClusterSignTest` compared
+   `concatClusters(A, c)` = all-but-c — a leave-one-out stability test — instead of
+   the per-window sign test its reader documents; now `statistic(A[c])` vs
+   `statistic(B[c])`, with a discriminating fixture) and #40
+   (`training.labelDistribution` read `candidate.model.labelDistribution`, which
+   nothing produces, so it was always a silent null; it is now derived from the
+   model diagnostics) and #41 (the report's `family` seed fields read a
+   `replication.seedDistribution`/`.varianceComponents`/`.pairedVarianceRatio` shape
+   that the only producer, `replicateAnalysis`, never emits — it returns `byVariant`
+   with the split nested as `.components` — so the fields were structurally `na` while
+   their reason told the reader `--seeds` would populate them; the reasons and the
+   `family` reader now point at `replication.json`, and the §AK check feeds the real
+   `byVariant` shape to prove it does not silently populate them). Also hardened the
+   decision
+   block's featured-row ranking (`netSharpe || -Infinity` misranked an exactly-zero
+   Sharpe) and added one multi-stream integration check in `analyze.test.js` (the
+   decision block's paired sizing, journal decay and leave-one-fold range must be
+   populated on a real 2-stream run — the integration shape the unit fixture could
+   not see). #41's shape assertion was folded into the existing §AK check, so the
+   counts are unchanged: `analysis.test.js` 559 → 562, `analyze.test.js` 221 → 222,
+   ledger 2285 → 2289. The first native `npm test` after the review then caught
+   #42 — a `concurrency > 1` run with the audit on (the default) crashed
+   (`signalForFold is not a function`) because `evaluateABAsync` nulled the
+   in-process signal function for the worker-backed path while the audit still
+   re-fits perturbed views in-process; `evaluateABAsync` now always supplies the
+   folded signal and `walkForwardEvaluateAsync` names the requirement instead of
+   throwing a bare `TypeError` (the browser R26-4 concurrency check now runs with
+   the audit ON as well as off; no count change).
+62. [ ] **Measure the entry-to-training age distribution (the `_processClosedTrades`
+   FIFO-drain lag).** R26-11's spec asks for the distribution that makes the
+   `processCount = 1` drain visible: the gap, in bars, between a trade's *entry* bar
+   and the bar at which the drain actually consumes (labels) it. What landed is the
+   **entry-to-close holding period** (`heldBarsSum`/`heldBarsCount`/`heldBarsMax`,
+   the labeller's own horizon) — a different quantity. To close the gap: thread the
+   current candle timestamp into `_processClosedTrades` (and its `processCount=1`
+   call site in `hiveMindController.js`), accumulate entry→train ages into a new
+   counter beside the accuracy bag, persist it, and add a native assertion. This
+   touches a **locked hot path** (`trades.js`) and must preserve all 11 golden
+   fingerprints, so it needs its own A/B + golden decision, exactly like R26-12/13.
+   Grounding: López de Prado 2018 ch. 3 (event-based sampling; the sample is only as
+   fresh as the drain makes it).
 
 **Deferred — research leads (NOT scheduled; see `DESIGN.md` §5)**
 

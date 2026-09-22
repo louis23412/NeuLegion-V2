@@ -75,7 +75,7 @@ as LOCKED-invariant backed by `analysis.test.js`.
 
 The extraction was mechanical and verified two ways:
 
-- **Assembly** — `modules.test.js` (50 checks) pins the wiring itself.
+- **Assembly** — `modules.test.js` (51 checks) pins the wiring itself.
 - **Behaviour** — the method bodies are byte-identical to the originals, and
   `golden.test.js` fingerprints the exact floating-point trajectory of a
   deterministic, seeded workload (`hiveMind.js` is chaotic: one reordered

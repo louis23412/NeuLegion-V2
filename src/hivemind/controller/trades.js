@@ -7,12 +7,25 @@
 
 import crypto from 'crypto';
 import HiveMind from './../hiveMind.js';
-import { isValidNumber } from './../utils.js';
+import { isValidNumber, isValidTimestamp } from './../utils.js';
 import { spanWeightsFromEntries } from './../training/sample_weights.js';
 
 export const controllerTradeMethods = {
     _updateOpenTrades (candles) {
         if (!Array.isArray(candles) || candles.length === 0) return;
+
+        // Entry-timestamp guard (round 26, R26-0 / BUGS.md #33).
+        //
+        // A trade may only be closed by a bar strictly AFTER its entry: without
+        // this, a caller that supplies an over-wide or out-of-order window (the
+        // A/B's old whole-prefix shape) closes trades on bars that predate them,
+        // which mislabels the training stream. Production feeds exactly one new
+        // candle per call, so the guard is a no-op there; a candle or a trade
+        // whose timestamp cannot be ordered falls back to the old scan rather
+        // than silently freezing the book. One Date.parse per candle and per open
+        // trade, both lists tiny.
+        const candleTimes = candles.map((c) =>
+            (c && isValidTimestamp(c.timestamp)) ? Date.parse(c.timestamp) : NaN);
 
         const tradesStmt = this._db.prepare(`
             SELECT timestamp, sellPrice, stopLoss, entryPrice, features, confidence
@@ -22,7 +35,22 @@ export const controllerTradeMethods = {
 
         const closedTrades = [];
 
+        // Label policy (round 26, R26-11 / BUGS.md #36). 'optimistic' is the
+        // historical two-barrier rule (TP tested first, stop fills at the stop
+        // price, no expiry); 'conservative' resolves a both-barrier bar to the stop
+        // and fills a gapped stop at the bar's worst traded price; 'triple' adds a
+        // time barrier at `_labelHorizonBars`. Default optimistic ⇒ bit-identical.
+        const policy = (this._labelPolicy === 'conservative' || this._labelPolicy === 'triple')
+            ? this._labelPolicy
+            : 'optimistic';
+        const conservative = policy !== 'optimistic';
+        const triple = policy === 'triple';
+        const horizonBars = Number.isFinite(this._labelHorizonBars) && this._labelHorizonBars > 0
+            ? Math.floor(this._labelHorizonBars)
+            : null;
+
         for (const trade of trades) {
+            const entryTime = isValidTimestamp(trade.timestamp) ? Date.parse(trade.timestamp) : NaN;
             let features;
             try {
                 features = JSON.parse(trade.features);
@@ -33,10 +61,19 @@ export const controllerTradeMethods = {
                 console.warn(`[isolated] open_trades row ${trade.timestamp} has unparseable features; skipped.`);
                 continue;
             }
-            for (const candle of candles) {
+
+            const isLong = trade.sellPrice > trade.entryPrice;
+            let barsAfterEntry = 0;
+
+            for (let ci = 0; ci < candles.length; ci++) {
+                const candle = candles[ci];
                 if (!candle || !isValidNumber(candle.high) || !isValidNumber(candle.low)) continue;
 
-                const isLong = trade.sellPrice > trade.entryPrice;
+                const afterEntry = Number.isFinite(entryTime)
+                    ? (Number.isFinite(candleTimes[ci]) && candleTimes[ci] > entryTime)
+                    : true;
+                if (!afterEntry) continue;
+                barsAfterEntry++;
 
                 const hitTakeProfit = isLong
                     ? candle.high >= trade.sellPrice
@@ -46,17 +83,55 @@ export const controllerTradeMethods = {
                     ? candle.low <= trade.stopLoss
                     : candle.high >= trade.stopLoss;
 
-                if (hitTakeProfit || hitStopLoss) {
-                    const exitPrice = hitTakeProfit ? trade.sellPrice : trade.stopLoss;
-                    const outcome = hitTakeProfit ? 1 : 0;
+                let exitPrice = null;
+                let outcome = null;
+                let timeBarrier = false;
 
+                if (conservative) {
+                    // Stop-first on an unresolved two-barrier bar, and a gapped stop
+                    // fills at the bar's worst traded price (the open, when it gaps
+                    // through the stop) rather than at the stop price.
+                    if (hitStopLoss) {
+                        exitPrice = isValidNumber(candle.open)
+                            ? (isLong ? Math.min(trade.stopLoss, candle.open) : Math.max(trade.stopLoss, candle.open))
+                            : trade.stopLoss;
+                        outcome = 0;
+                    } else if (hitTakeProfit) {
+                        exitPrice = trade.sellPrice;
+                        outcome = 1;
+                    }
+                } else {
+                    // Historical optimistic ordering: the take-profit is tested first,
+                    // so a bar spanning both barriers is booked as a win.
+                    if (hitTakeProfit) {
+                        exitPrice = trade.sellPrice;
+                        outcome = 1;
+                    } else if (hitStopLoss) {
+                        exitPrice = trade.stopLoss;
+                        outcome = 0;
+                    }
+                }
+
+                if (exitPrice == null && triple && horizonBars != null && barsAfterEntry >= horizonBars && isValidNumber(candle.close)) {
+                    // The third barrier: expiry. Labelled from the horizon bar's close,
+                    // on the take-profit side of the trade's direction.
+                    exitPrice = candle.close;
+                    outcome = (isLong ? candle.close >= trade.entryPrice : candle.close <= trade.entryPrice) ? 1 : 0;
+                    timeBarrier = true;
+                }
+
+                if (exitPrice != null) {
                     closedTrades.push({
                         timestamp: trade.timestamp,
                         entryPrice: trade.entryPrice,
                         exitPrice,
                         outcome,
                         features,
-                        confidence: trade.confidence
+                        confidence: trade.confidence,
+                        // Diagnostics only (not persisted): the holding length and
+                        // whether the time barrier resolved it.
+                        heldBars: barsAfterEntry,
+                        timeBarrier,
                     });
                     break;
                 }
@@ -82,6 +157,14 @@ export const controllerTradeMethods = {
                         trade.confidence
                     );
                     deleteOpenStmt.run(trade.timestamp);
+
+                    // Label lifecycle (round 26, R26-11): the holding distribution and
+                    // the time-barrier count, so the label policy is measurable.
+                    const held = Number.isFinite(trade.heldBars) ? trade.heldBars : 0;
+                    this._globalAccuracy.heldBarsSum += held;
+                    this._globalAccuracy.heldBarsCount += 1;
+                    if (held > this._globalAccuracy.heldBarsMax) this._globalAccuracy.heldBarsMax = held;
+                    if (trade.timeBarrier) this._globalAccuracy.resolvedTimeBarrier += 1;
                 }
             });
 
@@ -141,6 +224,16 @@ export const controllerTradeMethods = {
                 if (trade.confidence >= 0) {
                     this._globalAccuracy.total++;
                     this._globalAccuracy.totalPoints += 100;
+
+                    // Label lifecycle + Brier components (round 26, R26-2 /
+                    // BUGS.md #37). Same sample as `total`, so the base rate and
+                    // the skill score a report quotes are referenced to the rows
+                    // the model was actually scored on.
+                    if (trade.outcome === 1) this._globalAccuracy.resolvedTakeProfit++;
+                    else this._globalAccuracy.resolvedStopLoss++;
+                    const forecast = trade.confidence / 100;
+                    this._globalAccuracy.brierSum += (forecast - trade.outcome) * (forecast - trade.outcome);
+                    this._globalAccuracy.brierCount++;
 
                     if (trade.confidence >= 50 && trade.outcome === 1) {
                         this._globalAccuracy.wins++;

@@ -33,13 +33,15 @@
 import fs from 'fs';
 import path from 'path';
 import {
-    VARIANTS, SIGNAL_VARIANTS, ALL_VARIANTS, FEATURE_LEN, resolveVariant, applyVariant,
+    VARIANTS, SIGNAL_VARIANTS, ALL_VARIANTS, LABEL_VARIANTS, RESOLVABLE_VARIANTS,
+    FEATURE_LEN, resolveVariant, applyVariant,
     featureVector, makeHiveMindModelFactory, makeControllerModelFactory, makeSignalForVariant,
-    withSeed, evaluateAB, formatAnalysis, readCloses, readCandles, runAnalysis,
+    withSeed, evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, readCloses, readCandles, runAnalysis,
+    replicateAnalysis,
     CONTROLLER_MODEL, CONTROLLER_POSITION_POLICY, probesPerFold, auditVerdict,
 } from '../../../src/analyze.js';
 import { walkForwardSplit } from '../../../src/analysis/splits.js';
-import { poolReports, auditNoLookahead } from '../../../src/analysis/walkforward.js';
+import { poolReports, auditNoLookahead, restateReportAtPolicy, confidenceToPosition, confidenceFromProb } from '../../../src/analysis/walkforward.js';
 import { backtestMetrics } from '../../../src/analysis/backtest.js';
 import { shockCandles, volumeShockFactor, makeCandleViewFor } from '../../../src/analysis/world.js';
 
@@ -300,6 +302,7 @@ export async function run() {
             FakeController.instances.push(this);
         }
         getSignal() { this.calls++; this._globalAccuracy.trainingSteps = this.calls; return { prob: 55 }; }
+        flushState() { this.flushStateCalls = (this.flushStateCalls || 0) + 1; return { status: true }; }
     }
     FakeController.instances = [];
     class FakeMind {
@@ -337,10 +340,103 @@ export async function run() {
         ctlPositions.every((p) => p > 0) && ctlPositions.every((p) => p <= CONTROLLER_POSITION_POLICY.scale),
         JSON.stringify(ctlPositions));
     check('the controller factory reports stats', (() => { const s = ctlModel.stats(); return s.folds === 1 && s.trainingSteps > 0 && s.warmErrors === 0; })());
+
+    // R26-2: the model diagnostics are referenced to the label base rate (BUGS.md
+    // #37). A model that only matches the base-rate forecast earns no skill; a
+    // genuinely better-than-base-rate model does.
+    const labelStats = (over) => {
+        class LCtl extends FakeController {
+            getSignal() { this.calls++; this._globalAccuracy.trainingSteps = this.calls; Object.assign(this._globalAccuracy, over); return { prob: 55 }; }
+        }
+        const f = makeControllerModelFactory({ HiveMind: FakeMind, HiveMindController: LCtl, stateDir: path.join('.nl-analyze-test', 'models'), seed: 5, warmup: 0 });
+        const m = f(resolveVariant('baseline'));
+        m.fit([0, 1], [2], ctlView);
+        return m.stats();
+    };
+    const sNoSkill = labelStats({ resolvedTakeProfit: 270, resolvedStopLoss: 730, brierSum: 200, brierCount: 1000, wins: 700, total: 1000 });
+    const sSkill = labelStats({ resolvedTakeProfit: 730, resolvedStopLoss: 270, brierSum: 150, brierCount: 1000, wins: 800, total: 1000 });
+    check('R26-2: a model no better than its base-rate forecast is reported base-rate (no skill)',
+        sNoSkill.status === 'base-rate' && Math.abs(sNoSkill.baseRate - 0.27) < 1e-9 &&
+        sNoSkill.brierSkill < 0 && sNoSkill.accuracySkill < 0 && sNoSkill.chanceAccuracy === 0.73,
+        JSON.stringify(sNoSkill));
+    check('R26-2: a model that beats the base-rate forecast is reported skilful (proper score, positive skill)',
+        sSkill.status === 'skilful' && Math.abs(sSkill.baseRate - 0.73) < 1e-9 &&
+        sSkill.brierSkill > 0 && sSkill.raw.brierCount === 1000,
+        JSON.stringify(sSkill));
     const ctlDup = ctlFactory(resolveVariant('pca-hash'));
     ctlDup.fit([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [10, 11], ctlView);
     check('the controller factory is deterministic under a fixed seed (positions)',
         JSON.stringify(ctlDup.predict([10, 11], ctlView)) === JSON.stringify(ctlModel.predict([10, 11], ctlView)));
+
+    // R26-12: the checkpoint throttle (`HiveMind.dumpState()` on every getSignal is
+    // ~25% of the per-call cost, and the A/B never reads the state back).
+    check('R26-12: the controller factory defaults the save interval to 1 (dump every call, bit-identical)',
+        (() => {
+            const f = makeControllerModelFactory({ HiveMind: FakeMind, HiveMindController: FakeController, stateDir: path.join('.nl-analyze-test', 'models'), seed: 5, warmup: 0 });
+            f(resolveVariant('baseline')).fit([0, 1], [2], ctlView);
+            return FakeController.instances.at(-1)._saveInterval === 1;
+        })());
+    check('R26-12: the controller factory threads a requested save interval onto the controller',
+        (() => {
+            const f = makeControllerModelFactory({ HiveMind: FakeMind, HiveMindController: FakeController, stateDir: path.join('.nl-analyze-test', 'models'), seed: 5, warmup: 0, saveInterval: 7 });
+            f(resolveVariant('baseline')).fit([0, 1], [2], ctlView);
+            return FakeController.instances.at(-1)._saveInterval === 7;
+        })());
+    check('R26-12: a KEPT fit is flushed once at disposal when the interval never dumps during the run (and never otherwise)',
+        (() => {
+            const opts = { HiveMind: FakeMind, HiveMindController: FakeController, stateDir: path.join('.nl-analyze-test', 'models'), seed: 5, warmup: 0, modelRetention: 'keep' };
+            const kept = makeControllerModelFactory({ ...opts, saveInterval: Infinity })(resolveVariant('baseline'));
+            kept.fit([0, 1], [2], ctlView);
+            const keptCtl = FakeController.instances.at(-1);
+            const beforeDispose = keptCtl.flushStateCalls || 0;
+            kept.dispose();
+            const finite = makeControllerModelFactory({ ...opts, saveInterval: 1 })(resolveVariant('baseline'));
+            finite.fit([0, 1], [2], ctlView);
+            const finiteCtl = FakeController.instances.at(-1);
+            finite.dispose();
+            return beforeDispose === 0 && keptCtl.flushStateCalls === 1 && (finiteCtl.flushStateCalls || 0) === 0;
+        })());
+
+    // ---- R26-0: the driver must feed the controller the PRODUCTION WINDOW ------
+    // (BUGS.md #33). Production passes `state.cache.slice(-cacheSize)` — the last
+    // `cacheSize` candles — and the controller trims its candle table to
+    // `cacheSize`, so feeding the whole growing prefix re-inserts the trimmed
+    // history and hands `_updateOpenTrades` bars older than the entry. A recording
+    // controller pins the driver's per-call input contract without a DB.
+    class RecordingCtl {
+        constructor(id, dp, cs, es, type, tier, priceObj, forceMin) {
+            this._cacheSize = cs; this._inputSize = 8; this._forceMin = forceMin;
+            this._globalAccuracy = { trainingSteps: 0, quarantinedRows: 0 };
+            this.calls = [];
+            RecordingCtl.instances.push(this);
+        }
+        getSignal(candles) { this.calls.push(candles); this._globalAccuracy.trainingSteps = this.calls.length; return { prob: 55 }; }
+    }
+    RecordingCtl.instances = [];
+
+    const recCacheSize = 10;
+    const recReturns = synthReturns(60);
+    const recCandles = candlesFromReturns(recReturns, { start: 10 });
+    const recView = { returns: recReturns, candles: recCandles };
+    const recFactory = makeControllerModelFactory({
+        HiveMind: FakeMind, HiveMindController: RecordingCtl,
+        stateDir: path.join('.nl-analyze-test', 'models'), seed: 5, warmup: 0, cacheSize: recCacheSize,
+    });
+    const recModel = recFactory(resolveVariant('baseline'));
+    recModel.fit([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], [15, 16, 17], recView);
+    recModel.predict([15, 16, 17], recView);
+    const rec = RecordingCtl.instances.at(-1);
+    const recExpected = [];
+    for (let i = 1; i <= 15; i++) recExpected.push(recCandles.slice(Math.max(0, i - recCacheSize), i));
+    for (const t of [15, 16, 17]) recExpected.push(recCandles.slice(Math.max(0, t + 1 - recCacheSize), t + 1));
+    const recInputsMatch = rec.calls.length === recExpected.length && rec.calls.every((c, k) =>
+        c.length === recExpected[k].length && c.every((x, j) => x.timestamp === recExpected[k][j].timestamp));
+    check('R26-0 window contract: every getSignal input is at most cacheSize candles',
+        rec.calls.length > 0 && rec.calls.every((c) => c.length <= recCacheSize),
+        JSON.stringify(rec.calls.map((c) => c.length)));
+    check('R26-0 window contract: each input is the contiguous, advancing production window (last cacheSize candles)',
+        recInputsMatch,
+        `calls=${rec.calls.length} widths=${JSON.stringify(rec.calls.map((c) => c.length))}`);
 
     // the -1 untrained sentinel abstains (prob -> 50 -> dead-zone 0)
     class SentCtl extends FakeController { getSignal() { return { prob: -1 }; } }
@@ -356,15 +452,31 @@ export async function run() {
         throwModel.predict([2], ctlView).every((p) => p === 0) && throwModel.stats().warmErrors === 2,
         JSON.stringify({ pos: throwModel.predict([2], ctlView), stats: throwModel.stats() }));
 
-    // the documented warm-up floor: a fold with too little streamed history abstains
+    // The warm-up floor is now a *reported statistic*, not a gate: the gate is the
+    // model's own readiness (`trainingSteps > 0`), because the old
+    // `testStart >= warmup` guard could never fire at the default split
+    // (trainSize 60 > warmup 40) — a false certificate (round 26, R26-2 /
+    // BUGS.md #35).
     const coldFactory = makeControllerModelFactory({
         HiveMind: FakeMind, HiveMindController: FakeController, stateDir: path.join('.nl-analyze-test', 'models'),
         seed: 5, warmup: 100,
     });
     const coldModel = coldFactory(resolveVariant('baseline'));
     coldModel.fit([0, 1, 2, 3], [4], ctlView);
-    check('a fold below the documented warm-up floor abstains entirely (no leakage-exposed prediction)',
-        coldModel.predict([4], ctlView).every((p) => p === 0) && coldModel.stats().undertrained === true);
+    check('a fold below the warm-up floor is reported undertrained (a statistic, not a gate)',
+        coldModel.stats().undertrained === true && CONTROLLER_MODEL.warmup > 0);
+    check('a fold below the warm-up floor that DID train still predicts (warmup no longer gates)',
+        coldModel.stats().ready === true && coldModel.predict([4], ctlView).every((p) => p > 0));
+    // The readiness gate: a controller that never trained abstains on every bar.
+    class ColdCtl extends FakeController { getSignal() { this.calls++; return { prob: 55 }; } }
+    const neverFactory = makeControllerModelFactory({
+        HiveMind: FakeMind, HiveMindController: ColdCtl, stateDir: path.join('.nl-analyze-test', 'models'), seed: 5, warmup: 0,
+    });
+    const neverModel = neverFactory(resolveVariant('baseline'));
+    neverModel.fit([0, 1], [2], ctlView);
+    check('readiness gate (R26-2): a controller that never trained abstains on every bar',
+        neverModel.stats().ready === false && neverModel.stats().status === 'not-trained' &&
+        neverModel.predict([2], ctlView).every((p) => p === 0));
     const warmModel = ctlFactory(resolveVariant('baseline'));
     warmModel.fit([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [10, 11], ctlView);
     check('a fold at or above the warm-up floor is not flagged undertrained',
@@ -433,7 +545,17 @@ export async function run() {
     // A deterministic *varying* controller stand-in, so the pooled streams are not
     // flat and the family-wise cross-check is actually exercised.
     class VaryCtl extends FakeController {
-        getSignal() { this.calls++; this._globalAccuracy.trainingSteps = this.calls; return { prob: 50 + 6 * Math.sin(this.calls * 0.7) }; }
+        getSignal() {
+            this.calls++;
+            this._globalAccuracy.trainingSteps = this.calls;
+            // R26-2: a realistic label lifecycle (≈27 % TP, Brier 0.20) so the
+            // report's model block is exercised with a base rate and a skill score.
+            this._globalAccuracy.resolvedTakeProfit = Math.round(this.calls * 0.27);
+            this._globalAccuracy.resolvedStopLoss = this.calls - this._globalAccuracy.resolvedTakeProfit;
+            this._globalAccuracy.brierSum = this.calls * 0.20;
+            this._globalAccuracy.brierCount = this.calls;
+            return { prob: 50 + 6 * Math.sin(this.calls * 0.7) };
+        }
     }
     {
         const dir = path.join('.nl-analyze-test');
@@ -477,13 +599,14 @@ export async function run() {
             JSON.stringify(rep.familywise).slice(0, 200));
         check('every candidate row carries a decision, a reason list and a pooled metrics block',
             rep.candidates.length === 14 && rep.candidates.every((c) => typeof c.promote === 'boolean' && Array.isArray(c.reasons) && !!c.pooledMetrics && c.kind));
-        check('runAnalysis states the round-25 gate, its alpha and every hurdle it applied',
+        check('R26-7: runAnalysis states the dependence gate, its alpha and every hurdle it applies',
             rep.gate === 'dependence' && rep.gateAlpha === 0.05 && rep.gateOptions.requireSharpeDiff === true &&
-            rep.gateOptions.requireBreadth === true && rep.gateOptions.minDsrAdjusted === 0.95 && rep.gateOptions.alpha === 0.05);
-        check('a single-stream run has no panel, so the dependence block is null and the round-25 hurdles read skipped-no-panel',
+            rep.gateOptions.requireClusterStability === true && rep.gateOptions.minDsrAdjusted === 0.95 && rep.gateOptions.alpha === 0.05 &&
+            rep.gateOptions.requireBreadth === undefined);
+        check('R26-7: a single-stream run has no panel, so the dependence block is null and the panel hurdles read skipped-no-panel',
             rep.baseline.dependence === null && rep.candidates.every((c) => c.dependence === null) &&
             rep.candidates.every((c) => c.gate && c.gate.requireSharpeDiff === 'skipped-no-panel' &&
-                c.gate.requireBreadth === 'skipped-no-panel' && c.gate.minDsrAdjusted === 'skipped-no-panel'));
+                c.gate.requireClusterStability === 'skipped-no-panel' && c.gate.minDsrAdjusted === 'skipped-no-panel'));
         check('every candidate row carries the paired promotion test object (available:false with a reason, never absent)',
             rep.candidates.every((c) => c.promotionTest && c.promotionTest.available === false && typeof c.promotionTest.reason === 'string'));
         check('the run carries the default cost ladder, restating the baseline at every level',
@@ -493,12 +616,87 @@ export async function run() {
             rep.costLadder.rows[0].baseline.netSharpe >= rep.costLadder.rows[3].baseline.netSharpe);
         check('the run carries the family-correlation diagnostic over the whole searched family',
             rep.familyCorrelation && rep.familyCorrelation.available && rep.familyCorrelation.K === 14 && rep.familyCorrelation.folds === rep.folds);
-        check('per-variant wall times are recorded for every variant (baseline first)',
+        // R26-5: the turnover attack is opt-in and, off, contributes nothing.
+        check('R26-5: the turnover attack is off by default (null block and target, no summary line)',
+            rep.turnoverSweep === null && rep.turnoverTargetBps === null && !rep.summary.includes('turnover '));
+        const tsCfg = {
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+            variantIds: ['surprise', 'sig-momentum'], model: 'controller', writeFiles: false, audit: false,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        };
+        const tsOff = await runAnalysis({ ...tsCfg });
+        const tsOn = await runAnalysis({ ...tsCfg, turnoverSweep: true, turnoverTarget: 5 });
+        const tsRep = tsOn.report;
+        check('R26-5: --turnover-sweep enumerates the dead-zone x holding grid as pure post-processing',
+            tsRep.turnoverSweep && tsRep.turnoverSweep.available === true &&
+            tsRep.turnoverSweep.policies === 48 && tsRep.turnoverSweep.rows.length === 96 &&
+            Object.keys(tsRep.turnoverSweep.byId).length === 2 &&
+            tsRep.turnoverSweep.targetBps === 5 && typeof tsRep.turnoverSweep.targetMet === 'boolean',
+            JSON.stringify({ p: tsRep.turnoverSweep && tsRep.turnoverSweep.policies, r: tsRep.turnoverSweep && tsRep.turnoverSweep.rows.length }));
+        check('R26-5: the turnover grid rows are sorted by break-even cost (descending)',
+            tsRep.turnoverSweep.rows.every((r, i) => i === 0 || (tsRep.turnoverSweep.rows[i - 1].breakEvenCostBps ?? -Infinity) >= (r.breakEvenCostBps ?? -Infinity)));
+        check('R26-5: the run summary renders the turnover block and the target',
+            tsRep.turnoverSweep.rows.length > 0 && tsRep.summary.includes('turnover ') && tsRep.summary.includes('target 5bps'));
+        check('R26-5: enabling the turnover attack changes no scored number (pure post-processing)',
+            tsRep.baseline.pooledMetrics.netSharpe === tsOff.report.baseline.pooledMetrics.netSharpe &&
+            JSON.stringify(tsRep.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])) ===
+            JSON.stringify(tsOff.report.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])),
+            JSON.stringify(tsRep.candidates.map((c) => [c.id, c.promote])));
+        // R26-6: the bar interval and the stream basket are opt-in, recorded, and
+        // cannot change how an included stream is scored.
+        check('R26-6: the stream interval and selection are off by default (raw bars, no selection block)',
+            rep.intervalBars === 1 && rep.streamSelection === null && rep.summary.includes('intervalBars=1'));
+        const ivRun = await runAnalysis({
+            file: bigFile, maxBars: 300, trainSize: 30, testSize: 10, stateFolder: path.join(dir, 'state'),
+            model: 'controller', writeFiles: false, audit: false, intervalBars: 4,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R26-6: --interval resamples every stream (300 1h bars -> 75 4h bars) and records the factor',
+            ivRun.report.intervalBars === 4 && ivRun.report.candles === 75 && ivRun.report.folds === 4 &&
+            ivRun.report.summary.includes('intervalBars=4'),
+            JSON.stringify({ bars: ivRun.report.candles, folds: ivRun.report.folds }));
+        const msCfg = {
+            files: [worldFile, bigFile], maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+            model: 'controller', writeFiles: false, audit: false,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        };
+        const msRep = (await runAnalysis({ ...msCfg, streamSelect: true })).report;
+        check('R26-6: --select-streams measures the basket (K streams, design effect, greedy order) without dropping any',
+            msRep.streams === 2 && msRep.streamSelection && msRep.streamSelection.available &&
+            msRep.streamSelection.order.length === 2 && msRep.streamSelection.keep === null &&
+            msRep.streamSelection.kept.length === 2 && msRep.streamSelection.keptDesignEffect.available &&
+            msRep.summary.includes('streams: 2 streams'),
+            JSON.stringify(msRep.streamSelection && msRep.streamSelection.order));
+        const keptRep = (await runAnalysis({ ...msCfg, streamSelect: 1 })).report;
+        check('R26-6: --select-streams=<n> keeps only the first n of the greedy order and reports the kept basket',
+            keptRep.streams === 1 && keptRep.streamSelection.keep === 1 &&
+            keptRep.streamSelection.kept.length === 1 && keptRep.streamSelection.keptDesignEffect.designEffect === 1 &&
+            keptRep.summary.includes('streams kept=1'),
+            JSON.stringify({ streams: keptRep.streams, kept: keptRep.streamSelection && keptRep.streamSelection.kept }));
+        check('per-variant wall times and the trial count are recorded on every row (baseline first)',
             rep.timings.length === 15 && rep.timings[0].role === 'baseline' &&
-            rep.timings.every((t) => typeof t.id === 'string' && Number.isFinite(t.elapsedMs) && t.elapsedMs >= 0));
+            rep.timings.every((t) => typeof t.id === 'string' && Number.isFinite(t.elapsedMs) && t.elapsedMs >= 0) &&
+            // The candidate rows must carry the same provenance: elapsedMs/streams
+            // (dropped by evaluateAB's projection before round 25b) and the K every
+            // DSR was deflated by.
+            rep.trials === rep.variants.length &&
+            rep.candidates.every((c) => Number.isFinite(c.elapsedMs) && c.streams === rep.streams && c.trials === rep.trials));
         check('the run summary renders the gate, the cost ladder, the family diagnostic and the paired line',
             rep.summary.includes('gate:   dependence') && rep.summary.includes('cost-ladder +0bps:') &&
             rep.summary.includes('family: excessCorr=') && rep.summary.includes('paired: n/a ('));
+        // R26-2: the per-variant model block (readiness + label base rate + skill).
+        // This is what makes a keep-off verdict readable as "no edge" vs "no model".
+        check('R26-2: the report carries a per-variant model block (trained, base rate, skill, status)',
+            rep.baseline.model && rep.baseline.model.trained === true && rep.baseline.model.folds === rep.folds &&
+            Math.abs(rep.baseline.model.baseRate - 0.27) < 0.02 && rep.baseline.model.brierSkill < 0 &&
+            rep.baseline.model.status === 'base-rate' && rep.baseline.model.raw &&
+            Number.isFinite(rep.baseline.model.trainingSteps),
+            JSON.stringify(rep.baseline.model));
+        check('R26-2: a pure signal candidate carries a null model block (an absent model is never a healthy one)',
+            rep.candidates.filter((c) => c.kind === 'signal').every((c) => c.model === null) &&
+            rep.variants.filter((v) => v.kind === 'signal').every((v) => v.model === null) &&
+            rep.variants.filter((v) => v.kind !== 'signal').every((v) => v.model && v.model.trained === true));
+        check('R26-2: the run summary renders the models line', rep.summary.includes('models: ') && rep.summary.includes('base-rate'));
         check('the pooled metrics carry an explicit minimum-track-record status (a null MinTRL on disk is not ambiguous)',
             ['finite', 'beyond-horizon', 'unavailable'].includes(rep.baseline.pooledMetrics.minTrackRecordLengthStatus));
 
@@ -532,6 +730,364 @@ export async function run() {
         });
         check('--variants keeps the baseline first and resolves ids through ALL_VARIANTS (mechanism + signal)',
             JSON.stringify(narrowed.report.variants.map((v) => v.id)) === JSON.stringify(['baseline', 'surprise', 'sig-momentum']));
+
+        // R26-12: the A/B never reads a fit's persisted state back, so its default
+        // is "never dump"; the throttle is threaded and recorded for provenance.
+        check('R26-12: the A/B defaults the controller save interval to Infinity (no dump is ever read back)',
+            FakeController.instances.at(-1)._saveInterval === Infinity);
+        const siRun = await runAnalysis({
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+            variantIds: ['surprise'], model: 'controller', writeFiles: false, audit: false, saveInterval: 3,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R26-12: runAnalysis threads the save interval through to the controller and records it in the report',
+            FakeController.instances.at(-1)._saveInterval === 3 && siRun.report.saveInterval === 3,
+            JSON.stringify({ onCtl: FakeController.instances.at(-1)._saveInterval, inReport: siRun.report.saveInterval }));
+
+        // ---- R26-11: the trade-label policy (BUGS.md #36) -------------------
+        // `optimistic` is the shipped labeller and the baseline behaviour. The
+        // `conservative` and `triple` labels are opt-in A/B candidates: a label
+        // change is a *training-set* change, so it must be asked for explicitly and
+        // the default family must stay exactly 15 candidates.
+        check('R26-11: the label variants resolve by id but stay out of the default family (opt-in only)',
+            resolveVariant('label-conservative').id === 'label-conservative' &&
+            resolveVariant('label-triple').id === 'label-triple' &&
+            LABEL_VARIANTS.length === 2 && RESOLVABLE_VARIANTS.length === ALL_VARIANTS.length + 2 &&
+            ALL_VARIANTS.every((v) => v.kind !== 'label') &&
+            LABEL_VARIANTS.every((v) => v.controllerScoped === true && v.kind === 'label' &&
+                typeof v.configure === 'function' && (v.labelPolicy === 'conservative' || v.labelPolicy === 'triple')),
+            `all=${ALL_VARIANTS.length} resolvable=${RESOLVABLE_VARIANTS.length}`);
+        check('R26-11: a label variant overrides the run-level policy on the controller (configure runs after the default), and the horizon is threaded',
+            (() => {
+                const mk = (over) => makeControllerModelFactory({
+                    HiveMind: FakeMind, HiveMindController: FakeController,
+                    stateDir: path.join('.nl-analyze-test', 'models'), seed: 5, warmup: 0, ...over,
+                });
+                const base = mk({ labelPolicy: 'optimistic' })(resolveVariant('label-conservative'));
+                base.fit([0, 1], [2], ctlView);
+                const conCtl = FakeController.instances.at(-1);
+                const tri = mk({ labelPolicy: 'conservative', labelHorizonBars: 3 })(resolveVariant('label-triple'));
+                tri.fit([0, 1], [2], ctlView);
+                const labelCtl = FakeController.instances.at(-1);
+                const run = mk({ labelPolicy: 'conservative', labelHorizonBars: 3 })(resolveVariant('baseline'));
+                run.fit([0, 1], [2], ctlView);
+                const plainCtl = FakeController.instances.at(-1);
+                // A non-finite horizon is recorded as null, never NaN.
+                const noHorizon = mk({ labelPolicy: 'triple', labelHorizonBars: Infinity })(resolveVariant('baseline'));
+                noHorizon.fit([0, 1], [2], ctlView);
+                const noCtl = FakeController.instances.at(-1);
+                return conCtl._labelPolicy === 'conservative' && conCtl._labelHorizonBars === null &&
+                    labelCtl._labelPolicy === 'triple' && labelCtl._labelHorizonBars === 3 &&
+                    plainCtl._labelPolicy === 'conservative' && plainCtl._labelHorizonBars === 3 &&
+                    noCtl._labelPolicy === 'triple' && noCtl._labelHorizonBars === null;
+            })());
+
+        const lpRun = await runAnalysis({
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+            variantIds: ['label-conservative', 'label-triple'], model: 'controller', writeFiles: false, audit: false,
+            labelPolicy: 'conservative', labelHorizonBars: 3,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R26-11: runAnalysis records the label policy and the triple-barrier horizon in the report',
+            lpRun.report.labelPolicy === 'conservative' && lpRun.report.labelHorizonBars === 3 &&
+            JSON.stringify(lpRun.report.variants.map((v) => v.id)) === JSON.stringify(['baseline', 'label-conservative', 'label-triple']),
+            JSON.stringify({ policy: lpRun.report.labelPolicy, horizon: lpRun.report.labelHorizonBars }));
+
+        const lpFull = await runAnalysis({
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+            model: 'controller', writeFiles: false, audit: false, labelPolicies: true,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R26-11: --label-policies appends exactly the two label variants to the 15-candidate family',
+            lpFull.report.variants.length === 17 &&
+            lpFull.report.variants.slice(-2).map((v) => v.id).join(',') === 'label-conservative,label-triple',
+            JSON.stringify(lpFull.report.variants.map((v) => v.id)));
+        check('R26-11: the label variants are controller-scoped, so --model=bare never runs them even when asked',
+            (await runAnalysis({
+                file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+                model: 'bare', writeFiles: false, audit: false, labelPolicies: true,
+                HiveMind: FakeMind, HiveMindController: VaryCtl,
+            })).report.variants.every((v) => v.kind !== 'label'));
+
+        let badPolicyThrew = false;
+        try {
+            await runAnalysis({ file: worldFile, model: 'controller', writeFiles: false, labelPolicy: 'nope', HiveMind: FakeMind, HiveMindController: VaryCtl });
+        } catch (err) { badPolicyThrew = /unknown labelPolicy/.test(String(err && err.message)); }
+        check('R26-11: an unknown labelPolicy throws a named error (before reading any file)', badPolicyThrew);
+
+        // ---- R26-13: seed replication + common random numbers ---------------
+        // A single-seed ordering is not a ranking: seed-to-seed variation routinely
+        // exceeds the variation attributed to the compared factor (Bouthillier et al.
+        // 2019; Henderson et al. 2018). CRN (Glasserman & Yao 1992) pairs the variant
+        // comparison on the random draws so the variance of the DIFFERENCE falls.
+        // The fold seed is observable because the model's constructor draws from the
+        // seeded `Math.random` that `withSeed` installs.
+        class RandMind {
+            constructor() { this.r = Math.random(); this.trained = 0; RandMind.instances.push(this); }
+            train() { this.trained++; return 0; }
+            predict() { return 0.5; }
+        }
+        RandMind.instances = [];
+        const mkRandFactory = (over) => makeHiveMindModelFactory({
+            HiveMind: RandMind, stateDir: path.join('.nl-analyze-test', 'models'), seed: 7, ...over,
+        });
+        const fitArgs = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [10, 11]];
+        mkRandFactory({})(resolveVariant('surprise')).fit(...fitArgs, retsView);
+        mkRandFactory({})(resolveVariant('querymod')).fit(...fitArgs, retsView);
+        check('R26-13: with CRN on the per-fold seed is variant-independent (both variants draw the same init)',
+            RandMind.instances.length === 2 && RandMind.instances[0].r === RandMind.instances[1].r,
+            JSON.stringify(RandMind.instances.map((m) => m.r)));
+        mkRandFactory({ commonRandomNumbers: false })(resolveVariant('surprise')).fit(...fitArgs, retsView);
+        mkRandFactory({ commonRandomNumbers: false })(resolveVariant('querymod')).fit(...fitArgs, retsView);
+        check('R26-13: with CRN off the historical per-variant seed is restored (the two variants draw differently)',
+            RandMind.instances.length === 4 && RandMind.instances[2].r !== RandMind.instances[3].r);
+        mkRandFactory({})(resolveVariant('surprise')).fit([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [12, 13], retsView);
+        check('R26-13: under CRN the seed still varies per fold (testStart enters the seed)',
+            RandMind.instances[4].r !== RandMind.instances[0].r);
+        check('R26-13: the controller factory threads CRN too (default on, off restores per-variant seeds)',
+            (() => {
+                class SeedCtl extends FakeController {
+                    constructor(...a) { super(...a); this._rand = Math.random(); }
+                }
+                const mkCtl = (over) => makeControllerModelFactory({
+                    HiveMind: FakeMind, HiveMindController: SeedCtl,
+                    stateDir: path.join('.nl-analyze-test', 'models'), seed: 7, warmup: 0, ...over,
+                });
+                const onA = mkCtl({})(resolveVariant('surprise')); onA.fit([0, 1], [2], ctlView);
+                const onB = mkCtl({})(resolveVariant('querymod')); onB.fit([0, 1], [2], ctlView);
+                const offA = mkCtl({ commonRandomNumbers: false })(resolveVariant('surprise')); offA.fit([0, 1], [2], ctlView);
+                const offB = mkCtl({ commonRandomNumbers: false })(resolveVariant('querymod')); offB.fit([0, 1], [2], ctlView);
+                const rows = SeedCtl.instances.slice(-4).map((c) => c._rand);
+                return rows[0] === rows[1] && rows[2] !== rows[3];
+            })());
+
+        check('R26-13: runAnalysis defaults to common random numbers and records it in the report + summary',
+            rep.commonRandomNumbers === true && rep.summary.includes('crn=true'));
+        const crnOffRun = await runAnalysis({
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+            model: 'controller', writeFiles: false, audit: false, commonRandomNumbers: false,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R26-13: --crn=0 is recorded honestly (report false, summary crn=false) and changes the seeds',
+            crnOffRun.report.commonRandomNumbers === false && crnOffRun.report.summary.includes('crn=false') &&
+            crnOffRun.report.baseline.pooledMetrics.netSharpe !== undefined);
+        check('R26-13: every row carries the per-fold net-Sharpe series (the seed x fold panel input)',
+            Array.isArray(rep.baseline.foldSharpes) && rep.baseline.foldSharpes.length === rep.folds &&
+            rep.candidates.every((c) => Array.isArray(c.foldSharpes) && c.foldSharpes.length === rep.folds));
+        const repRuns = await replicateAnalysis({
+            seeds: [11, 12], file: worldFile, maxBars: 120, trainSize: 60, testSize: 15,
+            stateFolder: path.join(dir, 'state'), model: 'controller', writeFiles: false, audit: false,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R26-13: replicateAnalysis runs once per seed and aggregates each variant\'s seed distribution',
+            repRuns.runs.length === 2 && repRuns.replication.seeds.join(',') === '11,12' &&
+            repRuns.replication.byVariant.baseline && repRuns.replication.byVariant.baseline.available === true &&
+            repRuns.replication.byVariant.baseline.seeds.length === 2 &&
+            repRuns.replication.byVariant.baseline.ci.available === true &&
+            repRuns.replication.byVariant.baseline.components.available === true &&
+            repRuns.replication.commonRandomNumbers === true &&
+            repRuns.runs.every((r) => r.report.commonRandomNumbers === true),
+            JSON.stringify({ seeds: repRuns.replication.seeds, n: repRuns.replication.byVariant.baseline.n }));
+        check('R26-13: replicateAnalysis refuses an empty seed list',
+            await (async () => {
+                try {
+                    await replicateAnalysis({
+                        seeds: [], writeFiles: false, file: worldFile,
+                        HiveMind: FakeMind, HiveMindController: VaryCtl,
+                    });
+                    return false;
+                } catch { return true; }
+            })());
+
+        // ---- R26-14: the forecast-comparison block --------------------------
+        // The family scored as forecasters: proper scores per variant + the
+        // Diebold–Mariano test vs baseline + the family Model Confidence Set. Pure
+        // post-processing of the journaled confidence, so it moves no scored number.
+        check('R26-14: the run carries the forecast block by default (scores + DM + MCS over every non-skipped variant)',
+            rep.forecast && rep.forecast.available === true && rep.forecast.bars > 0 &&
+            rep.forecast.byId.baseline && rep.forecast.mcs.at90.available && rep.forecast.mcs.at95.available &&
+            rep.forecast.mcs.at90.memberIds.length > 0 &&
+            rep.forecast.mcs.at90.memberIds.every((id) => rep.forecast.byId[id]) &&
+            rep.candidates.filter((c) => !c.skipped).every((c) => rep.forecast.byId[c.id] &&
+                Number.isFinite(rep.forecast.byId[c.id].brier) && Number.isFinite(rep.forecast.byId[c.id].logScore) &&
+                rep.forecast.byId[c.id].dm && rep.forecast.byId[c.id].dm.available === true),
+            JSON.stringify({ bars: rep.forecast && rep.forecast.bars, m90: rep.forecast && rep.forecast.mcs.at90.memberIds }));
+        check('R26-14: the run summary renders the forecast line and both MCS sets',
+            rep.summary.includes('forecast:') && rep.summary.includes('mcs90=[') && rep.summary.includes('mcs95=['));
+        const fcOff = await runAnalysis({
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+            model: 'controller', writeFiles: false, audit: false, forecast: false,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R26-14: forecast=false nulls the block and drops the summary line, changing no scored number',
+            fcOff.report.forecast === null && !fcOff.report.summary.includes('mcs90') &&
+            fcOff.report.baseline.pooledMetrics.netSharpe === rep.baseline.pooledMetrics.netSharpe &&
+            JSON.stringify(fcOff.report.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])) ===
+            JSON.stringify(rep.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])));
+
+        // ---- R26-8: the decision-grade report --------------------------------
+        // Six question blocks composed from the numbers above (nothing recomputed),
+        // every field a value or an explicit { available:false, reason }. On by
+        // default; `decision:false` nulls the block and moves no scored number.
+        check('R26-8: the run carries the six-question decision block by default',
+            rep.decisionEnabled === true && rep.decision && rep.decision.schema === 'nl.decision.v1' &&
+            !!rep.decision.training && !!rep.decision.edge && !!rep.decision.concentration &&
+            !!rep.decision.economics && !!rep.decision.family && !!rep.decision.nextRun,
+            JSON.stringify(Object.keys(rep.decision || {})));
+        check('R26-8: the featured candidate is a real one and the composed blocks are the run own blocks',
+            rep.candidates.some((c) => c.id === rep.decision.verdict.candidateId) &&
+            rep.decision.economics.costLadder === rep.costLadder &&
+            rep.decision.edge.familyCorrelation === rep.familyCorrelation &&
+            rep.decision.family.forecast === rep.forecast,
+            JSON.stringify({ featured: rep.decision.verdict.candidateId, cands: rep.candidates.map((c) => c.id) }));
+        check('R26-8: the run summary renders the decision, concentration and next-run lines',
+            rep.summary.includes('decision:') && rep.summary.includes('concentration:') && rep.summary.includes('nextRun:'));
+        const decOff = await runAnalysis({
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+            model: 'controller', writeFiles: false, audit: false, decision: false,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R26-8: decision=false nulls the block and drops the summary lines, changing no scored number',
+            decOff.report.decision === null && decOff.report.decisionEnabled === false &&
+            !decOff.report.summary.includes('nextRun:') &&
+            JSON.stringify(decOff.report.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])) ===
+            JSON.stringify(rep.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])));
+        // R26-10 item 10: the report-completeness contract — every sub-block of the
+        // decision states its own availability, and an unavailable one names a reason.
+        const decisionBlocks = [
+            rep.decision.training.model, rep.decision.concentration,
+            rep.decision.economics.costLadder, rep.decision.economics.confidence,
+            rep.decision.family.forecast, rep.decision.family.seedDistribution,
+            rep.decision.family.varianceComponents, rep.decision.family.pairedVarianceRatio,
+            rep.decision.nextRun,
+        ];
+        check('R26-10: every decision sub-block states availability and every unavailable one carries a reason',
+            ['training', 'edge', 'concentration', 'economics', 'family', 'nextRun'].every((k) => rep.decision[k] && typeof rep.decision[k] === 'object') &&
+            decisionBlocks.every((b) => b && typeof b === 'object' && (b.available !== false || (typeof b.reason === 'string' && b.reason.length > 0))),
+            JSON.stringify(decisionBlocks.map((b) => (b && b.available === false ? b.reason : `available:${b && b.available}`))));
+        // R26-8 clause 6 + the R26-3 journal, end-to-end on a real MULTI-STREAM run
+        // (not just the unit fixture): the paired sizing must read the paired SE and
+        // the cluster count from the report's own `promotionTest`, and the decay
+        // readout must find the journaled confidence. This is exactly the shape a
+        // bare-number unit fixture cannot see (BUGS.md #38).
+        check('R26-8: a multi-stream run populates the paired sizing, the journal decay and the leave-one-fold range',
+            msRep.decision.nextRun.pairedUnits.available === true &&
+            Number.isFinite(msRep.decision.nextRun.pairedUnits.se) &&
+            msRep.decision.nextRun.pairedUnits.nClusters >= 2 &&
+            'observed' in msRep.decision.nextRun.pairedUnits.required &&
+            msRep.decision.economics.confidence.available === true &&
+            msRep.decision.concentration.deleteOneCluster.available === true,
+            JSON.stringify({
+                pairedUnits: msRep.decision.nextRun.pairedUnits.required,
+                confidenceAvailable: msRep.decision.economics.confidence.available,
+                looAvailable: msRep.decision.concentration.deleteOneCluster.available,
+            }));
+
+        // ---- R26-4: the concurrent A/B driver -------------------------------
+        // A fake `spawnWorker` runs the fold inline with the SAME injected fakes
+        // (exactly what `fold_worker.js` does with the real modules), so the report
+        // must be byte-identical to the serial run apart from wall-time `timings`.
+        // This pins the whole parallel wiring in the browser; the real worker is
+        // covered by the node-only test.
+        const inlineFold = (req) => {
+            const stateDir = fs.mkdtempSync(path.join(dir, 'fold-'));
+            const factory = makeControllerModelFactory({
+                HiveMind: FakeMind, HiveMindController: VaryCtl, stateDir, seed: req.seed,
+                cacheSize: req.cacheSize, ensembleSize: req.ensembleSize, tier: req.tier, warmup: req.warmup,
+                positionPolicy: req.positionPolicy, saveInterval: req.saveInterval,
+                labelPolicy: req.labelPolicy, labelHorizonBars: req.labelHorizonBars,
+                commonRandomNumbers: req.commonRandomNumbers,
+            });
+            const view = req.candles ? makeCandleViewFor(req.candles)(req.returns, null) : { returns: req.returns };
+            let stats = null;
+            const fold = makeSignalForVariant(factory, {
+                positionPolicy: req.positionPolicy,
+                onStats: (_v, s) => { stats = s; },
+            })(resolveVariant(req.variantId));
+            const positions = fold(req.train, req.test, view);
+            const confidence = typeof fold.confidenceForFold === 'function' ? fold.confidenceForFold() : null;
+            return { positions, confidence, stats };
+        };
+        const fakeSpawn = (url, workerData) => ({
+            on(evt, cb) { if (evt === 'message') { Promise.resolve().then(() => cb(inlineFold(workerData))); } return this; },
+            terminate() { return Promise.resolve(0); },
+        });
+        const stripAB = (r) => JSON.stringify({
+            candidates: r.candidates.map((c) => ({ id: c.id, promote: c.promote, reasons: c.reasons, model: c.model, pooled: c.pooledMetrics })),
+            baseline: { model: r.baseline.model, pooled: r.baseline.pooledMetrics },
+        });
+        const parRep = await runAnalysis({
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state-par'),
+            model: 'controller', writeFiles: false, audit: false, concurrency: 3, spawnWorker: fakeSpawn,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R26-4: runAnalysis @ concurrency 3 reproduces the serial report (same verdict, same per-variant model block)',
+            stripAB(parRep.report) === stripAB(rep) && parRep.report.concurrency === 3,
+            `concurrency=${parRep.report.concurrency} promote=${JSON.stringify(parRep.report.candidates.map((c) => c.promote))}`);
+        check('R26-4: the parallel run still carries a non-null model block for every model variant (the worker stats are pooled)',
+            parRep.report.baseline.model && parRep.report.baseline.model.trained === true &&
+            parRep.report.variants.filter((v) => v.kind !== 'signal').every((v) => v.model && v.model.trained === true),
+            JSON.stringify(parRep.report.baseline.model));
+        check('R26-4: a serial run records concurrency 1 (the default is byte-identical)',
+            rep.concurrency === 1, `serial concurrency=${rep.concurrency}`);
+
+        // The dispatcher contract: an injected spawn returns the fold reply, a
+        // malformed reply rejects, and a worker `{error}` rejects with the reason.
+        const dispatcher = makeNodeFoldDispatcher({
+            url: 'file:///fake/fold_worker.js',
+            spawn: (u, wd) => ({
+                on(evt, cb) { if (evt === 'message') { Promise.resolve().then(() => cb({ positions: [1, 0, -1], confidence: [0.1, 0, -0.1], stats: { folds: 1 } })); } return this; },
+                terminate() { return Promise.resolve(0); },
+            }),
+        });
+        const dispatched = await dispatcher({ variantId: 'baseline', streamIndex: 0, foldIndex: 0 });
+        check('R26-4: makeNodeFoldDispatcher resolves a well-formed fold reply (positions/confidence/stats)',
+            JSON.stringify(dispatched.positions) === '[1,0,-1]' && dispatched.stats.folds === 1);
+        let dispatcherBad = false;
+        try {
+            await makeNodeFoldDispatcher({
+                url: 'file:///fake/fold_worker.js',
+                spawn: (u, wd) => ({ on(evt, cb) { if (evt === 'message') Promise.resolve().then(() => cb({ nope: 1 })); return this; }, terminate() { return Promise.resolve(0); } }),
+            })({ variantId: 'baseline', streamIndex: 0, foldIndex: 0 });
+        } catch { dispatcherBad = true; }
+        check('R26-4: makeNodeFoldDispatcher rejects a malformed fold reply', dispatcherBad);
+        let dispatcherErr = false;
+        try {
+            await makeNodeFoldDispatcher({
+                url: 'file:///fake/fold_worker.js',
+                spawn: (u, wd) => ({ on(evt, cb) { if (evt === 'message') Promise.resolve().then(() => cb({ error: 'fold blew up' })); return this; }, terminate() { return Promise.resolve(0); } }),
+            })({ variantId: 'baseline', streamIndex: 0, foldIndex: 0 });
+        } catch (err) { dispatcherErr = /fold blew up/.test(String(err && err.message)); }
+        check('R26-4: a worker {error} payload rejects with the reason (settle-once dispatch)', dispatcherErr);
+
+        // evaluateABAsync over the injected synthetic family is byte-identical too.
+        const abRets = synthReturns(120);
+        const abFolds = walkForwardSplit({ n: 120, trainSize: 60, testSize: 10 });
+        const abVars = mkVariants();
+        const abSignals = signalsFor();
+        const abSerial = evaluateAB({ returns: abRets, folds: abFolds, variants: abVars, signalForVariant: (v) => abSignals[v.id], costBps: 1, audit: false });
+        const abAsync = await evaluateABAsync({
+            returns: abRets, folds: abFolds, variants: abVars, signalForVariant: (v) => abSignals[v.id], costBps: 1, audit: false,
+            concurrency: 4,
+            foldExecutorFor: (variant) => async ({ train, test }) => ({ signals: abSignals[variant.id](train, test, { returns: abRets }), confidence: null }),
+        });
+        // With the audit ON and a worker executor in play, the scored pass is remote
+        // but the audit re-fits PERTURBED views in-process, so it still needs the
+        // folded signal function — a concurrent run with the default audit crashed
+        // here before `evaluateABAsync` supplied it (BUGS.md #42).
+        const abSerialA = evaluateAB({ returns: abRets, folds: abFolds, variants: abVars, signalForVariant: (v) => abSignals[v.id], costBps: 1, audit: true, auditProbesPerFold: 1 });
+        const abAsyncA = await evaluateABAsync({
+            returns: abRets, folds: abFolds, variants: abVars, signalForVariant: (v) => abSignals[v.id], costBps: 1, audit: true, auditProbesPerFold: 1,
+            concurrency: 4,
+            foldExecutorFor: (variant) => async ({ train, test }) => ({ signals: abSignals[variant.id](train, test, { returns: abRets }), confidence: null }),
+        });
+        const stripEval = (r) => JSON.stringify({
+            baseline: { pooledMetrics: r.baseline.pooledMetrics, aggregate: r.baseline.aggregate, audit: r.baseline.audit },
+            candidates: r.candidates.map((c) => ({ id: c.variant.id, promote: c.decision.promote, reasons: c.decision.reasons, pooledMetrics: c.report.pooledMetrics })),
+            search: r.search,
+        });
+        check('R26-4: evaluateABAsync (concurrency 4, injected executor) is byte-identical to evaluateAB apart from wall-time (audit off and on)',
+            stripEval(abAsync) === stripEval(abSerial) && stripEval(abAsyncA) === stripEval(abSerialA));
 
         let unknownThrew = false;
         try {
@@ -695,6 +1251,20 @@ export async function run() {
         q1Run.folds === 4 && Array.isArray(q1Run.variants) && q1Run.variants.length === 15,
         JSON.stringify({ retention: q1Run.modelRetention, folds: q1Run.folds, variants: q1Run.variants.length }));
     const q1Rep = qReadJson(q1.runDir, 'report.json');
+    check('R26-12: run.json and report.json record the checkpoint throttle (the A/B default is the never-dump "inf")',
+        q1Run.saveInterval === 'inf' && q1Rep.saveInterval === 'inf',
+        JSON.stringify({ run: q1Run.saveInterval, report: q1Rep.saveInterval }));
+    check('R26-11: run.json and report.json record the label policy and the (absent) triple-barrier horizon',
+        q1Run.labelPolicy === 'optimistic' && q1Run.labelHorizonBars === null && q1Run.labelPolicies === false &&
+        q1Rep.labelPolicy === 'optimistic' && q1Rep.labelHorizonBars === null,
+        JSON.stringify({ run: q1Run.labelPolicy, horizon: q1Run.labelHorizonBars, roster: q1Run.labelPolicies }));
+    check('R26-5: run.json records the turnover attack as off by default (and a null target)',
+        q1Run.turnoverSweep === false && q1Run.turnoverTarget === null &&
+        q1Rep.turnoverSweep === null && q1Rep.turnoverTargetBps === null,
+        JSON.stringify({ run: q1Run.turnoverSweep, target: q1Run.turnoverTarget }));
+    check('R26-6: run.json records the raw interval and no stream selection by default',
+        q1Run.intervalBars === 1 && q1Run.streamSelect === false && q1Rep.intervalBars === 1 && q1Rep.streamSelection === null,
+        JSON.stringify({ interval: q1Run.intervalBars, select: q1Run.streamSelect }));
     check('report.json is the canonical complete verdict with the machine-readable audit block',
         q1Rep.status === 'complete' && q1Rep.schema === 'nl.analyze.v1' && q1Rep.candidates.length === 14 &&
         !!q1Rep.baseline.audit && typeof q1Rep.baseline.audit.clean === 'boolean' && typeof q1Rep.baseline.audit.probes === 'number' &&
@@ -711,6 +1281,31 @@ export async function run() {
     check('folds.jsonl is a self-contained fold journal (one line per pass, matching the heartbeat)',
         q1Folds.length === q1Prog.counters.events &&
         q1Folds.every((r) => typeof r.stage === 'string' && typeof r.v === 'string' && Number.isFinite(r.fold)));
+    // R26-3: the journal now carries the raw pre-policy confidence beside the emitted
+    // positions, and the scored policy must reproduce those positions exactly.
+    check('R26-3: folds.jsonl journals the raw pre-policy confidence beside the emitted positions',
+        (() => {
+            const score = q1Folds.filter((r) => r.stage === 'score');
+            return score.length > 0 && score.every((r) => Array.isArray(r.confidence) && Array.isArray(r.signals) &&
+                r.confidence.length === r.signals.length && r.confidence.every((c) => Number.isFinite(c) && c >= -1 && c <= 1));
+        })());
+    check('R26-3: report.json carries the byte-for-byte policy round-trip certificate and the unified policy',
+        q1Rep.policyRoundTrip && q1Rep.policyRoundTrip.ok === true && q1Rep.policyRoundTrip.mismatch === 0 &&
+        JSON.stringify(q1Rep.positionPolicy) === JSON.stringify({ deadZone: 0.05, scale: 1 }),
+        JSON.stringify({ roundTrip: q1Rep.policyRoundTrip, policy: q1Rep.positionPolicy }));
+    check('R26-3: restating the baseline at the scored policy reproduces its pooled Sharpe (the sweep is pure post-processing)',
+        (() => {
+            const scored = restateReportAtPolicy(q1.result.baseline, { deadZone: 0.05, scale: 1 });
+            return !!scored && Math.abs(scored.pooledMetrics.netSharpe - q1.result.baseline.pooledMetrics.netSharpe) < 1e-12;
+        })());
+    check('R26-3: a wider dead zone abstains at least as much (the policy genuinely reaches the signals, not only the controller)',
+        (() => {
+            const scored = restateReportAtPolicy(q1.result.baseline, { deadZone: 0.05, scale: 1 });
+            const wider = restateReportAtPolicy(q1.result.baseline, { deadZone: 0.5, scale: 1 });
+            return !!scored && !!wider && wider.pooledMetrics.nonZeroFraction <= scored.pooledMetrics.nonZeroFraction &&
+                confidenceToPosition(confidenceFromProb(52), { deadZone: 0.05 }) === 0 &&
+                confidenceToPosition(confidenceFromProb(60), { deadZone: 0.05 }) > 0;
+        })());
     check('run.log journals the completion',
         fs.readFileSync(path.join(q1.runDir, 'run.log'), 'utf8').includes('"message":"analyze complete"'));
     check('the reclaimed models/ directory is removed once every fit has been discarded',
@@ -794,6 +1389,26 @@ export async function run() {
         q7Rep.costBps === 5 && q7Rep.baseline.pooledMetrics.totalCost > 0 &&
         q7Rep.baseline.pooledMetrics.netSharpe !== q7Rep.baseline.pooledMetrics.grossSharpe,
         JSON.stringify({ cost: q7Rep.baseline.pooledMetrics.totalCost, net: q7Rep.baseline.pooledMetrics.netSharpe, gross: q7Rep.baseline.pooledMetrics.grossSharpe }));
+
+    const q8 = await runAnalysis({
+        file: qWorld, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(qDir, 's8'),
+        variantIds: ['surprise'], model: 'controller', writeFiles: true, audit: false,
+        turnoverSweep: true, turnoverTarget: 7, streamSelect: true, progressMs: -1, HiveMind: FakeMind, HiveMindController: DiskCtl,
+    });
+    const q8Run = qReadJson(q8.runDir, 'run.json');
+    const q8Rep = qReadJson(q8.runDir, 'report.json');
+    check('R26-5: run.json and report.json persist the turnover sweep (block, target and grid size)',
+        q8Run.turnoverSweep === true && q8Run.turnoverTarget === 7 &&
+        q8Rep.turnoverSweep && q8Rep.turnoverSweep.available === true && q8Rep.turnoverSweep.targetBps === 7 &&
+        q8Rep.turnoverTargetBps === 7 && q8Rep.turnoverSweep.rows.length === 48 &&
+        q8Rep.turnoverSweep.rows.every((r) => r.id === 'surprise') &&
+        typeof q8Rep.turnoverSweep.targetMet === 'boolean',
+        JSON.stringify({ run: q8Run.turnoverSweep, target: q8Run.turnoverTarget, rows: q8Rep.turnoverSweep && q8Rep.turnoverSweep.rows.length }));
+    check('R26-6: run.json and report.json persist the interval and the stream selection',
+        q8Run.intervalBars === 1 && q8Run.streamSelect === true && q8Rep.intervalBars === 1 &&
+        q8Rep.streamSelection && q8Rep.streamSelection.available === true && q8Rep.streamSelection.keep === null &&
+        q8Rep.streamSelection.order.length === 1,
+        JSON.stringify({ interval: q8Run.intervalBars, select: q8Run.streamSelect }));
 
     // ---- R. evaluation integrity: volume reach, break-even cost, audit reuse -----
     // (a) The shock must reach VOLUME. Measured on the completed smoke run: without

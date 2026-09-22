@@ -13,6 +13,15 @@ cites a file, a line, or a measured number from an artifact.
 report overstates its own power (§5.5). The decision record is in
 [`OPTIMIZATION.md`](OPTIMIZATION.md).
 
+> **READ §8 FIRST.** The `20260921T062511-seed1` run (§7) is the first run sized by
+> the round-25 machinery, and §8 shows why its `baseline` row is **not** the shipped
+> model: `npm run analyze` feeds the controller the whole growing candle prefix
+> where production feeds it a fixed `cacheSize` window, so the controller's trade
+> bookkeeping sees ancient bars and its training labels are systematically wrong
+> (`BUGS.md` #33, measured: 78/144 wins in the A/B vs 156/64 with the production
+> window). The signal-family rows of §7 are unaffected, so §7's verdict stands, but
+> its "the baseline is a no-op" reading does not. Round 26 starts by fixing this.
+
 ---
 
 ## 1. Run `20260920T012907-seed1` — attempt 1: INTERRUPTED, no verdict
@@ -66,7 +75,7 @@ complete one.
 
 The model-state directory is the run's progress log, because the factory names each
 fit dir `${variant.id}-${fitCounter++}` with **one shared counter** across the whole
-run (`src/analyze.js:191` for the bare factory, `:254` for the controller one):
+run (`src/analyze.js:238` for the bare factory, `:452` for the controller one):
 
 * `baseline` owns fits `0 … 1151` — **complete**: 1,152 dirs = 8 streams × 36
   folds × 4 passes. No gaps in the index range.
@@ -525,28 +534,56 @@ power run (8 symbols, 600 bars, 288 folds, K=15):
     full K=15: ~52-70 h (shim), ~12 GiB of state (measured: 0.708 MiB/fit)
 ```
 
-**Measured cost model (round 25, from two completed real runs).** The projection
-above was 2× optimistic: it assumed 5.23 s per fit. The real driver costs
-**10.5-10.7 s per controller fit**, and that cost is independent of the stream
-count (every fit trains on the same `trainSize` bars). Signal variants are pure
-array math on the view (`makeSignalForVariant`, `src/analyze.js:360`) and cost
-approximately nothing, so only the **7 mechanism variants** (baseline + 6 flags)
-pay it:
+**Measured cost model (round 25b — a CORRECTION of the round-25 statement).** The
+round-25 text below said the driver costs "10.5-10.7 s per controller fit",
+*independent of the stream length*. That is wrong, and the `20260921T062511-seed1`
+run proved it: the same runner took **42.6 s per fold-pass at 142 folds/stream**
+versus 10.7 s at 36. The cause is in the fit itself:
 
-```
-wall clock ≈ 10.7 s × mechanismVariants × folds × (1 + auditProbesPerFold)   [--reuse-base]
-             10.7 s × mechanismVariants × folds × (2 + auditProbesPerFold)   [default]
-
-smoke   (1 stream,  16 folds): 7 ×  16 × 2 =    224 fits → 40.0 min   (measured 39.0 min)
-power   (8 streams, 288 folds): 7 × 288 × 2 =  4,032 fits → 11.98 h   (measured 11.98 h)
---audit-probes=0 at power scale:              32,256 fits →  ~95 h
+```js
+// src/analyze.js — fit(): warm the online controller up by replaying ALL history
+for (let i = 1; i <= testStart; i++) ctl.getSignal(candles.slice(0, i), 1);
 ```
 
-That single equation explains the whole attempt-3 wall clock, and it is why the
-planned "~6 h" became 11.98 h. Two consequences for planning: **`--audit-probes=1`
-is not optional at this scale** (a full per-bar audit is ~8×), and the run time is
-linear in *folds* (≈ streams × folds-per-stream) and in *mechanism variants* —
-adding a signal candidate is free, adding a mechanism candidate costs ~1.7 h.
+An online model must see every prior bar before predicting a fold's test block, so
+the number of warm-up `getSignal` calls **per fold grows with the fold index**.
+Each call costs ≈35 ms (measured 33.2 ms/bar at 36 folds/stream, 38.2 ms at 142 —
+the same constant), which gives:
+
+```
+wall clock ≈ 0.035 s × Σ_f(testStart_f) × streams × passes × mechanismVariants
+Σ_f(testStart_f) = F·trainSize + testSize·F(F−1)/2          (F = folds per stream)
+
+smoke   (1 stream,    16 folds, n=300):  7×1×2×   2,010 ≈  28,140 →  ~40 min   (measured 39.0 min)
+power   (8 streams,  288 folds, n=600):  7×8×2×  11,610 ≈ 1,300,320 → ~12.6 h  (measured 11.98 h)
+sig-run (8 streams, 1136 folds, n=2200): 1×8×2× 158,685 ≈ 2,538,960 → ~24.7 h  (measured 26.9 h)
+```
+
+("fit-call" = one warm-up `getSignal`; the constant absorbs per-fold construction,
+prediction and probe passes.) The two power-scale observations pin the exponent:
+per-fold cost is **10.7 s at 36 folds/stream and 42.6 s at 142** — a ratio of 3.98
+against a fold ratio of 3.94, i.e. `cost/fold ∝ F` and `total ∝ F²`. So a run is
+**O(n²) per stream, not linear in bars.** Signal variants remain free (0.3-0.8 s
+each across 1136 folds).
+
+Three load-bearing planning consequences:
+
+1. **Cost ∝ folds-per-stream for a fixed pooled-bar budget.** With
+   `pooledBars = streams × F × testSize`, `time ∝ pooledBars × F` — so *many short
+   streams are far cheaper than a few long ones* (8×2200 = 26.9 h, but 32×550 ≈ 6 h
+   for essentially the same pooled bars). This also aligns with the statistics: the
+   binding constraint is *effective* bars, and more *diverse* streams buy effective
+   bars while lowering the design effect.
+2. **`--audit-probes=1` is not optional at this scale** (a full per-bar audit is ~8×).
+3. The round-25 claim "adding a mechanism candidate costs ~1.7 h" holds only at the
+   288-fold scale; at 1136 folds **one** mechanism variant is 26.9 h. Adding a
+   *signal* candidate is still free.
+
+The biggest **semantics-preserving** speedup is therefore not a model change: folds
+are independent and each fit already gets its own state directory
+(`path.join(stateDir, \`${variant.id}-${fitCounter++}\`)`), so the fold loop
+parallelises across worker threads — `legion/workers.js#runWorkerThread` is the
+existing settle-once, watchdogged dispatch. See `OPTIMIZATION.md` "Round 25b".
 
 ---
 
@@ -833,7 +870,7 @@ and all 11 golden fingerprints are unchanged.
 | 1. Honest power under dependence | `dependenceSummary` measures the delete-one-cluster jackknife SE of the pooled Sharpe over fold-window clusters and reports `designEffect = (seCluster/seIid)^2`, `effectiveBars = bars/designEffect`, `adjustmentNeeded`, and the Kish equicorrelation reading; `powerSummary` carries `seDependent`/`mdeSharpeDependent`/`underpoweredDependent`/`varianceInflation` ALONGSIDE the i.i.d. numbers | `analysis/dependence.js`, `analysis/walkforward.js` |
 | 1b. Adjusted floors | `backtestMetrics`/`poolFolds` take `effectiveBars` and emit `psrAdjusted`/`dsrAdjusted` (null, not the unadjusted value, when no design effect was justified) | `analysis/backtest.js` |
 | 2. Cost-robust verdict | `restateReportAtCost` re-scores the retained per-fold (returns, signals) at any cost with the exact scored arithmetic (defaulting `trials` to the report's own deflation count); `costLadder` runs the whole decision at 0/2/5/10 bps; the driver emits it by default and `--cost-ladder=` overrides | `analysis/walkforward.js`, `analyze.js` |
-| 3. Fold consistency as significance | `pairedPromotionTest` = paired delete-one-cluster Sharpe-difference t(C−1) + the exact sign test over the same clusters; `promoteDecision` gains `requireSharpeDiff`/`requireBreadth`/`minDsrAdjusted`, each recorded as `applied` / `skipped-no-panel` / `not-needed` / `off` | `analysis/dependence.js`, `analysis/walkforward.js` |
+| 3. Fold consistency as significance | `pairedPromotionTest` = paired delete-one-cluster Sharpe-difference t(C−1) + the exact sign test over the same clusters; `promoteDecision` gains `requireSharpeDiff`/`requireBreadth`/`minDsrAdjusted`, each recorded as `applied` / `skipped-no-panel` / `not-needed` / `off`. **Round 26 (R26-7)** demotes the sign test to a *reported* statistic (`promotionTest.breadth`) and makes the shipped gate magnitude + stability: `requireSharpeDiff` (the paired cluster Sharpe effect-size floor) together with `requireClusterStability` (the leave-one-cluster-out check — the pooled difference must stay positive when any single fold-window cluster is deleted, `clusterStability` in `dependence.js`) plus `dsrAdjusted` | `analysis/dependence.js`, `analysis/walkforward.js` |
 | 4. query-mod investigation | `nonZeroFraction` + `meanAbsPosition` participation metrics in every pooled report, so "abstains on most folds, bets big on a few" is visible instead of hidden in a turnover number | `analysis/backtest.js` |
 | 5. Search concentration | `familyCorrelation` reports the per-fold excess-return correlation matrix, the strongest pair, and the Kish effective trial count — DIAGNOSTIC ONLY (the deflated Sharpe keeps `trials = K`) | `analysis/walkforward.js` |
 | 6. Observability nits | `minTrackRecordLengthStatus` (finite / beyond-horizon / unavailable) so a JSON `null` MinTRL is not ambiguous; per-variant wall times in `timings`; the gate and the ladder recorded in `run.json`, both checkpoints and the report | `analysis/backtest.js`, `analyze.js` |
@@ -901,3 +938,441 @@ Two further defects were caught in the review pass *after* the implementation
 - `querymod`'s smoothness (MDD 0.0081, median fold Sharpe 0.0000) now has a
   measurable signature (`nonZeroFraction`), but the *cause* — whether the dead zone
   is abstaining — needs the next run's participation numbers to settle.
+
+
+---
+
+## 7. Run `20260921T062511-seed1` — the signal-family power run: the round-25 gate works in production, and the science says "no, not on this data, not at these costs"
+
+This is the first run made *with* the round-25 machinery, and the first sized by the
+corrected power maths. 9 variants (baseline + the 8 causal signals), 8 streams,
+2,200 bars each, **1,136 folds / 17,040 pooled bars**, `--reuse-base`,
+`--audit-probes=1`, `--cost-bps=0`, gate `dependence` at alpha 0.05. It took
+**96,897,745 ms (26.9 h)** — see §4 for why that was 4× the prediction.
+
+### 7.1 The round-25 machinery worked
+
+Everything round 25 added is present and correct in a real run: `gate: dependence
+(alpha=0.0500)` in the header; `depend`, `power*`, `adjusted`, `part` and
+`paired` lines on every candidate; `gate-skipped=` never printed because every
+hurdle was genuinely applied; the full cost ladder; the `family:` diagnostic; and
+`gate: {minDsrAdjusted: applied, requireSharpeDiff: applied, requireBreadth: applied}`
+on all 8 candidates. The design-effect machinery also behaves exactly as designed on
+data it was not calibrated on:
+
+| | pooled Sharpe | PSR | DSR | adj. DSR | eff. bars | stream corr | design effect |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| baseline | -0.0318 | 0.397 | 0.038 | 0.046 | 6,897 | 0.184 | 2.47 |
+| sig:volume (best) | 0.2266 | 0.968 | 0.634 | 0.276 | 4,191 | 0.410 | 4.07 |
+| sig:range | 0.1737 | 0.924 | 0.463 | 0.195 | 3,704 | 0.489 | 4.60 |
+
+The key structural reading: **the controller's positions are nearly uncorrelated
+across symbols (0.184) while every signal's are strongly correlated (0.35-0.57).**
+That is expected — a signal computes the same feature on 8 correlated majors, so it
+is close to *one* common bet, whereas the controller's idiosyncratic positions are
+closer to 8. The consequence is that the signals' honest MDE95 is ±0.43-0.51 rather
+than the i.i.d. ±0.24, i.e. **a signal's apparent power is about a quarter of what
+its bar count suggests.** This is exactly the over-confidence round 25 was built to
+expose, and it is the single most important number in the run.
+
+### 7.2 The verdict: nothing promotes, and the family-wise test agrees
+
+All 8 candidates `keep-off`; SPA p = 0.4494, best = `sig:volume`, Rejects = [none],
+K = 9, T = 15,904 (the first bar of each 1,136 folds carries no exposure, so the
+family-wise test trims 17,040 → 15,904). The family is worth **3.63 effective
+trials of 8** (`excessCorr` 0.172), `maxPair` = `sig-agreement ~ sig-range` at
+r = 0.78.
+
+The best candidate is `sig:volume`: pooled Sharpe **0.2266**, PSR 0.9685 — but
+DSR 0.6337 and, honestly, **adjusted DSR 0.2758** at 4,191 effective bars. PSR
+0.97 is the number that *looks* publishable; the design-effect-adjusted DSR 0.28 is
+the one that is true.
+
+### 7.3 Which hurdle actually bound
+
+Of the three round-25 hurdles, **all 8 candidates passed `requireBreadth` and all 8
+failed `requireSharpeDiff` and `minDsrAdjusted`.** Three candidates (range, volume,
+autocorr) won *every one* of the 142 fold windows, hitting the sign test's
+resolution floor exactly (p = 2^-142 ≈ 1.8e-43), while their paired Sharpe
+difference was insignificant (best: t = 0.86, p = 0.196 for volume).
+
+That is not a contradiction — it is the finding. The candidate is *consistently
+slightly better* than a near-zero baseline in almost every window (so the sign is
+unanimous), but the *magnitude* of the improvement is not distinguishable from
+noise because the per-window differences swing widely. **The breadth hurdle is
+therefore non-discriminating in this regime**: passing a sign test against a weak
+baseline is nearly automatic, its floor is 2^-C, and it separated nothing (8/8
+passed). The binding hurdles are the magnitude ones. Round 26 should either give
+`requireBreadth` a magnitude floor or replace it (see `TODO.md`). **Resolved in round
+26 (R26-7):** the sign test is now a reported statistic only, and the shipped
+dependence gate is magnitude (`requireSharpeDiff`) + stability
+(`requireClusterStability`, `clusterStability` in `dependence.js`).
+**Correction (round 26b, `BUGS.md` #39):** the `requireBreadth` numbers in this
+section were produced by a `pairedClusterSignTest` that compared *all-but-window-c*
+(the delete-one-cluster jackknife input) rather than each window on its own, so the
+"8/8" and "won every one of the 142 fold windows / p = 2^-142" figures are
+leave-one-out sign statistics, not the per-window win counts the surrounding text
+describes. The per-window form is now the shipped behaviour. The *conclusion* —
+that breadth separated nothing and belonged out of the gate — is unaffected (it is
+also why the hurdle was reported-only); the exact counts are superseded.
+
+### 7.4 Costs kill every signal, and it is not close
+
+| candidate | turnover | gross P&L | break-even cost |
+| --- | ---: | ---: | ---: |
+| baseline | 138 | -0.0137 | -0.99 bps |
+| sig:volume | 2,402 | 0.8335 | **3.47 bps** |
+| sig:range | 3,476 | 0.6430 | 1.85 bps |
+| sig:autocorr | 3,189 | 0.3206 | 1.01 bps |
+| sig:momentum | 3,353 | 0.1626 | 0.48 bps |
+| sig:frac-momentum | 8,808 | 0.0831 | 0.09 bps |
+
+`breakEvenCostBps` is the per-unit-turnover cost at which the gross edge is exactly
+consumed. Every signal needs **0.09-3.47 bps**, against a realistic 1h taker cost of
+5-10 bps. The signals trade **17-64× the baseline's turnover** with almost no
+abstention (`nonZero ≈ 0.933`, `meanAbsPos ≈ 0.45`). The cost ladder confirms the
+whole family is dead at every level — and note the *baseline itself* is already
+Sharpe -0.19 at 5 bps, so "do nothing" would beat both.
+
+This is the most actionable single fact in the run: **the signal family's problem is
+turnover, not signal quality.** Its gross edge per unit of turnover is 0.1-3.5 bps
+and it needs to be 5-10× that, which means holding positions far longer than one
+bar (or a much stronger signal). The position policy (`deadZone 0.05`, `scale 1`) is
+currently untuned and is the obvious knob.
+
+### 7.5 The baseline is effectively a no-op
+
+The shipped controller, evaluated honestly, produces `meanAbsPos 0.0375` and
+turnover 0.12/fold across 17,040 bars, for pooled Sharpe -0.032 and a *negative*
+break-even cost. Its per-fold positive fraction is 0.382, its mean fold Sharpe
+-0.0037 — indistinguishable from zero. So this A/B is really "signal vs doing
+nothing", and on this data the answer is "doing nothing is also fine". Two readings
+are possible and the run cannot separate them: (a) the controller has no edge on 1h
+crypto, or (b) its outputs hover near 50 (no confidence) so the dead zone keeps it
+flat. The report does not expose the model's own training counters, so (b) is not
+testable from the artifact — that is a gap worth closing (see `TODO.md`).
+
+### 7.6 Concentration: the surviving edge lives in ~20 folds
+
+Recomputing per-fold gross P&L from `folds.jsonl` (10,224 scored fold-passes) is
+sobering. For `sig:volume`, the best 20 of 1,136 folds carry **108% of the gross
+edge** — the remaining 1,116 folds are net negative. Its positive sum is +4.97 and
+its negative sum -4.13, so the net 0.83 is a **17% residual of two ~5-unit opposing
+flows**, and 589/1,136 folds (52%) are positive. Most signals are worse:
+`sig:autocorr` has the top 20 folds at 293% of its gross; `sig:accel` 15.8× the
+whole edge in the top 20.
+
+The signal family's edge is a thin, high-variance residual concentrated in a
+handful of episodes. The round-25 gate did not have to be told this — the clustered
+Sharpe-difference test and the adjusted DSR already failed it — but a reader could
+mistake PSR 0.97 for a result, so a concentration readout belongs in the report
+(see `TODO.md`).
+
+### 7.7 What this means for the next run
+
+1. **Do not re-run this experiment bigger.** The law in §4 makes it unaffordable
+   (2,200 bars × 8 streams × 7 mechanisms ≈ 190 h) and §7.4/§7.6 say the ceiling is
+   the cost structure, not the sample size. More bars buys significance for an edge
+   that cannot pay for itself.
+2. **Fix the economics before the statistics.** Sweep the position policy /
+   turnover (offline if the pre-policy signal is journaled) so a candidate's
+   break-even clears 5-10 bps, *then* spend compute on power.
+3. **Buy diverse streams, not bars.** Adding non-crypto streams lowers the design
+   effect (effective bars) and costs linearly, whereas bars cost quadratically.
+4. **Parallelise the fold loop** so any of the above is affordable at all (§4,
+   `OPTIMIZATION.md` "Round 25b").
+5. **Tighten the gate's discriminating power** (breadth floor; concentration
+   readout) and **surface the model's training counters** so "no edge" can be told
+   apart from "never trained".
+
+---
+
+## 8. The round-26 controller / A-B fidelity sweep — why §7's `baseline` row is not the shipped model
+
+The round-26 plan (§7.7) was to attack the economics: parallelise the fold loop,
+journal the pre-policy signal, sweep the position policy, buy diverse streams. The
+user's instruction before implementing any of it was: *"do a sweep + bug check on
+all controllers, just to be 100% sure no bug is causing faulty readings."* That
+sweep is written up in `ROADMAP.md` round 26 (the inventory, the invariants, the
+fixtures). Its **first pass** found one defect that invalidates a reported reading
+(#33), two that make a reported comparison unfair (#34/#35) and — in the **second
+pass** (§8.4) — two more measured defects in the labels and their reporting
+(#36/#37), together with the correction of a cost claim the plan was about to size
+compute on. The full write-ups are `BUGS.md` #33-#37; this section records the
+evidence and what it does and does not change.
+
+### 8.1 The finding
+
+The A/B's controller factory streams the **whole growing candle prefix** into
+`getSignal`:
+
+```js
+// src/analyze.js — makeControllerModelFactory, fit() and predict()
+for (let i = 1; i <= testStart; i++) ctl.getSignal(candles.slice(0, i), 1);
+... ctl.getSignal(candles.slice(0, t + 1), 1)
+```
+
+Production does not. `legion/runner.js` pushes one candle, holds `state.cache` at
+`maxCache`, and `legion/workers.js` passes `state.cache.slice(-cacheSize)` — the
+last `cacheSize` candles — to `getSignal`. The controller trims its own candle
+table to `cacheSize` (`_getRecentCandles`'s `DELETE … NOT IN (… LIMIT
+cacheSize)`), so a production call's not-yet-seen candles are the newly arrived
+one(s) and `recentCandles` is one candle long. Fed the prefix, the cleanup has
+already discarded everything older than `cacheSize`, so the next call
+**re-inserts the whole trimmed history** and `recentCandles` becomes that history.
+`_updateOpenTrades` then tests every open trade's TP/SL against every one of those
+ancient bars.
+
+Measured in the browser harness (instrumenting `_getRecentCandles`;
+`cacheSize = 120`; 260 synthetic candles; identical seed, candles and controller):
+
+| call | `recentCandles.length` (prefix) | (production window) |
+| ---: | ---: | ---: |
+| 1 | 1 | 1 |
+| 130 | 10 | 1 |
+| 200 | 80 | 1 |
+| 260 | 140 | 1 |
+
+and the labels it produces:
+
+| run | wins | losses | `trainingSteps` | open at end |
+| --- | ---: | ---: | ---: | ---: |
+| prefix (current A/B) | 78 | 144 | 233 | 1 |
+| window (production-shaped) | 156 | 64 | 231 | 10 |
+
+At 600 bars the emitted confidence also differs (`fracOutsideDeadZone` 0.328 vs
+0.224, `probStd` 2.55 vs 2.27).
+
+### 8.2 What this invalidates, and what it does not
+
+- **Invalidated:** §7.5's reading of the `baseline` row ("the shipped controller is
+  effectively a no-op"; `meanAbsPos 0.0375`, `tradeCount 10230`, pooled Sharpe
+  −0.0318, and the §7.6 concentration numbers for the baseline). Those numbers
+  describe a controller trained on mislabelled trades. They must be re-derived
+  after the fix before any conclusion is drawn about the shipped model's edge.
+  **The cost claim is corrected:** round 25c expected the fix to remove a large
+  per-call churn term, but measuring the control shows a production-shaped window
+  costs the same per call as the prefix in the shim (56.6 vs 55.4 ms/call at calls
+  150-200; equal in every block). So the wall-clock figures in §4 may move — but by
+  an unmeasured amount, and `OPTIMIZATION.md` "Round 26b" now carries the measured
+  per-call breakdown (inference ≈ 54 %, full-state checkpoint ≈ 25 %, training
+  ≈ 14 %, churn ≤ 8 %) instead of the churn attribution.
+- **Not invalidated:** every signal-family row of §7, and §7.2/§7.3/§7.4's verdict.
+  `makeSignalForVariant` returns `variant.signal(view, test)` — pure array math on
+  the view — and never constructs a controller, so the signal candidates were
+  measured on exactly the data they claim. The family-wise null (SPA p = 0.4494),
+  the "all 8 fail `requireSharpeDiff` and `minDsrAdjusted`", the breadth hurdle
+  being non-discriminating, and the turnover/break-even table all stand. Round 26
+  therefore still starts from "the ceiling is economic", but it no longer assumes
+  the baseline comparison is meaningful.
+- **Changed interpretation of "no edge vs no confidence":** §7.5 offered (a) no
+  edge or (b) outputs near 50 with the dead zone keeping it flat, and said the
+  report cannot separate them. The sweep shows a third possibility that was
+  actually in play — a **mislabeling** path — and it also shows the readiness
+  counters that would settle (a)/(b) are computed by the factory's `stats()` and
+  thrown away (`BUGS.md` #35). Both are fixed in round 26 (R26-0, R26-2).
+
+### 8.3 Why the sweep is a permanent artefact, not a one-off
+
+The defect is a **caller-contract** defect: nothing in the suite asserted what the
+A/B passes a model per call, so a wrong window was invisible for six rounds of
+green tests. The sweep in `ROADMAP.md` therefore ends in contract tests (input
+width, increment size, no pre-entry close, non-vacuity of the training counters),
+not just in a patch — the same discipline #22 applied to the audit's reachability.
+
+### 8.4 The second pass (round 26b): the control measurement, the cost breakdown, and three more findings
+
+The user asked for the same request again — another sweep, a coherence and
+research-grounding check, more tests, and an optimisation of the analyse run. The
+second pass re-ran the sweep against the *plan's own assumptions* and produced
+four things worth recording here.
+
+**1. The round-25c cost claim does not survive a control.** Same controller, seed,
+candles, `cacheSize = 120`, one call per bar, mean ms/call by call block (shim):
+
+| calls | window (production-shaped) | prefix (current A/B) |
+| --- | ---: | ---: |
+| 1-20 | 12.1 | 6.8 |
+| 20-50 | 43.9 | 45.2 |
+| 50-100 | 56.1 | 51.2 |
+| 100-150 | 56.9 | 53.7 |
+| 150-200 | 56.6 | 55.4 |
+
+Window and prefix are the same, block for block. The `8.8 → ~50 ms/call` ramp that
+round 25c called the onset of the churn is **early-run warm-up** and appears in
+window mode too. Over 600 bars the whole difference is ≤ 8 % (51.2 vs 55.1
+ms/call), while the prefix's `recentCandles` grows to 480. So #33 is a correctness
+fix, its speed benefit is unmeasured, and the corrected native constant must be
+re-measured after it lands. `OPTIMIZATION.md` "Round 26b" replaces the round-25c
+section.
+
+**2. Where the per-call cost actually is.** Instrumenting one warm controller over
+100 window-shaped bars: `predict` 53.7 %, `dumpState()` 24.6 %, `train` 14.2 %,
+`broadcastMemory` 0.5 %, rest ~7 %. `dumpState()` rewrites the *entire* ensemble
+state to SQLite on every call, and the A/B never reads it back — so about a quarter
+of every fold is a checkpoint nobody loads. That is the largest semantics-preserving
+throughput lever found in the sweep (new item R26-12).
+
+**3. Two more label defects (#36).** A bar that spans both barriers is booked as a
+win (take-profit tested first), a gapped stop is filled at the stop price, and an
+untriggered trade is never closed or labelled. Measured exposure at the shipped
+factors: ~0.03 % of 1h bars have both barriers inside the range at the entry price
+and ~1.0 % span ≥ 3 ATR; and the window shape's label base rate is 27 % TP
+(155/411 on 600 bars) versus the prefix's 57 % (322/248).
+
+**4. A readings defect (#37).** The A/B reports no label base rate and no skill
+score, so a 27 %-base-rate problem reads as "71 % accurate" for a model that always
+predicts the stop. Fixed by R26-2/R26-8.
+
+The sweep matrix, with one row per component × invariant and a status cell for
+each, is written to **§9** as part of round 26 (this section is the finding; §9 is
+the standing audit). The plan's response to all of the above — the new items, the
+test additions, and the corrected expectations — is `ROADMAP.md` round 26,
+"Revision 2".
+
+---
+
+## 9. The round-26 sweep matrix — component × invariant × status (standing audit)
+
+R26-1's permanent output. §8 is the *finding* (the prefix/window defect and the
+second pass); this is the *standing audit*: every stateful component classified, the
+ten invariants checked for each, the sixteen verified suspects resolved, and the
+contract test that pins each finding. It is re-checked whenever a stateful component
+changes — the discipline #22 applied to the audit's reachability, applied to the
+controller's whole caller/callee surface.
+
+**Status legend.**
+
+- **fixed** — a defect was confirmed, written up in `BUGS.md`, fixed, and a contract
+  test now pins it;
+- **clean** — checked, no defect; the proving test is named;
+- **documented** — a real limitation or a deliberate scope decision, recorded with
+  the remedy/decision; not silently dropped;
+- **pending** — a cell whose remedy is a later round-26 item (R26-4/R26-7/R26-8/
+  R26-10/R26-13/R26-14); listed so it is not mistaken for resolved;
+- **pure** — a stateless module re-checked for contract drift only (already dense-tested).
+
+### 9.1 Component inventory
+
+| class | components |
+| --- | --- |
+| **A** online controller | `HiveMindController` core: `getSignal`, `_getRecentCandles`, `_updateOpenTrades`, `_processClosedTrades` |
+| **B** controller modules | `controller/{candles,trades,accuracy,features,database}.js` |
+| **C** online model | `HiveMind` + `kernels/*`, `memory/*`, `ensemble/*`, `training/*` |
+| **D** online pipeline | `legion/{runner,batch,workers,state}.js`, `consolidation_worker.js` |
+| **E** online support | `observer/{collector,legion_metrics,alerts}.js`, `http_server_worker.js`, `dashboard.js` |
+| **F** pure | `analysis/*` (incl. `parallel.js`; `fold_worker.js` is its process entry), `indicatorProcessor`, `candle_quality`, `candles_audit`, `price_precision`, `consolidation_logic`, `legion/{sanitize,rng,structure,serialization,signals}.js`, `analyze.js` |
+
+### 9.2 The ten invariants
+
+1. **Input-shape fidelity** — every caller passes the callee the same *shape* input
+   production passes (width, increment, ordering, read-vs-mutate, window-vs-history).
+2. **Ordering/timestamp assumptions** — anything assuming strict order must guard.
+3. **Read-vs-write** — a nominally-read op that mutates state a later statistic
+   depends on must be documented, and the mutation unit made deterministic.
+4. **Counter provenance** — every reported number is the one the code path produced.
+5. **Boundary degradation** — shuffled / duplicate-timestamp / corrupt / `NaN` /
+   short / empty inputs degrade at the boundary, never silently mislabel.
+6. **Determinism under a seed** — same `(variant, fold)` ⇒ same positions, serial
+   *and* parallel.
+7. **Resource bounds** — no unbounded growth (`open_trades`/`closed_trades`,
+   `state.cache`, model dirs, the 1-row-per-call drain).
+8. **Dead guards** — a guard that can never fire is a false certificate.
+9. **Label realism & lifecycle** — the labeler resolves an unresolvable bar
+   conservatively when asked, gives *every* opened trade a bounded horizon, and
+   reports a base rate the accuracy is referenced to.
+10. **Cost & persistence attribution** — cost is attributed to the stage that
+    produces it, and no full-state dump is written that is never read back.
+
+### 9.3 The matrix
+
+Rows are the invariants, columns the component classes (§9.1). Cells give the status
+and the pin.
+
+| invariant | A controller core | B controller modules | C HiveMind | D pipeline | E support | F pure |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 input shape | **fixed** (R26-0; `analyze.test.js` window contract) | **fixed** (R26-0; same) | **clean** (`features.js` consumes the fed window) | **clean** (production is the reference; `runner_smoke`) | **clean** (read-only) | **clean** |
+| 2 ordering | **fixed** (R26-0 timestamp guard; `core.test.js` E/F) | **clean** (`candles.js` filters non-finite) | **n/a** (no candles) | **clean** (monotonic feed; `fetcher`/`runner_smoke`) | **clean** | **clean** |
+| 3 read-vs-write | **documented** (`getSignal` trains by design; the fold is the parallel unit — R26-4) | **documented** (same) | **documented** (`predict` also trains, by design) | **clean** | **clean** | **clean** |
+| 4 counter provenance | **fixed** (R26-2 lifecycle counters; `core.test.js` I) | **fixed** (R26-2 persistence) | **clean** (`diagnostics()` vs disk; `sanity` I) | **clean** (`observer` recomputes) | **clean** | **clean** (`folds.jsonl` repro; R26-3) |
+| 5 boundary degrade | **fixed** (R26-0 insert guard; R26-2 dropped-candle count; R26-10 fixture matrix **pending**) | **fixed/clean** (`guards.test.js`) | **clean** (`guards.test.js`) | **clean** (malformed line counted; `runner_smoke`) | **clean** | **clean** (named errors) |
+| 6 determinism | **clean** (`withSeed`; deterministic positions test) | **clean** | **clean** (`sanity` E) | **clean** | **clean** | **fixed** (R26-4: the async twins are byte-identical to the serial ones; the worker dispatch is pinned node-only) |
+| 7 resource bounds | **documented** (`open_trades` unbounded under the default `optimistic`; the opt-in `triple` bounds it — R26-11; 1-row-per-call drain surfaced) | **documented** | **clean** (vault capacity) | **clean** (failure budget; `worker_pool`) | **clean** | **clean** (per-fit reclamation, R24) |
+| 8 dead guards | **fixed** (R26-2: the dead `undertrained` gate removed; `ready` is the gate) | **fixed** (R26-2) | **clean** | **clean** | **clean** | **fixed** (R26-2 readiness; `analyze.test.js`) |
+| 9 label realism | **fixed** (R26-11 opt-in `conservative`/`triple`; `core.test.js` J) | **fixed** (R26-11; `trades.js`/`accuracy.js`) | **n/a** | **clean** (labels created by A/B) | **clean** | **fixed** (R26-2 base rate/skill block) |
+| 10 cost/persistence | **fixed** (R26-12 `saveInterval`; `checkpoint_throttle.test.js`) | **fixed** (R26-12) | **fixed** (R26-12 `flushState`) | **clean** | **clean** | **clean** (`timings` per row) |
+
+### 9.4 The sixteen suspects, resolved
+
+| # | suspect | status | evidence / pin |
+| ---: | --- | --- | --- |
+| 1 | `BUGS.md` #33 prefix/window defect | **fixed** (R26-0) | `analyze.test.js` window contract + contiguous window; §8.1 |
+| 2 | `_updateOpenTrades` no timestamp guard | **fixed** (R26-0) | `core.test.js` section E; native `core.test.js` |
+| 3 | unguarded open-trade insert (duplicate PK) | **fixed** (R26-0) | `core.test.js` section G; `openTradeWriteErrors` non-enumerable |
+| 4 | `BUGS.md` #34 position-policy asymmetry | **fixed** (R26-3) | `analysis.test.js` + `analyze.test.js` unified-policy checks |
+| 5 | `BUGS.md` #35 readiness discarded + dead guard | **fixed** (R26-2) | `analyze.test.js` readiness + `core.test.js` section I |
+| 6 | two full-table `SELECT`s/call + unbounded `open_trades` | **documented** | deliberate under the default labeller (a default change is forbidden); the opt-in `triple` policy bounds the backlog (`core.test.js` J); the scans are indexed by timestamp. Not an arithmetic defect |
+| 7 | re-insert churn (#33 cost half) | **fixed** (R26-0) | control measured equal per call (≤ 8 % over 600 bars); cost claim withdrawn — §8.4(1), `OPTIMIZATION.md` "Round 26b" |
+| 8 | silent candle drops | **fixed** (R26-2) | `core.test.js` section I: `droppedCandles` counted + surfaced non-enumerably |
+| 9 | A/B fold purge exclusions not honoured | **documented** | a streaming model cannot skip bars; the window shape is now reconciled (R26-0). Recorded as a limitation, not a defect |
+| 10 | warm-up depth vs production | **documented** | R26-2: `testStart >= warmup` is reported via `undertrained`; readiness (`trainingSteps > 0`) is the gate; depth is visible in the `model` block |
+| 11 | #36 optimistic intrabar tie-break | **fixed** as opt-in (R26-11) | `core.test.js` J: `conservative` labels a both-barrier bar as the stop |
+| 12 | #36 gapped stop fills at the stop price | **fixed** as opt-in (R26-11) | `core.test.js` J: `conservative` fills at the worst traded price |
+| 13 | #36 untriggered trade never closed | **fixed** as opt-in (R26-11) | `core.test.js` J: `triple` closes at the horizon; `resolvedTimeBarrier` counted |
+| 14 | `dumpState()` on every call | **fixed** (R26-12) | `core.test.js` H + `checkpoint_throttle.test.js`; identical signal stream at k = 1, 3, ∞ |
+| 15 | A/B exercises only the `positive` polarity | **documented** | deliberate scope: the A/B evaluates one polarity, and the `negative` polarity is the signed mirror of the same controller (production's evolution picks between them). Recorded as a sweep item, not a defect; a polarity dimension is a future item if the family search shows it matters (R26-13) |
+| 16 | back-in-time / non-contiguous mass re-insert | **fixed** (R26-0) | `analyze.test.js` contiguous-window check (every input is the advancing window; `recentCandles.length ≤ 1`) |
+
+### 9.5 Contract tests for the invariants
+
+The R26-10 test plan (`ROADMAP.md` Part F) is the test half of this matrix. Landed
+with R26-0/2/3/11/12/4/5: **1** window contract, **2** no pre-entry close, **3** unified
+policy, **4** readiness surfacing, **7** parallel = serial (R26-4; browser
+byte-identity + the node-only real-worker `parallel_folds.test.js`), **11**
+contiguous window, **12** label-policy fixtures (browser + native), **13** base rate
++ skill, **14** checkpoint equivalence, **17** turnover policy (R26-5; browser
+section AF + the node-only spawned-CLI `analyze_cli.test.js` — the block is pure
+post-processing and moves no scored number), **18** stream interval + basket
+selection (R26-6; browser section AG + the analyze driver's opt-in `--interval`/
+`--select-streams` checks — a design choice that cannot change how an included
+stream is scored). **15** paired seeds/CRN (R26-13; browser section AH + the
+node-only spawned-CLI `analyze_cli.test.js` seed aggregate — CRN is on by default
+and `--crn=0` restores the historical per-variant seed, recorded in
+`run.json`/`report.json` and the summary). **16** forecast block + MCS
+(R26-14; browser section AI + the analyze driver's default-on `forecast` block,
+DM and MCS checks and the node-only spawned-CLI `--forecast=0` — measurement
+only, moving no scored number). **6** breadth replacement (R26-7; browser section
+AJ — `clusterStability` hand-checked on stable/fragile/unavailable panels and the
+gate fixtures proving a tiny edge fails the magnitude floor while a broad-but-thin
+edge fails stability and a real spread edge passes, plus the driver's `gateOptions`
+asserted in `analyze.test.js`; no new node-only block, because the change lives in
+the pure dependence/walkforward layer).
+**5** concentration readout (R26-8; browser section AK — `foldConcentration`'s exact
+top-K/signed sums, its leave-one-fold-out Sharpe range and per-fold marginal
+contribution against an independent sweep, and the run-level composition asserted in
+`analyze.test.js`) and **10** report completeness (R26-8; the six-question `decision`
+block, every missing input an explicit `{available:false, reason}`, rendered in the
+summary). **8** the six-case boundary-degradation fixture matrix (R26-10;
+`guards.test.js` section K drives the reader over empty / short / corrupt row / NaN /
+duplicate timestamp / shuffled order / `maxBars`, while `core.test.js` G and the
+`analyze.test.js` window contract cover the duplicate-timestamp and back-in-time
+component cases) and **9** dead-guard audit (R26-10; `analyze.test.js` pins the
+`undertrained` statistic to the controller's warm-up floor — not the dead
+`testStart >= 40` — and the readiness gate abstains on a never-trained model). Every
+cell now has a landed test. The round-26b review then completed the one R26-8
+sub-clause still open — clause 6's "seeds/folds a paired comparison would need"
+(`nextRunPlan.pairedUnits`, with an exact browser check) — and fixed `BUGS.md`
+#38/#39/#40/#41, all shape/wiring defects in this layer that the original fixtures
+could not see (`analysis.test.js` 559 → 562, `analyze.test.js` 221 → 222, ledger
+2285 → 2289; the §7.3 breadth counts are superseded, see its correction note).
+
+### 9.6 What the sweep certifies, and what it leaves open
+
+It certifies that **no unresolved defect is causing a faulty reading**: the one
+reading-invalidating defect (#33) is fixed and pinned, the two unfair-comparison
+defects (#34/#35) are fixed, and the three label/report defects (#36/#37) are fixed
+or made opt-in. It leaves open, deliberately and by name: the polarity scope (#15),
+the purge-exclusion limitation (#9), the unbounded default backlog (#6, bounded by
+the opt-in `triple`), and the pending contract tests above. None of those changes a
+reported number; each is recorded so a later reader cannot mistake it for checked.
+

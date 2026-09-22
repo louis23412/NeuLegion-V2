@@ -36,21 +36,36 @@ const BROWSER_ONLY = new Set(['bench.test.js']);
 // `dryrun`, `preflight`, `http_view`, `report_lifecycle`, `shutdown`) drive the
 // real worker_threads / SQLite / HTTP / process machinery, which the browser
 // harness cannot.
+//
+// `checkpoint_throttle.test.js` is node-only too: it runs a REAL `runAnalysis`
+// twice and byte-compares the fold journal, which the browser shim cannot do
+// (sql.js names databases from `Math.random()`, so two controllers in one Worker
+// can alias — see "Test-harness limitations" in docs/BUGS.md).
+//
+// `parallel_folds.test.js` (R26-4) is node-only for the same reason: the parallel
+// fold loop dispatches real `worker_threads` workers, so only the native driver can
+// prove the serial/parallel `folds.jsonl` byte-identity.
+//
+// `analyze_cli.test.js` is node-only because it SPAWNS the CLI: the browser entry
+// imports `runAnalysis` directly, so the `isMain` argument-parsing block (the
+// `--turnover-sweep` / `--turnover-target` wiring of R26-5 and the
+// `--crn` / `--seeds` wiring of R26-13) is never executed under the harness.
 const NODE_ONLY = new Set([
     'mirrors.test.js', 'engine_portability.test.js',
     'worker_pool.test.js', 'runner_smoke.test.js', 'dryrun.test.js',
     'preflight.test.js', 'http_view.test.js', 'report_lifecycle.test.js',
-    'shutdown.test.js', 'config_env.test.js',
+    'shutdown.test.js', 'config_env.test.js', 'checkpoint_throttle.test.js',
+    'parallel_folds.test.js', 'analyze_cli.test.js',
 ]);
 
 const testFiles = (dir) => fs.readdirSync(dir).filter((f) => f.endsWith('.test.js')).sort();
 const exists = (...parts) => fs.existsSync(path.join(...parts));
 
 // The ledger the two structural counts below are pinned to: 30 browser entries
-// (29 with a pass/fail contract, plus `bench`) and 39 node mirrors (29 mirrors +
-// the 10 Node-only suites). See RUNBOOK.md §6.
+// (29 with a pass/fail contract, plus `bench`) and 42 node mirrors (29 mirrors +
+// the 13 Node-only suites). See RUNBOOK.md §6.
 const BROWSER_ENTRY_LEDGER = 30;
-const NODE_MIRROR_LEDGER = 39;
+const NODE_MIRROR_LEDGER = 42;
 
 test('every pass/fail browser entry has a node mirror', () => {
     const entries = testFiles(entriesDir);

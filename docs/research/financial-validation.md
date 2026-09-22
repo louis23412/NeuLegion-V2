@@ -605,6 +605,134 @@ keep-off under the DSR floor; SPA p = 0.5699, best = `sig:momentum`,
 Rejects = [none]. This is the run that showed the i.i.d. power line was lying, and
 it is why the pooled SE is now built from the panel.
 
+## The economic ceiling: turnover, cost and position policy
+
+The `20260921T062511-seed1` signal run (round 26's motivating evidence;
+`RUN-ANALYSIS.md` §7) is the first evaluation whose binding constraint was
+*economic* rather than statistical: every causal signal beat the baseline gross,
+and every one died on cost. `sig:volume`'s break-even is 3.47 bps against a 1h
+taker round-trip of 5-10 bps, and the signal family is invested ~93 % of bars
+(`nonZeroFraction ≈ 0.933`, `meanAbsPosition ≈ 0.45`) because its position mapping
+has no dead zone. So the honest question is not "does the feature predict" but "can
+the prediction be *held* long enough to pay for the trading it implies".
+
+Four strands of literature converge on the same structure:
+
+1. **A proportional cost implies a no-trade region, not a threshold.**
+   Constantinides (1986) shows the optimal policy under proportional costs is to
+   abstain until the position drifts outside a band; Davis & Norman (1990) derive
+   the region's boundaries and prove the policy is an impulse at the boundary plus
+   continuity inside it. The practical consequence: the correct parameterisation is
+   an `enter`/`exit` **pair** (hysteresis), not a single `deadZone`, and the optimal
+   band widens with the cost. arXiv 2101.09936 gives the small-cost asymptotics of
+   the boundary, which is the shape to search over.
+2. **With predictable returns and costs, one trades *toward* an aim slowly.**
+   Gârleanu & Pedersen (2013) show the optimal trade is a cost-scaled fraction of the
+   distance to the aim portfolio, with separate "aim in" and "aim out" regions.
+   "Effective turnover" — how much of a signal's information survives the cost — is
+   the right objective, and it is a function of signal **decay**: if the alpha decays
+   slowly, holding pays. arXiv 2502.04284 formalises exactly this (past signal values
+   carry predictive power, so the optimal multi-period policy keeps a position while
+   the decaying signal still justifies the cost).
+3. **Turnover can be regularised rather than clipped.** arXiv 1709.06296 shows
+   turnover penalisation is *equivalent to* a particular regularisation of portfolio
+   weights and dominates generic shrinkage out of sample; arXiv 2509.04541 makes it
+   a training loss term (**turnover regularization**) with a pre-set budget; arXiv
+   1904.04912 (Deep Momentum Networks) learns trend *and* position sizing jointly
+   against the Sharpe ratio and keeps an edge after 2-3 bps of cost. So the
+   position-mapping layer — not only the feature — is a legitimate object of study.
+4. **Breadth must be *independent* breadth.** Grinold's (1989) fundamental law has
+   the information ratio growing with `√breadth`, and breadth counts *independent*
+   forecasts. That is the same correction `analysis/dependence.js` measures as a
+   design effect (Kish 1965): 8 correlated crypto majors are not 8 bets, and the
+   honest MDE95 is ~2× the i.i.d. one. It is why round 26 buys effective independent
+   streams (R26-6) rather than more bars of the same eight.
+
+5. **Two ways to buy breadth: time and the cross-section.** Grinold's √breadth has
+   two implementable forms here. Over *time*, the usable breadth of a signal is
+   limited by its decay rate — arXiv 2502.04284 makes this exact, and it is why a
+   candidate's raw-confidence half-life belongs in the report beside its break-even
+   cost. Across the *cross-section*, ranking the basket and going long the leaders /
+   short the laggards makes the common market factor cancel by construction, so the
+   per-stream returns are far less correlated than the same feature applied to each
+   stream independently (Moskowitz & Grinblatt 1999; the time-series counterpart is
+   Moskowitz, Ooi & Pedersen 2012). Combining weakly-correlated sleeves is the
+   standard way to buy breadth (Asness, Moskowitz & Pedersen 2013), and it is the
+   cheapest available answer to the design effect this project measures.
+
+The measurement layer is already in place and is not changed by any of this:
+`breakEvenCostBps` is assumption-free (`1e4·grossPnl/turnover`), `costLadder`
+restates the whole gate at several bps levels, `nonZeroFraction`/`meanAbsPosition`
+report participation, and `turnover` is the per-unit-turnover denominator that makes
+a signal comparable to a mechanism. What is *missing* (and is round-26 work) is
+(a) one confidence→position pipeline shared by both candidate families, so the
+turnover comparison is not confounded by two different mappings (`BUGS.md` #34),
+and (b) the raw pre-policy value in the journal, so a policy/holding sweep is
+post-processing rather than a refit (R26-3).
+
+## Finding the family: replication, forecast comparison and label realism
+
+Grounding for round 26's family-search half (R26-11…R26-15). The validation
+machinery above answers "is *this* result real?"; this section is about the prior
+question, "which of these models should be the one we test at all?" — and it has
+its own three independent strands in the literature.
+
+**1. A single run cannot rank models.** Bouthillier et al. (ICML 2019) and
+Henderson et al. (AAAI 2018) show the seed-to-seed variation of a fixed
+configuration is the same order as — often larger than — the difference between
+configurations, so an ordering from one run is noise. That is *exactly* the state
+of every variant comparison this project has produced: one `seed1` run per family,
+with `variantSeed` even mixing the variant id into the fold seed, so the
+comparisons are unpaired and their noise cannot cancel. The remedy is the standard
+replication recipe: several master seeds (Agarwal et al. 2021 — report an
+interquartile mean and a **stratified bootstrap** interval, not a mean), and
+**common random numbers** across the compared variants (Glasserman & Yao 1992 — the
+same random stream for both arms reduces the variance of the *difference*, which is
+the quantity a promotion decision uses). Concretely: make the fold seed depend on
+the master seed and the fold only, and let the variant identity affect the model,
+not the draws.
+
+**2. Compare families as forecasters, not only as PnL streams.** A strategy's
+Sharpe is a noisy, cost-contaminated transform of its forecast quality; the
+per-bar loss is the lower-variance object and the one the econometrics literature
+compares. Diebold & Mariano (1995) give the paired test on loss differentials;
+Hansen, Lunde & Nason (2011) turn a family comparison into the **Model Confidence
+Set** — the set of models that cannot be distinguished from the best, which is the
+honest answer when K candidates are close. The scores must be *proper* (Gneiting &
+Raftery 2007), otherwise a model can earn its way to the top by hedging toward the
+base rate — which matters here because the label base rate is ≈ 27 % TP at the
+shipped barrier factors, so Brier-type scores with a base-rate-referenced **skill
+score** are the discriminating readout, not raw accuracy. All of this is
+post-processing of the per-bar journal (R26-3), so it costs no additional model
+fits.
+
+**3. Label realism is part of the model, not a detail of the simulator.** The
+project's labeler is a **two-barrier** rule (take-profit, stop-loss) that resolves
+an intrabar tie optimistically, fills a gapped stop at the stop price, and never
+closes a trade that triggers neither barrier (`BUGS.md` #36). The standard label in
+this literature is the **triple barrier** — profit, loss *and time* (López de Prado
+2018, ch. 3; see also arXiv 2504.02249 and 2411.12753, already cited) — which
+bounds the holding period, gives every trade a label, and stops the open-trade
+book from growing without bound. Because swapping the labeler changes every
+training label, the honest move is not to switch it silently but to make it a
+**variant dimension** (R26-11) and let the gated A/B decide between the optimistic,
+the conservative and the triple-barrier conventions.
+
+**4. Search the family under the budget, not above it.** With folds made cheap
+(R26-12/R26-4) and comparisons made paired (R26-13), the remaining cost is
+`variants × seeds`. Successive halving and Hyperband (Jamieson & Talwalkar 2016;
+Li et al. 2018) are the standard allocation schemes for that regime: cheap early
+rounds eliminate the statistically hopeless arms and the freed budget goes to the
+survivors. It is recorded as a *gated* item (R26-15) because racing is only worth
+building once there is a larger family worth searching — which is what an R26-5 or
+R26-6 win would justify.
+
+The common thread: every one of these is a **measurement** change that makes the
+next cycle's decision better, and none of them touches the shipped trajectory or a
+golden fingerprint. They are the cheapest work in the round on a per-decision
+basis, which is why they are the part that decides what the *following* round
+should build.
+
 ## Candle data quality (structural audit vs. economic plausibility)
 
 Indicators are only as honest as their inputs. Two complementary layers guard the

@@ -51,12 +51,13 @@
 // attaches the FDP-bounded set plus a `promoteDecision` `maxFdp` hurdle. Both are
 // default-off, so every default result is byte-identical to Round 8.
 
-import { strategyReturns, backtestMetrics, purgedCVBacktest, poolFolds } from './backtest.js';
+import { strategyReturns, backtestMetrics, purgedCVBacktest, purgedCVBacktestAsync, poolFolds } from './backtest.js';
+import { normaliseConcurrency } from './parallel.js';
 import { subsamplingSpa, subsamplingStepM, subsamplingFdp, subsamplingKfwer } from './reality_check.js';
 import { sharpeRatio } from './performance.js';
 import {
     pearsonCorrelation, meanPairwiseCorrelation, equicorrelationDesignEffect, equicorrelationEffectiveSize,
-    foldWindowClusters, clusterJackknife, pairedClusterTest, pairedClusterSignTest, signTestFloor,
+    foldWindowClusters, clusterJackknife, pairedClusterTest, pairedClusterSignTest, clusterStability, signTestFloor,
 } from './dependence.js';
 
 // Close-to-close simple returns. `r[0] = 0` (no return is realised at the first
@@ -76,23 +77,92 @@ export function logReturns(closes) {
 
 const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
 
-// Map a model confidence `prob` in [0, 100] to a position in [-scale, +scale].
+// ---- one confidence -> position pipeline (round 26, R26-3 / BUGS.md #34) ----
 //
-//   c = (prob - 50) / 50            (signed confidence, [-1, 1])
-//   |c| <= deadZone  ->  0          (abstain: no edge worth trading)
-//   else             ->  direction * sign(c) * (|c| - deadZone)/(1 - deadZone) * scale
+// Both candidate families are mapped to positions through THIS pair of functions,
+// in one documented signed-confidence space `c ∈ [-1, 1]`:
 //
-// Properties (proved in analysis.test.js): odd about prob = 50, monotone
-// non-decreasing for direction = 1, bounded by scale, exactly 0 on the dead-zone
-// band, and clamped for out-of-range `prob`.
-export function probToPosition(prob, { direction = 1, deadZone = 0, scale = 1 } = {}) {
-    const p = clamp(Number(prob), 0, 100);
-    const c = (p - 50) / 50;
+//   controller:  c = (prob − 50) / 50                 (`confidenceFromProb`)
+//   signal:      c = clamp(z / saturation, −1, 1)     (`analysis/features.js`)
+//
+// and then the SAME policy maps `c` to a position:
+//
+//   |c| ≤ deadZone  ->  0                             (abstain: no edge worth trading)
+//   else            ->  sign(c) · (|c| − deadZone)/(1 − deadZone) · scale
+//
+// Before R26-3 the controller carried a dead zone and the signal family did not,
+// so a turnover/participation comparison across the two families confounded the
+// mapping with the signal. The policy is a run-level parameter (the A/B uses
+// `CONTROLLER_POSITION_POLICY`) and the raw `c` is journaled, so a policy sweep is
+// pure post-processing (`restateFoldsAtPolicy`).
+//
+// Properties: sign-preserving, bounded by `scale`, exactly 0 on the dead-zone band
+// and for a non-finite confidence.
+export function confidenceToPosition(confidence, { deadZone = 0, scale = 1 } = {}) {
+    const raw = Number(confidence);
+    if (!Number.isFinite(raw)) return 0;
+    const c = clamp(raw, -1, 1);
     const dz = clamp(deadZone, 0, 0.999);
     const a = Math.abs(c);
     if (a <= dz) return 0;
     const mag = (a - dz) / (1 - dz);
-    return Math.sign(direction || 1) * Math.sign(c) * mag * scale;
+    return Math.sign(c) * mag * scale;
+}
+
+// The controller's raw `prob` in [0, 100] as a signed confidence in [-1, 1].
+export function confidenceFromProb(prob) {
+    return clamp(Number(prob), 0, 100) / 50 - 1;
+}
+
+// A *holding / hysteresis* policy layer (round 26, R26-5) on top of the one
+// confidence→position mapping. `confidenceToPosition` is pointwise, so it cannot
+// express a no-trade band that depends on the *current* position — which is what a
+// proportional trading cost makes optimal (Constantinides 1986; Davis & Norman 1990;
+// Gârleanu & Pedersen 2013): enter at `|c| ≥ enter`, and do not leave until
+// `|c| ≤ exit` (with `exit < enter`), optionally only after a minimum holding
+// period. With no holding parameters this is exactly `confidences.map(confidenceToPosition)`,
+// so every default path stays byte-identical.
+export function positionSeriesFromConfidence(confidences, policy = {}) {
+    const { deadZone = 0, scale = 1 } = policy;
+    const enter = policy.enter;
+    const exit = policy.exit;
+    const rawHold = policy.minHold;
+    const hold = Number.isFinite(rawHold) && rawHold > 0 ? Math.floor(rawHold) : 0;
+    const holding = Number.isFinite(enter) || Number.isFinite(exit) || hold > 0;
+    if (!holding) return confidences.map((c) => confidenceToPosition(c, { deadZone, scale }));
+    const enterT = clamp(Number.isFinite(enter) ? enter : (Number.isFinite(deadZone) ? deadZone : 0), 0, 1);
+    const exitT = clamp(Number.isFinite(exit) ? exit : 0, 0, enterT);
+    const out = new Array(confidences.length).fill(0);
+    let pos = 0;
+    let held = 0;
+    for (let i = 0; i < confidences.length; i++) {
+        const c = Number(confidences[i]);
+        const mag = Number.isFinite(c) ? Math.min(1, Math.abs(c)) : 0;
+        const dir = c > 0 ? 1 : c < 0 ? -1 : 0;
+        // The band is indexed by the dead zone too: a signal that would map to 0
+        // under `{deadZone, scale}` is a 0-magnitude signal here.
+        const effMag = mag <= clamp(deadZone, 0, 0.999) ? 0 : (mag - clamp(deadZone, 0, 0.999)) / (1 - clamp(deadZone, 0, 0.999));
+        if (pos === 0) {
+            if (dir !== 0 && effMag >= enterT) { pos = dir * scale; held = 0; }
+        } else if (held >= hold) {
+            if (dir === -pos && effMag >= enterT) { pos = dir * scale; held = 0; }
+            else if (effMag <= exitT) { pos = 0; }
+        }
+        out[i] = pos;
+        held += 1;
+    }
+    return out;
+}
+
+// Map a model confidence `prob` in [0, 100] to a position in [-scale, +scale].
+//
+// The controller path through the one pipeline above — kept as the public name the
+// analysis layer and its tests already use. Properties (proved in
+// analysis.test.js): odd about prob = 50, monotone non-decreasing for
+// direction = 1, bounded by scale, exactly 0 on the dead-zone band, and clamped
+// for out-of-range `prob`.
+export function probToPosition(prob, { direction = 1, deadZone = 0, scale = 1 } = {}) {
+    return Math.sign(direction || 1) * confidenceToPosition(confidenceFromProb(prob), { deadZone, scale });
 }
 
 // A fold is *causal* when every training index strictly precedes every test
@@ -292,6 +362,10 @@ export function walkForwardEvaluate({
     returns, folds, signalForFold, costBps = 0, periodsPerYear = 252, trials = 1,
     audit = true, requireCausal = true,
     viewFor = null, probe = 1e3, requireReachable = false, auditProbesPerFold = 0,
+    // The raw pre-policy confidence for the same folds (round 26, R26-3). Journaled
+    // beside the emitted positions so a policy sweep is pure post-processing; it has
+    // no arithmetic effect on any metric.
+    confidenceForFold = null,
     // Reuse the scored pass as the audit's base pass (one less refit per fold; the
     // verdict is provably unchanged — see `auditNoLookahead`).
     auditReuseBase = false,
@@ -314,8 +388,11 @@ export function walkForwardEvaluate({
     }
     const view = (r, perturb) => (viewFor ? viewFor(r, perturb) : { returns: r });
     const wrapped = (train, test) => signalForFold(train, test, view(returns, null));
+    const wrappedConfidence = typeof confidenceForFold === 'function'
+        ? (train, test) => confidenceForFold(train, test, view(returns, null))
+        : null;
     const cv = purgedCVBacktest({
-        returns, signalForFold: wrapped, folds, costBps, periodsPerYear, trials,
+        returns, signalForFold: wrapped, confidenceForFold: wrappedConfidence, folds, costBps, periodsPerYear, trials,
         onFold: onEvent,
     });
     const aggregate = aggregateFolds(cv.folds);
@@ -331,6 +408,72 @@ export function walkForwardEvaluate({
         // The number of configurations the search ran: every DSR in this report was
         // deflated by it, so it rides along and a cost restatement cannot silently
         // re-deflate with a different value.
+        trials,
+        pooledMetrics: cv.pooledMetrics,
+        meanFoldSharpe: cv.meanFoldSharpe,
+        pooledBars: cv.pooledBars,
+        pooledReturns: cv.pooledReturns,
+        pooledGross: cv.pooledGross,
+        foldLengths: folds.map((f) => f.test.length),
+        aggregate,
+        audit: auditResult,
+        power: powerSummary(cv.pooledMetrics.netSharpe, cv.pooledBars, periodsPerYear),
+        probed: viewFor != null,
+    };
+}
+
+// The concurrent twin of `walkForwardEvaluate` (round 26, R26-4). Identical
+// arithmetic and identical emit order; only *when* a fold's positions are decided
+// changes. Pass `foldExecutor(ctx)` to dispatch the decision (e.g. to a worker),
+// or `signalForFold` to run the same decision in-process (the serial executor).
+// The look-ahead audit still runs serially after the scored pass and reads the
+// same `foldSignals`, so its passes are byte-identical too. With no executor and
+// no `signalForFold`, this throws — there is nothing to schedule.
+export async function walkForwardEvaluateAsync({
+    returns, folds, signalForFold = null, foldExecutor = null, costBps = 0, periodsPerYear = 252, trials = 1,
+    audit = true, requireCausal = true,
+    viewFor = null, probe = 1e3, requireReachable = false, auditProbesPerFold = 0,
+    confidenceForFold = null, auditReuseBase = false, onEvent = null, concurrency = 1,
+}) {
+    if (!Array.isArray(folds) || folds.length === 0) {
+        throw new Error('walkForwardEvaluateAsync: folds required (use walkForwardSplit / purgedKFoldSplit)');
+    }
+    if (typeof foldExecutor !== 'function' && typeof signalForFold !== 'function') {
+        throw new Error('walkForwardEvaluateAsync: foldExecutor(ctx) or signalForFold(trainIdx, testIdx, view) required');
+    }
+    // The audit re-fits the signal on perturbed views, so it can only run with an
+    // in-process `signalForFold` — a fold executor has no view channel. Fail loudly
+    // rather than as a `signalForFold is not a function` TypeError mid-audit.
+    if (audit && typeof signalForFold !== 'function') {
+        throw new Error('walkForwardEvaluateAsync: `audit` requires an in-process signalForFold (the look-ahead audit re-fits perturbed views; a foldExecutor alone cannot audit)');
+    }
+    if (requireCausal) {
+        const bad = folds.filter((f) => !isCausalFold(f));
+        if (bad.length) {
+            throw new Error(`walkForwardEvaluateAsync: ${bad.length}/${folds.length} fold(s) train on/after their test block (not causal walk-forward)`);
+        }
+    }
+    const width = normaliseConcurrency(concurrency, { max: folds.length });
+    const view = (r, perturb) => (viewFor ? viewFor(r, perturb) : { returns: r });
+    const exec = foldExecutor || (async ({ train, test }) => {
+        const positions = signalForFold(train, test, view(returns, null));
+        const confidence = typeof confidenceForFold === 'function' ? confidenceForFold(train, test, view(returns, null)) : null;
+        return { signals: positions, confidence };
+    });
+    const cv = await purgedCVBacktestAsync({
+        returns, folds, foldExecutor: exec, costBps, periodsPerYear, trials,
+        onFold: onEvent, concurrency: width,
+    });
+    const aggregate = aggregateFolds(cv.folds);
+    const auditResult = audit
+        ? auditNoLookahead({
+            signalForFold, folds, returns, probe, viewFor, requireReachable, auditProbesPerFold, onProbe: onEvent,
+            baseSignals: cv.foldSignals, reuseBase: auditReuseBase,
+        })
+        : null;
+    return {
+        folds: cv.folds,
+        foldInputs: cv.foldInputs,
         trials,
         pooledMetrics: cv.pooledMetrics,
         meanFoldSharpe: cv.meanFoldSharpe,
@@ -603,13 +746,20 @@ export function poolReports(reports, { periodsPerYear = 252, trials = 1 } = {}) 
 //     (Cameron & Miller 2015) and the p-value referenced to t(C-1). This is the
 //     honest replacement for "the mean fold Sharpe went up": with 8 correlated
 //     streams the i.i.d. comparison overstates significance by ~2x.
-//   - `requireBreadth`: the candidate must win the majority of fold *windows*
-//     significantly, by an exact sign test over the same clusters
-//     (Demsar 2006). `minFoldWinFraction` compares a raw fraction of 288
-//     correlated folds against 0.5 with no reference distribution, so a margin of
-//     0.4896-vs-0.5000 is unreadable; the sign test turns the same evidence into a
-//     p-value. A window cluster groups the same calendar window across streams,
-//     which is the unit that actually repeats.
+//   - `requireBreadth` (round 25; now REPORTED, not shipped): the candidate must
+//     win the majority of fold *windows* significantly, by an exact sign test over
+//     the same clusters (Demsar 2006). Kept as an option, but round 26 (R26-7)
+//     removed it from the shipped gate: it passed 8/8 candidates and hit its 2^-n
+//     floor on three, so it separated nothing about magnitude. `minFoldWinFraction`
+//     compares a raw fraction of 288 correlated folds against 0.5 with no reference
+//     distribution, so a margin of 0.4896-vs-0.5000 is unreadable; the sign test is
+//     still computed and reported as `promotionTest.breadth`.
+//   - `requireClusterStability` (round 26, R26-7): the MAGNITUDE companion to the
+//     sign test. The paired Sharpe difference must stay positive when ANY single
+//     fold-window cluster is deleted (`clusterStability`). A candidate whose edge is
+//     carried by a handful of windows — the measured `sig:volume` case, where the
+//     best 20 of 1,136 folds carry 108% of the gross — fails this even when it wins
+//     most windows and the full-sample magnitude test.
 //   - `minDsrAdjusted`: the DSR floor applied to the design-effect-adjusted DSR
 //     (`pooledMetrics.dsrAdjusted`, computed on `effectiveBars`). Skipped — not
 //     failed — when no cross-stream panel exists to estimate the design effect
@@ -643,12 +793,19 @@ export function promoteDecision(baseline, candidate, {
     // Round 25 (all default-off).
     requireSharpeDiff = false,
     requireBreadth = false,
+    // Round 26 (R26-7): the stability half of the dependence gate — the pooled edge
+    // must survive deleting any single fold-window cluster (the statistical form of
+    // "the edge is not carried by a handful of folds"). `requireBreadth` (the exact
+    // sign test) is retained as an option but is no longer part of the shipped gate:
+    // it is a REPORTED statistic.
+    requireClusterStability = false,
+    minStableFraction = 1,
     minDsrAdjusted = null,
     alpha = 0.05,
     periodsPerYear = 252,
 } = {}) {
     const reasons = [];
-    const promotionTest = pairedPromotionTest(baseline, candidate, { alpha, periodsPerYear });
+    const promotionTest = pairedPromotionTest(baseline, candidate, { alpha, periodsPerYear, minStableFraction });
     const bMean = baseline.aggregate ? baseline.aggregate.mean : baseline.meanFoldSharpe;
     const cMean = candidate.aggregate ? candidate.aggregate.mean : candidate.meanFoldSharpe;
     const bDsr = baseline.pooledMetrics ? baseline.pooledMetrics.dsr : NaN;
@@ -681,7 +838,7 @@ export function promoteDecision(baseline, candidate, {
     // report has no cross-stream panel, so there is nothing to estimate a design
     // effect or a paired test from. `gate` records which happened per hurdle, so
     // a report can never claim a gate it did not actually apply.
-    const gate = { minDsrAdjusted: 'off', requireSharpeDiff: 'off', requireBreadth: 'off' };
+    const gate = { minDsrAdjusted: 'off', requireSharpeDiff: 'off', requireBreadth: 'off', requireClusterStability: 'off' };
     const hasPanel = (r) => !!(r && Array.isArray(r.streamReturns) && r.streamReturns.length >= 2
         && r.dependence && r.dependence.available);
     const panel = hasPanel(baseline) && hasPanel(candidate);
@@ -731,6 +888,27 @@ export function promoteDecision(baseline, candidate, {
             }
         }
     }
+    // Round 26 (R26-7): cluster stability — the pooled edge must survive deleting any
+    // single fold-window cluster. Unlike the sign test this is a MAGNITUDE check: a
+    // candidate can win most windows yet be carried entirely by a few (the measured
+    // `sig:volume` case: its best 20 of 1,136 folds carry 108% of its gross), and it
+    // can also win the magnitude test on the full sample while one window alone
+    // accounts for the edge.
+    if (requireClusterStability) {
+        if (!panel) {
+            gate.requireClusterStability = 'skipped-no-panel';
+        } else {
+            gate.requireClusterStability = 'applied';
+            if (!promotionTest.available) {
+                reasons.push(`cluster-stability test unavailable (${promotionTest.reason})`);
+            } else if (!promotionTest.stability || !promotionTest.stability.available) {
+                reasons.push(`cluster-stability test unavailable (${(promotionTest.stability && promotionTest.stability.reason) || 'no stability estimate'})`);
+            } else if (!promotionTest.stability.stable) {
+                const s = promotionTest.stability;
+                reasons.push(`cluster stability ${s.fractionPositive} of ${s.nClusters} leave-one-window differences positive (required >= ${s.minFraction}); removing window ${s.worstCluster} alone drops the paired Sharpe difference to ${s.worstDelta}`);
+            }
+        }
+    }
     if (maxSearchP != null || requireSearchReject) {
         const s = candidate.search;
         const p = s && Number.isFinite(s.pValue) ? s.pValue : NaN;
@@ -773,7 +951,7 @@ export function promoteDecision(baseline, candidate, {
 // a reason) when the reports carry no comparable panel — a single-stream run, or
 // two runs with different fold grids — so callers can fall back gracefully
 // instead of inventing a test.
-export function pairedPromotionTest(baseline, candidate, { alpha = 0.05, periodsPerYear = 252 } = {}) {
+export function pairedPromotionTest(baseline, candidate, { alpha = 0.05, periodsPerYear = 252, minStableFraction = 1 } = {}) {
     const clustersB = clustersOf(baseline, { periodsPerYear });
     const clustersA = clustersOf(candidate, { periodsPerYear });
     if (!clustersA || !clustersB) {
@@ -788,13 +966,19 @@ export function pairedPromotionTest(baseline, candidate, { alpha = 0.05, periods
     const breadth = breadthRaw.available
         ? { ...breadthRaw, alpha, significant: Number.isFinite(breadthRaw.pValue) && breadthRaw.pValue <= alpha, floor: signTestFloor(breadthRaw.n) }
         : breadthRaw;
+    // Round 26 (R26-7): the stability half of the gate — the pooled edge must
+    // survive deleting any single fold-window cluster. Computed here (not in the
+    // driver) so the number rides on `promotionTest` and is reported even under the
+    // classic gate.
+    const stability = clusterStability({ clustersA, clustersB, statistic, minFraction: minStableFraction });
     return {
         available: true,
         alpha,
         nClusters: clustersA.length,
         sharpeDifference,
         breadth,
-        reader: 'paired cluster test over fold-window clusters: sharpeDifference = candidate-baseline pooled Sharpe with a delete-one-cluster jackknife SE (t referenced to t(C-1)); breadth = exact sign test of per-window wins. Both are round-25 gate inputs; both are estimated from the same clusters, which is the sample unit the fold structure actually repeats.',
+        stability,
+        reader: 'paired cluster test over fold-window clusters: sharpeDifference = candidate-baseline pooled Sharpe with a delete-one-cluster jackknife SE (t referenced to t(C-1)); breadth = exact sign test of per-window wins (REPORTED, no longer a gate since round 26); stability = the leave-one-cluster-out pooled Sharpe difference must stay positive for (at least) every window — the edge must not be carried by a handful of folds. sharpeDifference and stability are the round-26 gate inputs, estimated from the same clusters, the sample unit the fold structure actually repeats.',
     };
 }
 
@@ -874,6 +1058,104 @@ export function restateReportAtCost(report, costBps, { periodsPerYear = 252, tri
     };
 }
 
+// Restate a report at another confidence->position policy (round 26, R26-3).
+//
+// The journal records, per fold, the model's raw signed confidence and the
+// positions the scored policy emitted. A policy change (dead zone, scale — and,
+// from R26-6, a holding rule) is then PURE POST-PROCESSING: no model is re-run.
+// `restateReportAtPolicy(report, policy)` returns the restated per-fold positions
+// and metrics plus the pooled/aggregate/dependence blocks, recomputed with the
+// same `backtestMetrics`/`poolFolds` arithmetic the scored pass used — so a policy
+// sweep is exactly the `--cost-ladder` idea applied to the mapping instead of the
+// cost.
+//
+// Acceptance (pinned): at the scored policy this reproduces the emitted positions
+// byte-for-byte (`verifyPolicyRoundTrip`), which is what makes the sweep sound.
+export function restateReportAtPolicy(report, policy = {}, { costBps = 0, periodsPerYear = 252, trials = null } = {}) {
+    if (!report || !Array.isArray(report.foldInputs) || !report.foldInputs.length) return null;
+    const effectiveTrials = Number.isFinite(trials) ? trials : (Number.isFinite(report.trials) ? report.trials : 1);
+    const perFold = [];
+    const positions = [];
+    const pooled = [];
+    const pooledGross = [];
+    const streamReturns = [];
+    let streamIndex = -1;
+    let streamRemaining = 0;
+    for (let fi = 0; fi < report.foldInputs.length; fi++) {
+        const input = report.foldInputs[fi];
+        // A fold with no journaled confidence (an older journal) falls back to the
+        // scored positions — the restatement is then the identity for that fold.
+        const sig = Array.isArray(input.confidence)
+            ? positionSeriesFromConfidence(input.confidence, policy)
+            : input.signals;
+        const bt = strategyReturns({ returns: input.returns, signals: sig, costBps });
+        const scored = report.folds && report.folds[fi] ? report.folds[fi] : {};
+        perFold.push({
+            testStart: scored.testStart,
+            testEnd: scored.testEnd,
+            metrics: backtestMetrics({ returns: input.returns, signals: sig, costBps, periodsPerYear, trials: effectiveTrials }),
+        });
+        positions.push(sig);
+        for (const r of bt.returns) pooled.push(r);
+        for (const r of bt.gross) pooledGross.push(r);
+        if (streamRemaining <= 0) {
+            streamReturns.push([]);
+            streamIndex++;
+            const lens = report.streamFoldLengths && report.streamFoldLengths[streamIndex];
+            streamRemaining = Array.isArray(lens) ? lens.length : 0;
+        }
+        streamReturns[streamIndex].push(...bt.returns);
+        streamRemaining--;
+    }
+    const streamFoldLengths = report.streamFoldLengths || null;
+    const dependence = dependenceSummary({ streamReturns, streamFoldLengths, periodsPerYear });
+    const effectiveBars = dependence && dependence.available ? dependence.effectiveBars : null;
+    const { pooledMetrics } = poolFolds(perFold, pooled, pooledGross, { periodsPerYear, trials: effectiveTrials, effectiveBars });
+    return {
+        policy: {
+            deadZone: Number.isFinite(policy.deadZone) ? policy.deadZone : 0,
+            scale: Number.isFinite(policy.scale) ? policy.scale : 1,
+            ...(Number.isFinite(policy.enter) ? { enter: policy.enter } : {}),
+            ...(Number.isFinite(policy.exit) ? { exit: policy.exit } : {}),
+            ...(Number.isFinite(policy.minHold) && policy.minHold > 0 ? { minHold: Math.floor(policy.minHold) } : {}),
+        },
+        costBps,
+        trials: effectiveTrials,
+        folds: perFold,
+        positions,
+        pooledMetrics,
+        pooledBars: pooled.length,
+        pooledReturns: pooled,
+        pooledGross,
+        streamReturns,
+        streamFoldLengths,
+        aggregate: aggregateFolds(perFold),
+        dependence,
+        power: powerSummary(pooledMetrics.netSharpe, pooled.length, periodsPerYear, dependence),
+    };
+}
+
+// The acceptance check for R26-3: the journaled confidence + the scored policy
+// must reproduce the emitted positions exactly. Returns `{ ok, mismatch, folds }`.
+export function verifyPolicyRoundTrip(report, policy = {}) {
+    if (!report || !Array.isArray(report.foldInputs) || !report.foldInputs.length) {
+        return { ok: false, mismatch: 0, folds: 0, reason: 'no foldInputs' };
+    }
+    let mismatch = 0;
+    let checked = 0;
+    for (const f of report.foldInputs) {
+        if (!f || !Array.isArray(f.confidence) || !Array.isArray(f.signals) || f.confidence.length !== f.signals.length) {
+            return { ok: false, mismatch, folds: checked, reason: 'a fold is missing confidence/signals (or they differ in length)' };
+        }
+        checked++;
+        const restated = positionSeriesFromConfidence(f.confidence, policy);
+        for (let i = 0; i < f.signals.length; i++) {
+            if (restated[i] !== f.signals[i]) mismatch++;
+        }
+    }
+    return { ok: mismatch === 0, mismatch, folds: checked };
+}
+
 // The cost ladder: the whole decision recomputed at a handful of cost levels.
 //
 // `levels` are in basis points of turnover (the unit `--cost-bps` uses). Level 0
@@ -941,7 +1223,7 @@ export function costLadder({
     };
 }
 
-export const DEPENDENCE_GATE_READER = 'Round-25 gate: the candidate must (a) beat the baseline on the paired cluster Sharpe difference at alpha, (b) win a significant majority of fold windows (exact sign test at alpha), and (c) clear the DSR floor on the design-effect-adjusted sample size (dsrAdjusted). (a) and (b) are estimated from fold-window clusters, the unit the walk-forward repeats; (c) uses n/designEffect because the pooled bars are correlated across streams. The returned `gate` records, per hurdle, whether it was applied | skipped-no-panel (a single stream has no panel to estimate from) | not-needed (a panel exists but the design effect is <= 1, so nothing was over-confident to deflate) | off — a report can never claim a hurdle it did not evaluate.';
+export const DEPENDENCE_GATE_READER = 'Round-26 gate: the candidate must (a) beat the baseline on the paired cluster Sharpe difference at alpha (the magnitude floor) and (b) be STABLE — the paired Sharpe difference must stay positive when ANY single fold-window cluster is deleted (the edge must not be carried by a handful of folds), and (c) clear the DSR floor on the design-effect-adjusted sample size (dsrAdjusted). The exact sign test over fold windows is still computed and reported (`promotionTest.breadth`) but is no longer a gate: it passed every candidate and its 2^-n floor made it uninformative about magnitude. (a) and (b) are estimated from fold-window clusters, the unit the walk-forward repeats; (c) uses n/designEffect because the pooled bars are correlated across streams. The returned `gate` records, per hurdle, whether it was applied | skipped-no-panel (a single stream has no panel to estimate from) | not-needed (a panel exists but the design effect is <= 1, so nothing was over-confident to deflate) | off — a report can never claim a hurdle it did not evaluate.';
 
 // ---------------------------------------------------------------------------
 // Family correlation: how many independent bets did the search really make?

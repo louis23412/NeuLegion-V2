@@ -17,6 +17,9 @@ import {
     stableHash, configFingerprint, STRUCTURE_CONFIG_KEYS, assertControllerArgs,
 } from '../../../src/legion/sanitize.js';
 import { mulberry32, hashString, deriveSeed, installSeededRandom } from '../../../src/legion/rng.js';
+import fs from 'fs';
+import path from 'path';
+import { readCandles, readCloses } from '../../../src/analyze.js';
 
 export async function run() {
     const checks = [];
@@ -124,6 +127,39 @@ export async function run() {
     check('rejects a non-finite atrFactor', rejects({ priceObj: { ...good.priceObj, atrFactor: NaN } }));
     check('rejects a zero minPriceMovement', rejects({ priceObj: { ...good.priceObj, minPriceMovement: 0 } }));
     check('rejects a negative stopFactor', rejects({ priceObj: { ...good.priceObj, stopFactor: -1 } }));
+
+    // ---- K. R26-10: the reader's boundary-degradation matrix ----------------
+    // A run must degrade, never abort, on the six boundary inputs the sweep
+    // matrix names: empty, short, corrupt row, NaN, duplicate timestamp and
+    // shuffled order. The A/B reads candle JSONL through `readCandles`/`readCloses`
+    // before any component touches it, so this is the first guard in the chain.
+    const dir = path.join('.nl-guards-test');
+    try { if (typeof fs.mkdirSync === 'function') fs.mkdirSync(dir, { recursive: true }); } catch { /* exists */ }
+    const write = (name, body) => { const p = path.join(dir, name); fs.writeFileSync(p, body); return p; };
+    try {
+        const empty = write('empty.jsonl', '');
+        check('reader: an empty file yields no rows (no throw)', readCandles(empty).length === 0 && readCloses(empty).length === 0);
+        const short = write('short.jsonl', JSON.stringify({ timestamp: 1, open: 1, high: 2, low: 0.5, close: 1.5, volume: 3 }));
+        check('reader: a one-row file yields exactly one row', readCandles(short).length === 1 && readCloses(short).length === 1);
+        const corrupt = write('corrupt.jsonl', [JSON.stringify({ timestamp: 1, close: 10 }), '{oops', JSON.stringify({ timestamp: 2, close: 11 })].join('\n'));
+        check('reader: a corrupt row is skipped, the valid rows survive',
+            readCandles(corrupt).length === 2 && readCandles(corrupt).map((c) => c.close).join(',') === '10,11' &&
+            readCloses(corrupt).join(',') === '10,11');
+        const nan = write('nan.jsonl', [JSON.stringify({ timestamp: 1, close: null }), JSON.stringify({ timestamp: 2, close: 'abc' }), JSON.stringify({ timestamp: 3, close: 7 })].join('\n'));
+        check('reader: NaN / non-numeric closes are skipped; a close-only row is filled to a usable OHLCV bar',
+            readCandles(nan).length === 1 &&
+            JSON.stringify(readCandles(nan)[0]) === JSON.stringify({ timestamp: 3, open: 7, high: 7, low: 7, close: 7, volume: 1 }));
+        const dup = write('dup.jsonl', [JSON.stringify({ timestamp: 5, close: 1 }), JSON.stringify({ timestamp: 5, close: 2 })].join('\n'));
+        check('reader: a duplicate timestamp degrades to two rows (the auditor, not the reader, is the dedupe gate)',
+            readCandles(dup).length === 2 && readCandles(dup).map((c) => c.close).join(',') === '1,2');
+        const shuffled = write('shuffled.jsonl', [JSON.stringify({ timestamp: 9, close: 9 }), JSON.stringify({ timestamp: 1, close: 1 }), JSON.stringify({ timestamp: 5, close: 5 })].join('\n'));
+        check('reader: a shuffled stream is preserved in file order (the reader never reorders time)',
+            readCandles(shuffled).map((c) => c.timestamp).join(',') === '9,1,5');
+        check('reader: maxBars takes the most recent rows, not the first',
+            readCandles(shuffled, { maxBars: 2 }).map((c) => c.timestamp).join(',') === '1,5');
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
 
     const failed = checks.filter((x) => !x.pass);
     return { total: checks.length, failed: failed.length, failures: failed, checks };

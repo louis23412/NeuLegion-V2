@@ -35,6 +35,36 @@ class HiveMindController {
         totalPoints : 0,
         realPoints : 0,
 
+        // Label lifecycle (round 26, R26-2 / BUGS.md #36/#37): the resolved-barrier
+        // split and the Brier components of every *scored* closed trade, so a
+        // model's accuracy can be referenced to the label base rate. Counted over
+        // the same rows as `total` (`confidence >= 0`), so the skill score and the
+        // base rate share a sample. A trade resolved at the take-profit has
+        // `outcome === 1`; the stop, `outcome === 0`.
+        resolvedTakeProfit : 0,
+        resolvedStopLoss : 0,
+        brierSum : 0,
+        brierCount : 0,
+
+        // Candles rejected by the OHLCV validity filter (round 26, R26-1 suspect
+        // 8): a malformed bar is counted rather than silently skipped. Per-call
+        // observations, so the same malformed bar in two windows counts twice.
+        droppedCandles : 0,
+
+        // Label lifecycle, part 2 (round 26, R26-11 / BUGS.md #36): how trades
+        // resolved under the label policy — a time barrier, and the entry-to-close
+        // holding distribution — so the FIFO drain's lag and the "never expires a
+        // trade" defect are visible rather than inferred. `resolvedTimeBarrier`
+        // counts every time-barrier closure (including rows with `confidence < 0`,
+        // which are not in `total`); `heldBars*` cover every closed trade.
+        resolvedTimeBarrier : 0,
+        heldBarsSum : 0,
+        heldBarsCount : 0,
+        heldBarsMax : 0,
+        // A duplicate-timestamp (or otherwise failed) open-trade write (R26-0).
+        // In-memory only: not persisted, not part of the signal payload.
+        openTradeWriteErrors : 0,
+
         memoriesSent : 0,
         memoriesReceived : 0
     }
@@ -53,12 +83,35 @@ class HiveMindController {
     _shouldDumpState;
     _memoryBroadcast;
     _lastSaveStatus;
+    // State-persistence interval, in `getSignal` calls (round 26, R26-12).
+    // `1` (default) dumps on every call, exactly as before — so the golden
+    // fingerprints are unchanged. A larger value trades crash-recovery
+    // granularity for throughput: `HiveMind.dumpState()` rewrites the ENTIRE
+    // ensemble state (weights, gradient accumulators, every memory prototype) to
+    // SQLite, measured at ~25% of per-call time, and the A/B never reads the
+    // saved state back, so it sets `Infinity` (see `makeControllerModelFactory`).
+    // This only affects when the state is written; `_saveState` does not mutate
+    // the model, so the emitted signals/positions are identical at any interval.
+    _saveInterval = 1;
+    _saveTicks = 0;
     // Sample-uniqueness-weighted training (Lopez de Prado ch. 4, see
     // training/sample_weights.js). null (default) disables it: every closed
     // trade trains with weight 1, exactly as before, so the golden fingerprints
     // are unchanged. Set `{ horizonBars, intervalMs?, ...weightConfig }` to
     // enable.
     _sampleWeightConfig = null;
+
+    // Trade-label policy (round 26, R26-11 / BUGS.md #36). `'optimistic'`
+    // (default) is the historical behaviour — a bar that spans both barriers is
+    // booked as a win, a gapped stop fills at the stop price, and a trade that
+    // never triggers a barrier is never closed — so every golden fingerprint is
+    // untouched. `'conservative'` resolves a both-barrier bar to the STOP
+    // (stop-first) and fills a gapped stop at the bar's worst traded price.
+    // `'triple'` is conservative plus a time barrier at `_labelHorizonBars`
+    // (the third barrier of the triple-barrier label, Lopez de Prado 2018 ch. 3).
+    // The A/B exposes these as opt-in variants (`analyze.js#LABEL_VARIANTS`).
+    _labelPolicy = 'optimistic';
+    _labelHorizonBars = null;
 
     constructor ( id, dp, cs, es, type, tier, priceObj, forceMin = false ) {
         assertControllerArgs({ dp, cs, es, type, tier, priceObj });
@@ -158,14 +211,25 @@ class HiveMindController {
         }
         
         if (recentCandles.length > 0) {
-            insertTradeStmt.run(
-                recentCandles.at(-1).timestamp,
-                sellPrice,
-                stopLoss,
-                entryPrice,
-                JSON.stringify(features),
-                prediction
-            );
+            // A duplicate timestamp cannot be inserted (`open_trades.timestamp` is
+            // a PRIMARY KEY), and a data glitch must not throw out of `getSignal`
+            // and abort the batch (round 26, R26-0): count it, warn, and continue
+            // without the trade. The counter is in-memory only (not persisted, not
+            // part of the signal payload), so the golden fingerprints are
+            // unaffected.
+            try {
+                insertTradeStmt.run(
+                    recentCandles.at(-1).timestamp,
+                    sellPrice,
+                    stopLoss,
+                    entryPrice,
+                    JSON.stringify(features),
+                    prediction
+                );
+            } catch (err) {
+                this._globalAccuracy.openTradeWriteErrors = (this._globalAccuracy.openTradeWriteErrors || 0) + 1;
+                console.warn(`[isolated] could not open a trade at ${recentCandles.at(-1).timestamp}: ${err.message}`);
+            }
         }
 
         this._processClosedTrades(processCount);
@@ -186,7 +250,21 @@ class HiveMindController {
             currentMemories = translation.totalMemories;
             memoriesPerMember = translation.protosPerMember;
 
-            this._lastSaveStatus = this._hivemind.dumpState();
+            // Checkpoint throttling (round 26, R26-12): `_saveInterval = 1`
+            // (default) dumps every call — bit-identical to the previous
+            // behaviour — a finite `k > 1` dumps every k-th call, and
+            // `Infinity`/`0`/negative never dumps during the run. The in-memory
+            // ensemble is authoritative (nothing reloads mid-run) and `_saveState`
+            // does not mutate the model, so the emitted signal is the same at any
+            // interval; only the wall clock and the crash-recovery granularity
+            // change. The A/B therefore sets `Infinity` (the saved state is never
+            // read back there).
+            this._saveTicks++;
+            // Floor to an integer interval; a non-finite interval (Infinity) never
+            // matches the modulo, and a non-positive one is disabled explicitly.
+            const saveInterval = Number.isFinite(this._saveInterval) ? Math.floor(this._saveInterval) : Infinity;
+            const shouldSave = saveInterval > 0 && (this._saveTicks % saveInterval === 0);
+            if (shouldSave) this._lastSaveStatus = this._hivemind.dumpState();
         }
 
         const tradesStmt = this._db.prepare(`SELECT timestamp FROM open_trades`);
@@ -265,15 +343,39 @@ class HiveMindController {
                 configurable: true,
             });
         }
+        // The same non-enumerable diagnostic for the round-26 counters (R26-1
+        // dropped candles, R26-0 failed open-trade writes). Only defined when
+        // nonzero, so a clean signal carries no extra property and the golden
+        // payload (which hashes enumerable keys) is untouched.
+        for (const [key, value] of [
+            ['droppedCandles', this._globalAccuracy.droppedCandles],
+            ['openTradeWriteErrors', this._globalAccuracy.openTradeWriteErrors],
+        ]) {
+            if (value > 0) {
+                Object.defineProperty(signal, key, { value, enumerable: false, configurable: true });
+            }
+        }
 
         return signal;
+    }
+
+    // Write the in-memory ensemble state to disk now, regardless of
+    // `_saveInterval` (round 26, R26-12). `getSignal` throttles the per-call
+    // checkpoint; this is the explicit "final flush" a caller uses when it does
+    // want the on-disk state to reflect the last call (e.g. an A/B fold run with
+    // the state kept for forensics). It is a no-op before the mind exists and
+    // never mutates the model, so it cannot move an emitted signal.
+    flushState () {
+        if (!this._hivemind) return null;
+        this._lastSaveStatus = this._hivemind.dumpState();
+        return this._lastSaveStatus;
     }
 }
 
 // The controller-side helper methods used to live in this class body. They are
 // now split across ./controller/* (see src/README.md) and installed onto the
 // prototype here, in one place, so the class stays a readable shell: fields,
-// constructor, and the public getSignal() API.
+// constructor, and the public getSignal()/flushState() API.
 for (const methods of [
     controllerDatabaseMethods,
     controllerAccuracyMethods,

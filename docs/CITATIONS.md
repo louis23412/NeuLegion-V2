@@ -178,6 +178,145 @@ venue/year so they remain findable.
 - Frazzini, Israel & Moskowitz. *Trading Costs.* SSRN 3221167, 2018. (the empirical scale of trading costs, and why a gross-only verdict is not a verdict — grounds the `costLadder` levels and `breakEvenCostBps`)
 - Binance. *Spot and USDⓈ-M futures fee schedules* (spot taker 10 bps, USDⓈ-M futures taker 5 bps). Platform docs, 2024–2026. (the concrete cost levels the default `costLadder` brackets)
 
+## Trading costs, turnover & position policy
+
+Grounding for round 26 (R26-3/R26-5): the *economic* half of the ceiling the
+`20260921T062511-seed1` run exposed. The signal family's gross edge per unit of
+turnover is 0.09-3.47 bps against a 5-10 bps taker cost, so the question is not
+whether a signal predicts but whether its prediction can be *held* long enough to
+pay for the trading it implies.
+
+- Constantinides. *Capital Market Equilibrium with Transaction Costs.* Journal of
+  Political Economy 94(4):842–862, 1986. (a proportional transaction cost makes the
+  optimal policy a **no-trade region**: do nothing until the position drifts outside
+  a band — the theoretical form of the dead zone plus the holding rule in R26-5)
+- Davis & Norman. *Portfolio Selection with Transaction Costs.* Mathematics of
+  Operations Research 15(4):676–713, 1990. (characterises the region's boundaries
+  and the impulse/continuity structure of the optimal policy — the reason an
+  `enter`/`exit` hysteresis pair, not a single threshold, is the right parameterisation)
+- Gârleanu & Pedersen. *Dynamic Trading with Predictable Returns and Transaction
+  Costs.* Journal of Finance 68(6):2309–2340, 2013. (the modern dynamic formulation:
+  the optimal trade is a fraction of the distance to the aim portfolio, with a
+  cost-scaled **aim in and out** region — grounds trading *slower* rather than not at
+  all, and supplies the "effective turnover" notion)
+- *Optimal investment in illiquid market with search frictions and transaction
+  costs.* arXiv 2101.09936. (small-cost asymptotics of the no-trade region's
+  boundaries and value function — the quantitative shape the dead-zone sweep is
+  searching over)
+- *Large-Scale Portfolio Allocation Under Transaction Costs and Model Uncertainty.*
+  arXiv 1709.06296. (shows turnover penalisation is *equivalent to* regularisation of
+  the portfolio weights, and that it dominates ordinary shrinkage out of sample —
+  the theoretical reason `clampPosition`/`deadZone` should be tuned against turnover
+  rather than chosen a priori)
+- *On the Effect of Alpha Decay and Transaction Costs on the Multi-period Optimal
+  Trading Strategy.* arXiv 2502.04284. (models alpha decay — *past* signal values
+  have predictive power — and derives the optimal multi-period policy under costs:
+  the rigorous version of "hold a position while the decaying signal still justifies
+  paying to keep it", i.e. exactly R26-5's hysteresis rule)
+- *Finance-Grounded Optimization For Algorithmic Trading.* arXiv 2509.04541.
+  (introduces **turnover regularization** — a loss term that constrains a learned
+  position series' turnover to a pre-set budget — and shows financially grounded
+  losses beat accuracy losses; the learning-side complement to the policy-side sweep)
+- *Enhancing Time Series Momentum Strategies Using Deep Neural Networks.*
+  arXiv 1904.04912. (Deep Momentum Networks learn trend *and* position sizing jointly
+  by optimising the Sharpe ratio, retaining an edge after 2-3 bps of cost — evidence
+  that a learned sizing/sign-shaping layer is the right place to attack turnover)
+- Grinold. *The Fundamental Law of Active Management.* Journal of Portfolio
+  Management 15(3):30–37, 1989. (the information ratio scales with √breadth, where
+  breadth is the number of *independent* forecasts — the reason R26-6 buys effective
+  independent streams rather than bars, and the finance-domain statement of the same
+  design-effect correction `analysis/dependence.js` measures)
+- Cawley & Talbot. *On Over-fitting in Model Selection and Subsequent Selection Bias
+  in Performance Evaluation.* Journal of Machine Learning Research 11:2079–2107,
+  2010. (model *selection* must be nested inside the evaluation or the reported
+  performance is biased — the standard result behind R26-9's warning that reusing one
+  warmed model across folds/trials changes what the fold statistics mean)
+- *Identifying Predictions That Influence the Future: Detecting Performative Concept
+  Drift in Data Streams.* arXiv 2412.10545. (trading is a performative setting where
+  the deployed model can induce the drift it then reacts to; the argument *for*
+  periodically refitting rather than snapshotting once — the other side of R26-9)
+- Jamieson & Talwalkar. *Non-stochastic Best Arm Identification and Hyperparameter
+  Optimization.* AISTATS 2016 (arXiv 1502.07943). (successive halving: give many
+  arms a small budget, keep the top 1/eta, repeat — the engine behind R26-15)
+- Li, Jamieson, DeSalvo, Rostamizadeh & Talwalkar. *Hyperband: A Novel Bandit-Based
+  Approach to Hyperparameter Optimization.* JMLR 18(185):1–52, 2018 (arXiv
+  1603.06560). (successive halving as a subroutine; the budget/eta schedule R26-15
+  implements)
+- Moskowitz & Grinblatt. *Do Industries Explain Momentum?* Journal of Finance
+  54(4):1259–1295, 1999. (cross-sectional momentum: ranking a *basket* and going
+  long the leaders / short the laggards — the construction that makes the common
+  market factor cancel, so per-stream returns are far less correlated than the same
+  feature applied to each stream independently; grounds round 26's cross-sectional
+  lead)
+- Moskowitz, Ooi & Pedersen. *Time Series Momentum.* Journal of Financial Economics
+  104(2):228–250, 2012. (the time-series counterpart and the evidence that the two
+  families are genuinely different bets — grounds the current signal family's
+  framing and the diversity argument for adding the cross-sectional one)
+- Asness, Moskowitz & Pedersen. *Value and Momentum Everywhere.* Journal of Finance
+  68(4):929–985, 2013. (momentum across asset classes: combining weakly-correlated
+  sleeves is how breadth is actually bought — the empirical form of Grinold's √breadth
+  and of the round-26 composite lead)
+
+## Experimental design, replication & model comparison
+
+Grounding for round 26's family-search half (R26-11…R26-15). The correctness,
+throughput and economics items make a *reading* trustworthy; these make a
+*decision between models* legitimate. The core fact is that a variant ordering from
+one seed is not a ranking, and the core tool is a paired, replicated, distribution-
+aware comparison.
+
+- Bouthillier, Laurent & Vincent. *Unreproducible Research is Reproducible.*
+  Proceedings of the 36th International Conference on Machine Learning (ICML),
+  2019. (running identical code with different seeds changes results materially,
+  and seed-to-seed variation routinely exceeds the variation attributed to the
+  factor being compared — the reason a single-seed variant ordering is not a family
+  ranking, and the reason R26-13 exists)
+- Henderson, Islam, Bachman, Pineau, Precup & Meger. *Deep Reinforcement Learning
+  that Matters.* AAAI 2018. arXiv 1709.06560. (the same conclusion from the RL
+  side, with the reporting recipe: several seeds, a distribution rather than a
+  point, and the seed recorded in the manifest so a result can be reproduced)
+- Agarwal, Schwarzer, Castro, Courville & Bellemare. *Deep Reinforcement Learning
+  at the Edge of the Statistical Precipice.* NeurIPS 2021. arXiv 2108.13264.
+  (interquartile mean and **stratified bootstrap** confidence intervals over runs,
+  plus performance profiles — the honest summary of a noisy per-run metric, and the
+  source of R26-13's "report the distribution, never a single run" rule)
+- Glasserman & Yao. *Some Guidelines and Guarantees for Common Random Numbers.*
+  Management Science 38(6):884–908, 1992. (**common random numbers**: using the same
+  random stream across the alternatives being compared reduces the variance of the
+  *difference* even though it leaves each level's variance alone — the reason the
+  A/B's fold seed should be variant-independent, since "A beats B" is a statement
+  about the paired difference)
+- Jamieson & Talwalkar. *Non-stochastic Best Arm Identification and Hyperparameter
+  Optimization.* AISTATS 2016. arXiv 1502.07943. (successive halving: give every arm
+  a small budget, discard the statistically bad ones, reallocate — the principled
+  way to search a family under a compute budget, which is exactly this project's
+  constraint; grounds R26-15)
+- Li, Jamieson, DeSalvo, Rostamizadeh & Talwalkar. *Hyperband: A Novel Bandit-Based
+  Approach to Hyperparameter Optimization.* Journal of Machine Learning Research
+  18(185):1–52, 2018. arXiv 1603.06560. (the bracket/racing formulation on top of
+  successive halving, with the exploration/exploitation budget split explicit — the
+  template for R26-15's driver)
+- Diebold & Mariano. *Comparing Predictive Accuracy.* Journal of Business &
+  Economic Statistics 13(3):253–263, 1995. (the paired test on per-period loss
+  differentials — the correct way to say "model A forecasts better than model B" on
+  the same bars, and the statistic R26-14 is built from)
+- Hansen, Lunde & Nason. *The Model Confidence Set.* Econometrica 79(2):453–497,
+  2011. (return the **set** of models that cannot be distinguished from the best at
+  a chosen confidence, instead of crowning a winner from noisy, dependent losses —
+  the right output when K families are compared, and R26-14's headline)
+- Gneiting & Raftery. *Strictly Proper Scoring Rules, Prediction and Estimation.*
+  Journal of the American Statistical Association 102(477):359–378, 2007. (which
+  scores are **proper** — so "the model is good" cannot be earned by hedging toward
+  the base rate; the constraint R26-14's and R26-2's metric choices must satisfy)
+- Young. *A First Order Approximation to the Optimum Checkpoint Interval.*
+  Communications of the ACM 17(9):530–532, 1974. (the checkpoint interval that
+  balances dump cost against expected lost work — why a full-state dump on every
+  call is far from optimal, and the frame for R26-12's `saveInterval`)
+- Daly. *A Higher Order Estimate of the Optimum Checkpoint Interval for Restart
+  Dumps.* Future Generation Computer Systems 22(3), 2006. (the refined interval for
+  large dumps — the same tradeoff for the A/B, where the dump is large and the
+  failure window is a whole run)
+
 ## Observability, calibration & monitoring
 
 Grounding for the dedicated outer analysis layer (`src/observer/`, ROADMAP P1-2) —

@@ -78,7 +78,7 @@ property pinned by a dedicated test; **needs-local-run** = native dependency
 | Analysis supercharges | `analysis/*` (10 modules: including `world.js` — the audited candle view — and `features.js` — the causal signal family) | **invariant** | `analysis.test.js` (390), `walkforward.test.js` (48) |
 | LSH support modules | `memory/multiprobe.js`, `memory/binarypc.js`, `memory/bitweight.js`, `memory/querymod.js` | **invariant** (default-off; golden no-op) | their own entries + `lsh.test.js` section J + `golden.test.js` |
 
-Registry totals: **53 entries — 17 bit-exact, 36 invariant, 0 needs-local-run,
+Registry totals: **60 entries — 17 bit-exact, 43 invariant, 0 needs-local-run,
 0 experimental.** The canonical check ledger is in [`RUNBOOK.md`](RUNBOOK.md).
 The native `npm test` gate is green at round 22 (**115/115 blocks across 39
 files**, `docs/BUGS.md` #20/#21), so the three controller DB bags that were the
@@ -180,6 +180,28 @@ The round-25 rule, recorded here because it is a decision-procedure change:
   and no re-run. A verdict that changes across the ladder is a verdict about the cost
   assumption.
 
+**Round-25b observation (from the `20260921T062511-seed1` real run).** The three
+hurdles did not bind equally. On 8 signal candidates, `requireBreadth` passed **8 of
+8** — and hit its 2^-C resolution floor (p = 2^-142 ≈ 1.8e-43) on three of them —
+while `requireSharpeDiff` and `minDsrAdjusted` rejected all 8. A sign test against
+a near-zero baseline is close to automatic, so as specified the breadth hurdle adds
+little discrimination and the magnitude hurdles do the work; giving it a magnitude
+floor is now a tracked question (`ROADMAP.md` round 26, R26-7). **Resolved in round
+26 (R26-7):** the sign test is kept as a reported statistic, and the shipped
+dependence gate is the magnitude floor (`requireSharpeDiff`) plus a
+cluster-stability requirement (`requireClusterStability` — the pooled difference
+must stay positive on every leave-one-cluster-out panel). **Correction (round 26b,
+`BUGS.md` #39):** the breadth figures quoted here were produced by a
+`pairedClusterSignTest` that compared all-but-window-c (the jackknife input), i.e. a
+leave-one-out form, so the "8 of 8" and "2^-C floor" numbers are superseded by the
+per-window sign test now shipped; the conclusion (breadth separated nothing against
+a weak baseline) is unaffected. The same run is also the clearest
+vindication of the clustered tests: **every** signal had a negative mean per-fold
+Sharpe and a `foldWinFraction < 0.5`, yet a positive pooled Sharpe and a ~100%
+fold-*window* win rate. At the fold level the fractions said "loses"; at the cluster
+level the tests said "no significant magnitude". Only the clustered view is
+answering the question the fold grid actually asks.
+
 ## 7. Integration invariants (what keeps the pieces coherent)
 
 - **Golden fingerprints (11).** `golden.test.js` pins the exact seeded
@@ -201,8 +223,8 @@ The round-25 rule, recorded here because it is a decision-procedure change:
 The open, prioritized work is in [`TODO.md`](TODO.md); the consolidated plan and
 priority rationale is in [`ROADMAP.md`](ROADMAP.md).
 
-The design is still frozen; the native gate is **green (115/115 blocks,
-`BUGS.md` #20/#21)**. Round 22 delivered the full ROADMAP P0-P3 programme (run
+The design is still frozen; the native gate is **green (123/123 blocks,
+`BUGS.md` #20/#21/#42)**. Round 22 delivered the full ROADMAP P0-P3 programme (run
 integrity + determinism + the dry-run/preflight harness + the monitor dashboard +
 the legion observer + the walk-forward A/B driver); the only hot-path-adjacent
 golden change was the deliberate `hm:postReloadPrediction` re-freeze (`BUGS.md`
@@ -261,3 +283,31 @@ behaviour is behind `--gate=` (default `dependence`, `classic` for the round-23/
 rule) and `--cost-ladder=`. The remaining step is not construction, it is the next
 **experiment**: a run sized by *independence* rather than bars (`RUN-ANALYSIS.md`
 §6.4), whose report will carry the round-25 blocks natively.
+
+**Round-26 forensic finding — the A/B's controller input was not the production
+input (fixed by R26-0; `BUGS.md` #33-#37 all fixed).** The first run made *with* the round-25 blocks and the corrected
+power maths (`20260921T062511-seed1`) settled the economic question (nothing
+promotes; the signal family's break-even is 0.09-3.47 bps against a 5-10 bps
+taker), and a controller/A-B fidelity sweep then found a defect in the *driver*
+that changes how its baseline row must be read (`BUGS.md` #33): `analyze.js`
+streams `candles.slice(0, i)` into `getSignal` where production streams
+`state.cache.slice(-cacheSize)` (`legion/workers.js`), so the controller's candle
+table re-inserts its own trimmed history on every call and `_updateOpenTrades` —
+which has no timestamp guard — closes trades against bars older than their entry.
+Measured: 78/144 wins with the prefix vs 156/64 with the production window on the
+same seed and data. The signal-family rows are unaffected (they never construct a
+controller), so the "the ceiling is economic" verdict stands, but the baseline
+comparison does not, and the fix is a precondition for any further measurement.
+Round 26's shape is therefore: **correctness** (R26-0 the window fix, R26-1 a
+repeatable controller sweep, R26-11 label-policy variants) before **throughput**
+(R26-12 the checkpoint throttle, R26-4 parallel folds) before
+**economics** (R26-3 the unified policy, R26-5 the holding/turnover sweep, R26-6
+effective independence) before
+**decision quality** (R26-2/R26-7/R26-8) and the **method** question (R26-9), with a
+**family-search** half (R26-13 seed replication with common random numbers,
+R26-14 forecast comparison + Model Confidence Set, R26-15 gated racing) that
+decides *which* family the following round builds. The second sweep pass
+(`RUN-ANALYSIS.md` §8.4) also withdrew round 25c's cost attribution — a
+production-shaped window costs the same per call as the prefix — so nothing is
+sized on the churn. No new mechanism, no training-arithmetic change, no golden
+re-freeze is in scope.

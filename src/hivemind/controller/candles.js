@@ -23,6 +23,16 @@ export const controllerCandleMethods = {
             c.volume >= 0
         );
 
+        // A malformed bar is counted, never silently skipped (round 26, R26-1
+        // suspect 8): the count rides in `stats()` and, when nonzero, on the
+        // signal as a non-enumerable diagnostic. `candles.length - newCandles.length`
+        // counts only the invalid entries — a repeated (already-seen) candle is
+        // still valid and is ignored by `INSERT OR IGNORE`, not dropped here.
+        const dropped = candles.length - newCandles.length;
+        if (dropped > 0) {
+            this._globalAccuracy.droppedCandles = (this._globalAccuracy.droppedCandles || 0) + dropped;
+        }
+
         let recentCandles = [];
         let fullCandles = [];
         const transaction = this._db.transaction(() => {

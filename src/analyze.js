@@ -25,9 +25,17 @@ import fs from 'fs';
 import path from 'path';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
+import { Worker } from 'node:worker_threads';
 import { CONFIG } from './legion/config.js';
 import { mulberry32, hashString } from './legion/rng.js';
-import { walkForwardEvaluate, promoteDecision, formatReport, walkForwardSearch, probToPosition, poolReports, costLadder, familyCorrelation, DEPENDENCE_GATE_READER } from './analysis/walkforward.js';
+import { runWorkerThread } from './legion/workers.js';
+import { makeFoldExecutor, normaliseConcurrency } from './analysis/parallel.js';
+import { walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision, formatReport, walkForwardSearch, probToPosition, confidenceToPosition, confidenceFromProb, restateReportAtPolicy, verifyPolicyRoundTrip, poolReports, costLadder, familyCorrelation, DEPENDENCE_GATE_READER } from './analysis/walkforward.js';
+import { turnoverSweep as runTurnoverSweep, formatTurnoverSweep } from './analysis/holding.js';
+import { resampleCandles, designEffectOfStreams, selectStreams as runStreamSelection, formatStreamSelection } from './analysis/streams.js';
+import { seedDistribution, formatSeedReplication } from './analysis/replication.js';
+import { forecastComparison, formatForecast } from './analysis/forecast.js';
+import { foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision } from './analysis/decision.js';
 import { walkForwardSplit } from './analysis/splits.js';
 import { makeCandleViewFor, worldFromCandles, DEFAULT_SHOCK } from './analysis/world.js';
 import { SIGNAL_CANDIDATES, signalForCandidate } from './analysis/features.js';
@@ -113,13 +121,63 @@ export const SIGNAL_VARIANTS = Object.freeze(
 // family. `kind` (default 'mechanism') distinguishes them in the report.
 export const ALL_VARIANTS = Object.freeze([...VARIANTS, ...SIGNAL_VARIANTS]);
 
-// The probability -> position policy for the controller-backed model (round 23,
-// N0). The controller's confidence is a small deviation around 50 (measured: test
-// windows sit in ~46-58), so the mapping is documented rather than implicit:
-// `probToPosition` maps 50 -> 0 and saturates at the extreme, and `deadZone`
-// abstains when the confidence is within 5% of a coin flip, i.e. prob in
-// [47.5, 52.5]. Measured cost/behaviour of the policy is recorded in the report.
-export const CONTROLLER_POSITION_POLICY = Object.freeze({ deadZone: 0.05, scale: 1 });
+// The trade-label policies as opt-in A/B candidates (round 26, R26-11 /
+// BUGS.md #36). They are CONTROLLER-scoped: each sets the controller's
+// `_labelPolicy` (the `triple` policy also needs a run-level `labelHorizonBars`).
+// `optimistic` is the baseline's behaviour, so only `conservative` and `triple`
+// are candidates. They are deliberately NOT in the default roster: a label change
+// is a *training-set* change, so it is opt-in (`--variants=label-conservative,...`
+// or `--label-policies`) and never silently on — the default trajectory and every
+// golden fingerprint are untouched.
+export const LABEL_VARIANTS = Object.freeze([
+    {
+        id: 'label-conservative',
+        label: 'label:conservative',
+        kind: 'label',
+        controllerScoped: true,
+        labelPolicy: 'conservative',
+        note: 'stop-first tie-break on a both-barrier bar + a gapped stop filled at the worst traded price (BUGS.md #36)',
+        configure: (ctl) => { ctl._labelPolicy = 'conservative'; },
+        afterFit: null,
+    },
+    {
+        id: 'label-triple',
+        label: 'label:triple',
+        kind: 'label',
+        controllerScoped: true,
+        labelPolicy: 'triple',
+        note: 'conservative + a time barrier at `labelHorizonBars` (the triple-barrier label, López de Prado 2018 ch. 3)',
+        configure: (ctl) => { ctl._labelPolicy = 'triple'; },
+        afterFit: null,
+    },
+]);
+
+// The full resolvable universe: the default A/B family plus the opt-in label
+// variants. `resolveVariant` searches this (so `--variants=label-triple` works),
+// while the default roster stays the 15-candidate family.
+export const RESOLVABLE_VARIANTS = Object.freeze([...ALL_VARIANTS, ...LABEL_VARIANTS]);
+
+// The confidence→position policy for the A/B (round 26, R26-3 / BUGS.md #34).
+//
+// ONE policy, applied to BOTH candidate families through
+// `walkforward#confidenceToPosition`, in one documented signed-confidence space:
+//   - the controller hands in `(prob − 50)/50`;
+//   - a signal candidate hands in `clamp(z / saturation, −1, 1)` (its feature's
+//     causal z-score normalised to the same [-1, 1] space).
+// Before R26-3 the controller carried this dead zone and the signal family did
+// not, so every turnover/participation comparison was confounded by the mapping.
+// The controller's confidence is a small deviation around 50 (measured test
+// windows sit in ~46-58), so a 5% dead zone abstains on prob in [47.5, 52.5].
+// Measured behaviour is recorded in the report, and the raw confidence is
+// journaled so the policy can be swept offline (`restateReportAtPolicy`).
+export const POSITION_POLICY = Object.freeze({ deadZone: 0.05, scale: 1 });
+// Back-compat name: before R26-3 this was the controller-only policy.
+export const CONTROLLER_POSITION_POLICY = POSITION_POLICY;
+
+// The identity policy (no dead zone, unit scale). Used as `makeSignalForVariant`'s
+// default so a direct call is byte-identical to the pre-R26-3 behaviour; the A/B
+// passes the unified `POSITION_POLICY` explicitly.
+export const IDENTITY_POSITION_POLICY = Object.freeze({ deadZone: 0, scale: 1 });
 
 // The controller cache/ensemble used by the A/B model (the same shape the
 // multi-symbol suite replays: cache 120, ensemble 4, tier 1, forced-minimum
@@ -133,9 +191,10 @@ export const CONTROLLER_MODEL = Object.freeze({ cacheSize: 120, ensembleSize: 4,
 
 let variantIndex = null;
 // Look up a variant by id (throws on an unknown id so a typo cannot silently run
-// the baseline).
+// the baseline). Searches the resolvable universe, which includes the opt-in
+// label variants.
 export const resolveVariant = (id) => {
-    if (!variantIndex) variantIndex = new Map(ALL_VARIANTS.map((v) => [v.id, v]));
+    if (!variantIndex) variantIndex = new Map(RESOLVABLE_VARIANTS.map((v) => [v.id, v]));
     if (!variantIndex.has(id)) {
         throw new Error(`analyze: unknown variant "${id}" (known: ${[...variantIndex.keys()].join(', ')})`);
     }
@@ -182,11 +241,18 @@ export function featureVector(returns, t, { len = FEATURE_LEN, leaky = false } =
 // so a run cannot bloat storage. `runAnalysis` defaults to 'discard'.
 export const makeHiveMindModelFactory = ({
     HiveMind, stateDir, seed = 1, len = FEATURE_LEN, leaky = false, modelRetention = 'keep',
+    // Round 26 (R26-13): common random numbers. When true the per-fold seed is
+    // VARIANT-INDEPENDENT (`seed + testStart*977`), so every variant is fitted and
+    // predicted on the same random draws and the variance of the *difference*
+    // between variants falls (Glasserman & Yao 1992) — the quantity a promotion
+    // decision uses. When false the historical per-variant seed is restored.
+    commonRandomNumbers = true,
 }) => {
     let fitCounter = 0;
     return (variant) => {
         let hm = null;
         let predictSeed = 0;
+        let lastConfidence = [];
         let dir = null;
         let reclaimed = false;
         const reclaim = () => {
@@ -208,7 +274,7 @@ export const makeHiveMindModelFactory = ({
             fit(train, test, view) {
                 const returns = view.returns;
                 const testStart = Math.min(...test);
-                const foldSeed = (variantSeed + testStart * 977) >>> 0;
+                const foldSeed = ((commonRandomNumbers ? seed : variantSeed) + testStart * 977) >>> 0;
                 // A unique directory per fit so no fit resumes another's state.
                 dir = path.join(stateDir, `${variant.id}-${fitCounter++}`);
                 const bars = train.filter((t) => t + 1 < testStart);
@@ -223,8 +289,13 @@ export const makeHiveMindModelFactory = ({
             },
             predict(test, view) {
                 const returns = view.returns;
-                return withSeed(predictSeed, () => test.map((t) => (hm.predict(featureVector(returns, t, { len, leaky })) - 0.5) * 2));
+                // `(prob - 0.5) * 2` is already a signed confidence in [-1, 1], so the
+                // bare model needs no policy (confidence === position).
+                const confidences = withSeed(predictSeed, () => test.map((t) => (hm.predict(featureVector(returns, t, { len, leaky })) - 0.5) * 2));
+                lastConfidence = confidences;
+                return confidences;
             },
+            rawConfidence: () => lastConfidence,
             // Explicit, idempotent disposal. Called by `makeSignalForVariant` after
             // predict, so an in-memory model can still be re-predicted by tests.
             dispose: () => reclaim(),
@@ -233,17 +304,153 @@ export const makeHiveMindModelFactory = ({
     };
 };
 
+// Label-lifecycle + skill diagnostics for one controller's `_globalAccuracy`
+// (round 26, R26-2 / `BUGS.md` #37). Pure, side-effect-free, module-private.
+//
+// A model's raw accuracy is unreadable without its reference point: at the
+// shipped factors the stop is half as far as the take-profit, so the label base
+// rate is ≈27 % TP and "always predict stop" reads as 73 % accurate. So the
+// diagnostics are *referenced* to the base rate with proper scores:
+//
+//   baseRate       fraction of scored trades resolved at the take-profit
+//   brier          mean Brier score of the entry confidence (lower is better)
+//   brierBaseline  the base-rate forecast's Brier score, p̄(1−p̄)
+//   brierSkill     1 − brier/brierBaseline. Proper (Gneiting & Raftery 2007), so
+//                  hedging to the base rate cannot earn skill; > 0 is a real edge
+//   accuracy       directional hit rate, wins/total
+//   chanceAccuracy the base-rate forecast's accuracy, max(baseRate, 1−baseRate)
+//   accuracySkill  accuracy − chanceAccuracy (Heidke-style chance correction)
+//   status         'not-trained' | 'base-rate' | 'skilful' (three states, not two)
+//
+// `raw` carries the un-derived counters so a cross-fold accumulator can pool the
+// sample and recompute the rates over it, instead of averaging per-fold rates.
+const labelDiagnostics = (ga = {}) => {
+    const num = (v) => (Number.isFinite(v) ? v : 0);
+    const trainingSteps = num(ga.trainingSteps);
+    const takeProfit = num(ga.resolvedTakeProfit);
+    const stopLoss = num(ga.resolvedStopLoss);
+    const resolvedTotal = takeProfit + stopLoss;
+    const baseRate = resolvedTotal > 0 ? takeProfit / resolvedTotal : null;
+    const brierCount = num(ga.brierCount);
+    const brier = brierCount > 0 ? num(ga.brierSum) / brierCount : null;
+    const brierBaseline = baseRate == null ? null : baseRate * (1 - baseRate);
+    const brierSkill = (brier != null && brierBaseline != null && brierBaseline > 0)
+        ? 1 - brier / brierBaseline
+        : null;
+    const scored = num(ga.total);
+    const accuracy = scored > 0 ? num(ga.wins) / scored : null;
+    const chanceAccuracy = baseRate == null ? null : Math.max(baseRate, 1 - baseRate);
+    const accuracySkill = (accuracy != null && chanceAccuracy != null) ? accuracy - chanceAccuracy : null;
+    const status = trainingSteps > 0
+        ? ((brierSkill != null && brierSkill > 0) ? 'skilful' : 'base-rate')
+        : 'not-trained';
+    // Label lifecycle (round 26, R26-11): the time-barrier count and the
+    // entry-to-close holding distribution, so the label policy is measurable.
+    const heldCount = num(ga.heldBarsCount);
+    const heldSum = num(ga.heldBarsSum);
+    const heldMax = num(ga.heldBarsMax);
+    return {
+        trainingSteps,
+        quarantinedRows: num(ga.quarantinedRows),
+        droppedCandles: num(ga.droppedCandles),
+        openTradeWriteErrors: num(ga.openTradeWriteErrors),
+        resolved: { takeProfit, stopLoss, total: resolvedTotal },
+        resolvedTimeBarrier: num(ga.resolvedTimeBarrier),
+        heldBars: { count: heldCount, sum: heldSum, max: heldMax, mean: heldCount > 0 ? heldSum / heldCount : null },
+        baseRate, brier, brierBaseline, brierSkill,
+        accuracy, chanceAccuracy, accuracySkill,
+        status,
+        raw: {
+            trainingSteps,
+            quarantinedRows: num(ga.quarantinedRows),
+            droppedCandles: num(ga.droppedCandles),
+            openTradeWriteErrors: num(ga.openTradeWriteErrors),
+            takeProfit, stopLoss,
+            brierSum: num(ga.brierSum), brierCount,
+            wins: num(ga.wins), scored,
+            resolvedTimeBarrier: num(ga.resolvedTimeBarrier),
+            heldBarsSum: heldSum, heldBarsCount: heldCount, heldBarsMax: heldMax,
+        },
+    };
+};
+
+// Cross-fold accumulator for a variant's model diagnostics (round 26, R26-2).
+const emptyModelAccumulator = () => ({
+    folds: 0, notTrainedFolds: 0, undertrainedFolds: 0, warmErrors: 0,
+    raw: {
+        trainingSteps: 0, quarantinedRows: 0, droppedCandles: 0, openTradeWriteErrors: 0,
+        takeProfit: 0, stopLoss: 0, brierSum: 0, brierCount: 0, wins: 0, scored: 0,
+        resolvedTimeBarrier: 0, heldBarsSum: 0, heldBarsCount: 0, heldBarsMax: 0,
+    },
+});
+
+const mergeModelStats = (acc, s) => {
+    if (!acc || !s) return acc;
+    acc.folds += 1;
+    acc.warmErrors += Number.isFinite(s.warmErrors) ? s.warmErrors : 0;
+    if (s.undertrained) acc.undertrainedFolds += 1;
+    if (!(s.trainingSteps > 0)) acc.notTrainedFolds += 1;
+    const raw = s.raw || {};
+    for (const key of Object.keys(acc.raw)) {
+        const v = raw[key];
+        if (!Number.isFinite(v)) continue;
+        // Every counter pools additively except the holding maximum.
+        if (key === 'heldBarsMax') acc.raw[key] = Math.max(acc.raw[key], v);
+        else acc.raw[key] += v;
+    }
+    return acc;
+};
+
+// The per-variant `model` block: the pooled diagnostics, or null when the variant
+// never fit a model (a pure signal candidate) so an absent model cannot be read
+// as a healthy one.
+const summarizeModelStats = (acc) => {
+    if (!acc || acc.folds === 0) return null;
+    const r = acc.raw;
+    const d = labelDiagnostics({
+        trainingSteps: r.trainingSteps,
+        quarantinedRows: r.quarantinedRows,
+        droppedCandles: r.droppedCandles,
+        openTradeWriteErrors: r.openTradeWriteErrors,
+        resolvedTakeProfit: r.takeProfit,
+        resolvedStopLoss: r.stopLoss,
+        brierSum: r.brierSum,
+        brierCount: r.brierCount,
+        wins: r.wins,
+        total: r.scored,
+        resolvedTimeBarrier: r.resolvedTimeBarrier,
+        heldBarsSum: r.heldBarsSum,
+        heldBarsCount: r.heldBarsCount,
+        heldBarsMax: r.heldBarsMax,
+    });
+    return {
+        folds: acc.folds,
+        trained: d.trainingSteps > 0,
+        notTrainedFolds: acc.notTrainedFolds,
+        undertrainedFolds: acc.undertrainedFolds,
+        warmErrors: acc.warmErrors,
+        ...d,
+    };
+};
+
 // The controller-backed model factory (ROADMAP round 23, N0): the A/B's model is
 // the SHIPPED one — a real `HiveMindController` fed the real candle series, with
 // its 10-indicator feature vector, trade bookkeeping and closed-trade training —
 // instead of a bare `HiveMind` on a 6-element return vector.
 //
-// Per fold it streams bars `0 .. testStart-1` (the whole available history, in
-// order: a streaming model cannot skip bars, so the fold's purge exclusions are
-// not honoured — documented) and then evaluates the test bars **prequentially**:
-// the position at bar t is read from `getSignal(candles[0..t])`, so it only ever
-// uses information available at t, and the realised return is t -> t+1. The audit
-// (`analysis/world.js`) certifies exactly that property.
+// Per fold it streams bars `0 .. testStart-1` **through the same window shape
+// production uses** (`legion/workers.js` passes `state.cache.slice(-cacheSize)`,
+// i.e. the last `cacheSize` candles; the controller trims its own candle table to
+// `cacheSize`), so the per-call input is always
+// `candles.slice(max(0, i - cacheSize), i)` — contiguous and advancing. Feeding the
+// whole growing prefix instead (as the driver did before round 26) re-inserts the
+// trimmed history on every call and hands `_updateOpenTrades` bars older than the
+// trade's entry, which mislabels the training stream (`BUGS.md` #33). Purge
+// exclusions are still not honoured — a streaming model cannot skip bars — which
+// is documented. The test bars are evaluated **prequentially**: the position at bar
+// t is read from `getSignal(candles.slice(max(0, t + 1 - cacheSize), t + 1))`, so it
+// only ever uses information available at t, and the realised return is t -> t+1.
+// The audit (`analysis/world.js`) certifies exactly that property.
 //
 // Model flags: `variant.configure` is applied to the controller (so
 // `_sampleWeightConfig` lands where the controller reads it) AND to the
@@ -258,6 +465,11 @@ export const makeControllerModelFactory = ({
     tier = CONTROLLER_MODEL.tier, warmup = CONTROLLER_MODEL.warmup,
     positionPolicy = CONTROLLER_POSITION_POLICY,
     modelRetention = 'keep',
+    saveInterval = 1,
+    labelPolicy = 'optimistic',
+    labelHorizonBars = null,
+    // Round 26 (R26-13): see `makeHiveMindModelFactory`.
+    commonRandomNumbers = true,
     priceObj = {
         atrFactor: CONFIG.baseAtr, stopFactor: CONFIG.baseStop,
         minPriceMovement: CONFIG.minPriceMove, maxPriceMovement: CONFIG.maxPriceMove,
@@ -268,9 +480,19 @@ export const makeControllerModelFactory = ({
         let ctl = null;
         let mind = null;
         let predictSeed = 0;
+        // The raw pre-policy signed confidence per test bar (round 26, R26-3), so the
+        // driver can journal it and restate the report at another policy.
+        let lastConfidence = [];
         let warmErrors = 0;
         let folds = 0;
         let undertrained = false;
+        // Readiness (round 26, R26-2 / BUGS.md #35). The old gate was
+        // `testStart >= warmup` (40) while the default split's first test bar is
+        // >= trainSize (60), so it could never fire — a false certificate. The
+        // model's own readiness signal is whether it trained at all; a fold whose
+        // controller never trained abstains (its `prob` would be the -1 sentinel
+        // anyway, but this makes the reason explicit and testable).
+        let ready = false;
         let dir = null;
         let reclaimed = false;
         // 'discard' closes the fit's SQLite handle and removes its state directory.
@@ -295,12 +517,21 @@ export const makeControllerModelFactory = ({
             } catch { /* ignore */ }
             return { closed, removed };
         };
+        // R26-12: with `modelRetention: 'keep'` and a non-finite save interval the
+        // ensemble state is never written during the run, so a kept fit directory
+        // would hold no state at all. Flush it once at disposal. Under `discard` the
+        // directory is deleted immediately afterwards, so the write would be pure
+        // waste and is skipped. Off the arithmetic path either way.
+        const flushKeptState = () => {
+            if (modelRetention !== 'keep' || Number.isFinite(saveInterval) || !ctl) return;
+            try { if (typeof ctl.flushState === 'function') ctl.flushState(); } catch { /* best effort */ }
+        };
         const variantSeed = (seed * 131 + (hashString(variant.id) % 100000)) >>> 0;
         return {
             fit(train, test, view) {
                 const candles = view.candles || [];
                 const testStart = Math.min(...test);
-                const foldSeed = (variantSeed + testStart * 977) >>> 0;
+                const foldSeed = ((commonRandomNumbers ? seed : variantSeed) + testStart * 977) >>> 0;
                 dir = path.join(stateDir, `${variant.id}-${fitCounter++}`);
                 folds++;
                 // A fold with too little history abstains (documented; reads only
@@ -308,37 +539,61 @@ export const makeControllerModelFactory = ({
                 undertrained = !(testStart >= warmup);
                 withSeed(foldSeed, () => {
                     ctl = new HiveMindController(`AN-${variant.id}`, dir, cacheSize, ensembleSize, 'positive', tier, priceObj, true);
+                    // R26-12: the A/B never reads the checkpoint back, so it does
+                    // not pay for it (default via runAnalysis is Infinity; the
+                    // factory default of 1 keeps the direct-call behaviour and the
+                    // golden fingerprints unchanged).
+                    ctl._saveInterval = saveInterval;
+                    // Round 26 (R26-11): the run-level label policy. Set BEFORE the
+                    // variant's configure, so a label variant can override it. The
+                    // default 'optimistic' is the shipped behaviour (bit-identical).
+                    ctl._labelPolicy = labelPolicy;
+                    ctl._labelHorizonBars = Number.isFinite(labelHorizonBars) ? labelHorizonBars : null;
                     if (variant.configure) variant.configure(ctl);
                     // Pre-create the mind so mind-level flags are reachable.
                     mind = new HiveMind(dir, ensembleSize, ctl._inputSize, `AN-${variant.id}`, true);
                     ctl._hivemind = mind;
                     if (variant.configure) variant.configure(mind);
                     for (let i = 1; i <= testStart; i++) {
-                        try { ctl.getSignal(candles.slice(0, i), 1); } catch { warmErrors++; }
+                        try { ctl.getSignal(candles.slice(Math.max(0, i - cacheSize), i), 1); } catch { warmErrors++; }
                     }
                     if (variant.afterFit) variant.afterFit(mind);
                 });
+                // Readiness is decided once the fit is complete: a controller that
+                // closed no trade never trained, and every test bar abstains.
+                ready = !!(ctl && ctl._globalAccuracy && Number.isFinite(ctl._globalAccuracy.trainingSteps) && ctl._globalAccuracy.trainingSteps > 0);
                 predictSeed = (foldSeed + 7777) >>> 0;
             },
             predict(test, view) {
-                if (undertrained) return test.map(() => 0);
+                if (!ready) { lastConfidence = test.map(() => 0); return test.map(() => 0); }
                 const candles = view.candles || [];
-                return withSeed(predictSeed, () => test.map((t) => {
-                    let prob = 50;
-                    try {
-                        const s = ctl.getSignal(candles.slice(0, t + 1), 1);
-                        // `prob === -1` is the documented "untrained" sentinel: abstain.
-                        if (s && Number.isFinite(s.prob) && s.prob >= 0) prob = s.prob;
-                    } catch { /* a failed decision abstains, never throws */ }
-                    return probToPosition(prob, positionPolicy);
-                }));
+                return withSeed(predictSeed, () => {
+                    // The raw signed confidence per bar, then ONE policy maps it to a
+                    // position (round 26, R26-3). `confidenceToPosition(confidenceFromProb(p))`
+                    // is byte-identical to the old `probToPosition(p, policy)`.
+                    const confidences = test.map((t) => {
+                        let prob = 50;
+                        try {
+                            const s = ctl.getSignal(candles.slice(Math.max(0, t + 1 - cacheSize), t + 1), 1);
+                            // `prob === -1` is the documented "untrained" sentinel: abstain.
+                            if (s && Number.isFinite(s.prob) && s.prob >= 0) prob = s.prob;
+                        } catch { /* a failed decision abstains, never throws */ }
+                        return confidenceFromProb(prob);
+                    });
+                    lastConfidence = confidences;
+                    return confidences.map((c) => confidenceToPosition(c, positionPolicy));
+                });
             },
-            dispose: () => reclaim(),
+            // The raw pre-policy confidence for the last `predict`, or [] before it.
+            rawConfidence: () => lastConfidence,
+            dispose: () => { flushKeptState(); return reclaim(); },
+            // One fold's model diagnostics (round 26, R26-2): the readiness flag,
+            // the label-lifecycle split, the base rate and the skill scores, plus
+            // the `raw` counters a cross-fold accumulator pools.
             stats: () => ({
-                warmErrors, folds, undertrained,
+                warmErrors, folds, undertrained, ready,
                 retention: modelRetention, reclaimed,
-                trainingSteps: ctl && ctl._globalAccuracy ? ctl._globalAccuracy.trainingSteps : 0,
-                quarantinedRows: ctl && ctl._globalAccuracy ? ctl._globalAccuracy.quarantinedRows : 0,
+                ...labelDiagnostics(ctl ? ctl._globalAccuracy : {}),
             }),
         };
     };
@@ -357,16 +612,35 @@ export function withSeed(seed, fn) {
 // A signal candidate (`variant.signal`, the causal family from
 // `analysis/features.js`) is pure array math on the view. A model variant builds a
 // fresh model per fold, fits it on the view, then predicts the test bars.
-export const makeSignalForVariant = (factory) => (variant) => {
+export const makeSignalForVariant = (factory, { onStats = null, positionPolicy = IDENTITY_POSITION_POLICY } = {}) => (variant) => {
     if (typeof variant.signal === 'function') {
-        return (train, test, view) => variant.signal(view, test);
+        // A signal candidate emits a signed confidence (its clamped causal z-score).
+        // The SAME confidence->position policy maps it to a position (round 26,
+        // R26-3); with the identity default this is byte-identical to the pre-R26-3
+        // signal path. The raw confidence is cached for `confidenceForFold`.
+        let lastConfidence = [];
+        const fold = (train, test, view) => {
+            lastConfidence = variant.signal(view, test);
+            return lastConfidence.map((c) => confidenceToPosition(c, positionPolicy));
+        };
+        fold.confidenceForFold = () => lastConfidence;
+        return fold;
     }
-    return (train, test, view) => {
+    let lastConfidence = [];
+    const fold = (train, test, view) => {
         const model = factory(variant);
         model.fit(train, test, view);
         try {
-            return model.predict(test, view);
+            const positions = model.predict(test, view);
+            lastConfidence = typeof model.rawConfidence === 'function' ? model.rawConfidence() : null;
+            return positions;
         } finally {
+            // Round 26 (R26-2): hand the caller this fold's model diagnostics
+            // before the fit is released. Reporting only — an observer that throws
+            // must never fail a fold.
+            if (onStats && typeof model.stats === 'function') {
+                try { onStats(variant, model.stats()); } catch { /* reporting is best-effort */ }
+            }
             // The fold function is the only production caller, and it uses each
             // fitted model exactly once — so this is the right place to release the
             // fit's state (`modelRetention: 'discard'`). Disposal is a no-op when
@@ -374,6 +648,8 @@ export const makeSignalForVariant = (factory) => (variant) => {
             if (typeof model.dispose === 'function') model.dispose();
         }
     };
+    fold.confidenceForFold = () => lastConfidence;
+    return fold;
 };
 
 // ---------------------------------------------------------------------------
@@ -438,24 +714,31 @@ export function evaluateAB({
         // the controller-backed model; on a bare HiveMind it is flagged so the
         // report is honest rather than pretending it ran.
         const skipped = !!variant.controllerScoped && model !== 'controller';
-        const reports = streams.map((s, si) => walkForwardEvaluate({
-            returns: s.returns, folds: s.folds, signalForFold: signalForVariant(variant),
-            costBps, periodsPerYear, trials: variants.length, audit, requireCausal,
-            viewFor: s.viewFor == null ? viewFor : s.viewFor,
-            probe, requireReachable, auditProbesPerFold, auditReuseBase,
-            onEvent: onEvent
-                ? (e) => onEvent({
-                    ...e,
-                    variantId: variant.id, variantIndex: vi, variantTotal: variants.length,
-                    stream: si, streamLabel: s.label == null ? null : s.label, streamsTotal: streams.length,
-                })
-                : null,
-        }));
+        const reports = streams.map((s, si) => {
+            // One fold function per (variant, stream): it holds the raw-confidence
+            // cache the journal reads (round 26, R26-3).
+            const foldFor = signalForVariant(variant);
+            return walkForwardEvaluate({
+                returns: s.returns, folds: s.folds, signalForFold: foldFor,
+                confidenceForFold: typeof foldFor.confidenceForFold === 'function' ? foldFor.confidenceForFold : null,
+                costBps, periodsPerYear, trials: variants.length, audit, requireCausal,
+                viewFor: s.viewFor == null ? viewFor : s.viewFor,
+                probe, requireReachable, auditProbesPerFold, auditReuseBase,
+                onEvent: onEvent
+                    ? (e) => onEvent({
+                        ...e,
+                        variantId: variant.id, variantIndex: vi, variantTotal: variants.length,
+                        stream: si, streamLabel: s.label == null ? null : s.label, streamsTotal: streams.length,
+                    })
+                    : null,
+            });
+        });
         const report = poolReports(reports, { periodsPerYear, trials: variants.length });
-        // Per-variant wall time (round 25, observability): the cost model
-        // (`10.7 s x mechanismVariants x folds x (1 + probesPerFold)`) can only be
-        // checked, and the next run sized, if the run says how long each variant
-        // actually took. Pure reporting — it has no arithmetic effect.
+        // Per-variant wall time (round 25, observability): the cost law
+        // (`~0.035 s x sum_f(testStart_f) x streams x passes x mechanismVariants`,
+        // O(n^2) per stream — docs/RUN-ANALYSIS.md section 4) can only be checked,
+        // and the next run sized, if the run says how long each variant actually
+        // took. Pure reporting — it has no arithmetic effect.
         return { variant, report, skipped, streams: reports.length, elapsedMs: Date.now() - startedAt };
     };
 
@@ -479,6 +762,22 @@ export function evaluateAB({
         if (onVariant) onVariant({ role: 'candidate', index: vi, entry: evaluated[vi], decision });
     }
 
+    return finalizeAB({
+        variants, evaluated, baselineIndex, decisionsByIndex, alpha, audit, model,
+        streamCount: streams.length, streamLabels: streams.map((s) => s.label || null),
+        probe, auditProbesPerFold, requireReachable, auditReuseBase, costBps,
+    });
+}
+
+// The shared tail of `evaluateAB` and `evaluateABAsync` (round 26, R26-4): the
+// candidate projection, the family-wise search and the returned result object. It
+// reads only already-computed reports, so the serial and concurrent drivers cannot
+// drift and the concurrency change stays strictly off the arithmetic path.
+const finalizeAB = ({
+    variants, evaluated, baselineIndex, decisionsByIndex, alpha, audit, model,
+    streamCount, streamLabels, probe, auditProbesPerFold, requireReachable, auditReuseBase, costBps,
+}) => {
+    const baseline = evaluated[baselineIndex].report;
     const candidates = evaluated
         .map((entry, vi) => ({ ...entry, decision: decisionsByIndex.get(vi) || null }))
         .filter((_, i) => i !== baselineIndex);
@@ -505,21 +804,129 @@ export function evaluateAB({
             variant: c.variant,
             report: c.report,
             skipped: c.skipped,
+            // Round 25b: carry the per-variant wall time and stream count through
+            // to the caller — the report's `timings` block and the checkpoint
+            // stream already had them, but this projection dropped them, so
+            // `candidates[].elapsedMs` in `report.json` was always null.
+            elapsedMs: c.elapsedMs,
+            streams: c.streams,
             decision: decisions[i],
             search: search && Array.isArray(search.candidates) ? (search.candidates[i + 1] || null) : null,
         })),
         search,
         auditClean: audit ? !!(baseline.audit && baseline.audit.clean) : null,
         model,
-        streams: streams.length,
+        streams: streamCount,
         probe,
         auditProbesPerFold,
         requireReachable,
         reuseBase: auditReuseBase,
         costBps,
         positionPolicy: model === 'controller' ? CONTROLLER_POSITION_POLICY : null,
-        streamLabels: streams.map((s) => s.label || null),
+        streamLabels,
     };
+}
+
+// The concurrent twin of `evaluateAB` (round 26, R26-4). Same options, plus
+// `foldExecutorFor(variant, streamIndex, stream)` — returning a fold executor for a
+// unit (e.g. a worker dispatch), or null/undefined to run that variant in-process
+// via `signalForVariant` — and `concurrency` (the in-flight width). The variant
+// order, the emit order and every number are unchanged; only wall time moves. The
+// result is assembled by the SAME `finalizeAB`, so the two drivers cannot drift.
+export async function evaluateABAsync({
+    returns = null, folds = null, viewFor = null, worlds = null,
+    variants = ALL_VARIANTS, signalForVariant,
+    foldExecutorFor = null,
+    costBps = 0, periodsPerYear = 252, audit = true, requireCausal = true, alpha = 0.05,
+    probe = 1e3, requireReachable = false, auditProbesPerFold = 0, model = 'bare',
+    auditReuseBase = false, gateOptions = null,
+    onEvent = null, onVariant = null, onModelStats = null, concurrency = 1,
+} = {}) {
+    if (typeof signalForVariant !== 'function') {
+        throw new Error('evaluateABAsync: signalForVariant(variant) => signalForFold is required');
+    }
+    if (!Array.isArray(variants) || variants.length < 2) {
+        throw new Error('evaluateABAsync: at least a baseline and one candidate are required');
+    }
+    const streams = Array.isArray(worlds) && worlds.length
+        ? worlds
+        : [{ returns, folds, viewFor, label: 'main' }];
+    if (!Array.isArray(streams[0].returns) || !Array.isArray(streams[0].folds) || !streams[0].folds.length) {
+        throw new Error('evaluateABAsync: either `worlds` or (`returns` + `folds`) is required');
+    }
+
+    const baselineIndex = Math.max(0, variants.findIndex((v) => v.id === 'baseline'));
+    const evaluateOne = async (vi) => {
+        const variant = variants[vi];
+        const startedAt = Date.now();
+        const skipped = !!variant.controllerScoped && model !== 'controller';
+        const reports = [];
+        for (let si = 0; si < streams.length; si++) {
+            const s = streams[si];
+            const rawExecutor = foldExecutorFor ? foldExecutorFor(variant, si, s) : null;
+            // Surface the worker's model diagnostics to the same accumulator the
+            // in-process `onStats` feeds, so the per-variant `model` block (R26-2) is
+            // present in the parallel run too. Reporting only — no arithmetic.
+            const executor = rawExecutor
+                ? async (ctx) => {
+                    const r = await rawExecutor(ctx);
+                    if (onModelStats && r && r.stats) {
+                        try { onModelStats(variant, r.stats); } catch { /* reporting is best-effort */ }
+                    }
+                    return { signals: r.signals, confidence: r.confidence };
+                }
+                : null;
+            const foldFor = signalForVariant(variant);
+            reports.push(await walkForwardEvaluateAsync({
+                returns: s.returns, folds: s.folds,
+                // The scored pass may run in a worker (`executor`), but the look-ahead
+                // audit always runs HERE, in-process, because it re-fits the signal on
+                // PERTURBED views — and a fold executor has no view channel. Nulling
+                // `signalForFold` when an executor existed crashed `auditNoLookahead`
+                // for every `concurrency > 1` run with `audit` on (the default).
+                // `signalForVariant` is a cheap closure over the shared factory; when
+                // an executor handles the scored pass only the audit calls it.
+                signalForFold: foldFor,
+                foldExecutor: executor || null,
+                confidenceForFold: !executor && typeof foldFor.confidenceForFold === 'function' ? foldFor.confidenceForFold : null,
+                costBps, periodsPerYear, trials: variants.length, audit, requireCausal,
+                viewFor: s.viewFor == null ? viewFor : s.viewFor,
+                probe, requireReachable, auditProbesPerFold, auditReuseBase,
+                concurrency,
+                onEvent: onEvent
+                    ? (e) => onEvent({
+                        ...e,
+                        variantId: variant.id, variantIndex: vi, variantTotal: variants.length,
+                        stream: si, streamLabel: s.label == null ? null : s.label, streamsTotal: streams.length,
+                    })
+                    : null,
+            }));
+        }
+        const report = poolReports(reports, { periodsPerYear, trials: variants.length });
+        return { variant, report, skipped, streams: reports.length, elapsedMs: Date.now() - startedAt };
+    };
+
+    const evaluated = new Array(variants.length);
+    evaluated[baselineIndex] = await evaluateOne(baselineIndex);
+    if (onVariant) onVariant({ role: 'baseline', index: baselineIndex, entry: evaluated[baselineIndex], decision: null });
+    const decisionsByIndex = new Map();
+    for (let vi = 0; vi < variants.length; vi++) {
+        if (vi === baselineIndex) continue;
+        evaluated[vi] = await evaluateOne(vi);
+        const decision = promoteDecision(evaluated[baselineIndex].report, evaluated[vi].report, {
+            requireCleanAudit: audit,
+            ...(variants[vi].decision || {}),
+            ...(gateOptions || {}),
+        });
+        decisionsByIndex.set(vi, decision);
+        if (onVariant) onVariant({ role: 'candidate', index: vi, entry: evaluated[vi], decision });
+    }
+
+    return finalizeAB({
+        variants, evaluated, baselineIndex, decisionsByIndex, alpha, audit, model,
+        streamCount: streams.length, streamLabels: streams.map((s) => s.label || null),
+        probe, auditProbesPerFold, requireReachable, auditReuseBase, costBps,
+    });
 }
 
 const f4 = (x) => (Number.isFinite(x) ? x.toFixed(4) : String(x));
@@ -550,9 +957,27 @@ export function formatAnalysis(result, extra = {}) {
     const s = result.search;
     lines.push(`walk-forward A/B: ${result.candidates.length + 1} variants, ` +
         `${result.baseline.folds ? result.baseline.folds.length : 0} folds, ${result.baseline.pooledBars} pooled bars`);
+    const ib = extra.intervalBars != null ? extra.intervalBars : (result.intervalBars || 1);
     lines.push(`model: ${result.model || 'bare'} | streams=${result.streams || 1} | ` +
         `positionPolicy=${JSON.stringify(result.positionPolicy || CONTROLLER_POSITION_POLICY)} | ` +
-        `probe=${f4(result.probe)} | auditProbesPerFold=${result.auditProbesPerFold || 0} | costBps=${result.costBps || 0} | reuseBase=${result.reuseBase === true}`);
+        `probe=${f4(result.probe)} | auditProbesPerFold=${result.auditProbesPerFold || 0} | costBps=${result.costBps || 0} | reuseBase=${result.reuseBase === true}` +
+        ` | intervalBars=${ib} | crn=${extra.commonRandomNumbers !== false}`);
+    // Round 26 (R26-2): whether each model-backed variant actually trained, and
+    // whether it beats its label base rate. Without this, a keep-off verdict is
+    // ambiguous between "no edge" and "no model" (BUGS.md #35/#37).
+    const ms = extra.model || null;
+    if (ms && typeof ms.get === 'function' && typeof ms.size === 'number' && ms.size > 0) {
+        const parts = [];
+        for (const [id, acc] of ms) {
+            const d = summarizeModelStats(acc);
+            if (!d) continue;
+            parts.push(`${id} ${d.status} steps=${d.trainingSteps}` +
+                ` base=${d.baseRate == null ? 'n/a' : f4(d.baseRate)}` +
+                ` skill=${d.brierSkill == null ? 'n/a' : f4(d.brierSkill)}` +
+                ` warmErrors=${d.warmErrors}`);
+        }
+        if (parts.length) lines.push(`models: ${parts.join(' | ')}`);
+    }
     // Round 25: state the gate. A `keep-off` verdict means something different
     // under a dependence-aware gate than under the classic one, so the reader
     // must be told which one produced it.
@@ -608,6 +1033,34 @@ export function formatAnalysis(result, extra = {}) {
                 ` | promotes=[${promo.length ? promo.join(',') : 'none'}]`);
         }
     }
+    // Round 26 (R26-5): the turnover attack. One line per candidate naming the
+    // best break-even policy, so the reader sees whether any no-trade band (or
+    // hysteresis / minimum holding) clears the target cost — and which.
+    const ts = extra.turnoverSweep;
+    if (ts) {
+        const rendered = formatTurnoverSweep(ts);
+        if (rendered) for (const line of rendered.split('\n')) lines.push(line);
+    }
+    // Round 26 (R26-6): the effective independence of the stream basket (Kish
+    // design effect over the streams' own returns) and, when asked, the greedy
+    // selection order. Design/diagnostic only.
+    const ss = extra.streamSelection;
+    if (ss) {
+        const rendered = formatStreamSelection(ss);
+        if (rendered) for (const line of rendered.split('\n')) lines.push(line);
+        if (ss.keep != null && ss.keptDesignEffect && ss.keptDesignEffect.available) {
+            lines.push(`streams kept=${ss.keep} -> ${ss.kept.join(',')} DE=${f4(ss.keptDesignEffect.designEffect)} ` +
+                `effectiveBars=${f4(ss.keptDesignEffect.effectiveBars)}`);
+        }
+    }
+    // Round 26 (R26-14): the forecast-comparison line — proper scores and the
+    // Model Confidence Set. The MCS is the headline: which families cannot be
+    // distinguished from the best, rather than a single sample-best winner.
+    const fcBlock = extra.forecast;
+    if (fcBlock) {
+        const rendered = formatForecast(fcBlock);
+        if (rendered) for (const line of rendered.split('\n')) lines.push(line);
+    }
     // Run-level power honesty (round 24b): a null verdict from a run that could
     // not have detected a Sharpe of 1 is "underpowered", not "no edge". Name the
     // sample size that would settle it, so the next run can be sized.
@@ -623,6 +1076,13 @@ export function formatAnalysis(result, extra = {}) {
         lines.push(`power*: MDE95 Sharpe=±${f4(pw.mdeSharpeDependent)} under the cluster jackknife` +
             ` (i.i.d. variance understated by ${f4(pw.varianceInflation)}x; ${f4(pw.effectiveBars)} effective bars of ${pw.bars})` +
             (pw.underpoweredDependent ? ' — UNDERPOWERED' : ''));
+    }
+    // Round 26 (R26-8): the decision-grade report — the verdict, the concentration
+    // readout and the next-run sizing knobs stated in one place, so a reader does
+    // not have to reconstruct them from the per-candidate lines above.
+    if (extra.decision) {
+        const renderedDecision = formatDecision(extra.decision);
+        if (renderedDecision) for (const line of renderedDecision.split('\n')) lines.push(line);
     }
     lines.push(`audit: baseline ${auditVerdict(result.baseline)}`);
     return lines.join('\n');
@@ -733,21 +1193,27 @@ export const auditBlock = (audit) => (audit
     : null);
 
 // One row of `report.variants` (the roster: what exists, and whether it ran).
-const variantRosterRow = (entry) => ({
+const variantRosterRow = (entry, modelStats = null) => ({
     id: entry.variant.id,
     label: entry.variant.label,
     kind: entry.variant.kind || 'mechanism',
     skipped: entry.skipped,
     streams: entry.streams,
+    // Round 26 (R26-2): null for a pure signal candidate (it never fits a model),
+    // so an absent model block is never mistaken for a healthy one.
+    model: summarizeModelStats(modelStats && modelStats.get(entry.variant.id)),
 });
 
 // The baseline row. `audit` is the full machine-readable block; `auditClean` keeps
 // the old boolean for anything that already reads it.
-const baselineRow = (result) => {
+const baselineRow = (result, modelStats = null) => {
     const base = result.baseline;
     return {
         id: result.baselineVariant.id,
         label: result.baselineVariant.label || result.baselineVariant.id,
+        // Round 26 (R26-2): did the model train, on what label base rate, and is
+        // it any better than that base rate.
+        model: summarizeModelStats(modelStats && modelStats.get(result.baselineVariant.id)),
         pooledMetrics: base.pooledMetrics,
         aggregate: base.aggregate,
         audit: auditBlock(base.audit),
@@ -758,16 +1224,21 @@ const baselineRow = (result) => {
         dependence: base.dependence || null,
         pooledBars: base.pooledBars,
         foldLengths: base.foldLengths || null,
+        // Round 26 (R26-13): the per-fold net Sharpe series, so a multi-seed run can
+        // build the (seed x fold) panel without re-reading folds.jsonl.
+        foldSharpes: (base.folds || []).map((f) => (f && f.metrics ? f.metrics.netSharpe : NaN)),
     };
 };
 
 // One candidate row: the decision, the pooled metrics, the audit block and (when
 // the family-wise cross-check has run) the joint `search` statistics.
-const candidateRow = (entry, decision, search) => ({
+const candidateRow = (entry, decision, search, modelStats = null) => ({
     id: entry.variant.id,
     label: entry.variant.label,
     kind: entry.variant.kind || 'mechanism',
     skipped: entry.skipped,
+    // Round 26 (R26-2): the per-variant model diagnostics (null for a signal).
+    model: summarizeModelStats(modelStats && modelStats.get(entry.variant.id)),
     promote: decision.promote,
     reasons: decision.reasons,
     foldWinFraction: decision.foldWinFraction,
@@ -783,7 +1254,15 @@ const candidateRow = (entry, decision, search) => ({
     promotionTest: decision.promotionTest || null,
     gate: decision.gate || null,
     elapsedMs: entry.elapsedMs ?? null,
+    // How many streams actually contributed to this variant's pooled report.
+    streams: entry.streams ?? null,
+    // The number of searches this candidate's DSR was deflated by (K, the whole
+    // roster). It rides on the report, but it was not surfaced in `report.json`,
+    // so a reader could not see the trial count the verdict assumed.
+    trials: entry.report && Number.isFinite(entry.report.trials) ? entry.report.trials : null,
     pooledBars: entry.report.pooledBars,
+    // Round 26 (R26-13): the per-fold net Sharpe series (seed x fold panel input).
+    foldSharpes: (entry.report.folds || []).map((f) => (f && f.metrics ? f.metrics.netSharpe : NaN)),
     search: search ? { pValue: search.pValue, rejected: search.rejected, statistic: search.statistic, kfwerPValue: search.kfwerPValue ?? null, fdp: search.fdp ?? null } : null,
 });
 
@@ -805,6 +1284,10 @@ const foldRecord = (event) => ({
     // True for an audit base pass that REUSED the scored signals instead of re-fitting.
     reused: event.reused ?? null,
     signals: event.signals ?? null,
+    // The raw pre-policy confidence (round 26, R26-3). With the scored policy this
+    // reproduces `signals` byte-for-byte (`analyze#verifyPolicyRoundTrip`), so a
+    // dead-zone/scale/holding sweep is pure post-processing.
+    confidence: event.confidence ?? null,
     returns: event.returns ?? null,
     metrics: event.metrics ?? null,
 });
@@ -817,6 +1300,23 @@ const fmtClock = (ms) => {
     const sec = s % 60;
     const p2 = (n) => String(n).padStart(2, '0');
     return h ? `${h}:${p2(m)}:${p2(sec)}` : `${p2(m)}:${p2(sec)}`;
+};
+
+// A worker-backed fold dispatcher (round 26, R26-4). Each call runs one fold-pass
+// in its own thread via the settle-once, watchdogged `runWorkerThread`, so a crash
+// or hang in one fold rejects that fold only. `spawn` is injectable so a test can
+// drive the dispatch without `worker_threads`.
+export const makeNodeFoldDispatcher = ({ url, spawn = null, timeoutMs = null } = {}) => {
+    const spawnWorker = spawn || ((u, workerData) => new Worker(u, { workerData }));
+    return async (request) => runWorkerThread({
+        url,
+        label: `fold:${request.variantId}#${request.streamIndex}.${request.foldIndex}`,
+        workerData: request,
+        spawn: spawnWorker,
+        accept: (m) => !!m && Array.isArray(m.positions),
+        onSuccess: (m) => ({ positions: m.positions, confidence: m.confidence || null, stats: m.stats || null }),
+        ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
+    });
 };
 
 // Run the A/B against real candle data. Loads the model lazily so importing this
@@ -836,15 +1336,77 @@ export async function runAnalysis({
     reuseBase = false,            // reuse the scored pass as the audit base pass (one less refit/fold)
     foldLog = 'all',              // 'all' | 'score' | 'off': what folds.jsonl records
     progressMs = 5000,            // stdout + progress.json cadence; 0 = every event, -1 = silent
+    // Round 26 (R26-12): the A/B never reads a fit's persisted state back, so it
+    // does not pay for the checkpoint. `1` restores a per-call full-state dump
+    // (the historical behaviour); `Infinity` never dumps during the run. The
+    // emitted signals/positions are identical either way (measured: ~25% of the
+    // per-call cost was the dump).
+    saveInterval = Infinity,
+    // Round 26 (R26-11): the label policy applied to every controller. Default
+    // `optimistic` is the shipped labeler (bit-identical); `conservative` and
+    // `triple` are also available as opt-in *variants* (`--label-policies`).
+    // `labelHorizonBars` is the triple barrier's time horizon; without it the
+    // `triple` policy degrades to `conservative` (recorded, not silently ignored).
+    labelPolicy = 'optimistic',
+    labelHorizonBars = null,
+    labelPolicies = false,        // append the opt-in label variants to the roster
+    // Round 26 (R26-4): the fold loop's in-flight width. `1` (default) keeps the
+    // serial driver byte-for-byte; `> 1` dispatches whole fold-passes to worker
+    // threads through the settle-once dispatcher. The arithmetic and the emit order
+    // are unchanged (only wall time moves). `spawnWorker` is injectable for tests.
+    concurrency = 1,
+    spawnWorker = null,
+    // Round 26 (R26-6): buy effective independence, not bars. `intervalBars > 1`
+    // resamples every stream by that factor (e.g. 4 => 4h bars from 1h data) — a
+    // genuinely different horizon, not another copy of the same one. `streamSelect`
+    // is null (off) | true (measure and report the greedy basket) | a positive
+    // integer (keep only the first N streams of the greedy order). Both are design
+    // choices; neither changes how an included stream is scored.
+    intervalBars = 1,
+    streamSelect = null,
+    // Round 26 (R26-13): common random numbers. With CRN (the default) every
+    // variant's fold seed depends only on the master seed and `testStart`, so the
+    // variant comparison is PAIRED on the random draws and the variance of the
+    // difference falls (Glasserman & Yao 1992). `false` restores the historical
+    // per-variant seed (`seed*131 + hash(variant.id)`) for reproducing old runs.
+    commonRandomNumbers = true,
+    // Round 26 (R26-14): score the family as forecasters (proper scores, the
+    // Diebold–Mariano test vs the baseline, and the family Model Confidence Set).
+    // Pure post-processing of the journaled confidence — it cannot move a scored
+    // number. `--forecast=0` disables the (small) extra work.
+    forecast = true,
+    // Round 26 (R26-8): the decision-grade report — a pure composition of the blocks
+    // above into the six questions the next cycle asks (training / edge /
+    // concentration / economics / family / nextRun), every field either a value or an
+    // explicit { available:false, reason }. No new strategy statistic is computed; the
+    // concentration readout restates the scored folds (leave-one-fold-out Sharpe
+    // range) and `nextRun` reads the measured power. `--decision=0` disables it.
+    decision = true,
     // Round 25 decision options.
     gate = 'dependence',          // 'classic' (round-23/24 hurdles) | 'dependence' (adds the panel-aware ones)
     gateAlpha = null,             // alpha for the dependence hurdles (defaults to `alpha`)
     costLadderLevels = [0, 2, 5, 10], // bps-of-turnover levels the verdict is restated at ([] disables)
+    // Round 26 (R26-5): the turnover attack. A dead-zone x hysteresis x
+    // minimum-holding grid restated as pure post-processing of the journaled
+    // confidence (no model). Off by default — it is an extra diagnostic block,
+    // like the cost ladder, and cannot move a scored number. `turnoverTarget` is
+    // the bps of per-unit-turnover cost the attack is trying to clear (the
+    // realistic crypto taker range is 5-10 bps).
+    turnoverSweep = false,
+    turnoverTarget = 5,
     log = () => {},               // stdout sink (injectable so tests stay quiet)
     HiveMind: injectedHiveMind = null, HiveMindController: injectedController = null,
 } = {}) {
     const startedAt = Date.now();
     const useController = model !== 'bare';
+    // Round 26 (R26-11): validate the label policy up front so a typo cannot
+    // silently run the default labeler.
+    if (!['optimistic', 'conservative', 'triple'].includes(labelPolicy)) {
+        throw new Error(`analyze: unknown labelPolicy "${labelPolicy}" (optimistic | conservative | triple)`);
+    }
+    // Round 26 (R26-4): resolve the fold loop's in-flight width once, so the manifest,
+    // the checkpoints and the report all state what was actually used.
+    const width = normaliseConcurrency(concurrency);
     // Round 25: resolve the promotion gate and the cost-ladder levels ONCE, so the
     // manifest, every checkpoint and the final report state what was actually
     // used. `classic` is the round-23/24 gate; `dependence` adds the paired
@@ -854,11 +1416,22 @@ export async function runAnalysis({
     const gateMode = gate === 'classic' ? 'classic' : 'dependence';
     const gateAlphaResolved = Number.isFinite(gateAlpha) ? gateAlpha : alpha;
     const gateOptions = gateMode === 'dependence'
-        ? { requireSharpeDiff: true, requireBreadth: true, minDsrAdjusted: 0.95, alpha: gateAlphaResolved, periodsPerYear: 252 }
+        ? { requireSharpeDiff: true, requireClusterStability: true, minDsrAdjusted: 0.95, alpha: gateAlphaResolved, periodsPerYear: 252 }
         : { alpha: gateAlphaResolved, periodsPerYear: 252 };
     const ladderLevels = Array.isArray(costLadderLevels)
         ? costLadderLevels.filter((x) => Number.isFinite(x) && x >= 0)
         : [];
+    // Round 26 (R26-5): resolve the turnover attack's target once, so the manifest
+    // and the report state the same number the sweep was run against.
+    const turnoverEnabled = turnoverSweep === true;
+    const turnoverTargetBps = Number.isFinite(turnoverTarget) ? turnoverTarget : 5;
+    // Round 26 (R26-6): resolve the interval factor and the stream-selection mode
+    // once, so the manifest and the report agree.
+    const intervalFactor = Number.isInteger(intervalBars) && intervalBars > 1 ? intervalBars : 1;
+    const streamSelectKeep = Number.isFinite(streamSelect) && streamSelect > 0 ? Math.floor(streamSelect) : null;
+    const streamSelectEnabled = streamSelect === true || streamSelectKeep != null;
+    const crn = commonRandomNumbers !== false;
+    const forecastEnabled = forecast !== false;
     const HiveMind = injectedHiveMind || (await import('./hivemind/hiveMind.js')).default;
     const HiveMindController = useController
         ? (injectedController || (await import('./hivemind/hiveMindController.js')).default)
@@ -866,11 +1439,17 @@ export async function runAnalysis({
 
     const inputs = files && files.length ? files : (symbols && symbols.length ? resolveSymbolFiles(symbols) : [file]);
 
-    const worlds = [];
+    let worlds = [];
     for (const f of inputs) {
-        const world = worldFromCandles(readCandles(f), { maxBars });
+        // Round 26 (R26-6): optionally resample the raw 1h stream to a coarser bar
+        // interval before the world is built, so a second horizon can be added to
+        // the panel without a second dataset.
+        const rawCandles = readCandles(f);
+        const candles = intervalFactor > 1 ? resampleCandles(rawCandles, { factor: intervalFactor }) : rawCandles;
+        const world = worldFromCandles(candles, { maxBars });
         if (world.closes.length < trainSize + testSize + 2) {
-            throw new Error(`analyze: not enough candles in ${f} (${world.closes.length}) for train=${trainSize} + test=${testSize}`);
+            throw new Error(`analyze: not enough candles in ${f} (${world.closes.length}) for train=${trainSize} + test=${testSize}` +
+                (intervalFactor > 1 ? ` after resampling by ${intervalFactor}` : ''));
         }
         const folds = walkForwardSplit({ n: world.closes.length, trainSize, testSize });
         if (!folds.length) throw new Error(`analyze: the walk-forward split produced no folds for ${f}`);
@@ -886,12 +1465,54 @@ export async function runAnalysis({
             returns: world.returns,
             folds,
             viewFor: makeCandleViewFor(world.candles),
+            // The raw candle series, for a worker-backed fold executor (R26-4): the
+            // worker rebuilds the same view from it. Reporting uses the `candles`
+            // count above, so this field is internal to the driver.
+            candleData: world.candles,
         });
     }
 
+    // Round 26 (R26-6): measure the basket's effective independence (Kish 1965
+    // design effect over the streams' own returns) and, when asked, keep only the
+    // most diversifying streams — greedy by marginal effective bars per raw bar
+    // (Grinold 1989 breadth; the cost law is `time ~= pooledBars x folds-per-stream`,
+    // so a redundant stream is pure cost). A DESIGN choice: it changes which streams
+    // are pooled, never how an included stream is scored.
+    const streamSeriesByLabel = {};
+    for (const w of worlds) streamSeriesByLabel[w.label] = w.returns;
+    const streamSelectionCandidates = (streamSelectEnabled && worlds.length >= 1)
+        ? runStreamSelection({ seriesByLabel: streamSeriesByLabel, maxStreams: Infinity, foldLength: testSize, periodsPerYear: 252 })
+        : null;
+    if (streamSelectKeep != null && streamSelectionCandidates && streamSelectionCandidates.available && streamSelectionCandidates.order.length) {
+        const keep = new Set(streamSelectionCandidates.order.slice(0, streamSelectKeep));
+        worlds = worlds.filter((w) => keep.has(w.label));
+        if (!worlds.length) throw new Error('analyze: --select-streams kept no streams');
+    }
+    // The kept basket's own design effect (the "after" half of the report). Null
+    // when selection was off or there is a single stream.
+    const streamSelection = streamSelectionCandidates
+        ? {
+            ...streamSelectionCandidates,
+            keep: streamSelectKeep,
+            kept: worlds.map((w) => w.label),
+            keptDesignEffect: worlds.length >= 1
+                ? designEffectOfStreams(
+                    Object.fromEntries(worlds.map((w) => [w.label, w.returns])),
+                    { foldLength: testSize, periodsPerYear: 252 },
+                )
+                : null,
+        }
+        : null;
+
     const variants = variantIds
         ? ['baseline', ...variantIds.filter((id) => id !== 'baseline')].map(resolveVariant)
-        : [...VARIANTS.filter((v) => !v.controllerScoped || useController), ...SIGNAL_VARIANTS];
+        : [
+            ...VARIANTS.filter((v) => !v.controllerScoped || useController),
+            ...SIGNAL_VARIANTS,
+            // Round 26 (R26-11): the opt-in label variants, appended only when asked
+            // for (a label change is a training-set change; it must never be silent).
+            ...(labelPolicies && useController ? LABEL_VARIANTS : []),
+        ];
 
     const runId = makeRunId({ seed, startedAt });
     const runDir = writeFiles ? createRunDirectory(stateFolder, runId) : null;
@@ -930,8 +1551,21 @@ export async function runAnalysis({
             variants: variants.map((v) => v.id),
             probe, auditProbesPerFold, requireReachable, reuseBase,
             costBps, modelRetention, foldLog,
+            saveInterval: Number.isFinite(saveInterval) ? saveInterval : 'inf',
+            labelPolicy,
+            labelHorizonBars: Number.isFinite(labelHorizonBars) ? labelHorizonBars : null,
+            labelPolicies: !!labelPolicies,
+            concurrency: width,
+            intervalBars: intervalFactor,
+            streamSelect: streamSelectKeep != null ? streamSelectKeep : streamSelectEnabled,
+            commonRandomNumbers: crn,
+            forecast: forecastEnabled,
+            decision: decision !== false,
             gate: gateMode, gateAlpha: gateAlphaResolved, costLadder: ladderLevels.slice(),
-            positionPolicy: useController ? CONTROLLER_POSITION_POLICY : null,
+            turnoverSweep: turnoverEnabled,
+            turnoverTarget: turnoverEnabled ? turnoverTargetBps : null,
+            trials: variants.length,
+            positionPolicy: useController ? POSITION_POLICY : null,
             node: process.version,
         });
     }
@@ -941,6 +1575,11 @@ export async function runAnalysis({
         score: 0, base: 0, probe: 0, events: 0, eventsTotal,
         variantsDone: 0, variantsTotal: variants.length,
     };
+    // Round 26 (R26-2): the per-variant model-diagnostics accumulator, filled by
+    // every fold's `stats()` as the A/B runs. Populated before a variant's
+    // `onVariant` fires (all its folds are done), so the report rows built there
+    // carry complete diagnostics.
+    const modelStats = new Map();
     const state = {
         phase: 'starting', variantId: null, variantIndex: -1, variantTotal: variants.length,
         stream: null, foldIndex: null, foldTotal: null, lastEventAt: startedAt,
@@ -1051,7 +1690,7 @@ export async function runAnalysis({
         familywise: null,
         progress: { ...counters, phase: state.phase, elapsedMs: Date.now() - startedAt },
         artifacts: runDir ? { report: 'report.json', folds: 'folds.jsonl', log: 'run.log', progress: 'progress.json' } : null,
-        reader: 'live checkpoint, rewritten after every variant. status: running|complete|failed. Row shapes match report.json. `timings` carries each finished variant\'s wall time (the measured cost model is 10.7 s per controller fit), so a running eval can be sized from the checkpoint alone. On status=failed, candidates[] holds every variant that finished and folds.jsonl holds every completed pass, so the science is not lost with the process.',
+        reader: 'live checkpoint, rewritten after every variant. status: running|complete|failed. Row shapes match report.json. `timings` carries each finished variant\'s wall time, so a running eval can be sized from the checkpoint alone. The measured cost law is `time ~= k * streams * passes * modelVariants * sum_f(testStart_f)` with `k ~= 0.036 s` per history bar replayed, because a model fit warms up by replaying ALL history up to the fold (`analyze.js` fit) - the run is O(n^2) per stream, not linear in bars, so doubling a stream\'s history roughly quadruples its cost (`OPTIMIZATION.md`, `BUGS.md` #31). On status=failed, candidates[] holds every variant that finished and folds.jsonl holds every completed pass, so the science is not lost with the process.',
         ...extra,
     });
     const checkpoint = (status, extra) => {
@@ -1060,17 +1699,18 @@ export async function runAnalysis({
     };
     const onVariant = (event) => {
         const entry = event.entry;
-        roster.push(variantRosterRow(entry));
+        roster.push(variantRosterRow(entry, modelStats));
         if (event.role === 'baseline') {
-            baselineBlock = baselineRow({ baseline: entry.report, baselineVariant: entry.variant });
+            baselineBlock = baselineRow({ baseline: entry.report, baselineVariant: entry.variant }, modelStats);
         } else {
-            candidateRows.push(candidateRow(entry, event.decision, null));
+            candidateRows.push(candidateRow(entry, event.decision, null, modelStats));
         }
-        // Per-variant wall time (round 25, observability): the measured cost model
-        // is 10.7 s per controller fit, so a run's duration is
-        // `meanFit x mechanismVariants x folds x (1 + probesPerFold)`; recording
-        // what each variant actually took is what lets the NEXT run be sized
-        // instead of guessed at.
+        // Per-variant wall time (round 25, observability). The cost is NOT a fixed
+        // per-fit number: `fit()` replays all history through `getSignal` to warm
+        // the online controller, so cost/fold grows with the fold index and a run
+        // is O(n^2) per stream. Measured: 0.035 s per warm-up call, i.e.
+        // `0.035 * sum_f(testStart_f) * streams * passes * mechanismVariants`
+        // (docs/RUN-ANALYSIS.md section 4, docs/OPTIMIZATION.md round 25b).
         variantTimings.push({
             id: entry.variant.id,
             kind: entry.variant.kind || 'mechanism',
@@ -1094,25 +1734,71 @@ export async function runAnalysis({
               `${Number.isFinite(entry.elapsedMs) ? ` in ${fmtClock(entry.elapsedMs)}` : ''}`);
     };
 
+    const positionPolicy = useController ? POSITION_POLICY : IDENTITY_POSITION_POLICY;
+    // Round 26 (R26-2): pool every fold's model diagnostics per variant. The
+    // in-process path feeds this from `makeSignalForVariant`'s `onStats`; the
+    // parallel path feeds it from the worker's reported `stats` (R26-4).
+    const accumulateStats = (variant, s) => {
+        const acc = modelStats.get(variant.id) || emptyModelAccumulator();
+        mergeModelStats(acc, s);
+        modelStats.set(variant.id, acc);
+    };
     const factory = useController
-        ? makeControllerModelFactory({ HiveMind, HiveMindController, stateDir: modelRoot, seed, modelRetention })
-        : makeHiveMindModelFactory({ HiveMind, stateDir: modelRoot, seed, modelRetention });
-    const signalForVariant = makeSignalForVariant(factory);
+        ? makeControllerModelFactory({ HiveMind, HiveMindController, stateDir: modelRoot, seed, modelRetention, saveInterval, labelPolicy, labelHorizonBars, commonRandomNumbers: crn })
+        : makeHiveMindModelFactory({ HiveMind, stateDir: modelRoot, seed, modelRetention, commonRandomNumbers: crn });
+    const signalForVariant = makeSignalForVariant(factory, {
+        // Round 26 (R26-3): ONE confidence->position policy for both families.
+        positionPolicy,
+        onStats: accumulateStats,
+    });
+
+    // Round 26 (R26-4): with `concurrency > 1` each fold-pass is dispatched to a
+    // worker that reconstructs the same signal function from the same data, so the
+    // positions/confidence/stats are bit-identical and only wall time moves.
+    let foldExecutorFor = null;
+    if (width > 1) {
+        // Resolve the worker URL only when we must spawn it (a caller-supplied
+        // `spawnWorker` — the tests — ignores it, and `import.meta.url` is not
+        // resolvable in every environment the analysis layer is imported into).
+        const workerUrl = spawnWorker ? null : new URL('./analysis/fold_worker.js', import.meta.url);
+        const dispatcher = makeNodeFoldDispatcher({ url: workerUrl, spawn: spawnWorker });
+        foldExecutorFor = (variant, si, s) => makeFoldExecutor({
+            dispatch: (ctx) => dispatcher({
+                variantId: variant.id, model: modelPath, streamIndex: si, foldIndex: ctx.index,
+                seed, stateDir: modelRoot, modelRetention,
+                cacheSize: CONTROLLER_MODEL.cacheSize, ensembleSize: CONTROLLER_MODEL.ensembleSize,
+                tier: CONTROLLER_MODEL.tier, warmup: CONTROLLER_MODEL.warmup,
+                positionPolicy, saveInterval, labelPolicy, labelHorizonBars,
+                commonRandomNumbers: crn,
+                len: FEATURE_LEN, leaky: false,
+                returns: s.returns, candles: s.candleData || null,
+                train: ctx.train, test: ctx.test,
+            }),
+        });
+    }
 
     state.phase = 'evaluating';
     checkpoint('running');
-    reportProgress(true, `starting ${variants.length} variants x ${foldsTotal} folds x ${worlds.length} stream(s)`);
+    reportProgress(true, `starting ${variants.length} variants x ${foldsTotal} folds x ${worlds.length} stream(s)${width > 1 ? ` @ concurrency ${width}` : ''}`);
 
     const t0 = performance.now();
     let result = null;
     let evaluationError = null;
     try {
-        result = evaluateAB({
-            worlds, variants, signalForVariant, costBps, audit, alpha,
-            probe, auditProbesPerFold, model: modelPath, requireReachable, auditReuseBase: reuseBase,
-            gateOptions,
-            onEvent, onVariant,
-        });
+        result = width > 1
+            ? await evaluateABAsync({
+                worlds, variants, signalForVariant, foldExecutorFor, onModelStats: accumulateStats, concurrency: width,
+                costBps, audit, alpha,
+                probe, auditProbesPerFold, model: modelPath, requireReachable, auditReuseBase: reuseBase,
+                gateOptions,
+                onEvent, onVariant,
+            })
+            : evaluateAB({
+                worlds, variants, signalForVariant, costBps, audit, alpha,
+                probe, auditProbesPerFold, model: modelPath, requireReachable, auditReuseBase: reuseBase,
+                gateOptions,
+                onEvent, onVariant,
+            });
     } catch (err) {
         evaluationError = err;
     }
@@ -1159,6 +1845,101 @@ export async function runAnalysis({
         candidates: result.candidates.map((c) => c.report),
         periodsPerYear: 252,
     });
+    // Round 26 (R26-3): the journaled raw confidence + the scored policy must
+    // reproduce the emitted positions byte-for-byte. That is the precondition for
+    // treating a dead-zone/scale sweep as pure post-processing, so it is asserted on
+    // every real run rather than assumed.
+    const policyRoundTrip = verifyPolicyRoundTrip(result.baseline, useController ? POSITION_POLICY : IDENTITY_POSITION_POLICY);
+
+    // Round 26 (R26-14): score the family as forecasters — proper scores (Brier +
+    // reliability/resolution/uncertainty, log score), the Diebold–Mariano test of
+    // each candidate's per-bar Brier loss against the baseline, and the Hansen–
+    // Lunde–Nason Model Confidence Set over the whole family. Pure post-processing
+    // of the journaled confidence, so it cannot move a scored number.
+    const forecastBlock = forecastEnabled
+        ? forecastComparison({
+            baseline: result.baseline.foldInputs,
+            candidates: result.candidates
+                .filter((c) => !c.skipped && c.report && Array.isArray(c.report.foldInputs))
+                .map((c) => ({ id: c.variant.id, foldInputs: c.report.foldInputs })),
+            seed,
+        })
+        : null;
+
+    // Round 26 (R26-5): the turnover attack. Which no-trade band (dead zone),
+    // entry/exit hysteresis and minimum holding period lowers turnover enough to
+    // reach a realistic taker cost, restated from the journaled confidence with no
+    // model. Pure post-processing, so it cannot move a scored number — it only
+    // adds a row per (candidate, policy) to the report.
+    const turnover = turnoverEnabled
+        ? runTurnoverSweep({
+            baseline: result.baseline,
+            candidates: ladderCandidates,
+            costBps,
+            periodsPerYear: 252,
+            trials: variants.length,
+            decisionOptions: { requireCleanAudit: audit, ...gateOptions },
+            targetBps: turnoverTargetBps,
+        })
+        : null;
+
+    const candidateReportRows = result.candidates.map((c) => candidateRow(c, c.decision, c.search, modelStats));
+    // Round 26 (R26-8): the decision-grade report. A pure composition of the blocks
+    // above into the six questions the next cycle asks; it computes no new strategy
+    // statistic (the concentration readout restates the already-scored folds with the
+    // same `strategyReturns` arithmetic, and `nextRun` reads the measured power). The
+    // featured candidate is the promoted one if any, else the best by pooled Sharpe.
+    let decisionBlock = null;
+    if (decision) {
+        const promotable = result.candidates
+            .map((c, i) => ({ c, row: candidateReportRows[i] }))
+            .filter((x) => !x.c.skipped && x.c.report && x.c.report.pooledMetrics);
+        const promoted = promotable.find((x) => x.row.promote);
+        // Rank by pooled Sharpe, treating a non-finite one as the floor. Using
+        // `x || -Infinity` here would misrank an exactly-zero Sharpe as -Infinity,
+        // so a zero-Sharpe candidate would lose to a negative one.
+        const poolSharpe = (x) => (Number.isFinite(x.c.report.pooledMetrics.netSharpe) ? x.c.report.pooledMetrics.netSharpe : -Infinity);
+        const best = promoted || promotable.slice().sort((a, b) => poolSharpe(b) - poolSharpe(a))[0] || null;
+        const featured = best ? best.c.report : null;
+        const featuredRow = best ? best.row : null;
+        const concentration = featured
+            ? foldConcentration({ folds: featured.folds, foldInputs: featured.foldInputs, costBps, periodsPerYear: 252 })
+            : null;
+        const confidence = featured ? confidencePersistence({ foldInputs: featured.foldInputs }) : null;
+        const nextRun = nextRunPlan({
+            power: (featured && featured.power) || result.baseline.power || null,
+            dependence: featuredRow ? featuredRow.dependence : null,
+            candidate: featuredRow,
+            levels: ladderLevels,
+            periodsPerYear: 252,
+            durationMs,
+            folds: foldsTotal,
+            streams: worlds.length,
+        });
+        decisionBlock = decisionReport({
+            model: featuredRow ? featuredRow.model : null,
+            runMeta: {
+                gate: gateMode,
+                gateOptions,
+                labelPolicy,
+                labelHorizonBars,
+                seed,
+                trials: variants.length,
+                saveInterval: Number.isFinite(saveInterval) ? saveInterval : 'inf',
+            },
+            baseline: result.baseline,
+            candidate: featuredRow,
+            concentration,
+            confidence,
+            nextRun,
+            familyCorrelation: familyCorr,
+            familywise,
+            costLadder: ladder,
+            forecast: forecastBlock,
+            replication: null,
+            positionPolicy: useController ? POSITION_POLICY : IDENTITY_POSITION_POLICY,
+        });
+    }
 
     const report = {
         version: 1,
@@ -1187,15 +1968,32 @@ export async function runAnalysis({
         reuseBase,
         modelRetention,
         foldLog,
+        // R26-12: the checkpoint throttle this run used. A number, or 'inf' for
+        // "never dump during the run" (the A/B default). It is off the arithmetic
+        // path: it changes only when the in-memory ensemble is written to disk.
+        saveInterval: Number.isFinite(saveInterval) ? saveInterval : 'inf',
+        // Round 26 (R26-11): the label policy this run used, and the triple barrier's
+        // horizon (null when unused). A label policy is a training-set change, so
+        // which one a run used is part of the result.
+        labelPolicy,
+        labelHorizonBars: Number.isFinite(labelHorizonBars) ? labelHorizonBars : null,
+        // Round 26 (R26-4): the fold loop's in-flight width. Off the arithmetic path
+        // — it changes only how many fold-passes ran at once.
+        concurrency: width,
         gate: gateMode,
         gateAlpha: gateAlphaResolved,
         gateOptions: { ...gateOptions },
-        positionPolicy: useController ? CONTROLLER_POSITION_POLICY : null,
+        trials: variants.length,
+        positionPolicy: useController ? POSITION_POLICY : null,
+        // Round 26 (R26-3): the byte-for-byte policy round-trip certificate. A
+        // policy sweep is only valid if the journaled confidence reproduces the
+        // emitted positions at the scored policy.
+        policyRoundTrip,
         power: result.baseline.power || null,
-        variants: result.variants.map(variantRosterRow),
+        variants: result.variants.map((entry) => variantRosterRow(entry, modelStats)),
         timings: variantTimings,
-        baseline: baselineRow(result),
-        candidates: result.candidates.map((c) => candidateRow(c, c.decision, c.search)),
+        baseline: baselineRow(result, modelStats),
+        candidates: candidateReportRows,
         familywise,
         // Round 25: the cost ladder (the whole verdict restated at 0/2/5/10 bps of
         // turnover) and the family-correlation diagnostic. Both are pure
@@ -1205,12 +2003,39 @@ export async function runAnalysis({
         // cost assumption, not about the strategy.
         costLadder: ladder,
         familyCorrelation: familyCorr,
+        // Round 26 (R26-5): the turnover attack. Which dead-zone / entry-exit
+        // hysteresis / minimum-holding policy lowers turnover enough to clear a
+        // realistic taker cost. Null unless `--turnover-sweep`. A grid of pure
+        // post-processing of the journaled confidence (no model), so it cannot
+        // move a scored number.
+        turnoverSweep: turnover,
+        turnoverTargetBps: turnoverEnabled ? turnoverTargetBps : null,
+        // Round 26 (R26-6): the bar interval the streams were resampled to, and the
+        // measured effective-independence of the basket (Kish 1965 design effect
+        // over the streams' returns). Design/diagnostic only — no scored number
+        // depends on it.
+        intervalBars: intervalFactor,
+        streamSelection,
+        // Round 26 (R26-13): whether the variant comparison was paired on the
+        // random draws (common random numbers). Default true; `false` restores the
+        // historical per-variant seed.
+        commonRandomNumbers: crn,
+        // Round 26 (R26-14): the forecast-comparison block (proper scores per
+        // variant, DM vs baseline, and the family Model Confidence Set). Null when
+        // disabled. Pure post-processing of the journaled confidence.
+        forecast: forecastBlock,
+        // Round 26 (R26-8): the decision-grade report. Six blocks (training / edge /
+        // concentration / economics / family / nextRun), each answering one question
+        // the next cycle asks, with every field a value or an explicit
+        // { available:false, reason }. Null when `--decision=0`.
+        decisionEnabled: decision !== false,
+        decision: decisionBlock,
         progress: { ...counters, phase: 'complete', elapsedMs: durationMs },
         artifacts: runDir
             ? { folds: 'folds.jsonl', log: 'run.log', progress: 'progress.json', partial: 'partial-report.json' }
             : null,
-        reader: `canonical verdict. Per candidate: \`promote\` + \`reasons\` + \`pooledMetrics\` (incl. \`grossPnl\` and \`breakEvenCostBps\` = the per-unit-turnover cost in bps at which the gross edge is exactly consumed, so a high-turnover signal can be compared to a low-turnover mechanism on one axis) + \`audit\` (clean/reachable/reachableFolds/probes/viewDiffers/baseReused) + \`search\` (family-wise) + round-25 blocks: \`dependence\` (delete-one-cluster jackknife SE over fold-window clusters, design effect, effective bars, equicorrelation reading; null on a single stream), \`promotionTest\` (paired cluster Sharpe-difference t(C-1) + exact sign test over fold windows) and \`gate\` (which hurdles were APPLIED vs SKIPPED-no-panel). The run-level \`power\` block carries the pooled Sharpe SE/MDE, an \`underpowered\` flag (MDE95 above 1.0: a null verdict that could not detect Sharpe 1 is uninformative) and \`barsToDetect1\`; \`power.seDependent\`/\`mdeSharpeDependent\` are the same numbers under the cluster jackknife. \`timings\` records each variant's wall time (the measured cost model is 10.7 s per controller fit). \`costLadder\` restates the entire verdict at each cost level in bps of turnover; \`familyCorrelation\` reports how correlated the candidates' excess returns were (a diagnostic only — the deflated Sharpe deliberately keeps trials=K). \`folds.jsonl\` holds one line per fold-pass (source: stage=score|base|probe, probeIndex for the probe bar, the pass's bar indices, emitted positions, realised returns and metrics), so the pooled metrics AND the audit can be recomputed offline; \`run.log\` is the event journal; \`progress.json\` is the liveness heartbeat.`,
-        summary: formatAnalysis(result, { gate: { mode: gateMode, alpha: gateAlphaResolved }, costLadder: ladder, familyCorrelation: familyCorr }),
+        reader: `canonical verdict. Per candidate: \`promote\` + \`reasons\` + \`pooledMetrics\` (incl. \`grossPnl\` and \`breakEvenCostBps\` = the per-unit-turnover cost in bps at which the gross edge is exactly consumed, so a high-turnover signal can be compared to a low-turnover mechanism on one axis) + \`audit\` (clean/reachable/reachableFolds/probes/viewDiffers/baseReused) + \`search\` (family-wise) + round-25 blocks: \`dependence\` (delete-one-cluster jackknife SE over fold-window clusters, design effect, effective bars, equicorrelation reading; null on a single stream), \`promotionTest\` (paired cluster Sharpe-difference t(C-1) + exact sign test over fold windows) and \`gate\` (which hurdles were APPLIED vs SKIPPED-no-panel). The run-level \`power\` block carries the pooled Sharpe SE/MDE, an \`underpowered\` flag (MDE95 above 1.0: a null verdict that could not detect Sharpe 1 is uninformative) and \`barsToDetect1\`; \`power.seDependent\`/\`mdeSharpeDependent\` are the same numbers under the cluster jackknife. \`trials\` (top-level and per candidate) is K, the searched-roster size every DSR was deflated by. \`timings\` records each variant's wall time; the measured cost law is \`time ~= k * streams * passes * modelVariants * sum_f(testStart_f)\` with \`k ~= 0.036 s\` per history bar replayed (a model fit warms up by replaying all history up to the fold, so per-fold cost grows with the fold index - the run is O(n^2) per stream, not linear in bars). \`costLadder\` restates the entire verdict at each cost level in bps of turnover; \`familyCorrelation\` reports how correlated the candidates' excess returns were (a diagnostic only — the deflated Sharpe deliberately keeps trials=K); \`turnoverSweep\` (null unless \`--turnover-sweep\`) restates the journaled confidence under a dead-zone x entry/exit-hysteresis x minimum-holding grid and names the policy with the highest break-even cost, so the economic ceiling can be attacked offline (no model, no re-run); \`streamSelection\` (null unless \`--select-streams\`) measures the basket's Kish design effect over the streams' own returns and reports the greedy most-diversifying order — with \`keep\` set it also names the kept basket and its design effect — and \`intervalBars\` is the resampling factor every stream was built at (1 = the raw bars). \`commonRandomNumbers\` says whether the variant comparison was paired on the random draws (R26-13 common random numbers; default true). \`folds.jsonl\` holds one line per fold-pass (source: stage=score|base|probe, probeIndex for the probe bar, the pass's bar indices, emitted positions, realised returns and metrics), so the pooled metrics AND the audit can be recomputed offline; \`run.log\` is the event journal; \`progress.json\` is the liveness heartbeat.`,
+        summary: formatAnalysis(result, { gate: { mode: gateMode, alpha: gateAlphaResolved }, costLadder: ladder, familyCorrelation: familyCorr, turnoverSweep: turnover, streamSelection, intervalBars: intervalFactor, commonRandomNumbers: crn, forecast: forecastBlock, decision: decisionBlock, model: modelStats }),
     };
 
     state.phase = 'complete';
@@ -1224,6 +2049,7 @@ export async function runAnalysis({
             familyCorrelation: report.familyCorrelation,
             timings: report.timings,
             summary: report.summary,
+            decision: report.decision,
             finishedAt: report.finishedAt,
             progress: report.progress,
         });
@@ -1246,6 +2072,40 @@ export async function runAnalysis({
     reportProgress(true, 'complete');
 
     return { runDir, report, result, durationMs };
+}
+
+// Round 26 (R26-13): run the A/B under several master seeds and summarize the
+// per-variant distribution (mean / IQM / stratified-bootstrap CI / variance
+// decomposition) with common random numbers ON, so the variant differences are
+// paired on the random draws. A single-seed point estimate is not a family
+// decision (Bouthillier et al. 2019; Henderson et al. 2018). Only the first seed
+// writes a run directory; the aggregate is written beside it as `replication.json`.
+export async function replicateAnalysis({ seeds = [1, 2, 3], writeFiles = true, log = () => {}, ...options } = {}) {
+    const list = (Array.isArray(seeds) ? seeds : []).filter((s) => Number.isFinite(s));
+    if (!list.length) throw new Error('replicateAnalysis: at least one numeric seed is required');
+    const runs = [];
+    for (let i = 0; i < list.length; i++) {
+        runs.push(await runAnalysis({ ...options, seed: list[i], writeFiles: writeFiles && i === 0, commonRandomNumbers: true, log }));
+    }
+    const first = runs[0].report;
+    const ids = ['baseline', ...first.candidates.map((c) => c.id)];
+    const seriesOf = (report, id) => {
+        const row = id === 'baseline' ? report.baseline : report.candidates.find((c) => c.id === id);
+        return row && Array.isArray(row.foldSharpes) ? row.foldSharpes : [];
+    };
+    const byVariant = {};
+    for (const id of ids) {
+        byVariant[id] = seedDistribution({ perSeed: runs.map((r) => ({ seed: r.report.seed, values: seriesOf(r.report, id) })) });
+    }
+    const replication = {
+        seeds: list,
+        variants: ids,
+        byVariant,
+        commonRandomNumbers: true,
+        reader: 'per-variant seed distribution over the same fold grid: mean, IQM (Agarwal et al. 2021), stratified-bootstrap CI resampling within each seed stratum, and the seed/fold variance fractions. CRN on => the variant differences are paired on the random draws (Glasserman & Yao 1992); a single seed is not a ranking.',
+    };
+    if (writeFiles && runs[0].runDir) writeJson(runs[0].runDir, 'replication.json', replication);
+    return { runs, replication, runDir: runs[0].runDir || null, durationMs: runs.reduce((a, r) => a + r.durationMs, 0) };
 }
 
 export const ANALYZE_USAGE = [
@@ -1274,8 +2134,49 @@ export const ANALYZE_USAGE = [
     '  --gate-alpha=<a>         alpha for the dependence hurdles (default = --alpha)',
     '  --cost-ladder=0,2,5,10   cost levels (bps of turnover) the whole verdict is',
     '                           restated at (default 0,2,5,10; empty disables)',
+    '  --turnover-sweep         restate the journaled confidence under a no-trade band',
+    '                           x entry/exit hysteresis x minimum-holding grid (pure',
+    '                           post-processing, no model) and report which policy',
+    '                           clears the target taker cost',
+    '  --turnover-target=<bps>  break-even cost the turnover attack tries to clear',
+    '                           (default 5 bps — the Binance USD-M futures taker fee)',
+    '  --interval=<n>           resample every stream by n bars (e.g. 4 = 4h bars from',
+    '                           1h data); a genuinely different horizon, not a copy',
+    '  --select-streams[=<n>]   measure the basket\'s effective independence (Kish',
+    '                           design effect over the streams\' returns) and report',
+    '                           the greedy most-diversifying order; with =<n> keep only',
+    '                           the first n streams of that order',
+    '  --crn=0                  disable common random numbers (R26-13): use the',
+    '                           historical per-variant fold seed instead of the paired',
+    '                           variant-independent one (default: CRN on)',
+    '  --forecast=0             skip the forecast-comparison block (R26-14): the',
+    '                           proper scores, the Diebold-Mariano test vs baseline',
+    '                           and the family Model Confidence Set (default: on;',
+    '                           pure post-processing of the journaled confidence)',
+    '  --decision=0             skip the decision-grade report block (R26-8): the',
+    '                           six-question composition (training / edge /',
+    '                           concentration / economics / family / nextRun); the',
+    '                           concentration readout is a leave-one-fold-out Sharpe',
+    '                           sweep, so this saves that pass (default: on)',
+    '  --seeds=a,b,c            replicate the A/B under several master seeds with CRN and',
+    '                           aggregate each variant\'s mean/IQM/stratified-bootstrap CI',
+    '                           + seed/fold variance split (writes replication.json',
+    '                           beside the first run dir)',
     '  --keep-models            keep each fit\'s SQLite state dir (forensics; large)',
     '  --fold-log=all|score|off what folds.jsonl records (default all)',
+    '  --save-interval=<n>      full-state checkpoint every n getSignal calls',
+    '                           (default Infinity: the A/B never reads it back;',
+    '                           use 1 for the historical per-call dump)',
+    '  --label-policy=optimistic|conservative|triple',
+    '                           trade-label policy for every controller (default',
+    '                           optimistic = the shipped labeler, bit-identical)',
+    '  --label-horizon=<n>      time barrier in bars for --label-policy=triple',
+    '                           (required for the triple barrier to expire a trade)',
+    '  --label-policies         add the opt-in label variants (conservative, triple)',
+    '                           to the candidate roster (a training-set change)',
+    '  --concurrency=<n>        fold-passes in flight via worker threads (default 1 =',
+    '                           serial; > 1 dispatches each fold to a worker — identical',
+    '                           arithmetic and folds.jsonl, only wall time moves)',
     '  --progress-ms=<n>        heartbeat cadence ms (default 5000; 0 = every pass, -1 = silent)',
 ].join('\n');
 
@@ -1309,7 +2210,13 @@ if (isMain) {
             ? undefined
             : (ladderRaw.trim() === '' ? [] : ladderRaw.split(',').map((x) => Number(x.trim())).filter((x) => Number.isFinite(x) && x >= 0));
         const symbols = list('symbols');
-        const { runDir, report, durationMs } = await runAnalysis({
+        const saveIntervalRaw = argOf('save-interval');
+        // Default: no checkpointing during the run (the A/B never reads it back).
+        // `--save-interval=1` restores the historical per-call full-state dump.
+        const saveInterval = saveIntervalRaw == null
+            ? Infinity
+            : (/^(inf(inity)?)$/i.test(saveIntervalRaw.trim()) ? Infinity : Number(saveIntervalRaw));
+        const options = {
             file: argOf('file') || CONFIG.file,
             files: list('files'),
             symbols: symbols && symbols.length === 1 && symbols[0] === 'all' ? CANDLE_MANIFEST.map((e) => e.symbol) : symbols,
@@ -1328,16 +2235,49 @@ if (isMain) {
             gate: argOf('gate') || 'dependence',
             gateAlpha: argOf('gate-alpha') == null ? null : num('gate-alpha', null),
             ...(costLadderLevels === undefined ? {} : { costLadderLevels }),
+            turnoverSweep: has('turnover-sweep'),
+            turnoverTarget: num('turnover-target', 5),
+            intervalBars: num('interval', 1),
+            streamSelect: (() => {
+                if (!has('select-streams')) return null;
+                const raw = argOf('select-streams');
+                const n = raw == null ? NaN : Number(raw);
+                return Number.isFinite(n) && n > 0 ? n : true;
+            })(),
+            commonRandomNumbers: !/^(0|false)$/i.test(String(argOf('crn'))),
+            forecast: !/^(0|false)$/i.test(String(argOf('forecast'))),
+            decision: !/^(0|false)$/i.test(String(argOf('decision'))),
             modelRetention: has('keep-models') ? 'keep' : 'discard',
             foldLog,
+            saveInterval,
+            labelPolicy: argOf('label-policy') || 'optimistic',
+            labelHorizonBars: num('label-horizon', null),
+            labelPolicies: has('label-policies'),
+            concurrency: num('concurrency', 1),
             progressMs: num('progress-ms', 5000),
             log: (line) => console.log(line),
-        });
-        console.log(report.summary);
-        console.log(`\nanalyzed in ${durationMs.toFixed(0)}ms${runDir ? ` — report at ${path.join(runDir, 'report.json')}` : ''}`);
-        if (runDir) {
-            console.log('upload: run.json, report.json, run.log (optionally folds.jsonl) — ' +
-                'per-variant checkpoint: partial-report.json, live heartbeat: progress.json. Do not upload models/.');
+        };
+        const seedList = list('seeds');
+        if (seedList) {
+            // Round 26 (R26-13): replicate under several master seeds and print each
+            // variant's distribution, not a single-seed point estimate.
+            const seeds = seedList.map((s) => Number(s)).filter((s) => Number.isFinite(s));
+            const { runs, replication, runDir, durationMs } = await replicateAnalysis({ ...options, seeds });
+            for (const r of runs) console.log(r.report.summary);
+            console.log('');
+            for (const [id, dist] of Object.entries(replication.byVariant)) {
+                console.log(formatSeedReplication({ label: `seeds ${id}`, dist }));
+            }
+            console.log(`\nreplicated ${seeds.length} seeds (${seeds.join(',')}) in ${durationMs.toFixed(0)}ms` +
+                `${runDir ? ` — aggregate at ${path.join(runDir, 'replication.json')}` : ''}`);
+        } else {
+            const { runDir, report, durationMs } = await runAnalysis(options);
+            console.log(report.summary);
+            console.log(`\nanalyzed in ${durationMs.toFixed(0)}ms${runDir ? ` — report at ${path.join(runDir, 'report.json')}` : ''}`);
+            if (runDir) {
+                console.log('upload: run.json, report.json, run.log (optionally folds.jsonl) — ' +
+                    'per-variant checkpoint: partial-report.json, live heartbeat: progress.json. Do not upload models/.');
+            }
         }
     } catch (err) {
         console.error('analyze failed:', err && err.stack ? err.stack : err);

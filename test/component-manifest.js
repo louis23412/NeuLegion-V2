@@ -81,7 +81,9 @@ export const TOTAL_INSTALLED = INSTALLED_METHODS.length;
 // HiveMindController split.
 //
 // `src/hivemind/hiveMindController.js` keeps only its fields, constructor and
-// the public `getSignal()`; the per-controller helper methods live under
+// the public API (`getSignal()` — the per-bar decision — and `flushState()`,
+// the on-demand checkpoint write added in round 26/R26-12); the per-controller
+// helper methods live under `src/hivemind/controller/*` and are installed onto
 // `src/hivemind/controller/*` and are installed onto
 // `HiveMindController.prototype` by the same `installMethods` helper. Kept in a
 // separate map because the two classes are assembled independently.
@@ -99,7 +101,7 @@ export const CONTROLLER_COMPONENTS = {
 };
 
 // The controller class body keeps the constructor and the public getSignal().
-export const CONTROLLER_CLASS_API = ['getSignal'];
+export const CONTROLLER_CLASS_API = ['getSignal', 'flushState'];
 
 export const CONTROLLER_INSTALLED_METHODS = Object.values(CONTROLLER_COMPONENTS).flat();
 

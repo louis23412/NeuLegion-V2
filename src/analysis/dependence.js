@@ -236,6 +236,46 @@ export function pairedClusterTest({ clustersA, clustersB, statistic, alpha = 0.0
     };
 }
 
+// Cluster stability: does the pooled edge SURVIVE deleting any single fold-window
+// cluster? This is the statistical form of "the edge is not carried by a handful
+// of windows" (round 26, R26-7). For each cluster c it recomputes the candidate
+// minus baseline statistic on the panel with c removed; `worstDelta` is the
+// smallest leave-one-out difference and `fractionPositive` the share that stay
+// positive. `stable` requires `fractionPositive >= minFraction` (default: every
+// cluster) AND `worstDelta > minDelta` (default 0). A candidate whose full-sample
+// edge is positive but which loses money once one window is removed is exactly the
+// fragile case a raw win-fraction or sign test cannot see.
+export function clusterStability({ clustersA, clustersB, statistic, minFraction = 1, minDelta = 0 }) {
+    const nA = Array.isArray(clustersA) ? clustersA.length : 0;
+    const nB = Array.isArray(clustersB) ? clustersB.length : 0;
+    if (nA !== nB || nA < 2) return { available: false, reason: 'panels must share the same >= 2 clusters', nClusters: nA };
+    const full = statistic(concatClusters(clustersA)) - statistic(concatClusters(clustersB));
+    const leaveOneOut = [];
+    for (let c = 0; c < nA; c++) {
+        const delta = statistic(concatClusters(clustersA, c)) - statistic(concatClusters(clustersB, c));
+        leaveOneOut.push({ cluster: c, delta });
+    }
+    if (!leaveOneOut.every((r) => Number.isFinite(r.delta))) {
+        return { available: false, reason: 'a leave-one-cluster-out difference is not finite', nClusters: nA };
+    }
+    let worst = leaveOneOut[0];
+    for (const r of leaveOneOut) if (r.delta < worst.delta) worst = r;
+    const positive = leaveOneOut.filter((r) => r.delta > minDelta).length;
+    const fractionPositive = positive / leaveOneOut.length;
+    return {
+        available: true,
+        nClusters: nA,
+        full,
+        worstCluster: worst.cluster,
+        worstDelta: worst.delta,
+        fractionPositive,
+        leaveOneOut,
+        minFraction,
+        minDelta,
+        stable: fractionPositive >= minFraction - 1e-12,
+    };
+}
+
 // The breadth (win-consistency) test: on each cluster, did the candidate's
 // statistic beat the baseline's? Ties are dropped (they carry no sign
 // information), and the result is an exact sign test — no distributional
@@ -252,8 +292,13 @@ export function pairedClusterSignTest({ clustersA, clustersB, statistic }) {
     if (nA !== nB || nA < 1) return { available: false, reason: 'panels must share the same >= 1 clusters', nClusters: nA };
     const signs = [];
     for (let c = 0; c < nA; c++) {
-        const a = statistic(concatClusters(clustersA, c));
-        const b = statistic(concatClusters(clustersB, c));
+        // PER-WINDOW: compare THIS cluster's statistic to the baseline's. The
+        // delete-one-cluster form (`concatClusters(a, c)`) belongs to
+        // `pairedClusterTest` and `clusterStability`; using it here made the sign
+        // test a leave-one-out stability test instead of the error-controlled
+        // win-fraction it replaces (and duplicated `clusterStability`'s job).
+        const a = statistic(clustersA[c]);
+        const b = statistic(clustersB[c]);
         if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
         if (a > b) signs.push(1); else if (a < b) signs.push(-1); else signs.push(0);
     }

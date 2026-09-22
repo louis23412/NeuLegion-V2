@@ -168,11 +168,20 @@ const EXPECTED = {
     'hm:broadcast': '31d90624',
     'hm:translate': '8e4e4d29',
     'hm:postReloadPrediction': '5f703135',
-    'ctl:finalSignal': '224a8b19',
-    'ctl:signalTrajectory': '17d78ef3',
+    // Re-frozen once, deliberately, for round 26 R26-0 (BUGS.md #33). The
+    // controller block used to be fed the whole growing candle prefix
+    // (`cache.slice(0, i)`); production feeds the last `cacheSize` candles, and
+    // the `_updateOpenTrades` entry-timestamp guard (added in R26-0) makes the
+    // prefix shape behave identically — but the *old* values pinned the
+    // pre-guard trajectory, i.e. the mislabelled #33 stream. The controller feed
+    // is now the production window. `ctl:signalCount` and `ctl:lastTrainingStep`
+    // are unchanged; `hm:*` are untouched. Was: ctl:finalSignal `224a8b19`,
+    // ctl:signalTrajectory `17d78ef3`, ctl:accuracyTotals `a0ece37d`.
+    'ctl:finalSignal': 'a7b13a39',
+    'ctl:signalTrajectory': '5d341253',
     'ctl:signalCount': '74386641',
     'ctl:lastTrainingStep': '6433cfe3',
-    'ctl:accuracyTotals': 'a0ece37d',
+    'ctl:accuracyTotals': '09d8fb5a',
 };
 
 export async function run(options = {}) {
@@ -273,8 +282,16 @@ export async function run(options = {}) {
         const hashes = [];
         let last = null;
         let steps = 0;
+        // The controller is fed the **production window shape** — the last
+        // `cacheSize` (120) candles of the growing cache, exactly what
+        // `legion/workers.js` passes (`state.cache.slice(-cacheSize)`) — rather
+        // than the whole growing prefix. The prefix shape re-inserts the trimmed
+        // history on every call and (before round 26) closed trades on bars older
+        // than their entry (`BUGS.md` #33); the guard in `_updateOpenTrades` now
+        // prevents that, and `core.test.js` pins the guard directly. This loop
+        // pins the number the shipped path actually produces.
         for (let i = 40; i <= cache.length; i++) {
-            const slice = cache.slice(0, i);
+            const slice = cache.slice(Math.max(0, i - 120), i);
             last = withSeed(2000 + i, () => new HiveMindController(
                 'G', stateDir('ctl'), 120, 4, 'positive', 1, PRICE, true,
             ).getSignal(slice, 1, 0.025, 0.025, [], []));

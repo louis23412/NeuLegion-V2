@@ -37,6 +37,12 @@ import * as realityCheckMod from '../../../src/analysis/reality_check.js';
 import * as dependenceMod from '../../../src/analysis/dependence.js';
 import * as worldMod from '../../../src/analysis/world.js';
 import * as featuresMod from '../../../src/analysis/features.js';
+import * as holdingMod from '../../../src/analysis/holding.js';
+import * as streamsMod from '../../../src/analysis/streams.js';
+import * as replicationMod from '../../../src/analysis/replication.js';
+import * as forecastMod from '../../../src/analysis/forecast.js';
+import * as decisionMod from '../../../src/analysis/decision.js';
+import * as raceMod from '../../../src/analysis/race.js';
 import * as pricePrecisionMod from '../../../src/price_precision.js';
 import * as surpriseMod from '../../../src/hivemind/memory/surprise.js';
 import * as sampleWeightsMod from '../../../src/hivemind/training/sample_weights.js';
@@ -66,6 +72,12 @@ const ANALYSIS_IMPORTS = {
     'dependence.js': dependenceMod,
     'world.js': worldMod,
     'features.js': featuresMod,
+    'holding.js': holdingMod,
+    'streams.js': streamsMod,
+    'replication.js': replicationMod,
+    'forecast.js': forecastMod,
+    'decision.js': decisionMod,
+    'race.js': raceMod,
 };
 
 const SUPPORT_IMPORTS = {

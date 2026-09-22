@@ -14,5 +14,5 @@ test('HiveMind component split is structurally sound', async () => {
         result.failed, 0,
         `${result.failed}/${result.total} structural checks failed:\n${JSON.stringify(result.failures, null, 2)}`,
     );
-    assert.equal(result.total, 50, `expected exactly the 50 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
+    assert.equal(result.total, 51, `expected exactly the 51 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
 });

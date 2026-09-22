@@ -159,7 +159,7 @@ the whole run is off the hot path).
    which is exactly the profile the per-fold hurdles exist to reject.
 
 The decision record is therefore: **no promote, no re-freeze, and the promotion
-gate itself is now on the work list** (round 25 — see `TODO.md` items 31-36 and
+gate itself is now on the work list** (round 25 — see `TODO.md` items 31-37 and
 `ROADMAP.md` round 25).
 
 ## Verification method (bit-exact A/B)
@@ -426,13 +426,197 @@ move a model trajectory. The new cost is all O(small) or O(C):
   attributes time per variant).
 
 **The measured cost model is the one optimisation input that matters for the next
-run:** a single controller fit costs **~10.7 s**, so a run costs
-`time ≈ 10.7 s × mechanismVariants × folds × (1 + probes)`. Round 25 makes the
+run:** a single controller fit costs **~10.7 s** at 36 folds/stream, so a run costs
+`time ≈ 10.7 s × mechanismVariants × folds × (1 + probes)`. **SUPERSEDED by
+"Round 25b" below** — the per-fit cost is not constant: it grows with the fold
+index (42.6 s at 142 folds/stream) and a run is O(n²) per stream, because the fit
+replays all history to warm the online controller. Round 25 makes the
 corrected MDE (hence the honest required sample) computable *before* spending it,
 so the next run can be sized from the model rather than from a guess. No change to
 the fit itself is implied or taken — the O(n²) similarity sweep and the
 recomputation-vs-storage tradeoff below remain the only known hot-path
 opportunities, and both are still rejected for bit-exactness.
+
+## Round 25b — the measured cost law, and why the run is O(n²)
+
+The `20260921T062511-seed1` signal-family run settled what the round-25 cost model
+got wrong. It ran **9 variants over 8 streams × 2,200 bars (1,136 folds, 17,040
+pooled bars)** and its `timings` block is unambiguous:
+
+| variant | kind | folds | elapsed |
+| --- | --- | ---: | ---: |
+| `baseline` | mechanism | 1,136 | **96,890,845 ms (26.9 h)** |
+| 8 × `sig:*` | signal | 1,136 | 309-775 ms each |
+
+**All 26.9 hours were one mechanism variant.** Signals are pure array math on the
+view and cost nothing (`makeSignalForVariant`). That is the first lesson: the
+cost of an experiment is the cost of its *model* variants, so narrowing a run to
+the signal family is essentially free while adding a mechanism variant multiplies
+the whole run.
+
+### The law
+
+`fit()` warms an online controller by replaying history:
+
+```js
+for (let i = 1; i <= testStart; i++) ctl.getSignal(candles.slice(0, i), 1);
+```
+
+The number of warm-up calls per fold grows with the fold index, so:
+
+```
+time ≈ 0.035 s × Σ_f(testStart_f) × streams × passes × mechanismVariants
+Σ_f(testStart_f) = F·trainSize + testSize·F(F−1)/2
+```
+
+with ≈35 ms per warm-up call (33.2 ms measured at F=36, 38.2 ms at F=142 — the same
+constant, which is what makes the law predictive rather than fitted). Two
+consequences:
+
+- **`cost/fold ∝ F`, so `total ∝ F²` and the run is O(n²) per stream** (per-fold
+  cost 10.7 s at 36 folds/stream vs 42.6 s at 142 — measured ratio 3.98 against a
+  fold ratio of 3.94).
+- **For a fixed pooled-bar budget, `time ∝ pooledBars × folds-per-stream`.** Since
+  `pooledBars = streams × F × testSize`, MANY SHORT STREAMS are much cheaper than a
+  few long ones: 8 × 2,200 ⇒ 26.9 h, but 32 × 550 ⇒ ≈6 h for the same pooled bars.
+
+### The levers, in order of value
+
+1. **Parallelise the fold loop across worker threads (semantics-preserving, the big
+   win).** Every fold is an independent model fit and already gets its own state
+   directory (`stateDir/<variant>-<counter>`), so the folds are embarrassingly
+   parallel: ~8-16× on a desktop. `legion/workers.js#runWorkerThread` is the
+   existing settle-once, watchdogged dispatch, and `consolidation_worker.js` shows
+   the pattern for a heavy per-item job. The only care needed is journal ordering
+   (`folds.jsonl` and the per-variant checkpoints are written in fold order today,
+   so results would need buffering and a stable emit order to keep the offline
+   journal byte-comparable). This changes no arithmetic and no random draw — the
+   per-fold seed is already `(variantSeed + testStart·977)`, i.e. independent of
+   scheduling.
+2. **Size with short streams.** With the law, a run's wall clock is a design choice:
+   prefer more *diverse* streams at fewer bars — it is cheaper (linear in streams,
+   quadratic in folds-per-stream) *and* statistically better (more effective bars,
+   lower design effect).
+3. **Journal the pre-policy signal** so position-policy/cost sweeps can be restated
+   offline. Today `folds.jsonl` records the *emitted* positions, so a different
+   `positionPolicy` requires a refit; recording the pre-policy value would make the
+   turnover/cost economics a pure post-processing experiment. (Not implemented yet —
+   it is on the round-26 plan.)
+4. **Trim the allocation churn (secondary).** `candles.slice(0, i)` allocates a
+   fresh `O(i)` array per warm-up call; `Σ_i O(i) = O(F²)` copies per stream. It is
+   not the dominant term (the `getSignal` compute is), but passing an end index (or
+   a shared subarray view) would remove it without touching arithmetic.
+
+### Deliberately NOT taken
+
+**Warming up once per stream and snapshotting at fold boundaries** would collapse
+the O(n²) to O(n) — but the per-fold fresh seed `(variantSeed + testStart·977)` is
+what makes each fold an independent random draw, and reusing one controller would
+correlate the folds' trajectories and change the very fold-level statistics the
+cluster inference reads. That is a statistical decision, not an optimisation, so it
+stays out of this document. **Replaying history is the online training** — it must
+not be "optimised" away.
+
+## Round 26b — where the A/B's per-call cost actually goes, and the correction of round 25c
+
+Round 25b attributed the fit's cost constant (`≈ 0.035 s` per warm-up call) to the
+inherent "replay history through an online model" cost and concluded the only
+semantics-preserving lever was parallelism. Round 25c then attributed a large part
+of that constant to the round-26 fidelity defect (`BUGS.md` #33): the A/B passes
+`getSignal` the whole growing prefix, the controller trims its candle table to
+`cacheSize`, so a prefix-shaped call re-inserts every trimmed candle, builds an
+`IN (?,…)` statement with thousands of placeholders and hands `_updateOpenTrades`
+the whole old history.
+
+**That attribution was wrong, and the second sweep pass caught it by measuring the
+control.** Same controller, same seed, same synthetic candles, `cacheSize = 120`,
+one call per bar, mean ms/call by call block (shim, sql.js):
+
+| calls | window (production-shaped) | prefix (current A/B) |
+| --- | ---: | ---: |
+| 1-20 | 12.1 | 6.8 |
+| 20-50 | 43.9 | 45.2 |
+| 50-100 | 56.1 | 51.2 |
+| 100-150 | 56.9 | 53.7 |
+| 150-200 | 56.6 | 55.4 |
+
+The two are **the same, block for block**. In prefix mode the re-insert volume
+grows to hundreds of candles per call (measured `recentCandles` up to 480 at 600
+bars); in window mode it is exactly 1 — and the per-call cost does not differ. The
+`8.8 → ~50 ms/call` "ramp" the round-25c table read as the onset of the churn
+appears **identically in window mode**: it is early-run warm-up (JIT, DB growth,
+WASM), not the defect. Across a full 600-bar run the difference is ≤ 8 % (window
+51.2 vs prefix 55.1 ms/call), which is a churn term that is real but small.
+
+So `#33` is a **correctness** fix. Its speed benefit on the native driver is
+**unmeasured**, and no round-26 item may be sized on the assumption that it is
+large. `BUGS.md` #33's "secondary payoff" sentence is qualified to say exactly
+this, and the corrected constant must be re-measured natively after R26-0 lands.
+
+**Where the per-call cost actually is.** Instrumenting one warm controller over 100
+bars (window-shaped, after the early ramp; shim):
+
+| stage | share of per-call time | per call |
+| --- | ---: | ---: |
+| `HiveMind.predict` (inference) | 53.7 % | 14.97 ms |
+| `HiveMind.dumpState()` (full state save) | 24.6 % | 6.85 ms |
+| `HiveMind.train` (label training) | 14.2 % | 3.95 ms |
+| `broadcastMemory` | 0.5 % | 0.13 ms |
+| `translateMemory`, SQLite IO, bookkeeping | ~7 % | ~2 ms |
+
+`dumpState()` re-opens the state DB, re-runs ~50 `CREATE TABLE IF NOT EXISTS` and
+~50 `DELETE FROM` statements, and re-inserts the **entire ensemble state** —
+transformer weights, gradient accumulators, every memory prototype and history —
+**on every call that predicts or trains**. In the A/B that state is never read
+back: `makeControllerModelFactory` pre-creates the mind and discards the directory
+per fold (`modelRetention`), and the controller's own candle DB is the only
+persisted thing the driver reads. So roughly **a quarter of every fold's compute is
+a checkpoint nobody ever loads**.
+
+That is a clean, semantics-preserving throughput lever: **checkpoint on an
+interval, not on every call** (round-26 item R26-12). Default `1` keeps the
+current behaviour bit-exact; the A/B sets "final only". The interval tradeoff is
+the classical checkpoint-interval problem (Young 1974; Daly 2006) — cost per unit
+time against expected lost work per failure — and a *production* run's failure
+window (a worker restart) is exactly where the interval should be bounded rather
+than infinity.
+
+As before, the shim is not the native driver: the *shares* above may move on
+native better-sqlite3, and the absolute constant must be re-measured there before
+it sizes anything. What the shim does establish is the *order*: inference first,
+persistence second, training third, and the fidelity defect's churn last.
+
+### R26-12 — landed (round 26)
+
+Implemented exactly as scoped above, with the semantics proof attached:
+
+- `src/hivemind/hiveMindController.js` — `_saveInterval` (class field, default
+  `1`) and `_saveTicks`; the checkpoint is gated to every `k`-th *eligible* call
+  (`Math.floor(_saveInterval)`, so a non-integer floors and a non-finite value
+  never matches the modulo). Default `1` ⇒ `_saveTicks % 1 === 0` on every
+  eligible call ⇒ byte-identical to the previous unconditional `dumpState()`, which
+  is why the 11 golden fingerprints are unmoved. Also added `flushState()` — an
+  explicit on-demand write that ignores the interval (a no-op before the mind
+  exists; used by the A/B only when a fit is KEPT and the interval never dumps, so
+  a forensic state directory is not left empty).
+- `src/analyze.js` — `makeControllerModelFactory({ saveInterval })` (default `1`,
+  the direct-call behaviour) and `runAnalysis({ saveInterval = Infinity })` (the
+  A/B never reads a fit's state back, so it does not pay for the write). The value
+  is recorded in `run.json` and `report.json` as a number or `'inf'`.
+  `--save-interval=<n>|inf` is the CLI switch; the default is `inf`, and
+  `--save-interval=1` restores the historical per-call dump.
+- **Evidence, not inference.** Note that the throttle *cannot* change an emitted
+  signal by construction (`dumpState` is a pure read of the model, and its return
+  value is only assigned to `_lastSaveStatus`, which is not in the signal payload).
+  The suite nonetheless asserts it end-to-end: `core.test.js` section H drives
+  three controllers over the same candles with a deterministic mind stand-in and
+  shows (a) the signal stream is identical at `k = 1, 3, Infinity`, (b) the write
+  count is exactly `ticks` / `floor(ticks / k)` / `0`. `analyze.test.js` pins the
+  factory default (`1`), the override, the driver default (`Infinity`), the
+  recorded field, and the one-shot kept-fit flush.
+- **Not yet measured natively.** The ~24.6 % share is a shim number. The native
+  saving (and the corrected fit constant) must be re-measured with
+  `npm run analyze` on real `better-sqlite3`; the shim number only sized the change.
 
 ## Remaining opportunity (deliberately NOT taken)
 

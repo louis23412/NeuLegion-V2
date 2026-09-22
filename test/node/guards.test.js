@@ -13,5 +13,5 @@ test('run-integrity guards hold (sanitize, rng, config fingerprint)', async () =
         result.failed, 0,
         `${result.failed}/${result.total} guard checks failed:\n${JSON.stringify(result.failures, null, 2)}`,
     );
-    assert.equal(result.total, 58, `expected exactly the 58 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
+    assert.equal(result.total, 65, `expected exactly the 65 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
 });
