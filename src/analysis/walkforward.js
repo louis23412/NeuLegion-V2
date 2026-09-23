@@ -58,6 +58,7 @@ import { sharpeRatio } from './performance.js';
 import {
     pearsonCorrelation, meanPairwiseCorrelation, equicorrelationDesignEffect, equicorrelationEffectiveSize,
     foldWindowClusters, clusterJackknife, pairedClusterTest, pairedClusterSignTest, clusterStability, signTestFloor,
+    studentTCritical,
 } from './dependence.js';
 
 // Close-to-close simple returns. `r[0] = 0` (no return is realised at the first
@@ -733,9 +734,17 @@ export function poolReports(reports, { periodsPerYear = 252, trials = 1 } = {}) 
 //     DSR >= 0.95 as well gives ~3.5% size at full power on a genuine edge
 //     (measured over 300 driftless-walk seeds, 5 walk-forward folds each). See
 //     `walkforward.test.js` / `analysis.test.js` section S.
-//   - it wins on at least `minFoldWinFraction` of folds (default: strict majority),
-//   - its positive-fold fraction is at least the baseline's plus `minPositiveFoldDelta`,
-//   - if `requireCleanAudit`, both reports' lookahead audits pass.
+//   - the lookahead audits pass (when `requireCleanAudit`).
+//
+// R28 (BUGS.md #57): the two RAW fold hurdles (`foldWinFraction >= 0.5` and
+// `positiveFraction >= baseline`) are no longer part of the SHIPPED
+// (dependence-aware) gate. `DESIGN.md` §6.1 recorded that decision in round 25
+// ("the raw fraction is still reported, as a statistic") but the code kept them
+// always-on, so the best round-27 arm reported a 0.20 fold-win fraction over 288
+// correlated folds while the error-controlled window-level sign test put it at
+// exactly 0.50. They remain supported (`rawFoldHurdles`, default true, preserves
+// the round-23/24 classic path and its published size/power calibration) and
+// `foldWinFraction`/`positiveFoldFraction` are always returned as statistics.
 //
 // Round 25 adds the dependence-aware hurdles, all default-off so the round-23/24
 // decision path is byte-identical unless a caller opts in (the real driver does):
@@ -786,6 +795,12 @@ export function promoteDecision(baseline, candidate, {
     minDsr = 0.95,
     minFoldWinFraction = 0.5,
     minPositiveFoldDelta = 0,
+    // R28 (BUGS.md #57): the two RAW fold hurdles are statistics, not gate
+    // hurdles. `true` preserves the round-23/24 classic gate (and its published
+    // size/power calibration); the shipped dependence-aware gate passes `false`
+    // and relies on the error-controlled cluster tests. `foldWinFraction` and
+    // `positiveFoldFraction` are returned either way.
+    rawFoldHurdles = true,
     requireCleanAudit = true,
     maxSearchP = null,
     requireSearchReject = false,
@@ -805,6 +820,35 @@ export function promoteDecision(baseline, candidate, {
     periodsPerYear = 252,
 } = {}) {
     const reasons = [];
+    // R28 (BUGS.md #55/#56): every evaluated hurdle is also recorded with its
+    // value, threshold and MARGIN, so a knife-edge miss is legible in the report
+    // (the round-27 `sig:momentum` adjusted DSR is 0.00124 below the 0.95 floor).
+    // `reasons` keeps its string form for every existing reader; `hurdles` is the
+    // structured companion and `tightestHurdle` is the closest one to its line.
+    const hurdles = [];
+    const record = (hurdle, value, threshold, direction, failed, gated = true) => {
+        const vNum = typeof value === 'number' && Number.isFinite(value);
+        const tNum = typeof threshold === 'number' && Number.isFinite(threshold);
+        hurdles.push({
+            hurdle,
+            value: vNum ? value : (value === undefined ? null : value),
+            threshold: tNum ? threshold : (threshold === undefined ? null : threshold),
+            direction,
+            margin: vNum && tNum ? value - threshold : null,
+            failed: !!failed,
+            // `gated:false` = a REPORTED STATISTIC that did not participate in the
+            // verdict (R28, BUGS.md #57: the raw fold fractions). Its `failed` and
+            // `margin` are still the honest evaluation of its stated rule, so a
+            // reader can see it was below the line; `gated:false` records that the
+            // failure could not affect the verdict (and `tightestHurdle` skips it).
+            gated,
+        });
+    };
+    const fail = (hurdle, value, threshold, direction, reason) => {
+        record(hurdle, value, threshold, direction, true);
+        reasons.push(reason);
+    };
+    const pass = (hurdle, value, threshold, direction, gated = true) => record(hurdle, value, threshold, direction, false, gated);
     const promotionTest = pairedPromotionTest(baseline, candidate, { alpha, periodsPerYear, minStableFraction });
     const bMean = baseline.aggregate ? baseline.aggregate.mean : baseline.meanFoldSharpe;
     const cMean = candidate.aggregate ? candidate.aggregate.mean : candidate.meanFoldSharpe;
@@ -812,26 +856,46 @@ export function promoteDecision(baseline, candidate, {
     const cDsr = candidate.pooledMetrics ? candidate.pooledMetrics.dsr : NaN;
 
     if (!(cMean >= bMean + minSharpeDelta)) {
-        reasons.push(`mean fold Sharpe ${cMean} < baseline ${bMean} + ${minSharpeDelta}`);
-    }
+        fail('meanSharpeDelta', cMean, bMean + minSharpeDelta, 'candidate >= baseline + minSharpeDelta',
+            `mean fold Sharpe ${cMean} < baseline ${bMean} + ${minSharpeDelta}`);
+    } else pass('meanSharpeDelta', cMean, bMean + minSharpeDelta, 'candidate >= baseline + minSharpeDelta');
     if (!(cDsr >= bDsr + minDsrDelta)) {
-        reasons.push(`pooled DSR ${cDsr} < baseline ${bDsr} + ${minDsrDelta}`);
-    }
+        fail('dsrDelta', cDsr, bDsr + minDsrDelta, 'candidate >= baseline + minDsrDelta',
+            `pooled DSR ${cDsr} < baseline ${bDsr} + ${minDsrDelta}`);
+    } else pass('dsrDelta', cDsr, bDsr + minDsrDelta, 'candidate >= baseline + minDsrDelta');
     if (!(cDsr >= minDsr)) {
-        reasons.push(`pooled DSR ${cDsr} < ${minDsr} (no demonstrated edge)`);
-    }
+        fail('minDsr', cDsr, minDsr, 'candidate >= minDsr',
+            `pooled DSR ${cDsr} < ${minDsr} (no demonstrated edge)`);
+    } else pass('minDsr', cDsr, minDsr, 'candidate >= minDsr');
     const win = foldWinFraction(candidate.folds, baseline.folds);
-    if (Number.isFinite(win) && win < minFoldWinFraction) {
-        reasons.push(`fold win fraction ${win} < ${minFoldWinFraction}`);
-    }
     const bPos = baseline.aggregate ? baseline.aggregate.positiveFraction : NaN;
     const cPos = candidate.aggregate ? candidate.aggregate.positiveFraction : NaN;
-    if (Number.isFinite(bPos) && Number.isFinite(cPos) && !(cPos >= bPos + minPositiveFoldDelta)) {
-        reasons.push(`positive-fold fraction ${cPos} < baseline ${bPos} + ${minPositiveFoldDelta}`);
+    // R28 (BUGS.md #57): computed and returned as statistics in every case; the
+    // REASON is only pushed when the classic raw hurdles are enabled. `failed` is
+    // the honest evaluation of the stated decision rule at this run's numbers (so a
+    // reported statistic can be seen to be below its line); `gated:false` says that
+    // failure could not affect the verdict.
+    if (Number.isFinite(win)) {
+        const winFails = win < minFoldWinFraction;
+        if (rawFoldHurdles && winFails) {
+            fail('foldWinFraction', win, minFoldWinFraction, 'candidate >= minFoldWinFraction',
+                `fold win fraction ${win} < ${minFoldWinFraction}`);
+        } else {
+            record('foldWinFraction', win, minFoldWinFraction, 'candidate >= minFoldWinFraction', winFails, rawFoldHurdles);
+        }
+    }
+    if (Number.isFinite(bPos) && Number.isFinite(cPos)) {
+        const posFails = !(cPos >= bPos + minPositiveFoldDelta);
+        if (rawFoldHurdles && posFails) {
+            fail('positiveFoldFraction', cPos, bPos + minPositiveFoldDelta, 'candidate >= baseline + minPositiveFoldDelta',
+                `positive-fold fraction ${cPos} < baseline ${bPos} + ${minPositiveFoldDelta}`);
+        } else {
+            record('positiveFoldFraction', cPos, bPos + minPositiveFoldDelta, 'candidate >= baseline + minPositiveFoldDelta', posFails, rawFoldHurdles);
+        }
     }
     if (requireCleanAudit) {
-        if (baseline.audit && !baseline.audit.clean) reasons.push(`baseline failed the lookahead audit (${baseline.audit.violations.length} violations)`);
-        if (candidate.audit && !candidate.audit.clean) reasons.push(`candidate failed the lookahead audit (${candidate.audit.violations.length} violations)`);
+        if (baseline.audit && !baseline.audit.clean) fail('baselineAudit', false, true, 'audit clean', `baseline failed the lookahead audit (${baseline.audit.violations.length} violations)`);
+        if (candidate.audit && !candidate.audit.clean) fail('candidateAudit', false, true, 'audit clean', `candidate failed the lookahead audit (${candidate.audit.violations.length} violations)`);
     }
     // --- round 25: dependence-aware hurdles (default-off) --------------------
     // A hurdle whose input does not exist is SKIPPED, not failed: a single-stream
@@ -847,8 +911,9 @@ export function promoteDecision(baseline, candidate, {
         if (cAdj != null) {
             gate.minDsrAdjusted = 'applied';
             if (!(cAdj >= minDsrAdjusted)) {
-                reasons.push(`pooled DSR (dependence-adjusted, ${candidate.pooledMetrics.effectiveBars} effective bars) ${cAdj} < ${minDsrAdjusted}`);
-            }
+                fail('minDsrAdjusted', cAdj, minDsrAdjusted, 'candidate >= minDsrAdjusted',
+                    `pooled DSR (dependence-adjusted, ${candidate.pooledMetrics.effectiveBars} effective bars) ${cAdj} < ${minDsrAdjusted}`);
+            } else pass('minDsrAdjusted', cAdj, minDsrAdjusted, 'candidate >= minDsrAdjusted');
         } else if (!hasPanel(candidate)) {
             // No cross-stream panel at all: a single stream has no cross-stream
             // dependence, so the unadjusted floor above is already the honest one.
@@ -869,9 +934,21 @@ export function promoteDecision(baseline, candidate, {
             gate.requireSharpeDiff = 'applied';
             if (!promotionTest.available) {
                 reasons.push(`paired Sharpe-difference test unavailable (${promotionTest.reason})`);
-            } else if (!promotionTest.sharpeDifference.significant) {
+            } else {
                 const d = promotionTest.sharpeDifference;
-                reasons.push(`paired cluster Sharpe difference not significant at ${alpha}: dSharpe=${d.value} se=${d.se} t=${d.t} df=${d.df} p=${d.pOneSided}`);
+                // R28 (BUGS.md #55/#56): the margin is against the ONE-SIDED
+                // cluster-t threshold the test itself uses, so "how close was it"
+                // is a real quantity (the round-27 `label:conservative` value
+                // 0.2164 is 0.0126 below the 0.2290 it needed).
+                const crit = Number.isFinite(d.df) ? studentTCritical(d.df, { alpha, twoSided: false }) : NaN;
+                const threshold = Number.isFinite(crit) ? crit * d.se : null;
+                if (!d.significant) {
+                    fail('pairedSharpeDifference', d.value, threshold,
+                        'candidate - baseline > tCritical(df, alpha) * pairedSE',
+                        `paired cluster Sharpe difference not significant at ${alpha}: dSharpe=${d.value} se=${d.se} t=${d.t} df=${d.df} p=${d.pOneSided}`);
+                } else if (threshold != null) {
+                    pass('pairedSharpeDifference', d.value, threshold, 'candidate - baseline > tCritical(df, alpha) * pairedSE');
+                }
             }
         }
     }
@@ -884,7 +961,10 @@ export function promoteDecision(baseline, candidate, {
                 reasons.push(`breadth test unavailable (${promotionTest.reason})`);
             } else if (!promotionTest.breadth.significant) {
                 const b = promotionTest.breadth;
-                reasons.push(`breadth ${b.wins}/${b.n} fold windows not significant at ${alpha}: p=${b.pValue} (best possible ${b.floor})`);
+                fail('breadth', b.pValue, alpha, 'p <= alpha',
+                    `breadth ${b.wins}/${b.n} fold windows not significant at ${alpha}: p=${b.pValue} (best possible ${b.floor})`);
+            } else {
+                pass('breadth', promotionTest.breadth.pValue, alpha, 'p <= alpha');
             }
         }
     }
@@ -905,7 +985,10 @@ export function promoteDecision(baseline, candidate, {
                 reasons.push(`cluster-stability test unavailable (${(promotionTest.stability && promotionTest.stability.reason) || 'no stability estimate'})`);
             } else if (!promotionTest.stability.stable) {
                 const s = promotionTest.stability;
-                reasons.push(`cluster stability ${s.fractionPositive} of ${s.nClusters} leave-one-window differences positive (required >= ${s.minFraction}); removing window ${s.worstCluster} alone drops the paired Sharpe difference to ${s.worstDelta}`);
+                fail('clusterStability', s.fractionPositive, s.minFraction, 'fractionPositive >= minFraction',
+                    `cluster stability ${s.fractionPositive} of ${s.nClusters} leave-one-window differences positive (required >= ${s.minFraction}); removing window ${s.worstCluster} alone drops the paired Sharpe difference to ${s.worstDelta}`);
+            } else {
+                pass('clusterStability', promotionTest.stability.fractionPositive, promotionTest.stability.minFraction, 'fractionPositive >= minFraction');
             }
         }
     }
@@ -913,11 +996,12 @@ export function promoteDecision(baseline, candidate, {
         const s = candidate.search;
         const p = s && Number.isFinite(s.pValue) ? s.pValue : NaN;
         if (requireSearchReject && !(s && s.rejected)) {
-            reasons.push('candidate not rejected by the family-wise (subsampling step-down) search test');
+            fail('searchReject', null, null, 'rejected by the family-wise search', 'candidate not rejected by the family-wise (subsampling step-down) search test');
         }
         if (maxSearchP != null) {
             if (!Number.isFinite(p)) reasons.push('family-wise search p-value missing on the candidate');
-            else if (!(p <= maxSearchP)) reasons.push(`family-wise search p ${p} > ${maxSearchP}`);
+            else if (!(p <= maxSearchP)) fail('maxSearchP', p, maxSearchP, 'p <= maxSearchP', `family-wise search p ${p} > ${maxSearchP}`);
+            else pass('maxSearchP', p, maxSearchP, 'p <= maxSearchP');
         }
     }
     if (maxFdp != null) {
@@ -925,10 +1009,19 @@ export function promoteDecision(baseline, candidate, {
         if (!f) reasons.push('family-wise FDP estimate missing on the candidate');
         else if (f.nRejected < 1) reasons.push('family-wise FDP search rejected nothing');
         else if (!(Number.isFinite(f.estimatedFdp) && f.estimatedFdp <= maxFdp)) {
-            reasons.push(`family-wise estimated FDP ${f.estimatedFdp} > ${maxFdp}`);
-        }
+            fail('maxFdp', f.estimatedFdp, maxFdp, 'estimatedFdp <= maxFdp', `family-wise estimated FDP ${f.estimatedFdp} > ${maxFdp}`);
+        } else pass('maxFdp', f.estimatedFdp, maxFdp, 'estimatedFdp <= maxFdp');
     }
-    return { promote: reasons.length === 0, reasons, foldWinFraction: win, promotionTest, gate };
+    // The hurdle closest to its line on the side that decided the verdict: for a
+    // keep-off, the FAILED hurdle with the smallest |margin| (how nearly it
+    // passed); for a promotion, the PASSED hurdle with the smallest |margin| (how
+    // nearly it failed). `hurdles` above carries every evaluated one.
+    const decided = hurdles.filter((h) => h.margin != null && h.gated !== false && (reasons.length ? h.failed : !h.failed));
+    let tightestHurdle = null;
+    for (const h of decided) {
+        if (!tightestHurdle || Math.abs(h.margin) < Math.abs(tightestHurdle.margin)) tightestHurdle = h;
+    }
+    return { promote: reasons.length === 0, reasons, hurdles, tightestHurdle, foldWinFraction: win, positiveFoldFraction: cPos, rawFoldHurdles, promotionTest, gate };
 }
 
 // ---------------------------------------------------------------------------
@@ -1258,7 +1351,7 @@ export const DEPENDENCE_GATE_READER = 'Round-26 gate: the candidate must (a) bea
 // Cheverud/Nyholt), and correlated tests are still tests that were run (Harvey,
 // Liu & Zhu 2016). A small effective-trial reading is therefore evidence about the
 // shape of the search, never a licence to relax a correction.
-export function familyCorrelation({ baseline, candidates, periodsPerYear = 252 } = {}) {
+export function familyCorrelation({ baseline, candidates, periodsPerYear = 252, labels = null } = {}) {
     if (!baseline || !Array.isArray(baseline.pooledReturns) || !baseline.pooledReturns.length) {
         return { available: false, reason: 'baseline report does not expose pooledReturns' };
     }
@@ -1303,6 +1396,9 @@ export function familyCorrelation({ baseline, candidates, periodsPerYear = 252 }
     return {
         available: true,
         K,
+        // R28 (BUGS.md #55): the candidate LABELS `maxPair`'s indices refer to, so a
+        // reader resolves them against the same list the matrix was built from.
+        labels: Array.isArray(labels) ? labels.slice(0, K) : null,
         folds: lengths.length,
         foldLengths: lengths.slice(),
         periodsPerYear,

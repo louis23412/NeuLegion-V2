@@ -677,6 +677,21 @@ Implemented exactly as scoped above, with the semantics proof attached:
   saving (and the corrected fit constant) must be re-measured with
   `npm run analyze` on real `better-sqlite3`; the shim number only sized the change.
 
+## Round 27 — no hot-path change; the runs' cost datum (signals are free)
+
+Round 27 changed the **reading layer only** (a liveness certificate, an `appliesTo`
+taxonomy, the reachable vertical barrier, fail-closed inputs, report honesty) — no
+locked-module arithmetic, no golden re-freeze, so there is nothing to add to the
+"Applied changes" table. The four round-27 runs do add one measured cost fact worth
+recording: in the Step-4 seed run the model-backed baseline's total fit time was
+**2 716 s (≈99.6% of the run's 2 726 s wall)** while each **model-free signal candidate
+took 4.57 s** — a ≈600× ratio, because a signal variant never trains a `HiveMind`. The
+implication for run sizing (and for `TODO.md` item 76 / `PLAN-round28.md` P6) is that a
+signal-family sweep or a many-seed replication of signals is essentially free, and the
+one expensive resource is model fits. The cost law itself is unchanged from round 25b/26b
+(`time ≈ k · streams · passes · modelVariants · Σ_f testStart_f`, `k ≈ 0.036 s` per
+history bar replayed, O(n²) per stream). Forensics: `RUN-ANALYSIS.md` §13.5.
+
 ## Remaining opportunity (deliberately NOT taken)
 
 **Reuse the forward FFN intermediates in the backward pass.** The forward pass

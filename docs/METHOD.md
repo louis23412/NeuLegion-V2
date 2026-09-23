@@ -142,7 +142,9 @@ and the report printed 15 keep-off "reasons" for them while counting all three i
 `K = 15`. The round-27 sweep then proved *why*: `sample-weights` is a mathematical
 no-op (every drain is one label, so the weight is exactly 1 — `BUGS.md` #43),
 `multi-probe`/`query-mod` steer a path whose only reader's result is discarded
-(`BUGS.md` #44), and `pca-hash` is live only through an undocumented reader. So:
+(`BUGS.md` #44), and `pca-hash` is *reachable* only through an undocumented reader
+(and, as the round-27 runs showed, live at some budgets and inert at others — #53).
+So:
 
 - every candidate carries a **`liveness` certificate** (`live` / `inert` / `skipped`
   / `not-applicable` / `duplicate-of:<id>`) computed as pure post-processing of the
@@ -201,6 +203,34 @@ unchanged). **Falsification:** if `ess / n ≈ 1` under `triple`, close the item
 permanently. **Implementing: `PLAN-round27.md` R27-3 (with R27-4b as its enabling
 fix).**
 
+**Round-27 run result (`RUN-ANALYSIS.md` §13.4).** The falsification did **not**
+trigger: under the `triple` baseline the mechanism is live (`ess/n = 0.8248`, only
+50/288 folds byte-identical to the baseline) but it **hurts** (paired ΔSharpe
+−0.2276, adjusted DSR 0.1674 vs 0.3148, 0/36 stability windows positive, break-even
+−4.51 bps). **Two corrections to this decision, both required before the item is
+closed.** (1) The `mean1`-over-the-window normalisation does **not** keep the
+effective learning rate unchanged, because only the newest span is trained: the
+emitted weights' mean was **2.6112**, so the arm ran at ≈2.6× the baseline's effective
+LR (`BUGS.md` #54). The verdict must be re-confirmed with the *emitted* stream
+renormalised to mean 1 (`PLAN-round28.md` P3). (2) The conclusion for the `optimistic`
+labeller — inert because one-bar labels do not overlap — is unaffected and remains
+proven by the Step-1 certificate (`sampleWeights {min 1, max 1, mean 1, ess = n}`).
+
+**Correction (round 28, `BUGS.md` #58).** The second bullet above is **wrong as stated**, and
+it is the basis of the whole decision. The `sample-weights` variant's `configure` sets the
+causal ring's span horizon to `_labelHorizonBars > 1 ? floor(…) : 1` (`analyze.js:151–158`),
+which is **1 on every `optimistic` run**; the all-ones weight vector is therefore produced by
+the *span parameter*, not by the labels. The evidence quoted for "one-bar labels" —
+`heldBars {count=sum=185937, max=1}` — was the **#49 false diagnostic**. With #49 fixed, the
+same runs report `heldBars {count 4369, max 54, mean 8.301}` (Step 1) and
+`{count 185937, max 72, mean 7.8245}` (Step 2) on the `optimistic` baseline: labels are held
+~8 bars and **do overlap**, so average uniqueness is ≈ 1/8, not 1. The decision's first half
+(close the item for `optimistic`) is therefore **withdrawn pending `PLAN-round28.md` P1a′/P1b/
+P1c** — a causal span estimate (EMA of past realized holding periods, or an explicit
+`--sample-weight-horizon`), the emitted-stream mean-1 renormalisation, and a re-run. What
+survives unchanged: the batch formula is degenerate here (one label per drain,
+`CONFIG.baseProcessCount = 1`), so the *streaming* estimator is the only expressible form.
+
 ## 5. What the next *power* purchase should buy (round 27) — independence, not bars
 
 **Decision: buy independent information, and name the window of any cost claim.** The
@@ -216,7 +246,27 @@ for cluster count); and a second bar interval (`--interval`, a different horizon
 highly correlated with its parent). Related: the economic ceiling must always be
 quoted with its sample — `sig:momentum`'s break-even is 0.48 bps over 2,200 bars and
 14.64 bps over 600 at essentially the same per-bar turnover. **`PLAN-round27.md`
-R27-8; `RUN-ANALYSIS.md` §10.9/§11.**
+R27-8; `RUN-ANALYSIS.md` §10.9/§11.** **Confirmed by the round-27 runs
+(`RUN-ANALYSIS.md` §13):** the label-policy run's own `nextRun` says the observed
+paired effect needs **41** fold-window clusters for one-sided significance (89 at 80 %
+power; the round-27 report's `55` used a two-sided z in a one-sided test — §14.7a) and it
+has 36; `barsToDetectObserved`
+is **93 577 bars** at design effect 5.12; the four runs' `effectiveStreams` are 2.30
+(Step 2), 2.47 (Step 3) and 1.89 (Step 4) out of 8 — so the binding constraint is the
+number of independent streams, not the bar count. The Step-4 signal candidates are
+also ~600× cheaper to evaluate than the model-backed baseline (4.57 s vs 2 716 s of
+total fit time per run), which makes an *independence* purchase affordable and a
+*signal-family* sweep nearly free.
+
+**Qualification (round 28, `BUGS.md` #56; `PLAN-round28.md` P6).** "More bars is the
+wrong lever" is a statement about the **level** (the DSR floor at Sharpe ≈1.02–1.08),
+not about every question the round asks. More bars *of the same basket* do buy
+fold-window clusters (`clusters = floor((bars − train)/testSize)`), which is exactly what
+the **paired** hurdle needs — 675 bars at `testSize 15` gives the 41 clusters, and
+`--test=10` on the existing 600 bars gives 54 — so "more bars" is the wrong purchase for
+the absolute-edge floor and the right one for the paired decision, provided the *cost* of
+the extra fits and the window-dependence caveat are stated. The genuinely independent
+lever remains new streams (the basket is Binance-only). `TODO.md` 82.
 
 ## 6. Scoring the forecast/MCS panel across `kind` (round 27) — group by kind
 
@@ -241,3 +291,64 @@ because the policy is a decision transform (dead zone + scale), not a calibratio
 it would still not yield a probability. **Pinning:** `analysis.test.js` (the unit
 grouping + within-kind DM), `analyze.test.js` (the run's grouped block).
 `PLAN-round27.md` R27-5.
+
+## 7. Sizing a *paired* decision (round 28) — never mix the paired difference's scale with the level's
+
+**Decision: every sizing hint names its scale, and a paired comparison is sized from the paired
+SE with the *same* reference the test uses.** The round-28 coherence re-read
+(`RUN-ANALYSIS.md` §14, `BUGS.md` #56) found `decision.nextRun` mixing two scales:
+
+- the **single-series** scale — the candidate's own Sharpe level: `mde95`, `mde95Dependent`,
+  `designEffect`, `barsToDetectObserved`, `dependence.seCluster` (0.54654 on Step 2);
+- the **paired** scale — candidate-vs-baseline: `promotionTest.sharpeDifference.se` (0.13554).
+
+`cheapestFlip`'s `magnitude` branch read `1.959964 × dependence.seCluster` and compared it to
+the paired difference, reporting `required 1.0711991` (which *is* `mde95Dependent`) and
+`factor 4.95005`. The honest requirement at the observed 36 clusters is
+`t(35, 0.05 one-sided) × 0.1355364 = 0.228998` against the observed 0.2164017 — **factor
+1.058**, i.e. the candidate is at 94.5 % of the required t. With 41 clusters (one-sided) it
+is significant; **89** clusters give ≈80 % power (t-based — the plan's `81` is the normal
+approximation; `RUN-ANALYSIS.md` §14.7a). `barsToDetectObserved` = 93,576 is
+the *single-series* statement in bar units — it is not the lever for a paired decision. The
+same re-read also established the discriminator the gate actually uses: the DSR floor at this
+design is crossed at a Sharpe of **≈1.02–1.08** (`sig-accel` 1.0194 → adjusted DSR 0.9742
+clears; `sig:momentum` 1.0848 → 0.9487614 misses), so a candidate at Sharpe 0.1017 is ≈10×
+short and *no* affordable sample closes that gap (buying the design effect from 5.12 → 1 buys
+≈2.3× on the SE). **Consequence recorded in `PLAN-round28.md`: the labeller decision is not a
+power purchase.** Tests: `decision`/`analysis.test.js` fixtures with two different SEs and with
+equal SEs.
+
+## 8. The fold-majority hurdle (round 28) — a reported statistic, not a gate
+
+**Decision: the gate implements the round-25/26 recorded decision; the raw fold fractions are
+reported, not gated.** `DESIGN.md` §6.1 states that the round-25 gate replaced
+`foldWinFraction >= 0.5` and `positiveFraction >= baseline` with the paired cluster Sharpe test
+and the leave-one-window cluster-stability requirement, and that "the raw fraction is still
+reported, as a statistic". `promoteDecision` nevertheless still carries `minFoldWinFraction =
+0.5` and `minPositiveFoldDelta = 0` as always-on reasons (`analysis/walkforward.js:800–812`),
+computed over **all 288 folds** — comparisons the project's own dependence panel says are not
+independent (8 streams per window). On the round-27 runs the raw hurdle is decisive and
+disagrees with the error-controlled cluster statistic: `label-conservative` 0.2013888 (raw) vs
+0.5000 (cluster sign test, 17/17/2); `sig:momentum` 0.4930556 vs 0.5277778 (19/17). The change
+is **verdict-neutral on all four round-27 runs** — every candidate that fails the raw hurdle
+also fails the DSR floor and/or the paired test — and that neutrality must be *proved* before
+landing (re-run `promoteDecision` over the four reports' rows with the raw hurdles off).
+Grounding unchanged: Demšar 2006 (the sign test), Cameron & Miller 2015 (clustered inference),
+Ledoit & Wolf 2008 (Sharpe differences). `PLAN-round28.md` P1e; `BUGS.md` #57.
+
+## 9. Sample-uniqueness weighting on a streaming trainer: the span must be *measured* (round 28)
+
+**Decision: the causal ring's span horizon is a measured quantity (a causal estimate of the
+realized holding period, or an explicit `--sample-weight-horizon`), never the run-level
+`_labelHorizonBars` default of 1, and the *emitted* weight stream is renormalised to mean 1.**
+Round 27 shipped `horizonBars = _labelHorizonBars > 1 ? floor(…) : 1`, i.e. 1 on every
+`optimistic` run, so Step 1's `sampleWeights {min=max=mean 1}` was a configuration artefact
+(`BUGS.md` #58) — the same runs' fixed `heldBars` is mean 8.30 / max 54, so labels overlap.
+Separately, the `mean1` normalisation was applied to the *window*, while only the newest span
+is ever trained, so the emitted stream's mean was 2.6112 and the arm ran at ≈2.6× the effective
+learning rate (`BUGS.md` #54) — the model is plain SGD (`_applyGradients` subtracts
+`Σ grad · lr / steps`), so a per-sample weight scales the step directly (modulo the
+norm-percentile `_scaleGradients`, a nonlinearity the control arm exists to expose). The
+re-test design (arms A/B/C) and the causality requirement (a label's weight may not use a
+span that ends in the future — the walk-forward audit's rule) are in `PLAN-round28.md` P1a′/
+P1b/P1c/P3.

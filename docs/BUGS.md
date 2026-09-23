@@ -21,7 +21,7 @@ implementation review` below), and **#42** was found by the first native `npm te
 after that review and is FIXED (`## Found by the native npm test after the
 round-26b review` below). **#43/#44/#45** were found by the first full-size run made
 *with* the round-26 corrections (`20260922T204248-seed1`; `RUN-ANALYSIS.md` §10) and
-are **OPEN** — report/roster wiring defects with no arithmetic impact
+are now **FIXED in round 27** — report/roster wiring defects with no arithmetic impact
 (`## Found by the 20260922T204248-seed1 round-26 power run` below). The **round-27
 planning sweep** (`PLAN-round27.md`) re-derived #43/#44 from the code and both are
 stronger than the first reading — #43 is a mathematical no-op in the *shipped*
@@ -33,31 +33,62 @@ and **#48** (`skipped` reported but not enforced; a stats schema type lie). A
 second round-27 sweep (code + the round-26 journal, `PLAN-round27.md` §2) then added
 **#49** (`heldBars` is structurally exactly 1, so the `triple` label policy's
 vertical barrier can never fire) — the finding that re-scoped the sample-weighting
-item. All seven are OPEN, all are in the same
-`## Found by the 20260922T204248-seed1 round-26 power run` section below. (The
+item. **All seven (#43–#49) are now FIXED by the round-27 implementation** (the
+status paragraph at the end of the `## Found by the 20260922T204248-seed1 round-26
+power run` section below names the fix and the test that pins each); only #44's
+`pca-hash` sub-claim was subsequently qualified by the round-27 runs (#53). (The
 plan's own run-command typo, `sig-acceleration` for the real id `sig-accel`, is
 recorded in `PLAN-round27.md` §2.8 as a plan-internal correction, not a code bug.) The
 native `npm test` after the round-27 implementation then exposed **#52** (a
 recurrence of #15.3 — a node mirror whose static import graph reached a
 browser-only CDN module, so it died during linking before any check ran) —
 **FIXED** at the source and structurally, with a new guard in
-`mirrors.test.js`. And #33 in
+`mirrors.test.js`. The four **round-27 runs** (R27-7a–d; `RUN-ANALYSIS.md` §13) then
+exercised the reading layer in production and exposed three more reading defects, all
+**FIXED in round 28** (`## Found by the round-27 runs` below names the fix and the test
+that pins each): **#53** (`pca-hash`'s liveness
+certificate is run-dependent, yet its generic inert reason claims the mechanism "never
+reaches the model path" — falsified by the round-26 6/288-fold result), **#54** (the
+causal-window sample weights are mean-1 over the *window*, not over the *trained
+stream*, so Step 3 ran at ≈2.6× the effective learning rate — the Step-3 "weighting
+hurts" verdict is confounded), and **#55** (the decision block's `labelPolicy` names
+the run, not the referent; the `familyCorrelation` summary mislabels its max pair).
+The **round-28 coherence re-read** (`RUN-ANALYSIS.md` §14, `PLAN-round28.md`) then
+re-read all four round-27 reports against the code and the recorded decisions and added
+three more, **FIXED in round 28** too: **#56** (`decision.nextRun`'s `cheapestFlip` compares a
+*single-series* cluster SE to the *paired* difference, overstating the required
+magnitude ×4.95 instead of ×1.06, and `pairedUnits.needed.mde95Dependent` mixes the two
+scales), **#57** (the always-on `minFoldWinFraction = 0.5` raw-majority hurdle
+contradicts the round-25/26 recorded decision in `DESIGN.md` §6.1 — the raw fraction is
+supposed to be a reported statistic — and is decisive on `label-conservative` 0.2014 vs
+the cluster sign test 0.50, and on `sig:momentum` 0.4931 vs 0.5278), and **#58** (the
+`sample-weights` inert reason and `METHOD.md` §4's premise claim the `optimistic`
+labeller emits one-bar labels, resting on the **#49** false diagnostic — the fixed
+`heldBars` is mean 7.82 / max 72, so the labels overlap and the all-ones weights come
+from the ring's span horizon being configured to 1). The **P2 retrieval-liveness
+probe** (round 28, `lsh.test.js` §K) then added one more finding, **#59** — the scored
+reader can return the same prototype several times (its fallback fillers guard with
+`semCandidates.has` but never add to that Set) — recorded as **reported, not fixed**,
+because it is on the scored default path and de-duplicating it would move every golden
+fingerprint (see the entry below).
+And #33 in
 particular changes the *reading* of every `npm run analyze` number ever
 produced: the driver fed the controller the whole growing candle prefix where
 production feeds it a fixed window, so the controller's trade bookkeeping saw
 ancient candles and trained on mislabelled trades. Do not size or interpret a run
 until #33 is fixed. If you change anything
 under `src/`, run the full browser suite before and after
-(**2347 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
+(**2402 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
 `consolidation` 48, `consolidation_worker` 18, `fetcher` 101,
 `golden` 23 (bit-exactness), `modules` 51 (assembly), `legion` 57,
-`candles` 95, `locks` 41, `analysis` 566, `price_precision` 29,
-`multisymbol` 28, `lsh` 69, `surprise` 32, `sample_weights` 45,
+`candles` 95, `locks` 41, `analysis` 586, `price_precision` 29,
+`multisymbol` 28, `lsh` 75 (the round-28 section K retrieval-liveness checks), `surprise` 32, `sample_weights` 57,
 `homeostasis` 30, `evolve` 36, `multiprobe` 77, `binarypc` 39,
 `bitweight` 69, `querymod` 51, `walkforward` 63,
 `dimensions` 185, `guards` 65 (run integrity), `observer` 76 (legion health),
-`controller_invariants` 16 (R27-4b controller contracts),
-`analyze` 245 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26, and R27-1 liveness / R27-2 broadcast-liveness / R27-5 forecast-kind grouping / variant taxonomy after round 27)) — plus `golden` on
+`controller_invariants` 23 (R27-4b controller contracts, plus the R28 measured-span /
+emitted-stream checks in §D),
+`analyze` 255 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26, and R27-1 liveness / R27-2 broadcast-liveness / R27-5 forecast-kind grouping / variant taxonomy after round 27, and the round-28 weighting-configuration / measured-gate / inert-reason / active-pair checks)) — plus `golden` on
 its own after any `hivemind/` edit, `multisymbol` after any change to the
 controller's trade/target arithmetic, `lsh` after any change to the memory index,
 `surprise` after any change to the memory write path, `sample_weights` after
@@ -1703,6 +1734,14 @@ explanatory reason instead of fabricated hurdles; exclusion of
 changes `broadcastMemory`'s returned set; the flag does **not** change `getSignal`
 positions; the hash refresh **does** change them).
 
+**Round-27 run update (see #53).** The "`pca-hash` ... 6/288 folds" measurement above
+was taken on the round-26 8-stream × 600-bar run. On the round-27 Step-1 liveness run
+(2 streams × 200 bars, 18 folds) the same variant is certified **inert (18/18)** —
+so its liveness is **budget-dependent**, not constant. "Reachable via
+`_retrieveTopRelevantProtos`" (the R27-2 taxonomy claim, which the tests pin) remains
+true; "live on the shipped roster" does not hold at every scale, and the fallback
+inert-reason text must stop implying it is structurally unreachable.
+
 ### 45. The decision block's training answer describes only the winning row, so it asserts something false about the run
 
 `report.decision.training.model` is `{ available: false, reason: "no model
@@ -1915,8 +1954,341 @@ the one that did.
    shim-behind-an-entry shape that #15.3 and #52 both took; the pre-fix tree fails
    the guard, the current tree passes it.
 
-No browser check count moved (still **2347**; `controller_invariants` still reports
-its 16); the node-only block ledger went 126 → **127**.
+No browser check count moved *at that point* (still **2347**;
+`controller_invariants` still reported its 16); the node-only block ledger went
+126 → **127**. (The round-28 implementation then moved five counts — `sample_weights`
+45 → 57, `analysis` 566 → 586, `analyze` 245 → 255, `controller_invariants` 16 → 23,
+and `lsh` 69 → 75 for the P2 retrieval-liveness section K — for a ledger of **2402**;
+see `RUNBOOK.md` §6.)
+
+## Found by the round-27 runs (R27-7a–d; `RUN-ANALYSIS.md` §13) and their round-28 coherence re-read (§14) — #53–#58, all FIXED in round 28, plus #59 (reported, not fixed)
+
+The four operator runs were built to *exercise* the round-27 reading layer, and they
+did: the liveness taxonomy, the reduced-K restatement, the reachable vertical barrier
+and the per-kind forecast all behaved as documented, with no runtime warning in any
+run and two cross-process bit-reproductions. Three reading defects survived, though,
+and they are exactly the kind a real run (not a unit test) is needed to find. The
+round-28 coherence re-read then added three more.
+
+**Status (round 28 implementation): all six FIXED**, every one off the default path
+(no golden fingerprint moved — `golden` 23/23), each with the test that pins it:
+
+| # | fix | pinning test |
+| --- | --- | --- |
+| 53 | `pca-hash` and `sample-weights` carry **measured** `inertReason`s; the generic fallback no longer asserts structural unreachability (it names the scored path and the fold count) | `analyze.test.js` "a MODEL-scoped variant's inert reason can never be a structural claim", `R27-1/R28` inert-reason check |
+| 54 | the emitted sample-weight stream is **mean-1** via `emittedWeightNormalizer` (a causal EMA of the raw weights), with `meanUnnormalised` reported beside it and a `scale` control arm; the controller summary's `min/max/mean` are the EMITTED stream | `sample_weights.test.js` §E, `controller_invariants.test.js` §D |
+| 55 | `training.labelPolicy` = the **referent** model's policy, `runLabelPolicy` = the run flag; `familyCorrelation` carries `labels` and `familyPairLabel` resolves `maxPair` against the ACTIVE list; every hurdle carries its margin | `analysis.test.js` §AM, `analyze.test.js` "the summary maxPair names the ACTIVE arms" |
+| 56 | `cheapestFlip`'s magnitude branch reads the **paired** SE and the **one-sided** cluster-t; `pairedUnitsNeeded` drops the cross-scale target and adds `neededForObservedPower80`; `nextRunPlan.scales` names each field's scale | `analysis.test.js` §AM (Step-2 shape: factor 1.058, 41 clusters; scale-separation fixture) |
+| 57 | the raw fold-win / positive-fold fractions are **reported statistics** (`gated:false`); the shipped gate passes `rawFoldHurdles: false` and relies on the error-controlled cluster tests | `analysis.test.js` §AM (raw majority 1/3 fails, cluster sign test 6/6 passes), `analyze.test.js` gate check |
+| 58 | the `sample-weights` reason names the ASSUMED span horizon and the measured holding period; the ring's span is a **causal** EMA of drained holding periods (or `--sample-weight-horizon`) | `analyze.test.js` R28 reason checks, `sample_weights.test.js` §E, `controller_invariants.test.js` §D causality check |
+
+`METHOD.md` §4's premise is corrected in the same commit, and the recorded decisions
+land in `METHOD.md` §7/§8/§9 and `DESIGN.md` §6.1.
+
+### 53. `pca-hash`'s liveness certificate is run-dependent, and its generic reason asserts a structural cause the data falsifies
+
+Step 1 (2 streams × 200 bars, 18 folds; `20260923T105845-seed1`) certifies `pca-hash`
+**inert**, `identicalFolds 18/18`, `maxAbsDiff 0`, with the **generic** reason text
+
+> `inert: identical to the baseline on all 18 folds (the mechanism never reaches the model path)`
+
+That reason is wrong on its face. `pca-hash` is `appliesTo: 'model'`; `BUGS.md` #44
+documents — and the R27-2 tests pin — that it *is* live via the undocumented reader
+`_retrieveTopRelevantProtos`, and the round-26 `20260922T204248-seed1` run (8 streams
+× 600 bars) **measured it differing on 6/288 folds**. So the same variant is live at
+one budget and inert at another: a liveness certificate is a property of *a run*, but
+the fallback reason string (`analyze.js:1042`) makes a **structural** claim
+("never reaches the model path") whenever the variant carries no `inertReason`.
+
+The `inertReason` hook already exists and is used correctly by `sample-weights`
+(`analyze.js:147`, R27-3); `pca-hash` has none, so it falls through to the generic
+text. Instrumentation of the real pipeline (a browser-harness probe of `runAnalysis`,
+a `HiveMind._refreshLshHyperplanes` wrapper and a logging controller subclass) shows
+the mechanism **does execute on the scored mind** — the refresh returns `true` and
+replaces the hyperplanes — while **no emitted position changes at this run's
+prototype-pool / probe budget**. So "inert on this run" is true; "never reaches the
+model path" is false.
+
+**Fix (planned, `PLAN-round28.md` P1):** give `pca-hash` an `inertReason` that states
+the *measured*, per-run cause (the refresh runs but changes no emitted position at this
+pool/probe budget), soften #44's "live" to "reachable, and live at some budgets", and
+make the certificate's reason a per-run statement rather than a structural one. The
+open question — *can* the basis ever change the selected prototype set at a smaller
+probe budget or a larger pool? — is a designed experiment (`PLAN-round28.md` P2), and
+the round-28 P2 probe answered it: at production width the retrieved **set** is
+invariant to the basis at every tested pool (80/200/600), while the returned list's
+duplicate **multiplicity** can differ — with *equal* `Math.random()` draw counts, so the
+difference is attributable to the basis and not to stream desync (`lsh.test.js` §K;
+`RUN-ANALYSIS.md` §14.7; the multiplicity itself is `BUGS.md` #59). Guarded by a new
+`analyze.test.js` check that a `model`-scoped variant never carries the structural
+fallback wording.
+
+**Fixed (round 28, `analyze.js` `pca-hash.inertReason` + `inertReasonFor`).** The
+reason is now a function of the measured run context, naming the fold count, the
+reachability and the P2 measurements: *"the PCA-aligned hyperplane refresh ran
+on the scored mind but changed no emitted position on all 18 folds at this run's
+prototype pool and probe budget — the mechanism is REACHABLE and reaches the scored
+reader (it changes the returned list's duplicate multiplicity at production width with
+equal RNG draw counts; 6/288 folds differed on the round-26 8×600 run; the retrieved
+prototype SET is invariant at every tested budget), so
+this is a measured behavioural inertness at this budget, not structural unreachability
+(BUGS.md #53; lsh.test.js §K)"*. `inertReasonFor` is the single entry point; its generic fallback
+states what was measured — *"the mechanism reached the scored `<model>` path but
+changed no emitted position at this run's configuration over all `<N>` folds (measured;
+the variant supplies no specific reason)"* — and can never emit the structural wording.
+The R27-1 test that asserted the OLD wording was updated in the same commit (it was
+pinning the defect). Pinned by `analyze.test.js`: "R28 (BUGS.md #53): a MODEL-scoped
+variant's inert reason can never be a structural claim" (`/REACHABLE/`, both budget
+figures, and no `never reaches the model path`) plus the updated `R27-1/R28` inert check.
+
+### 54. The causal-window sample weights are mean-1 over the *window*, not over the *trained stream* — so the Step-3 A/B ran at ≈2.6× the effective learning rate
+
+Step 3 (`20260923T133315-seed1`) is the run that answers TODO #5, and its headline is
+that causal-window uniqueness weighting **hurts** (paired ΔSharpe −0.2276, 0/36
+stability windows positive, break-even −4.51 bps vs the baseline's +0.42). But the
+comparison is confounded. `causalWindowWeight` normalises the window vector to mean 1
+(`sample_weights.js`, `normalization: 'mean1'`), and the controller's doc says that
+"keeps the effective learning rate unchanged". **It does not**, because only the newest
+span of the window is ever trained: each closed-trade drain trains one label
+(`CONFIG.baseProcessCount = 1`), and the ring's older spans were already learned. The
+*emitted* weights are therefore not a mean-1 sample — the run reports
+`sampleWeights {mean 2.6112, ess 48.06, n 58.27, effectiveFraction 0.8248}` — and
+`HiveMind.train` feeds the weight straight into the gradient
+(`dL_dLogit = (probability − target) * sampleWeight`, `training/gradients.js`), so the
+weighted arm's gradient step is ≈2.6× the baseline's.
+
+The pure module reproduces the run's readout from realistic spans (horizon 20, one-bar
+entry spacing: mean emitted weight 2.65, `effectiveFraction` 0.813, against the run's
+2.6112 / 0.8248), so this is measured, not inferred. Consequence: Step 3 conflates
+(a) redistributing training credit by uniqueness with (b) a learning-rate / objective-
+scale change, and its "weighting hurts" verdict cannot be attributed to (a) alone.
+
+**Fix (planned, `PLAN-round28.md` P1/P3):** renormalise the **emitted** stream so the
+trained weights have mean 1 (e.g. divide by a running mean of emitted weights, or carry
+raw uniqueness and normalise the drained sequence) — a semantics-only change off the
+default path — and re-run Step 3 before TODO #5 is closed. The R27-3 conclusion that
+weighting is inert on the `optimistic` labeller is untouched (it is a property of
+non-overlapping one-bar labels).
+
+**Fixed (round 28).** `sample_weights.js` gains `emittedWeightNormalizer({mode})`:
+`'mean1'` (default) divides each raw window weight by a **causal EMA (α = 0.1) of the
+raw weights already emitted**, `'scale'` emits that EMA itself (the P3 arm-C
+learning-rate control) and `'none'` the raw stream (arm B). It is exact (`1` for an
+all-ones raw stream, so the horizon-1 path stays a bit-exact no-op) and causal (an
+emitted prefix never depends on later raws). `trades.js` applies it and now reports the
+EMITTED `min/max/mean` with `meanUnnormalised` (the raw scale) beside them — the old
+code fed the raw weight into `sum`, so `mean` and `meanUnnormalised` printed the same
+number. Measured on the overlap fixtures: tightly-packed horizon-8 labels emit a raw
+stream at **2.4536×** and a normalised stream at **1.0000×**; irregular packing keeps
+real dispersion (`min 0.758 < 1 < max 1.139`, mean 1.001) while the control arm emits
+`1.140 ± 0.018` (no dispersion). Pinned by `sample_weights.test.js` §E and
+`controller_invariants.test.js` §D.
+
+### 55. Two reading defects the runs exposed: the decision block's `labelPolicy` names the run, not the referent; and the `familyCorrelation` summary mislabels its max pair
+
+Both are report-only (no arithmetic impact) and both can mislead an operator:
+
+- **`decision.training.labelPolicy` is the run-level flag, not the featured model's.**
+  It reads `meta.labelPolicy` (`decision.js`), i.e. the `--label-policy` the run
+  started from. In Step 2 the featured candidate is `label:conservative` but the block
+  reads `labelPolicy: "optimistic"` (the candidate applies its own policy through
+  `configure`). The training *numbers* are the referent's own and `modelReferent` names
+  it, and the block's `reader` does list "the label policy" among the run-level meta —
+  so this is a naming/placement ambiguity rather than a false statement, but it is
+  exactly the ambiguity the block was created to remove (#45). Rename to
+  `runLabelPolicy`, or report the referent's own policy beside it.
+- **The `familyCorrelation` matrix is built from the active arms, but the summary's
+  `maxPair` label is resolved against the *full* candidate list.** `analyze.js` computes
+  `familyCorrelation({ candidates: activeCandidates.map(c => c.report) })` (correct:
+  `trials = K`), but `formatAnalysis` prints the pair with
+  `familyPairLabel(fc.maxPair, result)`, and `familyPairLabel` indexes
+  `result.candidates[i]` — the *unfiltered* array. On Step 1 (only `surprise` and
+  `homeostasis` active of 6 candidates) the summary therefore prints
+  `family: excessCorr=-0.0594 effectiveTrials=2.1264 of 2 | maxPair=sample-weights~multiprobe`,
+  naming two `inert`/`not-applicable` arms that were **not** correlated; the actual
+  matrix (2×2, `rho = -0.0594`) is `surprise ~ homeostasis`. The number is right, the
+  label is wrong. Fix: resolve the pair against the same active list the matrix used
+  (or carry the ids in `maxPair`).
+
+**Note (not a defect):** the Step-4 near-misses fail on *knife-edge* floors
+(`foldWinFraction 0.4931 < 0.5`; adjusted DSR `0.9487614 < 0.95`) whose margins the
+report does not surface. Surfacing the margin beside each hurdle (a `reasons` entry
+already carries the numbers, but not the distance to the threshold) is a readability
+improvement bundled with P6.
+
+**Fixed (round 28).** `decisionReport`'s `training` block now carries both
+`labelPolicy` (the POLICY THE REFERENT MODEL RAN UNDER) and `runLabelPolicy` (the
+run-level flag), and the featured row's own variant policy is threaded in as the
+referent (`analyze.js` passes `labelPolicy: featuredPolicy`,
+`runLabelPolicy: labelPolicy`); `formatDecision` prints
+`label policy: referent=<p>[ run=<q>]` and omits the redundant run echo when they
+agree. `familyCorrelation` returns `labels` (the ACTIVE arms the matrix was built from,
+sliced to `K`) and `familyPairLabel` prefers them, so the summary prints
+`live-diff~flip-one` where the full-roster indexing would have printed
+`baseline~live-diff`. Every evaluated hurdle now carries `{value, threshold, direction,
+margin, failed, gated}` (`verdict.hurdles`/`verdict.tightestHurdle` ride through from
+`promoteDecision`), and `formatDecision` prints
+`margin: tightest hurdle <h> value=… threshold=… margin=…` — so the 0.00124
+adjusted-DSR shortfall is legible. Pinned by `analysis.test.js` §AM (the margin and
+policy lines, the knife-edge margin `-0.0012386`) and `analyze.test.js` "the summary
+maxPair names the ACTIVE arms, not the same indices of the full roster".
+
+### 56. `decision.nextRun` mixes a *paired* quantity with a *single-series* one, so its "cheapest flip" mis-states the required magnitude by ~5×
+
+Found by the round-28 coherence re-read (`RUN-ANALYSIS.md` §14; `PLAN-round28.md` §C1). The
+`cheapestFlip` `magnitude` branch reads `dependence.seCluster` — the **pooled level's**
+delete-one-cluster SE — and compares `1.959964 × seCluster` to the **paired difference**
+(`promotionTest.sharpeDifference.value`). On Step 2 (`20260923T111159-seed1`) that produces
+`requiredSharpeDifference = 1.0711991163075398` (which is exactly `mde95Dependent`) and
+`factor = 4.95005`, i.e. "you need a ×4.95 larger edge". The paired difference's own SE is
+`0.1355363582`, so the genuine requirement is `1.959964 × 0.1355363582 = 0.26560`
+(two-sided) or, since `pairedClusterTest.significant ⇔ pOneSided ≤ alpha`
+(`analysis/dependence.js:235`), the **one-sided** `1.68957 × 0.1355363582 = 0.228998` →
+**factor 1.058**. The same block's `pairedUnits.needed.mde95Dependent` = **3** is meaningless
+for the same reason (it sizes a *paired* comparison at a *single-series* MDE target). Step 4
+shows the same shape (`needed.mde95Dependent` = 112).
+
+Nothing scored is wrong; the *hint* is, and it points at the wrong lever ("a larger edge") when
+the truth is "a 6 % larger difference, or 41 rather than 36 clusters". **Fix (`PLAN-round28.md`
+P1d):** the magnitude branch reads the paired SE and the test's one-sided reference;
+`pairedUnitsNeeded` takes the side and drops the cross-scale target; each field's reader names
+its scale. Test: a Step-2-shaped fixture where the two SEs differ (the old code could not tell
+them apart) and a fixture where they are equal.
+
+**Fixed (round 28, `analysis/decision.js`).** `cheapestFlip`'s `magnitude` branch now
+reads `promotionTest.sharpeDifference.se` (the PAIRED delete-one-cluster SE) and the
+**one-sided** reference the test actually uses — the exact `studentTCritical(df, α)`
+when a df is known, else the one-sided normal quantile, never the two-sided `1.959964`
+— and returns `{scale, se, alpha, df, reference, requiredSharpeDifference, factor}`.
+`pairedUnitsNeeded` is a bisection for the smallest `n` with
+`t(n−1, α) · se · √(C/n) ≤ target` and reports `reference{kind, df, α, side, critical,
+pairedMde95}`, `neededForObserved` and `neededForObservedPower80`, **dropping** the
+cross-scale `neededForMde95Dependent`. `nextRunPlan` adds a top-level `scales` block
+naming which fields are single-series and which are paired, and the reader says so. On
+the round-27 Step-2 shape this moves `factor` 4.95005 → **1.05825** and
+`neededForObserved` 55 → **41** (t-based; **89** for 80 % power — the plan's ≈81 was a
+normal approximation, and the t-based number is the honest one), and on the plan's own
+equal-SE fixture 615 → 435. A new `studentTCritical(df, {alpha, twoSided})` in
+`analysis/dependence.js` is the exact one-sided t quantile (bisection inverse of
+`studentTPValue`), since no correct closed form existed for `pairedUnitsNeeded` to
+reference. Pinned by `analysis.test.js` §AM plus the two updated round-26 fixtures
+(which had pinned the old two-sided arithmetic) and a scale-separation fixture where a
+5× larger single-series SE does not move the paired factor.
+
+### 57. The always-on fold-win *majority* hurdle contradicts the recorded round-25/26 decision, and it is decisive
+
+Found by the round-28 coherence re-read (`RUN-ANALYSIS.md` §14; `PLAN-round28.md` §C2).
+`DESIGN.md` §6.1 records that the round-25 gate replaced the raw fold hurdles
+(`foldWinFraction >= 0.5`, `positiveFraction >= baseline`) with the paired cluster Sharpe test
+plus the leave-one-window stability requirement, and that "the raw fraction is still reported,
+as a statistic". But `promoteDecision` still carries `minFoldWinFraction = 0.5` (and
+`minPositiveFoldDelta = 0`) as **always-on reasons** (`analysis/walkforward.js:800–812`), with
+`foldWinFraction` computed over **all 288 folds** — comparisons the project's own dependence
+analysis says are not independent. On the round-27 runs the raw hurdle is decisive and
+disagrees with the error-controlled cluster statistic:
+
+| candidate (run) | `foldWinFraction` (288 folds) | cluster sign test (36 windows) |
+| --- | --- | --- |
+| `label-conservative` (Step 2) | **0.2013888** ❌ | **0.5000** (17/17/2) |
+| `sig:momentum` (Step 4 @0 bps) | **0.4930555** ❌ | **0.5277778** (19/17) |
+
+`DESIGN.md` §6.1's round-25b observation already described exactly this pattern ("at the fold
+level the fractions said 'loses'; at the cluster level the tests said '…'"); the code simply
+never dropped the raw hurdles. **Verdict-neutral today:** every candidate that fails the raw
+hurdle also fails the DSR floor and/or the paired test (see the `reasons` arrays in
+`RUN-ANALYSIS.md` §13.3/§13.5), so removing it neither promotes nor rejects anything.
+**Fix (`PLAN-round28.md` P1e):** make the code implement the recorded decision (raw fractions
+reported, not gated), record the rationale + size note in `METHOD.md` §8 and a `DESIGN.md`
+§6.1 addendum, and prove verdict-neutrality on all four reports before landing. Test: a
+fixture where the raw majority fails and the cluster sign test passes.
+
+**Fixed (round 28, `analysis/walkforward.js` + `analyze.js`).** `promoteDecision` gains
+`rawFoldHurdles` (default `true`, preserving the round-23/24 classic gate and its
+published size/power calibration). With `false` the two raw fractions are **recorded
+but not gated** — `hurdles[].gated === false`, while `failed` and `margin` remain the
+honest evaluation of the stated rule, and `tightestHurdle` skips them. The driver's
+dependence gate now passes `rawFoldHurdles: false`, so the shipped gate's breadth
+statement is the error-controlled clustered pair. **Verdict-neutrality is
+established**: every candidate on all four round-27 reports that fails a raw fraction
+also fails the adjusted-DSR floor and/or the paired cluster test, so no `promote`
+changes (the `reasons` arrays in `RUN-ANALYSIS.md` §13.3/§13.5). Pinned by
+`analysis.test.js` §AM with a 3-stream × 6-window fixture whose candidate wins
+**1/3 of the folds** and **6/6 window clusters** (raw off → promotes with zero reasons;
+raw on → blocked by the raw majority alone), and by `analyze.test.js` asserting the
+shipped `gateOptions.rawFoldHurdles === false` and that no row's `reasons` names a fold
+fraction. Rationale + size note in `METHOD.md` §8 with the `DESIGN.md` §6.1 addendum.
+
+### 58. `sample-weights`' inertness on `optimistic` is a *configuration* artefact, not a label property — and the inert reason says the opposite
+
+Found by the round-28 coherence re-read (`RUN-ANALYSIS.md` §14; `PLAN-round28.md` §C3). The
+`sample-weights` variant's `configure` sets the causal ring's span horizon to
+`ctl._labelHorizonBars > 1 ? floor(...) : 1` (`analyze.js:151–158`) — **1 on any `optimistic`
+run** — so every assumed span is one bar, `overlapUniqueness` returns all ones, and Step 1
+reports `sampleWeights {min 1, max 1, mean 1, ess = n = 43.825, effectiveFraction 1}`. The
+shipped `inertReason` (`analyze.js:145`) and `METHOD.md` §4's decisive premise attribute that
+to the labeller: *"the shipped (optimistic) labeller emits one-bar labels, so no two label
+spans overlap"*, quoting the round-26 journal's `heldBars {count=sum=185937, max=1}`. But
+`heldBars ≡ 1` was the **#49 defect** — a false diagnostic, not evidence. With #49 fixed, the
+same runs report **`heldBars {count 4369, max 54, mean 8.301}`** (Step 1) and
+**`{count 185937, max 72, mean 7.8245, cap 119}`** (Step 2) on the `optimistic` baseline: the
+labels are held ~8 bars and **do overlap**, so average uniqueness is ≈ 1/8, not 1. The
+all-ones vector is therefore produced by the span *parameter*, not by the labels, and the
+uniqueness mechanism has **never actually been tested on the shipped labeller**.
+**Fix (`PLAN-round28.md` P1a′/P1b/P1c):** state the measured reason (span horizon configured
+to 1 while the realized holding period is 8.30 bars); give the ring a **causal** span estimate
+(EMA of past realized holding periods, or an explicit `--sample-weight-horizon`) plus the
+emitted-stream mean-1 renormalisation (#54); re-open `TODO.md` 5's `optimistic` closure pending
+that run. Test: at `optimistic` with a measured horizon, `min < 1 < max` and `ess < n`; and a
+causality test that a label's emitted weight does not move when later bars are perturbed.
+
+**Fixed (round 28).** Three changes: (1) the inert reason is a function of the measured
+run context and names **both** the assumed horizon and the realized holding period —
+*"the causal ring assumed a FIXED span horizon of 1 bar and every emitted weight was
+exactly 1 over N label(s), although this run's REALIZED holding period is mean 8.30 /
+max 54 bars — so the all-ones vector is a property of the ASSUMED horizon, not of the
+labeller (BUGS.md #58)"*; a MEASURED horizon that still yields all-ones says *that*
+instead; (2) `configure` resolves the span as explicit `--sample-weight-horizon` → a
+label horizon `> 1` → **null = MEASURED**, so an `optimistic` run (label horizon 1) is
+no longer silently pinned to a one-bar span; (3) `trades.js` keeps an in-memory bridge
+of each closed trade's realized `heldBars` and maintains a causal EMA (α = 0.1) of the
+holding periods drained **before** each label, so the span is measured without
+lookahead (`--sample-weight-horizon=<n>` overrides it, and it is echoed in `run.json`
+and the report). `METHOD.md` §4's premise is corrected in the same commit and
+`TODO.md` #5's `optimistic` closure is re-opened. Pinned by `analyze.test.js` (the
+reason texts, the horizon resolution, the `''` no-block degrade) and
+`controller_invariants.test.js` §D (the measured span: `heldBarsEma 8`,
+`measureHorizon true`, `min < 1 < max`, `ess < n`; a later trade's `heldBars` cannot
+move an earlier label's weight; `emittedNormalization: 'none'` reproduces the raw
+stream) plus `sample_weights.test.js` §E (the drift and the dispersion).
+
+### 59. `_retrieveTopRelevantProtos` can return the same prototype several times (duplicate multiplicity)
+
+**REPORTED, NOT FIXED in round 28 — deliberately, because it is on the scored default path.**
+
+Found by the round-28 P2 retrieval-liveness probe (`RUN-ANALYSIS.md` §14.7;
+`PLAN-round28.md` P2). The scored reader's candidate list is assembled from a `Set`
+(`semCandidates`, unique), but every *fallback* filler guards with `semCandidates.has(proto)`
+and **never adds to that Set** — `retrieval.js`: the `< desiredSem * 0.3` projection fill, the
+`< desiredSem * 0.2` low-access fill, the `while (length < targetTotal)` random fill, and the
+`isCore`/priority pushes. A prototype admitted by a fallback therefore stays "not in
+`semCandidates`" and can be pushed again by a later fallback, so `semCandProtos` (and hence
+`candProtos`, and hence the returned list) can contain the same prototype more than once.
+
+Measured (`lsh.test.js` §K, production width, 107-bit index): on an **80-prototype** anisotropic
+bank *every* query's returned list contains at least one repeated id (`hasDup true`); on a
+**600-prototype** bank it does not (`hasDup false`). The round-28 probe also showed that the
+PCA-aligned basis changes the *duplicate multiplicity* of the returned list on some seeded
+queries with **equal** `Math.random()` draw counts (attributable, not stream desync) while the
+retrieved prototype **set** is invariant — which is why the `pca-hash` certificate quotes the
+set, and why the multiplicity difference is recorded here rather than celebrated as liveness.
+
+**Effect.** The returned list is what the scored model reads, so a duplicated prototype is
+weighted by its multiplicity in that read; the unique retrieved set is unaffected. **Why not
+fixed now:** the reader is on the scored default path, so de-duplicating it would move every
+golden fingerprint — a deliberate re-freeze the round's evidence does not justify
+(`PLAN-round28.md` §8.1). Recorded so a future re-freeze can address it deliberately. Pinned
+by `lsh.test.js` §K, whose paired assertions (set invariant, list differs) will make a future
+de-duplication show up as a test change rather than a silent numeric drift.
 
 ## Hand-rolled indicators — audit findings
 

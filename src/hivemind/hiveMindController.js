@@ -108,6 +108,22 @@ class HiveMindController {
     _sampleWeightRing = null;
     _sampleWeightEpochMs = null;
     _sampleWeightStats = null;
+    // R28 (BUGS.md #54/#58): the causal span estimator and the emitted-stream
+    // normaliser. `_sampleWeightHeldBars` maps a closed trade's timestamp to its
+    // realized holding period (recorded at close by `_updateOpenTrades`);
+    // `_sampleWeightHeldBarsEma` is the EMA of the holding periods of the trades
+    // DRAINED SO FAR, i.e. the only causal estimate of the label span available
+    // when a new label's weight is computed (using the label's own holding period
+    // would make its weight depend on its own future). `_sampleWeightNormalizer`
+    // removes the emitted stream's scale drift. All three are only created when
+    // `_sampleWeightConfig` is set, so the default path allocates nothing.
+    _sampleWeightHeldBars = null;
+    _sampleWeightHeldBarsEma = null;
+    _sampleWeightNormalizer = null;
+    // R28: an explicit sample-weight span horizon (set by the A/B from
+    // `--sample-weight-horizon`); null = the variant decides (label horizon, else
+    // the causal measured estimate).
+    _sampleWeightHorizon = null;
 
     // Trade-label policy (round 26, R26-11 / BUGS.md #36). `'optimistic'`
     // (default) is the historical behaviour — a bar that spans both barriers is

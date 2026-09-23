@@ -46,7 +46,7 @@ scope freeze that bounds it.
   test hardened to report the real failing check.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
-- **Browser suite**: 2347 checks across the 30 pass/fail entries (31 entries
+- **Browser suite**: 2402 checks across the 30 pass/fail entries (31 entries
   including the non-pass/fail `bench`); 127 `test()` blocks across 43 node files
   (R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second
@@ -83,18 +83,34 @@ scope freeze that bounds it.
   and label-policy experiments, not more compute. No golden was ever re-frozen.
   Forensics: [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §5 (attempt 3, with the round-26
   correction banner) and §10 (the corrected re-run).
-- **Round 27 is implemented** ([`PLAN-round27.md`](PLAN-round27.md)); its runs (R27-7) are pending:
-  make every candidate prove it ran (a `liveness` certificate; untested and
-  duplicate candidates out of `K`), make the input path fail closed, make the
-  holding period / `triple` vertical barrier reachable (`BUGS.md` #49), then run the
-  label-policy and (re-scoped, `triple`-conditional) sample-weighting experiments.
-  The second sweep sharpened `BUGS.md` #43/#44 into provable statements, added
-  #46/#47/#48/#49, and measured the K-sensitivity offline (`RUN-ANALYSIS.md`
-  §10.10). No golden is touched.
+- **Round 27 is implemented AND its runs (R27-7a–d) are done** ([`PLAN-round27.md`](PLAN-round27.md);
+  forensics in [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §13). The round made every
+  candidate prove it ran (a `liveness` certificate; untested and duplicate candidates
+  out of `K`), made the input path fail closed, and made the holding period / `triple`
+  vertical barrier reachable (`BUGS.md` #49). The four runs then delivered: the
+  taxonomy works (`sample-weights` inert with measured evidence, `multi-probe`/
+  `query-mod` not-applicable, `surprise`/`homeostasis` live); `label:conservative` is
+  the **best arm the programme has produced** (paired ΔSharpe **+0.2164**, p 0.0597,
+  stability 1.0/36 windows, positive break-even +2.24 bps vs the baseline's negative
+  gross edge) with `label:triple` reachable (`resolvedTimeBarrier 16244`) but neither
+  clearing the DSR floor; causal-window uniqueness weighting is **live under `triple`
+  and hurts** (−0.2276 paired, 0/36 windows) — but confounded by a ≈2.6× effective-LR
+  change (`BUGS.md` #54); and `sig-accel` **promotes at `costBps 0` only** (fails at 2
+  bps) while `sig-momentum` fails two knife-edge floors. The runs also exposed **three
+  new reading defects** (#53 `pca-hash`'s run-dependent liveness + a false structural
+  reason; #54 the sample-weight normalisation; #55 the decision-block policy label and
+  the inactive-arm `familyCorrelation`). Follow-ups are `TODO.md` 74–83 and
+  [`PLAN-round28.md`](PLAN-round28.md). The round-28 planning pass then re-read all four
+  reports (`RUN-ANALYSIS.md` **§14**) and added **#56** (the sizing block mixes paired and
+  single-series quantities), **#57** (the raw fold-majority hurdle contradicts the recorded
+  round-25 decision) and **#58** (the `optimistic` sample-weight inertness is a *config*
+  artefact — the #49-fixed `heldBars` is mean 8.3, so labels overlap), and corrected the
+  round's sizing: the DSR floor is a magnitude gate (≈10× short), the paired test needs 41
+  clusters (not 55). No golden is touched.
 
-## Round 27 — make a candidate prove it ran, make the labeler reachable, then run the two experiments (IMPLEMENTED; the runs are pending)
+## Round 27 — make a candidate prove it ran, make the labeler reachable, then run the two experiments (IMPLEMENTED; the runs are DONE — `RUN-ANALYSIS.md` §13)
 
-**Deliverable: [`PLAN-round27.md`](PLAN-round27.md).** Status: **implemented (R27-1…R27-6, R27-8, R27-9); the runs are pending.** Round 26
+**Deliverable: [`PLAN-round27.md`](PLAN-round27.md).** Status: **implemented (R27-1…R27-6, R27-8, R27-9) and run (R27-7a–d complete; §13)**, with three follow-on reading defects found by the runs (`BUGS.md` #53/#54/#55; `TODO.md` 74–78). Round 26
 closed with three reading follow-ups (`BUGS.md` #43/#44/#45) and two experiments that
 had never run at power. Two planning sweeps then found that #43/#44 are stronger than
 first diagnosed, added #46/#47/#48, and — decisively — added **#49**: the holding
@@ -110,7 +126,10 @@ Why the round exists, in one paragraph each:
   `K = 15` (corroborated by `effectiveTrials 6.10 of 14`). The sweep *proved* why:
   (a) `sample-weights` had no `configure`, the drain is always one label
   (`baseProcessCount = 1`), **and the labels do not overlap** (`heldBars ≡ 1`,
-  #49) — so no wiring can make it non-trivial on `optimistic` (#43); (b)
+  #49) — so no wiring can make it non-trivial on `optimistic` (#43); *(**round-28
+  correction, `BUGS.md` #58:** `heldBars ≡ 1` was the #49 defect; the fixed diagnostic
+  is mean 8.30 / max 54, so the labels overlap and it is the ring's span horizon being
+  configured to 1 that made the weights all-ones)* (b)
   `multi-probe`/`query-mod` read only `_getGlobalLSHCandidates`, whose single
   caller's result is discarded, while the live retrieval path consults neither flag
   (#44); and (c) `pca-hash` is live only through that *undocumented* reader, partly
@@ -138,8 +157,64 @@ Why the round exists, in one paragraph each:
   (momentum's break-even is 0.48 bps at 2,200 bars and 14.64 bps at 600).
 
 Acceptance criteria (§8), exact commands (§6), the file map (§7) and the resolved
-decisions (§3.5) are in the plan. **No item is implemented yet; no golden is
-touched.**
+decisions (§3.5) are in the plan. **All round-27 items are implemented and the four
+runs are done** (verdicts in `RUN-ANALYSIS.md` §13); **no golden was touched**, and
+the three defects the runs exposed (#53/#54/#55) are reading-layer follow-ups, not
+model changes. The next round is scoped in [`PLAN-round28.md`](PLAN-round28.md).
+
+## Round 28 — reading coherence, the weighting confound, then the label-policy decision (IMPLEMENTED; `PLAN-round28.md`)
+
+**Deliverable: [`PLAN-round28.md`](PLAN-round28.md).** Status: **implemented** — the reading/
+sizing/gate layer (P1a–P1f, P2) landed with the full browser suite green and **no golden moved**;
+the weighting mechanism (P1b/P1c) and its scale-control arm landed; the two decision records
+(P4/P5) and the P6 measurement's bound are written. The two operator runs (`PLAN-round28.md` §3
+Steps 1/2) remain, and the two offline restatements that need the round-27 journals are blocked
+because those journals are no longer in the tree (`RUN-ANALYSIS.md` §14.8) — though the P6
+overlay (0.5b) is reconstructible from either new run's `folds.jsonl`, and only the `sig-accel`
+sweep (0.5c) additionally needs a signal-family run. Round 27's runs left three reading defects (`BUGS.md` #53/#54/#55; `TODO.md` 74–78).
+Round 28's planning pass then re-read all four reports against the code and the recorded
+decisions (`RUN-ANALYSIS.md` **§14**) and added three more defects plus two
+recorded-decision-vs-code drifts:
+
+- **#56** — `decision.nextRun`'s `cheapestFlip` compares a *single-series* cluster SE to the
+  *paired* difference (`factor 4.95005` instead of the honest `1.058`), and
+  `pairedUnits.needed.mde95Dependent` mixes the two scales.
+- **#57** — the always-on raw `minFoldWinFraction = 0.5` hurdle contradicts `DESIGN.md` §6.1's
+  recorded round-25 decision ("the raw fraction is still reported, as a statistic") and is
+  decisive: `label-conservative` 0.2014 raw vs **0.500** cluster sign test; `sig:momentum`
+  0.4931 vs 0.5278. Verdict-neutral on all four runs, so it can be fixed safely.
+- **#58** — the `sample-weights` inert reason (and `METHOD.md` §4's premise) claim the
+  `optimistic` labeller emits one-bar labels, resting on the **#49** false diagnostic. The
+  fixed `heldBars` is **mean 8.30 / max 54** (Step 1) and **mean 7.82 / max 72** (Step 2): the
+  labels overlap, and the all-ones weights come from the ring's span horizon being configured
+  to 1. The uniqueness mechanism has therefore never been tested on the shipped labeller.
+
+Two corrections re-order the round: the **DSR floor is a magnitude gate** (crossed at a Sharpe
+of ≈1.02–1.08; `label:conservative`'s 0.1017 is ≈10× short, and `barsToDetectObserved` 93 576
+is the same statement in bar units), so the labeller decision is **not** a power purchase; and
+the one affordable hurdle is the **paired** test — **41 clusters** for significance / 89 for
+80 % power (one-sided, t-based; the plan's `81` is the normal approximation — §14.7a), reachable
+via `--test=10` on the existing 600 bars (54 clusters), not
+the 55 the sizing block reported. Priorities: P1 reading+sizing+gate coherence (#53–#58), P2 a
+retrieval-liveness probe for `pca-hash`, P3 the corrected weighting experiment (measured
+causal span + emitted mean-1 + a scale-control arm), P4 ship `conservative` as an opt-in
+labeller and buy the affordable paired hurdle, P5 `sig-accel` arm-level + an offline
+no-trade-region cost test, P6 measure the market-neutral overlay before building any
+cross-sectional candidate, P7 doc sync. **No default path changes; no golden re-freeze.**
+
+**What landed (round 28).** `pca-hash` and `sample-weights` now carry **measured** inert reasons
+and the generic fallback may not claim a structural unreachability; the P2 probe measured the
+retrieval reader and showed the PCA basis changes only the returned list's duplicate
+*multiplicity*, never the retrieved **set** (production width, equal RNG draw counts;
+`lsh.test.js` §K; the multiplicity is `BUGS.md` #59, reported-not-fixed); the emitted
+sample-weight stream is **mean-1** via a causal EMA with a **causal measured span** (or
+`--sample-weight-horizon`) and a scale-control arm; the sizing block reads the **paired** SE and
+the **one-sided** reference (`factor 1.058`, `neededForObserved 41`, `neededForObservedPower80
+89`); the gate matches `DESIGN.md` §6.1 (raw fold fractions are reported statistics —
+`gated:false`) with the **verdict-neutrality proof recorded for all four runs** (§14.7b); and
+the referent policy / active-arm `maxPair` / hurdle margins are reported. Ledger **2402** browser
+checks (the four round-28 P1 entries plus `lsh` 69 → 75 for §K) / 127 node blocks; `golden`
+23/23 unchanged.
 
 ## Round 24 — make a verdict run survivable, then get it
 
@@ -279,7 +354,7 @@ the browser harness: **2289 checks, 0 failures** across all 29 pass/fail entries
 (`walkforward` 49 → 62, `analysis` 390 → 437, `analyze` 143 → 158; `locks` 41 and
 `modules` 50 unchanged). No golden fingerprint moved (nothing here is imported by
 the hot path). Full detail in `RUN-ANALYSIS.md` §6. *(Counts as at round 25; the
-current ledger is **2347** — see the status snapshot above.)*
+current ledger is **2402** — see the status snapshot above.)*
 
 - **R25-1 ✅** `analysis/dependence.js` (new, LOCKED-invariant) + `dependenceSummary`
   in `analysis/walkforward.js`. Shipped the delete-one-cluster jackknife over
@@ -424,7 +499,7 @@ methodological point; one is housekeeping.
    `CITATIONS.md` "Experimental design, replication & model comparison".
 6. **Coherence fixes.** `RUN-ANALYSIS.md` §7.9 (cited twice) does not exist → §4;
    the status snapshot's browser-suite count was stale (1995 across 28 → **2070
-   across 29**; 2078 once the R26-0 contract tests landed, 2091 after R26-12, 2102 after R26-2, 2111 after R26-3, 2124 after R26-11, 2142 after R26-4, 2159 after R26-5, 2177 after R26-6, 2202 after R26-13, 2229 after R26-14, 2237 after R26-7, 2265 after R26-8, 2268 after R26-9, 2276 after R26-10, 2285 after R26-15, 2289 after the round-26b review, 2347 after the round-27 additions); the round-23 "coherency audit" table is now labelled historical
+   across 29**; 2078 once the R26-0 contract tests landed, 2091 after R26-12, 2102 after R26-2, 2111 after R26-3, 2124 after R26-11, 2142 after R26-4, 2159 after R26-5, 2177 after R26-6, 2202 after R26-13, 2229 after R26-14, 2237 after R26-7, 2265 after R26-8, 2268 after R26-9, 2276 after R26-10, 2285 after R26-15, 2289 after the round-26b review, 2347 after the round-27 additions, 2396 after the round-28 P1 additions, 2402 after the round-28 P2 `lsh` section K); the round-23 "coherency audit" table is now labelled historical
    with its ledger noted as the round-24b total; the sweep's standing output is
    named **§9** explicitly (§8 is the finding, §9 the matrix); and the acceptance /
    order-of-work below are updated for R26-11…R26-15.
@@ -2007,12 +2082,12 @@ query-adaptive budget). None are in scope unless the definition of done in
 | Check | Result |
 | --- | --- |
 | Registry total & status split (53 = 17 + 36 + 0 + 0) | ✅ verified programmatically against `lock-registry.js` **at that revision** (current: 60 = 17 + 43 + 0 + 0) |
-| Ledger sum (1995, the round-24b total) vs `RUNBOOK.md` §6 table | ✅ exact match **at that revision**; the current ledger is 2347 |
+| Ledger sum (1995, the round-24b total) vs `RUNBOOK.md` §6 table | ✅ exact match **at that revision**; the current ledger is 2402 |
 | Manifest ↔ registry coverage (22 hivemind + 5 controller bags) | ✅ via `locks.test.js` |
 | Browser entries ↔ node mirrors ↔ `KNOWN_TESTS` (30/39/29) | ✅ via `mirrors.test.js` |
 | Golden fingerprint count (11) across all docs | ✅ consistent |
 | Syntax + relative-import resolution (185 JS files, 437 relative imports) | ✅ 0 errors (re-measured this revision) |
-| Counts in prose (115 blocks, 39 mirrors, 1995 checks) | ✅ synced **at that revision** (current: 127 blocks, 43 mirrors, 2347 checks) |
+| Counts in prose (115 blocks, 39 mirrors, 1995 checks) | ✅ synced **at that revision** (current: 127 blocks, 43 mirrors, 2402 checks) |
 | Exact check count in every wrap-style mirror | ✅ 20 mirrors now `assert.equal(result.total, N)` (was `>=`) |
 | Runner/worker/HTTP path in tests | ✅ **P0-3** delivered (`runner_smoke`, `http_view`, `dryrun`) |
 | Controller fault-isolation / malformed-input coverage | ✅ **P0-1** delivered (`guards`, `worker_pool`) |
@@ -2033,7 +2108,7 @@ query-adaptive budget). None are in scope unless the definition of done in
 | The round-23 verdict itself | ✅ **N3 delivered**, then corrected — the current verdict is `20260922T204248-seed1` (all 14 keep-off, SPA p = 0.4731, nothing promotes at 0/2/5/10 bps; `RUN-ANALYSIS.md` §10). Attempt 3's `+0.4387` baseline predates `BUGS.md` #33 and is superseded |
 | The report's own power claim | ✅ **round 25** — cross-stream correlation handled: the corrected run reports i.i.d. MDE95 ±0.4734 *and* the cluster-jackknife ±1.0442 with `underpoweredDependent`; the i.i.d. line no longer stands alone (`BUGS.md` #26) |
 | The verdict's cost-robustness | ✅ **round 26** — the dependence gate promotes `[none]` at 0/2/5/10 bps (`BUGS.md` #27 closed); the old fold-win/pos-fold hurdles are reported statistics, not the gate |
-| The fold-consistency hurdle | ✅ **round 26 (R26-7)** — replaced by the paired cluster significance test + the leave-one-window stability requirement (`analysis/dependence.js`); the sign test is reported-only |
+| The fold-consistency hurdle | ✅ **round 26 (R26-7)** — replaced by the paired cluster significance test + the leave-one-window stability requirement (`analysis/dependence.js`); the sign test is reported-only. **⚠️ Incomplete (`BUGS.md` #57, round 28):** the *raw* `minFoldWinFraction = 0.5` (and `minPositiveFoldDelta`) were never dropped from `promoteDecision`, so a non-independent 288-fold majority is still an always-on hurdle — decisive on `label-conservative` (0.2014 raw vs 0.500 cluster) and `sig:momentum` (0.4931 vs 0.5278). **Reconciled in round 28 (P1e) — DONE:** the shipped gate passes `rawFoldHurdles:false`, the raw fractions are reported statistics (`gated:false`), `METHOD.md` §8 / `DESIGN.md` §6.1 record the decision, and verdict-neutrality is proved on all four reports (8/8 candidates unchanged — `RUN-ANALYSIS.md` §14.7b) |
 
 ## Open risks
 
@@ -2071,7 +2146,7 @@ query-adaptive budget). None are in scope unless the definition of done in
 - **Hardening must not move a fingerprint.** The P0-1 guards are error-path only;
   if any guard turns out to run on the clean path, it is a deliberate re-freeze,
   not a "cleanup".
-- **Ledger churn.** Ledger counts are (31 browser entries / 43 mirrors / 2347
+- **Ledger churn.** Ledger counts are (31 browser entries / 43 mirrors / 2402
   checks) and `mirrors.test.js` asserts the two layout constants exactly; every
   count in the docs must be re-synced in the same commit. Round 23 avoided adding
   entries by proving the new `analysis/world.js` and `analysis/features.js` inside

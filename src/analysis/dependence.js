@@ -416,6 +416,33 @@ export function regularizedIncompleteBeta(a, b, x) {
     return 1 - (bt * betacf(b, a, 1 - x)) / b;
 }
 
+// The Student-t critical value: the `t` at which the upper tail equals `alpha`
+// (one-sided) or `alpha / 2` (two-sided). This is the INVERSE of `studentTPValue`
+// and it is what a sizing statement needs: `pairedClusterTest.significant` is
+// `pOneSided <= alpha`, so the difference a paired test can resolve is
+// `tCritical(C - 1, alpha) * se`, NOT `1.959964 * se`. Using the normal constant
+// for a one-sided t test at C = 36 overstates the requirement by ~16%
+// (1.959964 / 1.68957) — the round-28 reading defect `BUGS.md` #56.
+//
+// Bisection on the monotone upper tail (P(T > t) strictly decreases in t), with
+// a doubling bracket, so it needs no table and is exact to float precision.
+// Verified against table values in `analysis.test.js` (t = 1.68957 at df = 35,
+// one-sided 0.05; t = 2.03011 at df = 35, two-sided 0.05).
+export function studentTCritical(df, { alpha = 0.05, twoSided = false } = {}) {
+    if (!Number.isFinite(df) || df <= 0) return NaN;
+    const p = twoSided ? alpha / 2 : alpha;
+    if (!(p > 0) || !(p < 1)) return NaN;
+    let lo = 0;
+    let hi = 1;
+    while (hi < 1e8 && studentTPValue(hi, df, { twoSided: false }) > p) hi *= 2;
+    for (let i = 0; i < 200; i++) {
+        const mid = (lo + hi) / 2;
+        if (studentTPValue(mid, df, { twoSided: false }) > p) lo = mid;
+        else hi = mid;
+    }
+    return (lo + hi) / 2;
+}
+
 // P(T > t) for a Student-t with `df` degrees of freedom (one-sided), or the
 // two-sided p-value when `twoSided`. t = 0 gives exactly 0.5 / 1.
 //

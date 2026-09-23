@@ -20,5 +20,5 @@ test('controller determinism + open-book invariants hold', async () => {
         result.failed, 0,
         `${result.failed}/${result.total} controller_invariants checks failed:\n${JSON.stringify(result.failures, null, 2)}`,
     );
-    assert.equal(result.total, 16, `expected exactly the 16 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
+    assert.equal(result.total, 23, `expected exactly the 23 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
 });

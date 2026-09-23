@@ -99,16 +99,26 @@ harness promotes it (backlog P0).
 | Data-aware (PCA-aligned) hash | `_pcaHashConfig = null` | replace random hyperplanes with principal components | BinaryPC 2608.04405; `binarypc.test.js` (39), `lsh.test.js` §I |
 | Dynamic query modification | `_queryModConfig = null` | re-hash the centroid of found neighbours (query-side) | 2605.23807; `querymod.test.js` (51), `lsh.test.js` §J |
 
-> **How to read "not promoted" for this table (round-26 run, `BUGS.md` #43/#44).**
-> The A/B's *mechanism* candidates are how each of these features is tested, and the
-> `20260922T204248-seed1` run showed that **three of the seven are inert on the
-> shipped controller path**: `sample-weights` never sets `_sampleWeightConfig`
-> (#43), and `multi-probe`/`query-mod` set flags whose only reader
-> (`knowledge/transfer.js → _getGlobalLSHCandidates`) is not reached during a fold's
-> training (#44) — so those three candidates were byte-identical to the baseline in
-> every fold. Their keep-off verdicts are therefore **not evidence about the
-> feature**, and "off by default, not yet promoted" is, for them, still untested
-> rather than tested-and-rejected. See TODO #64.
+> **How to read "not promoted" for this table (round-26 run, `BUGS.md` #43/#44; round-27
+> correction and runs, `RUN-ANALYSIS.md` §13).** The A/B's *mechanism* candidates are
+> how each of these features is tested. The `20260922T204248-seed1` run showed that
+> **three of the seven were inert on the shipped controller path** — `sample-weights`
+> never set `_sampleWeightConfig` (#43), and `multi-probe`/`query-mod` set flags whose
+> only reader (`knowledge/transfer.js → _getGlobalLSHCandidates`) is not reached during
+> a fold's training (#44) — so those three candidates were byte-identical to the
+> baseline in every fold, and their keep-off verdicts are **not evidence about the
+> feature**. Round 27 resolved this per feature: `multi-probe`/`query-mod` are now
+> `not-applicable` (structurally off the scored path) and out of `K`; `sample-weights`
+> is out of the default roster and is **mathematically inert on the `optimistic`
+> labeller** (one-bar labels do not overlap, every uniqueness weight is 1 — proven by
+> the round-27 Step-1 certificate), while under the reachable `triple` label it is
+> **live but harmful** (Step 3: paired ΔSharpe −0.2276, 0/36 windows) — though that
+> Step-3 comparison is confounded by an effective-LR change (`BUGS.md` #54) and is
+> being re-run before TODO #5 is closed; and `pca-hash` turned out to be
+> **budget-dependent** rather than unconditionally live (#53). "Off by default, not yet
+> promoted" therefore means, for these four: *not tested by a valid run* (multi-probe,
+> query-mod), *tested and rejected* (sample-weights), and *reachable, live at some
+> budgets, not shown to help* (pca-hash). See TODO #64 and `PLAN-round28.md`.
 
 The low-rank ES layer (`legion/evolve.js`) is proven **invariant** but is an
 additive module **nothing imports yet** — it stays out of the hot path until it
@@ -212,6 +222,16 @@ Sharpe and a `foldWinFraction < 0.5`, yet a positive pooled Sharpe and a ~100%
 fold-*window* win rate. At the fold level the fractions said "loses"; at the cluster
 level the tests said "no significant magnitude". Only the clustered view is
 answering the question the fold grid actually asks.
+
+**Addendum (round 28, `BUGS.md` #57).** The rule above was recorded but not fully implemented:
+`promoteDecision` still applies `minFoldWinFraction = 0.5` and `minPositiveFoldDelta` as
+always-on reasons over all folds, and the round-27 runs show it binding (`label-conservative`
+0.2014 raw vs **0.500** cluster sign test; `sig:momentum` 0.4931 vs 0.5278). Round 28 (P1e)
+makes the code match this section — the raw fractions become reported statistics, the gate's
+breadth statement is the error-controlled cluster tests (magnitude + stability, with the sign
+test reported) — after proving verdict-neutrality on the four round-27 reports (every failing
+candidate also fails the DSR floor and/or the paired test, so no verdict moves). The size
+rationale and the new paired-vs-single-series sizing rule are recorded in `METHOD.md` §7/§8.
 
 ## 7. Integration invariants (what keeps the pieces coherent)
 

@@ -43,6 +43,7 @@ import {
     sampleWeights,
     spanWeightsFromEntries,
     causalWindowWeight,
+    emittedWeightNormalizer,
 } from '../../../src/hivemind/training/sample_weights.js';
 import {
     sampleUniqueness as analysisSampleUniqueness,
@@ -371,6 +372,110 @@ export async function run(options = {}) {
             JSON.stringify(defCfg) === JSON.stringify(nullCfg2));
     } catch (error) {
         check('D: causal-window weight completed', false, error && error.stack ? error.stack : String(error));
+    }
+
+    // ---- E. R28: the emitted-stream normaliser and the measured span ------------
+    // BUGS.md #54/#58. `causalWindowWeight` normalises over the WINDOW, so the weight
+    // it returns is mean-1 over the window — NOT over the emitted stream. The newest
+    // label overlaps fewer of the ring's labels than the oldest does, so the emitted
+    // stream's mean drifts with the horizon/window ratio (2.61121 measured on the
+    // round-27 `triple` run). On plain SGD (`_applyGradients` subtracts
+    // `sum(grad) * lr / steps`) a per-sample weight scales the step directly, so that
+    // drift is an unintended learning-rate change confounded with the weighting's own
+    // dispersion. `emittedWeightNormalizer` removes the drift CAUSALLY; the P3
+    // scale-control arm ('scale') emits the running raw level instead.
+    const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+    try {
+        // Exactness: an all-ones raw stream must stay exactly all-ones (the horizon-1
+        // path is a bit-exact no-op, which is why no golden fingerprint may move).
+        const nOnes = emittedWeightNormalizer({ mode: 'mean1' });
+        const ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1].map((r) => nOnes.normalize(r));
+        check('E: an all-ones raw stream emits exactly all-ones (the default path is bit-exact)',
+            ones.every((w) => w === 1), JSON.stringify(ones.slice(0, 4)));
+        check('E: the normaliser reports its count, the causal raw level and the emitted mean',
+            nOnes.count === 10 && nOnes.meanRaw === 1 && nOnes.meanEmitted === 1 &&
+            emittedWeightNormalizer({ mode: 'none' }).count === 0 && emittedWeightNormalizer({}).meanEmitted === null);
+        check('E: the three modes agree on a CONSTANT raw stream (mean1 -> 1, scale/none -> the level)',
+            (() => {
+                const mk = (mode) => { const n = emittedWeightNormalizer({ mode }); return [1, 1, 1, 1].map(() => n.normalize(2)); };
+                return mk('mean1').every((w) => w === 1) && mk('scale').every((w) => w === 2) && mk('none').every((w) => w === 2);
+            })());
+        check('E: a non-finite / non-positive / missing raw weight degrades to 1 (never NaN)',
+            (() => { const n = emittedWeightNormalizer({ mode: 'mean1' }); return n.normalize(NaN) === 1 && n.normalize(0) === 1 && n.normalize(-3) === 1 && n.normalize(1) === 1; })());
+        check('E: the divisor is an EMA of the raw stream, so a step change converges back to exactly 1 (a plain mean would lag)',
+            (() => {
+                const n = emittedWeightNormalizer({ mode: 'mean1' });
+                const out = [];
+                for (let i = 0; i < 200; i++) out.push(n.normalize(i < 5 ? 1 : 5));
+                return Math.abs(out[199] - 1) < 1e-6 && Math.abs(out[10] - 1) > 0.5 && Math.abs(out[199] - 1) < Math.abs(out[10] - 1);
+            })());
+        check('E: an out-of-range alpha falls back to 0.1 (a zero/NaN alpha must not freeze the level)',
+            (() => {
+                const mk = (alpha) => { const n = emittedWeightNormalizer({ mode: 'mean1', alpha }); return [3, 3, 1, 1, 1].map((x) => n.normalize(x)); };
+                return JSON.stringify(mk(0)) === JSON.stringify(mk(0.1)) && JSON.stringify(mk(NaN)) === JSON.stringify(mk(0.1)) && JSON.stringify(mk(2)) === JSON.stringify(mk(0.1));
+            })());
+        // Two overlap fixtures, because the drift and the dispersion are different
+        // phenomena. TIGHT packing (a one-bar entry gap, horizon 8, a 64-span ring —
+        // the controller's eviction) makes every label overlap the whole ring, so the
+        // raw stream's mean-1-over-WINDOW normalisation runs at ~2.45x; IRREGULAR
+        // packing (gaps 3..11) makes the uniqueness per label vary, which is where
+        // the mechanism's dispersion lives.
+        const period = 8;
+        const ringBars = 64;
+        const stream = (mode, gaps, N) => {
+            const entries = [];
+            let t = 0;
+            for (let i = 0; i < N; i++) { entries.push(t); t += gaps[i % gaps.length]; }
+            const ring = [];
+            const raw = [];
+            const em = [];
+            const norm = mode === 'none' ? null : emittedWeightNormalizer({ mode });
+            for (let i = 0; i < N; i++) {
+                const e = entries[i];
+                const r = causalWindowWeight(ring, [e, e + period - 1], { windowBars: ringBars, horizonBars: period, normalization: 'mean1' });
+                raw.push(r.weight);
+                em.push(norm ? norm.normalize(r.weight) : r.weight);
+                ring.push([e, e + period - 1]);
+                while (ring.length > ringBars) ring.shift();
+            }
+            const tail = (a) => a.slice(a.length - 150);
+            return { rawTail: tail(raw), tail: tail(em), meanRaw: avg(tail(raw)), meanEmitted: avg(tail(em)), min: Math.min(...tail(em)), max: Math.max(...tail(em)) };
+        };
+        const tightA = stream('mean1', [1], 300);
+        const tightB = stream('none', [1], 300);
+        const irrA = stream('mean1', [3, 5, 7, 9, 11], 400);
+        const irrB = stream('none', [3, 5, 7, 9, 11], 400);
+        const irrC = stream('scale', [3, 5, 7, 9, 11], 400);
+        check('E: with tightly-packed overlapping spans the RAW emitted stream runs ~2.45x — the round-27 drift, not mean 1 (BUGS.md #54)',
+            tightB.meanRaw > 2.2 && tightB.meanRaw < 2.7 && tightB.meanRaw > 1.9 &&
+            Math.abs(tightB.meanEmitted - tightB.meanRaw) < 1e-12,
+            JSON.stringify({ raw: tightB.meanRaw }));
+        check('E: the mean-1 normaliser drives the tightly-packed EMITTED mean to 1 while the raw level stays ~2.45x',
+            Math.abs(tightA.meanEmitted - 1) < 1e-6 && tightA.meanRaw > 2.2 && tightA.meanRaw < 2.7,
+            JSON.stringify({ emitted: tightA.meanEmitted, raw: tightA.meanRaw }));
+        check('E: with IRREGULAR entry gaps the normalised stream carries real DISPERSION (min < 1 < max)',
+            irrA.min < 0.9 && irrA.max > 1.05 && Math.abs(irrA.meanEmitted - 1) < 0.02 &&
+            irrA.tail.every((w) => Number.isFinite(w) && w > 0) &&
+            // ...and it is NOT the raw stream (whose own scale is different)
+            Math.abs(irrA.min - irrB.rawTail[irrB.rawTail.indexOf(Math.min(...irrB.rawTail))]) > 1e-9,
+            JSON.stringify({ min: irrA.min, max: irrA.max, mean: irrA.meanEmitted }));
+        check('E: the scale-control arm emits the running raw LEVEL with almost no dispersion (the P3 LR control)',
+            Math.abs(irrC.meanEmitted - irrC.meanRaw) < 1e-3 &&
+            (irrC.max - irrC.min) < 0.10 * irrC.meanEmitted &&
+            (irrA.max - irrA.min) > 3 * (irrC.max - irrC.min),
+            JSON.stringify({ mean: irrC.meanEmitted, range: irrC.max - irrC.min, aRange: irrA.max - irrA.min }));
+        check('E: the raw/horizon-8 stream is NOT all-ones (the ASSUMED span, not the labeller name, decides inertness)',
+            tightB.rawTail.every((w) => w !== 1) && tightB.meanRaw > 1.9 && new Set(irrB.rawTail).size > 1);
+        check('E: the emitted prefix is independent of later raws (a causal normaliser, not a two-pass one)',
+            (() => {
+                const xs = Array.from({ length: 40 }, (_, i) => 1 + 0.3 * Math.sin(i * 0.9));
+                const run = (arr) => { const n = emittedWeightNormalizer({ mode: 'mean1' }); return arr.map((x) => n.normalize(x)); };
+                const a = run(xs);
+                const b = run(xs.map((x, i) => (i < 20 ? x : x * 10)));
+                return JSON.stringify(a.slice(0, 20)) === JSON.stringify(b.slice(0, 20)) && a[30] !== b[30];
+            })());
+    } catch (error) {
+        check('E: emitted-normaliser checks completed', false, error && error.stack ? error.stack : String(error));
     }
 
     const failed = checks.filter((c) => !c.pass);

@@ -39,8 +39,14 @@ keep-off, SPA p = 0.4731, nothing promotes at any cost level, baseline Sharpe
 fidelity fix and is superseded.** The round-27 **plan** (make every candidate prove
 it ran, make sample weighting a real causal streaming mechanism, then run the two
 experiments that have never run at power) is
-[`docs/PLAN-round27.md`](docs/PLAN-round27.md) — **implemented (R27-1…R27-6,
-R27-8, R27-9); the two experiments have not yet been run.** The
+[`docs/PLAN-round27.md`](docs/PLAN-round27.md) — **implemented and run** (R27-7a–d
+complete; forensics in `RUN-ANALYSIS.md` §13). In brief: `label:conservative` is the
+best arm so far (paired ΔSharpe +0.2164, p 0.0597, stability 1.0, positive break-even
+vs the baseline's negative gross edge), `label:triple` is now reachable, causal-window
+uniqueness weighting is live but **hurts** (and is confounded by an effective-LR
+change), `sig-accel` promotes **at zero cost only**, and the runs exposed three
+reading defects (`BUGS.md` #53/#54/#55). The next round is scoped in
+[`docs/PLAN-round28.md`](docs/PLAN-round28.md). The
 evaluation-method decisions
 (e.g. why the scored path replays each fold rather than warming a per-stream
 snapshot) are in [`docs/METHOD.md`](docs/METHOD.md).
@@ -259,7 +265,7 @@ fingerprint is compared at 6 significant digits because it is over raw float64
 `predict()` output (the other nine hashes are literal; `hm:postReloadPrediction`
 is the second rounded one, per P2-3). `bench` is the only
 browser entry with no mirror (it prints timings and has no pass/fail contract),
-so a run reports **127 `test()` blocks, not 2347 individual checks**, and takes a few minutes
+so a run reports **127 `test()` blocks, not 2402 individual checks**, and takes a few minutes
 (the `dimensions` sweep dominates). Mirror-injected options must respect the
 entries' contracts: `stateDir` is pure in its label (use `labelledStateDir`) and
 the sql.js shim is imported lazily (and its own CDN import is lazy too, so

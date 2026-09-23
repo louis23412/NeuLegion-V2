@@ -237,6 +237,8 @@ export const ANALYSIS_MODULES = Object.freeze({
         'equicorrelationEffectiveSize', 'foldWindowClusters', 'concatClusters', 'clusterJackknife',
         'pairedClusterTest', 'pairedClusterSignTest', 'signTest', 'signTestFloor',
         'clusterStability', 'regularizedIncompleteBeta', 'studentTPValue', 'studentTCdf',
+        // R28 (BUGS.md #56): the exact one-sided t quantile the paired sizing reads.
+        'studentTCritical',
     ],
     'world.js': [
         'DEFAULT_SHOCK', 'shockFactor', 'volumeShockFactor', 'shockCandles', 'makeCandleViewFor', 'worldFromCandles',
@@ -409,6 +411,9 @@ export const SUPPORT_MODULES = Object.freeze({
     'sample_weights.js': [
         'DEFAULT_WEIGHT_CONFIG', 'overlapUniqueness', 'clampWeights', 'normalizeWeights',
         'weightEffectiveSampleSize', 'weightedMean', 'sampleWeights', 'spanWeightsFromEntries',
+        // R27-3/R28 (BUGS.md #54/#58): the streaming causal-window weight and the
+        // emitted-stream mean-1 normaliser (the scale-control arm's basis).
+        'causalWindowWeight', 'emittedWeightNormalizer',
     ],
     'homeostasis.js': [
         'DEFAULT_HOMEOSTASIS_CONFIG', 'resolveHomeostasisConfig', 'isStableConfig',

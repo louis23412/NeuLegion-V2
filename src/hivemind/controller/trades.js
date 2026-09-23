@@ -8,7 +8,7 @@
 import crypto from 'crypto';
 import HiveMind from './../hiveMind.js';
 import { isValidNumber, isValidTimestamp } from './../utils.js';
-import { spanWeightsFromEntries, causalWindowWeight } from './../training/sample_weights.js';
+import { spanWeightsFromEntries, causalWindowWeight, emittedWeightNormalizer } from './../training/sample_weights.js';
 
 export const controllerTradeMethods = {
     _updateOpenTrades (candles, windowCandles = null) {
@@ -220,6 +220,16 @@ export const controllerTradeMethods = {
                     this._globalAccuracy.heldBarsCount += 1;
                     if (held > this._globalAccuracy.heldBarsMax) this._globalAccuracy.heldBarsMax = held;
                     if (trade.timeBarrier) this._globalAccuracy.resolvedTimeBarrier += 1;
+
+                    // R28 (BUGS.md #58): remember the realized holding period so the
+                    // causal span estimator can use it the NEXT time a label's weight
+                    // is computed. `closed_trades` does not persist `heldBars`, and
+                    // the trade is drained in the same call, so the bridge is
+                    // in-memory and only exists when the weighting is on.
+                    if (this._sampleWeightConfig) {
+                        const map = this._sampleWeightHeldBars || (this._sampleWeightHeldBars = new Map());
+                        map.set(trade.timestamp, held);
+                    }
                 }
             });
 
@@ -346,12 +356,16 @@ export const controllerTradeMethods = {
     //
     //   * `mode: 'causal-window'` (R27-3): a streaming ring of the last
     //     `windowBars` OBSERVED entry spans. Each new label's weight is its
-    //     average uniqueness against the ring (including itself), mean-1
-    //     normalised over the ring so the mean weight stays 1. This is the only
-    //     mode that can express an effect, and only when labels OVERLAP: on the
-    //     shipped (optimistic) labeller every label is one bar long, so no two
-    //     spans intersect, every weight is 1, and the path is a bit-exact no-op —
-    //     which the liveness certificate reports as `inert`.
+    //     average uniqueness against the ring (including itself), normalised over
+    //     the window, and then (R28, BUGS.md #54) re-normalised by the running mean
+    //     of the RAW emitted weights so the emitted stream's mean is 1 rather than
+    //     drifting with the horizon/window ratio. The span horizon is either
+    //     `cfg.horizonBars` (fixed) or, when that is null, the causal EMA of the
+    //     holding periods of the trades drained so far (R28, BUGS.md #58 — the
+    //     assumed horizon, not the labeller's name, is what decides inertness).
+    //     `cfg.emittedNormalization` selects the arm: 'mean1' (dispersion at
+    //     matched LR), 'scale' (the scale alone, as a P3 control) or 'none' (the
+    //     un-normalised stream).
     //   * the legacy batch-local mode: each trade's label spans `horizonBars`
     //     bars from its entry, entry bars are derived from the trade timestamps
     //     at `intervalMs`, and the batch is weighted by average uniqueness
@@ -365,17 +379,44 @@ export const controllerTradeMethods = {
         if (cfg.mode === 'causal-window') {
             const ring = this._sampleWeightRing || (this._sampleWeightRing = []);
             const windowBars = Number.isFinite(cfg.windowBars) && cfg.windowBars > 0 ? Math.floor(cfg.windowBars) : 64;
-            const horizon = Number.isFinite(cfg.horizonBars) && cfg.horizonBars > 0 ? Math.floor(cfg.horizonBars) : 1;
+            const fixedHorizon = Number.isFinite(cfg.horizonBars) && cfg.horizonBars > 0 ? Math.floor(cfg.horizonBars) : null;
+            const measureHorizon = fixedHorizon == null;
+            const emaAlpha = Number.isFinite(cfg.heldBarsEmaAlpha) && cfg.heldBarsEmaAlpha > 0 ? cfg.heldBarsEmaAlpha : 0.1;
+            // R28: the emitted-stream normaliser, per controller (so it resets with
+            // the fold, exactly like the ring). `emittedNormalization: 'none'`
+            // disables it (the P3 arm B).
+            const mode = cfg.emittedNormalization === 'none' ? 'none'
+                : (cfg.emittedNormalization === 'scale' ? 'scale' : 'mean1');
+            const normalizer = mode === 'none' ? null
+                : (this._sampleWeightNormalizer || (this._sampleWeightNormalizer = emittedWeightNormalizer({ mode })));
             const out = new Array(trades.length).fill(1);
             for (let i = 0; i < trades.length; i++) {
                 const ms = Date.parse(trades[i].timestamp);
                 if (!Number.isFinite(ms)) continue;
                 if (!Number.isFinite(this._sampleWeightEpochMs)) this._sampleWeightEpochMs = ms;
                 const entry = Math.round((ms - this._sampleWeightEpochMs) / intervalMs);
+                // R28 (BUGS.md #58): the span horizon is CAUSAL — a fixed config
+                // value, or the EMA of the holding periods of the trades drained
+                // BEFORE this one (never this label's own future).
+                const measuredHorizon = Number.isFinite(this._sampleWeightHeldBarsEma) && this._sampleWeightHeldBarsEma > 0
+                    ? Math.max(1, Math.round(this._sampleWeightHeldBarsEma))
+                    : null;
+                const horizon = fixedHorizon != null ? fixedHorizon : (measuredHorizon != null ? measuredHorizon : 1);
                 const span = [entry, entry + horizon - 1];
                 const r = causalWindowWeight(ring, span, cfg);
-                out[i] = r.weight;
-                this._accumulateSampleWeightStats(r);
+                const rawWeight = r.weight;
+                const weight = normalizer ? normalizer.normalize(rawWeight) : rawWeight;
+                out[i] = weight;
+                this._accumulateSampleWeightStats(r, { weight, rawWeight, horizonBars: horizon, measureHorizon });
+                // Update the causal EMA AFTER this label's span was fixed, using the
+                // holding period the close recorded for it (if any).
+                const held = this._sampleWeightHeldBars ? this._sampleWeightHeldBars.get(trades[i].timestamp) : undefined;
+                if (Number.isFinite(held) && held > 0) {
+                    this._sampleWeightHeldBarsEma = Number.isFinite(this._sampleWeightHeldBarsEma)
+                        ? this._sampleWeightHeldBarsEma * (1 - emaAlpha) + held * emaAlpha
+                        : held;
+                }
+                if (this._sampleWeightHeldBars) this._sampleWeightHeldBars.delete(trades[i].timestamp);
                 ring.push(span);
                 while (ring.length > windowBars) ring.shift();
             }
@@ -396,23 +437,36 @@ export const controllerTradeMethods = {
         return spanWeightsFromEntries(entries, cfg);
     },
 
-    // Accumulate the causal-window weight statistics (R27-3). Diagnostic only: the
-    // report states what the weighting actually did, so an all-ones vector (the
-    // inert case) is visible rather than inferred.
-    _accumulateSampleWeightStats (r) {
+    // Accumulate the causal-window weight statistics (R27-3, extended in R28).
+    // Diagnostic only: the report states what the weighting actually did, so an
+    // all-ones vector (the inert case), the raw (un-normalised) scale and the
+    // assumed span horizon are visible rather than inferred.
+    _accumulateSampleWeightStats (r, extra = null) {
         const s = this._sampleWeightStats || (this._sampleWeightStats = {
-            count: 0, min: Infinity, max: -Infinity, sum: 0, essSum: 0, nSum: 0,
+            count: 0, min: Infinity, max: -Infinity, sum: 0, rawSum: 0, essSum: 0, nSum: 0,
+            horizonBars: null, measureHorizon: false,
         });
+        // R28 (BUGS.md #54): `min`/`max`/`mean` describe the EMITTED stream (what is
+        // actually trained — the mean-1 normalised weight), and `meanUnnormalised`
+        // the RAW stream (the 2.6x-scale drift), so the two are never conflated.
+        const w = Number.isFinite(extra && extra.weight) ? extra.weight
+            : (Number.isFinite(r.weight) ? r.weight : 1);
         s.count += 1;
-        if (r.weight < s.min) s.min = r.weight;
-        if (r.weight > s.max) s.max = r.weight;
-        s.sum += r.weight;
+        if (w < s.min) s.min = w;
+        if (w > s.max) s.max = w;
+        s.sum += w;
+        s.rawSum += (extra && Number.isFinite(extra.rawWeight)) ? extra.rawWeight : w;
         s.essSum += r.ess;
         s.nSum += r.n;
+        if (extra && Number.isFinite(extra.horizonBars)) s.horizonBars = extra.horizonBars;
+        if (extra && extra.measureHorizon) s.measureHorizon = true;
     },
 
     // The causal-window sample-weight summary, or null when the feature is off /
-    // never accumulated. Consumed by the A/B's model diagnostics (R27-3).
+    // never accumulated. Consumed by the A/B's model diagnostics (R27-3). R28
+    // (BUGS.md #54): `meanUnnormalised` is the raw emitted stream's mean, so the
+    // scale the old code silently applied (2.6x on the round-27 `triple` run) is
+    // visible next to the mean-1 normalised `mean`.
     sampleWeightSummary () {
         const s = this._sampleWeightStats;
         if (!s || s.count === 0) return null;
@@ -421,9 +475,12 @@ export const controllerTradeMethods = {
             min: s.min,
             max: s.max,
             mean: s.sum / s.count,
+            meanUnnormalised: s.rawSum / s.count,
             ess: s.essSum / s.count,
             n: s.nSum / s.count,
             effectiveFraction: s.nSum > 0 ? s.essSum / s.nSum : null,
+            horizonBars: s.horizonBars,
+            measureHorizon: !!s.measureHorizon,
         };
     }
 

@@ -251,6 +251,71 @@ export async function run(options = {}) {
             new Set(overlapped).size > 1 && overlapped.every((w) => Number.isFinite(w) && w > 0) &&
             overlapped.some((w) => w > 1),
             JSON.stringify(overlapped));
+
+        // R28 (BUGS.md #54/#58): the MEASURED span and the mean-1 EMITTED stream.
+        // With `horizonBars: null` the ring's span is the causal EMA of the realized
+        // holding periods of the trades already drained — never the span of the label
+        // being weighted (that would be lookahead). The reported `min`/`max`/`mean`
+        // are the EMITTED (normalised) stream and `meanUnnormalised` the raw one.
+        const mkTs = (h) => new Date(Date.parse('2024-01-01T00:00:00Z') + h * 3600000).toISOString();
+        const tenTrades = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((h) => ({ timestamp: mkTs(h), confidence: 60 }));
+        const c3 = new HiveMindController('MEAS', stateDir('meas-state'), 120, 4, 'positive', 1, PRICE, true);
+        c3._sampleWeightConfig = { mode: 'causal-window', windowBars: 8, horizonBars: null, normalization: 'mean1', emittedNormalization: 'mean1' };
+        c3._sampleWeightHeldBars = new Map([[mkTs(0), 8], [mkTs(1), 8]]);
+        const measured = c3._sampleWeightsForBatch(tenTrades);
+        const ms = c3.sampleWeightSummary();
+        check('D (R28, BUGS.md #58): a null config horizon is measured from the drained holding periods (causally)',
+            c3._sampleWeightHeldBarsEma === 8 && ms.horizonBars === 8 && ms.measureHorizon === true &&
+            c3._sampleWeightHeldBars.size === 0 && !c3._sampleWeightHeldBars.has(mkTs(9)),
+            JSON.stringify({ ema: c3._sampleWeightHeldBarsEma, summary: ms }));
+        check('D (R28, BUGS.md #54): the summary reports the EMITTED stream (min < 1 < max, ess < n) and the RAW scale separately',
+            ms.count === 10 && ms.min < 1 && ms.max > 1 &&
+            Math.abs(ms.mean - 1.0136322827009256) < 1e-9 &&
+            Math.abs(ms.meanUnnormalised - 0.9763185865818833) < 1e-9 &&
+            ms.mean !== ms.meanUnnormalised && ms.ess < ms.n && ms.effectiveFraction < 1 &&
+            Math.abs(ms.ess - 4.0917868969148845) < 1e-9 && Math.abs(ms.n - 5.4) < 1e-9,
+            JSON.stringify(ms));
+        check('D (R28): the emitted weights are exactly the returned batch (the summary is not a second computation)',
+            measured.every((w, i) => w >= ms.min && w <= ms.max) &&
+            Math.abs(measured.reduce((a, b) => a + b, 0) / measured.length - ms.mean) < 1e-9 &&
+            measured[2] === 0.7941176470588236 && measured[9] === 1.6029223460632247,
+            JSON.stringify(measured));
+        // Causality: perturbing a LATER trade's realized holding period (or a later
+        // trade's span) must not move an EARLIER label's emitted weight.
+        const c4 = new HiveMindController('CAUS', stateDir('caus-state'), 120, 4, 'positive', 1, PRICE, true);
+        c4._sampleWeightConfig = { ...c3._sampleWeightConfig };
+        c4._sampleWeightHeldBars = new Map([[mkTs(0), 8], [mkTs(5), 40], [mkTs(9), 50]]);
+        const perturbed = c4._sampleWeightsForBatch(tenTrades);
+        check('D (R28, P1c): the span estimator is causal — a later trade\'s heldBars cannot change an earlier label\'s weight',
+            JSON.stringify(perturbed.slice(0, 5)) === JSON.stringify(measured.slice(0, 5)) &&
+            JSON.stringify(perturbed.slice(5)) !== JSON.stringify(measured.slice(5)) &&
+            c4._sampleWeightHeldBarsEma > 8,
+            JSON.stringify({ same: JSON.stringify(perturbed.slice(0, 5)) === JSON.stringify(measured.slice(0, 5)), ema: c4._sampleWeightHeldBarsEma }));
+        // The explicit `--sample-weight-horizon` (a FIXED span) and the raw arm.
+        const c5 = new HiveMindController('FIXED', stateDir('fixed-state'), 120, 4, 'positive', 1, PRICE, true);
+        c5._sampleWeightConfig = { mode: 'causal-window', windowBars: 8, horizonBars: 12, normalization: 'mean1', emittedNormalization: 'mean1' };
+        const fixedW = c5._sampleWeightsForBatch(tenTrades);
+        const fs = c5.sampleWeightSummary();
+        check('D (R28, P1c): an explicit span horizon is FIXED (never measured) and produces its own weights',
+            fs.horizonBars === 12 && fs.measureHorizon === false && c5._sampleWeightHeldBarsEma == null &&
+            JSON.stringify(fixedW) !== JSON.stringify(measured),
+            JSON.stringify({ summary: fs, w: fixedW }));
+        const c6 = new HiveMindController('RAW', stateDir('raw-state'), 120, 4, 'positive', 1, PRICE, true);
+        c6._sampleWeightConfig = { mode: 'causal-window', windowBars: 8, horizonBars: null, normalization: 'mean1', emittedNormalization: 'none' };
+        c6._sampleWeightHeldBars = new Map([[mkTs(0), 8], [mkTs(1), 8]]);
+        const rawW = c6._sampleWeightsForBatch(tenTrades);
+        const rs = c6.sampleWeightSummary();
+        check('D (R28, P3 arm B): emittedNormalization:none reproduces the un-normalised stream (mean == meanUnnormalised, the raw scale)',
+            rs.mean === rs.meanUnnormalised &&
+            Math.abs(rs.mean - 0.9763185865818833) < 1e-9 &&
+            Math.abs(rs.max - 1.5287946428571426) < 1e-9 &&
+            Math.abs(rs.min - 0.7777777777777777) < 1e-9,
+            JSON.stringify({ summary: rs, w: rawW }));
+        check('D (R28, P3 arm B): the raw arm differs from the mean-1 arm (the normaliser is live, not a no-op)',
+            JSON.stringify(rawW) !== JSON.stringify(measured) &&
+            Math.abs(rs.meanUnnormalised - ms.meanUnnormalised) < 1e-12 &&
+            measured[9] !== rawW[9],
+            JSON.stringify({ raw: rawW.slice(0, 4), norm: measured.slice(0, 4) }));
     } catch (e) {
         check('D: off-state/liveness checks completed', false, e.stack);
     }

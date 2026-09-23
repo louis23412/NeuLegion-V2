@@ -754,6 +754,44 @@ golden fingerprint. They are the cheapest work in the round on a per-decision
 basis, which is why they are the part that decides what the *following* round
 should build.
 
+## Sizing a paired decision, and buying independence (round 28)
+
+Two round-27/28 findings, both about *what* to buy rather than *whether* a result is real.
+
+**1. A paired decision is sized from the paired SE, with the test's own reference.** The
+walk-forward decision compares a candidate to the baseline, so its power is set by the paired
+difference's standard error (Ledoit & Wolf 2008), not by either series' own SE. `decision.js`
+already sizes it that way (`pairedUnitsNeeded` uses `promotionTest.sharpeDifference.se`), but
+`cheapestFlip`'s `magnitude` branch compared `1.959964 × dependence.seCluster` — the *pooled
+level's* SE — to the paired difference, over-stating the required magnitude (Step 2: a reported
+factor of **4.950** where the honest one-sided factor is **1.058**), and `pairedUnitsNeeded`
+used a two-sided `z` while the shipped test is one-sided (`pOneSided ≤ alpha`). The rule
+(recorded in `METHOD.md` §7): every sizing hint names its scale, and the paired hint uses the
+paired SE and the one-sided reference. The distinction is not cosmetic — on the same run the
+one-sided paired test needs **41** clusters for significance where the two-sided form reports
+**55**, and 675 bars at `test 15` (or `--test=10` on the existing 600) delivers them.
+
+**2. An absolute-edge floor is a magnitude gate, not a sample-size one.** The adjusted-DSR
+floor is crossed at a Sharpe of ≈1.02–1.08 in these runs (`sig-accel` 1.0194 → 0.9742 clears;
+`sig:momentum` 1.0848 → 0.9487614 misses). A candidate whose edge is Sharpe 0.10 cannot be
+promoted by buying sample: `barsToDetectObserved` 93 576 is the same statement in bar units,
+and even perfect independence (design effect 5.12 → 1) buys only ≈√5.12 ≈ 2.3× on the SE. The
+honest reading of `label:conservative` (a real improvement of a *negative*-edge baseline to
+≈break-even) is therefore "arm-level, not promotable", and the *cheapest* lever for it is the
+paired hurdle, not the floor.
+
+**3. Buy independence with a cross-sectional sleeve, not a ninth correlated stream.** The
+dependence panel is the binding constraint (`effectiveStreams` 2.05–2.47 of 8, design effect
+5.12). A market-neutral / cross-sectional construction — rank the basket by a causal feature,
+long the leaders, short the laggards, net exposure ≈ 0 — cancels the common factor *by
+construction*, so its per-stream returns are far less correlated than the same feature applied
+per stream (Moskowitz & Grinblatt 1999; Moskowitz, Ooi & Pedersen 2012; Asness, Moskowitz &
+Pedersen 2013; the 2022–2026 cross-sectional literature: arXiv 2302.10175, 2012.07149,
+2208.09968, 1908.02164, 1901.09309). Because the dependence panel is computed **per candidate**
+from its own stream returns, the reduction is directly measurable — and it is measurable
+*offline*, as a demeaned overlay on an existing candidate's retained `streamReturns`, before
+any new candidate or cross-stream interface is built (`PLAN-round28.md` P6).
+
 ## Candle data quality (structural audit vs. economic plausibility)
 
 Indicators are only as honest as their inputs. Two complementary layers guard the

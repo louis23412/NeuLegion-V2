@@ -21,5 +21,5 @@ test('hyperplane LSH preserves recall and obeys the theta/pi rounding law', asyn
         result.failed, 0,
         `${result.failed}/${result.total} LSH checks failed:\n${JSON.stringify(result.failures, null, 2)}`,
     );
-    assert.equal(result.total, 69, `expected exactly the 69 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
+    assert.equal(result.total, 75, `expected exactly the 75 checks in the RUNBOOK.md §6 ledger (69 through round 27 + the 6 round-28 retrieval-liveness checks in section K), got ${result.total}`);
 });

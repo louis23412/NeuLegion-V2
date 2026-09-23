@@ -1789,7 +1789,7 @@ R27-4b fix, not on a `configure`.
 
 ---
 
-## 11. The round-27 plan (IMPLEMENTED: R27-1…R27-6, R27-8 and R27-9; the runs are the operator's)
+## 11. The round-27 plan (IMPLEMENTED: R27-1…R27-6, R27-8 and R27-9; the four runs are DONE — §13)
 
 Round 26 closed with three *reading* follow-ups and two unrun experiments. The
 round-27 planning sweep (triggered by the user's "plan the next step, double-check
@@ -1797,7 +1797,7 @@ the controller, add the checks you think are needed, and bake the flags in") tur
 those into a concrete, tested plan and found four more findings in the same class
 (`BUGS.md` #43/#44 sharpened, #46/#47/#48 new). The plan is
 [`PLAN-round27.md`](PLAN-round27.md); it is **implemented (R27-1…R27-6, R27-8,
-R27-9); the runs are the operator's** (§12 has the implementation record).
+R27-9) and run (R27-7a–d; §13)** (§12 has the implementation record).
 
 Its shape:
 
@@ -1839,7 +1839,7 @@ Its shape:
 Acceptance criteria, the exact commands, the file map and the resolved decisions
 (§3.5) are in `PLAN-round27.md` §3–§9.
 
-## 12. Round-27 implementation record (what landed; the runs are the operator's)
+## 12. Round-27 implementation record (what landed; the four runs are DONE — §13)
 
 Round 27's code and tests are in the tree and `npm test` is green (`RUNBOOK.md` §6
 ledger, 2347 checks). What changed, and what pins each item:
@@ -1884,6 +1884,656 @@ ledger, 2347 checks). What changed, and what pins each item:
   the flags are documented, threaded into `run.json`/`report.json`, and
   `--list-variants` starts no run).
 
-**Not yet done (operator):** R27-7's four runs (§11's commands; Step 0.5's offline K
-restatement is already measured in §10.10). Their results belong in new sections of
-this file. (R27-8's design note is already written — `METHOD.md` §5.)
+**Done (operator):** R27-7's four runs landed — see §13 (forensics) for what each one
+proves. Step 0.5's offline K restatement is already measured in §10.10. (R27-8's
+design note is already written — `METHOD.md` §5.)
+
+## 13. The round-27 runs (R27-7a–d) — what happened, what it proves, what it does not
+
+Four runs, all `status: complete`, all `node v25.9.0`, all on the same tree (round-27
+code, `npm test` green). Read them as one programme: **Step 1 tests the liveness
+*certificate*; Steps 2–3 turn on the two features the certificate cleared only where
+they could fire; Step 4 asks whether the two near-misses survive a seed distribution.**
+The headline is a split verdict — the *machinery* worked (each run reports what it
+was built to report, with no runtime warnings and two cross-process bit-reproductions),
+the *science* returned one genuine positive (`label-conservative`), a clear negative on
+the weighting experiment (live, but harmful — modulo a confound, #54), one zero-cost
+promotion with a knife-edge margin, and three defects in the reading layer (#53 in
+`pca-hash`'s certificate, #54 in the sample-weight normalisation, #55 in the decision
+block and the family-correlation label) that only a real run could surface.
+
+### 13.1 Manifest (all four; `costBps: 0`, `seed: 1`, `requireReachable: true`, `reuseBase: true`, `auditProbesPerFold: 1`, `commonRandomNumbers: true`)
+
+| run | id | what it was | scale | wall | folds | variants |
+| --- | --- | --- | --- | --- | --- | --- |
+| Step 1 | `20260923T105845-seed1` | liveness validation | 2 streams × 200 bars | 554 s | 18 | 6 + baseline |
+| Step 2 | `20260923T111159-seed1` | label policy | 8 streams × 600 bars | 8 259 s | 288 | `label-conservative`, `label-triple` + baseline |
+| Step 3 | `20260923T133315-seed1` | weighting under `triple` | 8 streams × 600 bars | 5 515 s | 288 | `sample-weights` + baseline |
+| Step 4 | `20260923T150720-seed1` | near-miss seed replication | 8 streams × 600 bars | 2 726 s | 288 | `sig-momentum`, `sig-accel` + baseline, `--seeds=1,2,3` |
+
+All four report `configFingerprint c0ba6493`. That is **expected, not a bug**:
+`configFingerprint` hashes only the legion **structure** keys
+(`sanitize.js`'s `STRUCTURE_CONFIG_KEYS`), so it does not change with `--variants`,
+`--label-policy` or `--cost-ladder`; `run.json` echoes the full config beside it.
+
+### 13.2 Step 1 — the liveness certificate works as designed; one certificate lies about *why* (`BUGS.md` #53)
+
+`liveness {roster 7, active 3, inert 2, notApplicable 2}`, `trials 3`, `trialsRoster 7`,
+`trialsInactive 4`. Every inactive candidate carries exactly one reason, is excluded
+from `K` and the family-wise search, and its `promotionTest.available` is `false` with
+the "excluded from K and the family-wise search" note. The four expected outcomes are
+all present and correctly classified:
+
+| candidate | status | reason |
+| --- | --- | --- |
+| `sample-weights` | **inert** | the *variant-specific* reason: the optimistic labeller emits one-bar labels, no two spans overlap, every uniqueness weight is exactly 1 |
+| `multi-probe`, `query-mod` | **not-applicable** | `broadcastMemory -> _getGlobalLSHCandidates`, whose output the scored model never reads back |
+| `surprise` | **live** | 2/18 folds differ (16 identical), `maxAbsDiff 0.0617` |
+| `homeostasis` | **live** | 15/18 folds differ (3 identical), `maxAbsDiff 0.1249` |
+| `pca-hash` | **inert** ⚠ | **the generic reason** — "the mechanism never reaches the model path" |
+
+`sample-weights`'s model block carries the measured evidence of its inertness:
+`sampleWeights {count 3438, min 1, max 1, mean 1, ess 43.825, n 43.825,
+effectiveFraction 1}` — an all-ones vector, so the certificate is a provable statement,
+not an inference. This is exactly what R27-3 was built to show.
+
+**The defect (#53).** `pca-hash` is on the model path (`appliesTo: 'model'`; `BUGS.md`
+#44 documents it live via `_retrieveTopRelevantProtos`, and the round-26 8×600 run
+measured it **differing on 6/288 folds**), yet on Step 1 it is certified `inert` with
+the generic string claiming it *never reaches the model path*. Two consequences:
+
+1. **The generic reason is the wrong class of explanation for a `model`-scoped
+   variant.** "Identical on all 18 folds" is a factual, per-run statement; "never
+   reaches the model path" is a structural claim the round-26 run falsifies. This is
+   the exact shape `inertReason` exists to fix (as `sample-weights` uses it), and
+   `pca-hash` has none.
+2. **Liveness is run-dependent.** The same variant is live at 8 streams × 600 bars and
+   inert at 2 streams × 200 bars. A liveness certificate is a property of *a run*, so
+   the report should say "identical on all N folds of THIS run" and never imply a
+   structural unreachability it has not proved.
+
+Instrumentation of the real pipeline (a browser-harness probe of `runAnalysis`, plus a
+`HiveMind._refreshLshHyperplanes` wrapper and a logging controller subclass) shows the
+mechanism *does* execute on the scored mind — the refresh returns `true` and replaces
+the hyperplanes — but no emitted position changes at this run's prototype-pool / probe
+budget. So the honest status for Step 1 is `inert` with a *measured* reason, and the
+open question (does the basis ever change the selected prototype set at a smaller probe
+budget or a larger pool?) is an experiment, not a conclusion. Note also that the
+tension is real on both sides: `binarypc`/`lsh` prove the refresh changes the *hash
+buckets*, and #44 itself warns that the retrieval probe draws a bucket-content-dependent
+number of `Math.random()` values — so "the run differs" is not clean evidence the
+*signal* changed either.
+
+Two smaller reading observations from the same run, neither a crash. The summary's
+family-correlation line prints `maxPair=sample-weights~multiprobe` when only
+`surprise`/`homeostasis` are active — the *matrix* is correctly built over the active
+arms (2×2, `rho = −0.0594`), but the `maxPair` **label** is resolved against the full
+candidate list (`analyze.js`'s `familyPairLabel` indexes `result.candidates`, not the
+active subset), so it names two arms that were never correlated (the label, not the
+number, is wrong). And the tiny run's family-wise SPA panel is degenerate
+(`spaPValue 0`, `rejects [baseline, surprise-gate]`) even though its own power line
+says `UNDERPOWERED` (`MDE95 ±1.90` i.i.d.). Treat the Step-1 panel as a liveness check,
+not evidence. Filed together as #53/#55.
+
+### 13.3 Step 2 — the label policy is the round's one genuine positive (`label-conservative`)
+
+This is the first run in which the two alternative labellers are *reachable* (R27-4b
+fixed `barsAfterEntry`) and *scored at power* (8 streams, 4 320 pooled bars), and both
+beat the optimistic baseline on the paired, cluster-based statistic:
+
+| variant | net Sharpe | DSR (adj.) | fold-win | paired ΔS | p(1-sided) | stability (LOO) | breadth | break-even | folds ≠ baseline |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline (`optimistic`) | **−0.1147** | 0.1428 | — (ref.) | — | — | — | — | **−2.58 bps** | — |
+| `label:conservative` | **+0.1017** | 0.2521 | 0.2014 | **+0.2164** (se 0.1355) | **0.0597** | **1.0** (36/36, worst +0.105) | 17/17/2 | **+2.24 bps** | 100/288 |
+| `label:triple` | **+0.0194** | 0.2074 | 0.4132 | +0.1340 (se 0.1072) | 0.1098 | 1.0 (36/36, worst +0.0626) | 22/14 | +0.42 bps | **232/288** |
+
+What is actually established:
+
+- **The alternative labellers are not duplicates** (R27-4b verified): `conservative` and
+  `triple` differ from the baseline on 100/288 and 232/288 of folds respectively (i.e.
+  188/288 and 56/288 are byte-identical), and
+  `triple`'s model block reports `resolvedTimeBarrier 16244` with
+  `heldBars {max 20 = horizon, mean 6.77}` — the vertical barrier is reachable and fires.
+  (Contrast the corrected optimistic baseline: `heldBars {max 72, mean 7.82}` — also no
+  longer ≡ 1, which is the #49 fix visible in production.)
+- **The sign of the effect is consistent, not a lottery.** Both candidates' cluster
+  stability is 1.0 (every one of the 36 leave-one-window-out paired differences is
+  positive), and `conservative`'s is the stronger of the two. The worst single window
+  removal still leaves `+0.105`.
+- **The baseline's gross edge is negative** (`breakEvenCostBps −2.58`: it loses money
+  before any cost), while both candidates have a *positive* break-even (2.24 and 0.42
+  bps). So the improvement is "from a negative-edge model to a ~zero-edge model", not
+  "from zero to a money-maker".
+- **Neither clears the gate.** `conservative` binds on the DSR floor
+  (adj. 0.2521 < 0.95) and the fold-win majority (0.2014 < 0.5); `triple` binds on the
+  same two (0.2074, 0.4132) plus the relative positive-fold hurdle. The family-wise
+  SPA agrees (`p 0.6567`, best `label:conservative`, no rejects).
+  **Note (§14, `BUGS.md` #57):** the "fold-win majority" here is the raw fraction over 288
+  folds; the error-controlled **cluster** sign test is **0.500** (17/17/2). The raw hurdle is
+  an always-on legacy reason that contradicts `DESIGN.md` §6.1's recorded round-25 decision
+  (the raw fraction should be a *reported statistic*); it is verdict-neutral here (the DSR
+  floor binds regardless), and `PLAN-round28.md` P1e reconciles code and record.
+- **Sizing** (`decision.nextRun`): to make the *observed* paired difference significant
+  at the required power, `conservative` needs ~55 fold-window clusters and has 36
+  (`pairedUnits.neededForObserved 55`); the cheapest single lever is
+  **`magnitude` ×4.95** (the clustered test needs a ΔS of ~1.07 vs the observed 0.2164).
+  `barsToDetectObserved` is 93 577 bars at design effect 5.12 — i.e. **more bars of the
+  same basket is the wrong lever**; more independent folds/streams, or a larger effect,
+  is the right one (R27-8).
+
+  **⚠️ Corrected by the round-28 re-read (§14).** Both the 55 and the ×4.95 are artefacts.
+  `cheapestFlip` multiplied the *pooled level's* cluster SE (0.54654) by 1.96 and compared it
+  to the *paired* difference (whose own SE is 0.13554), and `pairedUnitsNeeded` used a
+  two-sided z while the test it sizes is one-sided (`pairedClusterTest.significant ⇔
+  pOneSided ≤ alpha`). The honest numbers: the required |Δ| at the 36 clusters is
+  `t(35, 0.05 one-sided) × 0.13554 = 0.228998` against the observed 0.21640 — **94.5 %,
+  factor 1.058** — and **41 clusters** would make it significant (89 for ≈80 % power — the
+  plan's `81` is the normal approximation; §14.7a; 54 come
+  from `--test=10` on the same 600 bars). `barsToDetectObserved` sizes a *single series*, not
+  the paired decision: the DSR floor is crossed at a Sharpe of ≈1.02–1.08 (`sig-accel`
+  1.0194 → 0.9742; `sig:momentum` 1.0848 → 0.9487614), so the labeller's 0.1017 is ≈10× short
+  and the floor is a **magnitude** gate, *not* a power purchase. More bars *does* buy
+  fold-window clusters (675 bars → 41) — the lever the paired hurdle actually needs. See
+  `BUGS.md` #56 and `PLAN-round28.md` §C1/§0.
+
+One wording nit (#55): `decision.training.labelPolicy` reads `"optimistic"` for this
+run because it names the *run-level* policy, while the featured model (the named
+`modelReferent`, `label:conservative`) was trained under `conservative`. The training
+block's numbers are the referent's own, so only the label is ambiguous — but an
+operator reading the decision block can be misled. Worth renaming (`runLabelPolicy`)
+or reporting the referent's own policy.
+
+### 13.4 Step 3 — weighting is *live* under `triple`, and it hurts; but the A/B is confounded by an effective-LR change (`BUGS.md` #54)
+
+The plan's falsification condition for R27-3 was `ess ≈ n` (i.e. the causal window
+weights are all ≈ 1 and there is nothing to weight). **That did not happen**: on the
+`triple` baseline `sample-weights` is **live** (only 50/288 folds byte-identical to the
+baseline, `maxAbsDiff 0.1717`) and its model block reports
+`sampleWeights {count 177817, min 0.7208, max 9.1542, mean 2.6112, ess 48.06, n 58.27,
+effectiveFraction 0.8248}` — the mechanism moved (`ess < n`). But it moved the wrong way:
+
+| variant | net Sharpe | DSR (adj.) | fold-win | paired ΔS | p(1-sided) | stability | break-even |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline (`triple`) | **+0.0194** | 0.3148 | — | — | — | — | +0.42 bps |
+| `sample-weights` | **−0.2083** | 0.1674 | 0.4028 | **−0.2276** (se 0.1665) | 0.9098 | **0/36** positive | **−4.51 bps** |
+
+The result is emphatic and internally consistent: the weighted objective is worse than
+unweighted on the pooled Sharpe, the dependence-adjusted DSR, every cluster-stability
+window (0/36 positive), and the turn-over break-even. **Read as "AFML ch.4
+average-uniqueness weighting buys nothing on this data and costs ~0.23 paired Sharpe"**
+— which, combined with §13.2's proof that it is inert on the shipped labeller, is the
+evidence to close TODO #5 (subject to the confound below).
+
+**However (the confound).** The weights are `mean1`-normalised **over the causal
+window**, but the controller trains on exactly one new label per closed-trade drain, and
+that label is the **newest span** of the window (the ring's older spans were already
+trained). So the *emitted* weights are not a mean-1 sample: their run mean is **2.6112**.
+`HiveMind.train` feeds the weight straight into `dL_dLogit = (probability − target) *
+sampleWeight` (`training/gradients.js`), so this arm ran at ≈ **2.6× the baseline's
+effective learning rate** — the code comment's "mean-1 … the effective learning rate is
+unchanged" is false in operation, because only the newest span is ever trained. The
+pure module reproduces the run's readout from realistic spans (horizon 20, one-bar
+entry spacing: mean weight 2.65, `effectiveFraction` 0.813 vs the run's 2.6112/0.8248),
+so this is not a hunch. The Step-3 comparison therefore **conflates credit
+redistribution with an LR/objective-scale change**; before TODO #5 is closed
+*conclusively*, the emitted weights must be renormalised so the trained stream has
+mean 1 and the run repeated. (The unweighted conclusion — "inert on `optimistic`" — is
+untouched by this; it is a property of non-overlapping labels.)
+
+Positive controls in the same run: the `triple` baseline reproduces Step 2's
+`label:triple` candidate to the last digit (`netSharpe 0.01935514227636181`,
+`trainingSteps 175657`), proving the A/B is bit-reproducible across separate processes
+under common random numbers; and with a single candidate the report honestly emits
+`familyCorrelation {available: false, reason: "fewer than two candidates — there is no
+family to correlate"}`.
+
+### 13.5 Step 4 — the near-miss replicates into a promotion, at zero cost (`sig-accel`)
+
+The 3-seed replication of the two near-misses returns the round's only `promote: true`:
+
+| candidate | net Sharpe | DSR (adj.) | fold-win | paired ΔS | p | stability | breadth | audit | break-even |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `sig:momentum` | 1.0848 | **0.9487614** | **0.4931** | +1.1995 | **0.0293** | 1.0 | 19/17 | 288/288 | 14.64 bps |
+| `sig:acceleration` | 1.0194 | **0.9742** | 0.5347 | +1.1341 | **0.0493** | 1.0 | 24/12 (p 0.0326) | 288/288 | 11.57 bps |
+
+What it shows:
+
+- **`sig-accel` promotes** with no reasons, a clean audit (`reachableFolds 288/288`),
+  perfect cluster stability (all 36 LOO differences positive, worst +0.806), and a
+  concentrated-but-broad edge (`top 1 fold = 4.3%` of gross, `top 20 = 57.6%`,
+  LOO Sharpe `[0.985, 1.094]`).
+- **`sig-momentum` fails on two knife-edge floors despite a *higher* Sharpe and
+  *stronger* paired evidence**: the always-on fold-win majority (`0.4931 < 0.5`) and
+  the adjusted-DSR floor (`0.9487614 < 0.95` — 0.0012 short). This is the gate doing
+  its job: it is measuring breadth and consistency, not peak Sharpe. Both margins are
+  small enough to report explicitly.
+- **The promotion is a zero-cost promotion.** The cost ladder is decisive: at 0 bps
+  `sig-accel` promotes; at **2 bps it fails** (adjusted DSR 0.9223, paired p 0.0628);
+  at 5/10 bps both fail. `run.json` records `costBps: 0`, so the verdict is a statement
+  about a zero-cost strategy with a healthy gross break-even (11.57 bps) but a
+  dependence-adjusted DSR that the first basis point of cost erodes past the floor.
+- **`--seeds` replication is vacuous for model-free signals.** `replication.json` shows
+  the two signals' `perSeedMean` identical across seeds 1/2/3 to 15 significant digits
+  (`seedVariance ≈ 1e-31`, `seedFraction ≈ 1e-32`) — they are deterministic functions
+  of the data — while the baseline varies (`perSeedMean [−0.0441, +0.5168, −0.1780]`,
+  `seedFraction 0.65%`, `foldFraction 99.35%`). So the replication is a seed
+  distribution for the *model-backed* baseline only; it correctly demonstrates that the
+  near-misses are not single-seed artefacts (they cannot be), and it cannot quantify
+  their seed sensitivity because there is none. The IQM CI is still informative about
+  *fold* uncertainty: `sig-accel` IQM 1.1429 CI `[0.8507, 1.4099]`, `sig-momentum` IQM
+  0.7372 CI `[0.4074, 1.0328]` — both CIs sit above the pooled baseline (−0.115).
+- **Throughput:** the baseline's total fit time was 2 716 s (≈99.6% of the run's
+  2 726 s wall); each signal candidate cost **4.57 s** (≈600× cheaper) because it is
+  model-free. The three-seed run is essentially the baseline's fits; a signal-family
+  sweep is nearly free. This reinforces R27-8 ("buy independence, not bars") from the
+  cost side.
+- **Family correlation:** `sig-momentum ~ sig-accel` excess returns correlate
+  `r = 0.6972` (`effectiveTrials 1.178 of 2`) — the two near-misses are largely the same
+  bet, so "two arms survive" is weaker evidence than it looks (the DSR keeps `trials =
+  K` on FWER grounds, per the panel's own reader).
+- **R27-5's per-kind forecast grouping is verified in production:** Step 4's
+  `forecast.kinds = [controller(1), signal(2)]`, and the top-level `mcs` is the
+  *baseline's kind*'s MCS (`[baseline]` — "a single model is its own MCS"), with
+  `forecast.byKind.signal.mcs` holding the signal family. The `byKind[kind].mcs`
+  structure the reader promises is present.
+
+### 13.6 Cross-run invariants (the good news)
+
+- **Bit-reproducibility across processes under CRN.** Step 2's baseline ≡ Step 4's
+  baseline (`netSharpe −0.11469136136703602`, `trainingSteps 170004`, same turnover);
+  Step 3's baseline ≡ Step 2's `label:triple` candidate (`0.01935514227636181`,
+  `175657`). Independent processes, same numbers.
+- **No runtime errors, warnings or quarantine.** `run.log` carries only `info`
+  progress events in all four runs; `warmErrors`, `quarantinedRows`, `droppedCandles`
+  and `openTradeWriteErrors` are 0; `progress.json` ends `phase: complete` with the
+  pass budget (`events === eventsTotal`) fully spent.
+- **The honesty machinery fires.** Inactive candidates carry one reason each and are
+  outside `K`; the audit is clean and `reachable` in every row; the single-candidate
+  family correlation is honestly `available: false`; the forecast groups by kind;
+  `partial-report.json` echoes the config. The three defects found by the round-26 run
+  (#43/#44/#45) and the reachability bug #49 are all visibly fixed in these reports.
+
+### 13.7 What the runs prove, and what they do not
+
+| run | proves | does not prove |
+| --- | --- | --- |
+| Step 1 | the liveness taxonomy works; `sample-weights` is inert on `optimistic` with measured evidence; `surprise`/`homeostasis` are live — **and** `pca-hash` is *per-run* live (live at 8×600, inert at 2×200), so the generic inert reason must not claim a structural cause (#53) | anything at power; whether `pca-hash` could move a position at another pool/probe budget |
+| Step 2 | `conservative`/`triple` are reachable, non-duplicate, and both improve the paired Sharpe vs the negative-edge baseline with every LOO window positive; the vertical barrier now fires (`resolvedTimeBarrier 16244`) | a promotion (neither clears the DSR floor or the fold-win majority); whether the effect survives a different basket/cost/label horizon |
+| Step 3 | causal-window uniqueness weighting *can* move the objective (`ess/n 0.825`) and makes it **worse** on every pooled and LOO statistic | whether the effect is intrinsic to uniqueness weighting or an artefact of the 2.6× effective-LR inflation (#54) — needs the normalised re-run |
+| Step 4 | `sig-accel` promotes at 0 bps with a clean audit, perfect stability and a broad edge; `sig-momentum` fails two knife-edge floors; the near-misses are structurally seed-free so `--seeds` is vacuous for them; signals are ~600× cheaper than the model | that the promotion survives any cost (`costBps: 0`; it fails at 2 bps); that either signal is a durable regime effect (fold variance still dominates) |
+
+### 13.8 What this means for the next run (summary; the plan is `PLAN-round28.md`)
+
+> **Corrected in §14 (round-28 re-read).** Items 3 and 5 below quote the sizing block's
+> `neededForObserved 55` and `magnitude ×4.95`, which §14 shows are artefacts of mixing the
+> *paired* difference with the *single-series* cluster SE and of a two-sided z in a one-sided
+> test; the honest requirements are 41 clusters (significance) / 89 (80 % power, t-based —
+> the plan's `81` is the normal approximation; §14.7a) and a
+> magnitude factor of 1.06, and the DSR floor is a *magnitude* gate (Sharpe ≈1.02–1.08), not a
+> sample-size one. Read §14 before acting on items 3 and 5.
+
+1. **Reconcile `pca-hash`'s liveness honestly** (#53): give it an `inertReason` that
+   states the measured per-run cause (the refresh runs; no emitted position changes at
+   this budget) and qualify #44's "live" claim; then design the probe-budget × pool-size
+   experiment that decides whether the basis can ever matter.
+2. **Re-run Step 3 with emitted weights renormalised to the trained stream's mean 1**
+   (#54) before closing TODO #5 — otherwise the "weighting hurts" verdict is
+   confounded with a learning-rate change.
+3. **`label-conservative` is the best arm the programme has produced** (+0.2164 paired,
+   p 0.0597, stability 1.0, positive break-even). Decide whether to buy power
+   (~55 needed vs 36 clusters; `magnitude ×4.95`) or to reduce the question's noise
+   (new independent streams). Do not re-run more bars.
+4. **Treat the `sig-accel` promotion as arm-level, not deployable**: it is a 0-bps
+   promotion and fails at the first basis point; record it as "the strongest arm is
+   model-free, cost-fragile, and correlated 0.70 with the other near-miss".
+5. **Buy independence, not bars (R27-8), now with the runs' own numbers**:
+   `effectiveStreams` 2.30 (Step 2), 2.47 (Step 3), 1.89 (Step 4) out of 8 majors;
+   `barsToDetectObserved` 93 577 in Step 2. The binding constraint is the number of
+   *independent* streams, not the bar count.
+6. **Reading polish**: `decision.training.labelPolicy` should name the referent's
+   policy (or be renamed `runLabelPolicy`); report knife-edge margins explicitly; and
+   fix the `familyCorrelation` summary's `maxPair` label to resolve against the active
+   arms the matrix was built from (it currently indexes the full candidate list).
+
+---
+
+## 14. Round-28 coherence re-read of the four reports (plan-only round; `PLAN-round28.md`)
+
+This section is the round-28 planning pass: every number in the four `report.json` files was
+re-read against the code that produced it, against the recorded method decisions
+(`METHOD.md`, `DESIGN.md` §6.1) and against each other. It found **three new reading defects**
+(`BUGS.md` **#56/#57/#58**), **two recorded-decision-vs-code drifts**, and it **corrected the
+sizing arithmetic the round-27 summary quoted**. No scored number is wrong; the *descriptions*
+are, and one hint pointed at the wrong lever. All arithmetic below is re-derived from the
+reports (`src/20260923T*/report.json`) and is reproducible.
+
+### 14.1 The sizing block mixes a *paired* quantity with a *single-series* one (`BUGS.md` #56)
+
+Step 2 (`20260923T111159-seed1`, candidate `label-conservative`) carried:
+
+| field | value | source |
+| --- | --- | --- |
+| `promotionTest.sharpeDifference` | value 0.2164017, **se 0.1355364**, t 1.5966319, df 35, pOne 0.0596693 | paired, candidate-vs-baseline |
+| `dependence.seCluster` | **0.5465402** | single series (the candidate's own Sharpe level) |
+| `decision.nextRun.mde95Dependent` | 1.0711991 = `1.959964 × 0.5465402` | single series |
+| `decision.nextRun.cheapestFlip.requiredSharpeDifference` | **1.0711991** | `1.959964 × seCluster` |
+| `decision.nextRun.cheapestFlip.factor` | **4.95005** = 1.0711991 / 0.2164017 | — |
+| `decision.nextRun.pairedUnits.neededForObserved` | **55** | `36 × (1.959964 × 0.1355364 / 0.2164017)²` |
+| `decision.nextRun.pairedUnits.needed.mde95Dependent` | **3** | pairs the 0.1355 SE with the 1.0712 target |
+
+`cheapestFlip` therefore multiplies the **level's** SE by 1.96 and compares it to the **paired
+difference**. The paired difference's own reference (`t(35) = 1.6895725`, one-sided, because
+`pairedClusterTest.significant ⇔ pOneSided ≤ alpha`, `dependence.js:235`) gives the honest
+requirement `1.6895725 × 0.1355364 = 0.2289985` — the observed 0.2164017 is **94.50 %** of it,
+i.e. **factor 1.058**, not 4.95. Cluster counts for a significant paired difference (one-sided
+t, t-crit recomputed per df):
+
+| clusters | 36 (have) | 41 | 55 | 81 (89 at 80 % power, §14.7a) |
+| --- | --- | --- | --- | --- |
+| paired SE | 0.13554 | 0.12702 | 0.10965 | 0.09036 |
+| `t` at Δ = 0.21640 | 1.5966 | 1.7036 | 1.9736 | 2.3950 |
+| significant (5 %) | ✗ (p 0.0597) | **✓** | ✓ | ✓ (≈80 % power) |
+
+In bar terms (`clusters = floor((bars − train)/testSize)`): 41 clusters = **675 bars** at
+`test 15`, or **`--test=10` on the existing 600 bars = 54 clusters** (a ~1.5× fit increase).
+`barsToDetectObserved` = **93 576** is `(1.959964 / (0.1017103/√252))²`, i.e. the **single
+series'** i.i.d. bar requirement — not the paired decision's lever.
+
+### 14.2 The absolute-edge floor is a *magnitude* gate, not a sample-size one
+
+The adjusted-DSR floor (`minDsrAdjusted 0.95`) is crossed in these runs at a Sharpe of
+≈**1.02–1.08**:
+
+| candidate | pooled Sharpe | adjusted DSR | clears? |
+| --- | --- | --- | --- |
+| `sig-accel` (Step 4) | 1.0194213 | 0.9742028 | ✓ |
+| `sig:momentum` (Step 4) | 1.0848066 | 0.9487614 | ✗ by 0.00124 |
+| `label:conservative` (Step 2) | 0.1017103 | 0.2521276 | ✗ (≈10× short on Sharpe) |
+
+Buying the whole dependence panel (design effect 5.12057 → 1) improves the *effective* sample
+by `deff` but the Sharpe standard error only by `√deff ≈ 2.26×`, so it cannot close a 10×
+Sharpe gap. **Consequence:** `label:conservative` cannot promote at any affordable sample; the
+DSR floor is asking for an absolute edge the labeller does not have, and it is behaving
+correctly. The *only* promotion-relevant hurdle that is affordable is the paired test (41
+clusters). This corrects `RUN-ANALYSIS.md` §13.3/§13.8 and `TODO.md` 76 (item 82).
+
+### 14.3 The always-on raw fold-majority hurdle contradicts the recorded decision (`BUGS.md` #57)
+
+`DESIGN.md` §6.1: the round-25 gate replaced `foldWinFraction >= 0.5` and
+`positiveFraction >= baseline` with the paired cluster Sharpe test + leave-one-window
+stability, and "the raw fraction is still reported, as a statistic". The code keeps both as
+always-on reasons (`walkforward.js:800–812`). Measured on the round-27 runs:
+
+| candidate (run) | raw `foldWinFraction` (288 folds) | cluster sign test (36 windows) | other binding reasons |
+| --- | --- | --- | --- |
+| `label-conservative` (Step 2) | 0.2013889 ❌ | 0.5000 (17/17/2), p 0.5679 | unadj. DSR 0.3327, adj. DSR 0.2521, paired p 0.0597 |
+| `label:triple` (Step 2) | 0.4131944 ❌ | — | DSR floors + positive-fold |
+| `sig:momentum` (Step 4 @0 bps) | 0.4930556 ❌ | 0.5277778 (19/17), p 0.4340 | adj. DSR 0.9487614 |
+| `sig-accel` (Step 4 @0 bps) | 0.5347222 ✓ | 0.6666667 (24/12), p 0.0326 | — (promotes) |
+
+So the raw hurdle and the error-controlled cluster statistic disagree in direction for the
+round's best arm, and the raw hurdle is one of exactly two reasons the near-miss
+`sig:momentum` fails at 0 bps. **Verdict-neutral:** every candidate that fails the raw hurdle
+also fails the DSR floor and/or the paired test, so implementing the recorded decision changes
+no verdict — to be proved mechanically before landing (`PLAN-round28.md` P1e).
+
+### 14.4 `pca-hash`'s inert reason is not "measured", and the retrieval liveness is confounded (`BUGS.md` #53)
+
+Step 1: `pca-hash` `{appliesTo: 'model'}`, `identicalFolds 18/18`, `maxAbsDiff 0`, reason
+`"inert: identical to the baseline on all 18 folds (the mechanism never reaches the model
+path)"` — a structural claim the round-26 6/288-fold difference falsifies, from the generic
+fallback (`analyze.js:1042`). Additional confound: `_retrieveTopRelevantProtos` consumes
+`Math.random()` a **bucket-content-dependent** number of times
+(`retrieval.js:268/294/295/300/342`), so changing the hash basis moves the trajectory by the
+draw count, and "positions differ" is not evidence the *retrieved prototype set* changed. The
+P2 experiment therefore measures the **retrieved id set** (deterministic given the hyperplanes)
+and the draw count, not just positions.
+
+### 14.5 The `optimistic` label spans overlap — the sample-weight inertness is a config artefact (`BUGS.md` #58)
+
+The `sample-weights` `configure` sets the causal ring's span horizon to
+`_labelHorizonBars > 1 ? floor(_labelHorizonBars) : 1` (`analyze.js:151–158`) → **1** on any
+`optimistic` run. Step 1's certificate is consequently all-ones
+(`sampleWeights {min 1, max 1, mean 1, ess = n = 43.8254799, effectiveFraction 1}`) and the
+shipped reason attributes it to one-bar labels. The **#49-fixed** `heldBars` on the *same*
+`optimistic` baseline is:
+
+| run | `heldBars` |
+| --- | --- |
+| Step 1 baseline | `{count 4369, max 54, mean 8.300984}` |
+| Step 2 baseline | `{count 185937, max 72, mean 7.824548, cap 119}` |
+| Step 2 `label:triple` | `{count 186246, max 20, mean 6.771523}`, `resolvedTimeBarrier 16244` |
+
+So labels are held ~8 bars on `optimistic` and **do overlap**; average uniqueness is ≈1/8, not
+1. The all-ones vector is the *span parameter*, and the mechanism has never been tested on the
+shipped labeller. (The step-3 confound is the second half: emitted mean **2.6112098** at
+`ess/n 0.8248488`, and the model is plain SGD — `_applyGradients` subtracts `Σ grad · lr /
+steps` — so the arm ran at ≈2.6× the effective LR.)
+
+### 14.6 The corrected next-step summary (replaces §13.8 items 3–6)
+
+1. **Fix the sizing block** (#56): paired hints read the paired SE and the one-sided reference;
+   name each field's scale.
+2. **Reconcile the gate with the record** (#57): the raw fold fractions become reported
+   statistics; prove verdict-neutrality on these four runs.
+3. **Correct the weight inertness story and re-test the mechanism** (#58, #54): a *measured*
+   causal span + emitted mean-1 normalisation + a scale-control arm (`PLAN-round28.md` P3).
+4. **`label:conservative`:** ship it as an opt-in *labeller* (a real improvement of a
+   negative-edge baseline to ≈break-even) and buy the **affordable** paired hurdle
+   (`--test=10` → 54 clusters ≥ 41); do **not** buy bars for the DSR floor (§14.2).
+5. **`sig-accel`:** arm-level; economically viable to ~11.6 bps but the 2-bps failure is the
+   knife-edge DSR floor, so the lever is **cost/turnover** — test a no-trade region offline
+   first (`restateReportAtPolicy` + `turnoverSweep`).
+6. **Independence:** measure the market-neutral overlay offline before building any
+   cross-sectional candidate (`effectiveStreams` 2.05–2.47/8, design effect 5.12).
+7. **`pca-hash`:** measured inert reason + a retrieval-liveness probe (P2); reading polish
+   (#55) unchanged.
+
+---
+
+## 14.7 Round-28 implementation record (the plan landed; what each change reproduces)
+
+This subsection is the *implementation* record for `PLAN-round28.md` P1/P2: what landed, the
+numbers re-derived from the four retained reports, and the tests that pin each. All arithmetic
+below is recomputed from the four `src/20260923T*/report.json` files (re-read this session and
+retained in-session; the run directories themselves are no longer in the tree — see §14.8).
+
+### 14.7a The corrected sizing block, recomputed for every round-27 candidate (`BUGS.md` #56)
+
+`decision.nextRun`'s paired fields, recomputed with the test's own **one-sided** cluster-t
+reference `t(df, 0.05)` and the **paired** SE (`analyze.js` `pairedUnitsNeeded` /
+`cheapestFlip`, the shapes pinned by `analysis.test.js` §AM):
+
+| run | candidate | paired Δ | paired SE | df | p(one-sided) | one-sided requirement `t(df)×SE` | factor | `neededForObserved` | `neededForObservedPower80` |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Step 1 (2×200) | `surprise` | 0.01596 | 0.14429 | 8 | 0.4573 | 0.26832 | 16.81 | 1993 | 4550 |
+| Step 1 (2×200) | `homeostasis` | −1.24678 | 0.44726 | 8 | 0.9882 | (wrong direction) | −0.667 | 6 | 9 |
+| Step 2 (8×600) | **`label-conservative`** | **0.21640** | **0.13554** | **35** | **0.05967** | **0.2289985** | **1.0582** | **41** | **89** |
+| Step 2 (8×600) | `label:triple` | 0.13405 | 0.10724 | 35 | 0.10980 | 0.1811839 | 1.3516 | 65 | 144 |
+| Step 3 (8×600) | `sample-weights` | −0.22762 | 0.16653 | 35 | 0.90980 | — (`cheapestFlip` = `cost`) | — | 55 | 121 |
+| Step 4 (8×600) | `sig:momentum` | 1.19950 | 0.61358 | 35 | 0.02931 | 1.0366883 | 0.8643 | 28 | 60 |
+| Step 4 (8×600) | `sig-accel` | 1.13411 | 0.66835 | 35 | 0.04930 | 1.1292325 | 0.9957 | 36 | 79 |
+
+Three corrections worth naming:
+
+* **The old `×4.95` was ×4.7 too large** and pointed at the wrong lever. On Step 2 the
+  one-sided requirement is `t(35)×0.1355364 = 0.2289985` against the observed `0.2164017` —
+  **94.50 %, factor 1.0582** (§14.1).
+* **`neededForObserved` is 41, not 55** (the old form used the two-sided 1.959964 in a
+  one-sided t test). The `pairedUnits.needed.mde95Dependent` cross-scale target is gone; the
+  paired MDE at the current cluster count is `reference.pairedMde95 = t(35)×SE = 0.2289985`.
+* **80 % power is 89 clusters, not 81.** `PLAN-round28.md` §0/§P4 quote `81` from the normal
+  approximation `(1.6449 + 1.95996)²·(SE/Δ)²`; the fitted quantity the code reports is the
+  *smallest n with `(t(n−1, 0.05) + z_0.80)·SE·√(C/n) ≤ Δ`*, which is **89** here (the t
+  critical value exceeds the normal constant at small df, so the exact answer is larger). The
+  fixture value is pinned in `analysis.test.js` §AM
+  (`neededForObserved 41`, `neededForObservedPower80 89`, factor `1.0582470005895548`).
+
+Two sanity checks fall out of the table: `sig:momentum`'s paired test is already resolved at 36
+clusters (factor 0.864 — its only binding reason is the adjusted-DSR floor), and Step 3's
+`sample-weights` reports `cheapestFlip.kind = 'cost'` (break-even −4.51 bps < the cheapest
+tested cost), so its cheapest lever is cost, not power. Both are the honest readings.
+
+### 14.7b The gate reconciles with the record, verdict-neutral on all four runs (`BUGS.md` #57)
+
+`promoteDecision` now reports the raw fold-win / positive-fold fractions as statistics
+(`hurdles[].gated === false`, still carrying their honest `failed`/`margin`) and the shipped
+`gateOptions` pass `rawFoldHurdles: false` (`analyze.js:2016`; pinned by `analyze.test.js`). The
+verdict-neutrality proof, re-derived from the reports' own `reasons` arrays (the gate is
+deterministic and the stored `reasons` *are* its output; a raw-fold reason is exactly one
+beginning `fold win fraction `/`positive-fold fraction `):
+
+| run | candidate | `promote` (round-27 gate) | raw-fold reasons | error-controlled / other reasons | `promote` with the raw hurdles off | unchanged |
+| --- | --- | --- | ---: | ---: | --- | --- |
+| Step 1 | `surprise` | false | 2 | 5 | false | ✓ |
+| Step 1 | `homeostasis` | false | 2 | 5 | false | ✓ |
+| Step 2 | `label-conservative` | false | 1 | 3 (unadj. DSR, adj. DSR, paired p) | false | ✓ |
+| Step 2 | `label:triple` | false | 2 | 3 | false | ✓ |
+| Step 3 | `sample-weights` | false | 2 | 5 | false | ✓ |
+| Step 4 | `sig:momentum` | false | 1 | 1 (adj. DSR 0.9487614) | false | ✓ |
+| Step 4 | `sig-accel` | **true** | 0 | 0 | **true** | ✓ |
+
+**8/8 unchanged.** The decisive case is `sig:momentum`: its raw win fraction (0.4930556 < 0.5)
+is an always-on reason today, but the adjusted-DSR floor (0.9487614 < 0.95) binds
+independently, so removing the raw hurdle neither promotes nor blocks it. Pinned by
+`analysis.test.js` §AM with a 3-stream × 6-window fixture whose candidate wins **1/3 of the
+folds** and **6/6 window clusters** (raw off → promotes with zero reasons; raw on → blocked by
+the raw majority alone) — a case where the two breadth statements disagree in direction, which
+is exactly the `label-conservative` / `sig:momentum` pattern.
+
+### 14.7c The P2 retrieval-liveness measurement (`BUGS.md` #53 / #59)
+
+`_retrieveTopRelevantProtos` draws `Math.random()` for two kinds of work: bucket-probe flips
+(basis-dependent) and index-picks over `semProtos` (`semProtos[floor(rand·numSem)]`,
+basis-independent). Under a **fixed** retrieval RNG seed, therefore, if the two configs consume
+the **same number of draws** their streams stay in lockstep and every index-pick is identical —
+so any difference in the returned result is attributable to the hash basis, not to desync.
+Measured on `makeAnisotropicBank` (the genuine anisotropic regime; `lsh.test.js` §K):
+
+| width | hash bits | pool | retrieved **set** differs? | returned **list** differs? | draw counts |
+| --- | ---: | ---: | --- | --- | --- |
+| production | 107 | 80 | **never** (0/4 queries × 3 seeds) | 1/4 queries at 3/3 seeds (`rs` 2, 3, 5) | **equal** (23 200 000) |
+| production | 107 | 200 | never | 1/4 at `rs` 5, 7 | equal |
+| production | 107 | 600 | never | never | equal |
+| narrow | 6 | 200 | never | never | **unequal** (38 448 vs 38 249) |
+
+So the honest status is **reachable, and retrieval-set-inert at every tested budget**: the
+aligned basis never changes *which* prototypes a query retrieves, but at production width it
+*does* change the duplicate multiplicity of the returned list (attributable — equal draw
+counts), and at narrow width the draw streams desync so a difference there would not be
+attributable at all. Two consequences the round's documents carry:
+
+* the `pca-hash` certificate quotes the **set** invariance and the two budget figures, never a
+  structural unreachability (`analyze.js`; `analyze.test.js` §M2);
+* the multiplicity itself is a real reader defect — the fallback fillers guard with
+  `semCandidates.has(proto)` but never add to that Set, so the same prototype can enter the
+  returned list more than once — filed as **`BUGS.md` #59**, *reported, not fixed*, because
+  de-duplicating the scored path would move every golden fingerprint.
+
+Pinned by `lsh.test.js` §K (6 checks; ledger `lsh` 69 → 75).
+
+### 14.7d The weighting mechanism is re-armed (P1b/P1c, `BUGS.md` #54/#58)
+
+`sample_weights.js` gained `emittedWeightNormalizer` (a causal EMA of the raw weights, three
+modes: `mean1`, `scale`, `none`) and `trades.js` feeds the ring a **causal** span horizon — the
+EMA (α 0.1) of the realized holding periods of trades drained *before* each label, never the
+span of the label being weighted — overridable with `--sample-weight-horizon=<n>`. `analyze.js`
+registers the opt-in `sample-weights` (default `mean1`) and the **scale control**
+`sample-weights-scale-control` (constant `scale`), and `sampleWeightSummary` reports
+`{mean, meanUnnormalised, min, max, ess, n, horizonBars, measureHorizon}` so a
+mis-normalisation is visible. The `null`-config path is bit-identical (goldens unmoved). Pinned
+by `sample_weights.test.js` §E and `controller_invariants.test.js` §D (measured span 8,
+`min < 1 < max`, `ess < n`, prefix causality, and the `none` arm reproducing the raw stream).
+
+### 14.7e Reading polish (`BUGS.md` #55)
+
+`decision.training.labelPolicy` now names the **referent** model's policy, with the run-level
+flag beside it as `runLabelPolicy`; `familyCorrelation` labels its `maxPair` against the
+**active** candidate list the matrix was built from (`familyPairLabel`); and every evaluated
+hurdle carries `{value, threshold, margin, direction, failed, gated}` so a knife-edge miss is
+legible (`formatDecision` prints the tightest hurdle and the referent policy). Pinned by
+`analysis.test.js` §AM and `analyze.test.js`.
+
+## 14.8 The Step-0.5 offline restatements (`PLAN-round28.md` §3)
+
+The plan's Step 0.5 asks for three pure-post-processing readouts from the retained round-27
+journals. **One is done, two are blocked by missing journals** — stated plainly, because the
+whole round is about not over-claiming:
+
+**(a) The P4 sizing / decision table — DONE.** §14.7a is exactly it: the one-sided paired
+requirements (41 clusters for significance, 89 for 80 % power, factor 1.058) and the corrected
+DSR-floor reading (a Sharpe ≈1.02–1.08; the labeller's 0.1017 is ≈10× short). This is the
+arithmetic `METHOD.md` §7 records and `TODO.md` 76/82 carry.
+
+**(b) The market-neutral overlay (P6) — NOT MEASURABLE from the *round-27* artefacts, but
+reconstructible from any retained multi-stream journal.** The plan
+specifies pure post-processing of a candidate's retained `streamReturns` (`r_s(t) − mean_s
+r(t)`). The four round-27 `report.json` files do **not** retain `streamReturns` (they retain
+only the derived `dependence` block, `familyCorrelation`'s excess-correlation pairs and the
+forecast scores), and the round-27 `folds.jsonl` journals are no longer in the tree (the four
+`20260923T*` run directories are absent; only `src/20260920T094400-seed1/` retains a journal,
+which is a 1-stream 300-bar smoke run — no cross-section to demean). So the decisive
+measurement cannot be reproduced here.
+
+A retained `folds.jsonl` **is** sufficient, however: every scored line carries `stream`,
+`fold`, `test` (the bar indices) and the per-bar `returns` of that stream's fold, so the
+cross-sectional panel `r_s(t)` is rebuildable from the journal alone (this is the same route
+§1.3's round-24 reconstruction and the round-27 `dependence` block were computed by). The
+round-28 Steps 1/2 are `--symbols=all` runs and write `folds.jsonl` at the default
+`--fold-log=all`, so **their journals unblock (b) without re-running the round-27 design**:
+align the 8 streams by `test` within each fold, demean each bar across streams, and recompute
+`dependenceSummary`; compare that design effect against the retained 5.12×.
+
+What *can* be said from the retained Step-2 `dependence` block is a **bound**, not a
+measurement. Step 2 reports `meanPairwiseStreamCorr 0.41519`, `equicorrelationDesignEffect
+3.90630` (exactly `1 + 7 × 0.41519`, so the equicorrelation model is internally consistent),
+the jackknife `designEffect 5.12057`, and `effectiveStreams 2.048` of 8. If the mean pairwise
+correlation were *entirely* a single common factor and cross-sectional demeaning removed it,
+the equicorrelation component would fall to 1 and the design effect would fall to the residual
+`5.12057 − 3.90630 + 1 = 2.21427` → an SE gain of `√(5.12057 / 2.21427) = 1.52×`; the absolute
+ceiling (the whole design effect were the common factor, DE → 1) is `√5.12057 = 2.26×`. So a
+perfect market-neutral sleeve buys **between ≈1.5× and ≈2.3× on the pooled level's SE** — a
+real but bounded help, and (as §14.2 already notes) nowhere near the ≈10× a DSR-floor promotion
+would need. The *paired* SE's response is a different quantity and is not bounded by this
+algebra; it needs the panel. The plan's cross-sectional candidate therefore stays **gated** on
+an actual overlay measurement.
+
+**(c) The `sig-accel` no-trade-region / minimum-hold sweep (P5) — NOT RUNNABLE from *this*
+tree.** The
+sweep (`restateReportAtPolicy` + `turnoverSweep`) is pure over the journaled pre-policy
+confidence. That per-bar series is not in the reports, but it **is** in `folds.jsonl` (`signals`,
+aligned to `test`), so — exactly as in (b) — the sweep is runnable from any retained journal of
+the relevant variant; the reports retain only its summary —
+`sig-accel` `confidence {bars 4320, pairs 4032, lag1 0.89077, halfLife 5.99}` — plus the cost
+ladder). The retained Step-4 cost ladder is the surviving evidence and is worth stating exactly,
+because it frames the question:
+
+| candidate | Sharpe @0 bps | adj. DSR @0 | Sharpe @2 | adj. DSR @2 | adj. DSR @5 | adj. DSR @10 | break-even |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sig-accel` | 1.0194 | **0.9742** ✓ | 0.8434 | **0.9223** ✗ | 0.7443 | 0.3029 | 11.57 bps |
+| `sig:momentum` | 1.0848 | 0.9488 ✗ | 0.9370 | 0.8933 | 0.7542 | 0.4359 | 14.64 bps |
+| `label-conservative` | 0.1017 | 0.2521 ✗ | 0.0110 | 0.2024 | 0.1408 | 0.0707 | 2.24 bps |
+
+`sig-accel` clears the floor by 0.0242 at 0 bps and misses it by 0.0277 at 2 bps — a knife-edge,
+not a loss (its gross break-even is 11.57 bps). A holding rule that removes turnover would need
+to lift the 2-bps adjusted DSR by ≥0.0277 without dropping Sharpe below the floor; the
+`confidence` summary (lag-1 0.891, half-life ≈6 bars) says the signal is persistent, which is
+the precondition the classical no-trade region needs (Constantinides 1986; Davis & Norman 1990;
+Gârleanu & Pedersen 2013; alpha decay arXiv 2502.04284). **To actually run it, the operator
+re-runs Step 4 with `--fold-log=all` retained (the round-27 runs did write `folds.jsonl`, but
+those files are gone from this tree) and post-processes with
+`--turnover-sweep`/`restateReportAtPolicy`; the exact grid is `analysis/holding.js
+DEFAULT_TURNOVER_GRID`.** Note that neither scheduled round-28 run journals a *signal*
+candidate (Step 1's arms are `sample-weights`/`sample-weights-scale-control`, Step 2's is
+`label-conservative`), so unblocking (c) specifically needs a signal-family re-run with
+`--fold-log=all` (omit `--variants`, or pass the `sig:*` ids). Until then, the P5 claim is
+limited to "the lever is cost, and the surviving summary is consistent with cost being
+attackable".
+
+**Operator commands** (from `PLAN-round28.md` §3, unchanged): Step 1 is the corrected weighting
+A/B (`--variants=sample-weights,sample-weights-scale-control`), Step 2 the label-policy paired
+confirmation (`--test=10`, 54 clusters ≥ 41), Step 0.5(b)/(c) the two offline readouts above —
+each of which needs its run's `folds.jsonl` retained (`--fold-log=all`, the default). **(b) is
+unblocked by either new run's journal** (both are `--symbols=all`, so the 8-stream panel is in
+`folds.jsonl`); **(c) additionally needs a signal-family run** because no scheduled run journals
+`sig-accel`.

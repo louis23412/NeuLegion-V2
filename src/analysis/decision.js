@@ -26,9 +26,10 @@
 //
 // Pure: no I/O, no RNG. Exact reference vectors live in `analysis.test.js`.
 
-import { sharpeRatio } from './performance.js';
+import { sharpeRatio, normalInvCdf } from './performance.js';
 import { strategyReturns } from './backtest.js';
 import { barsToDetect, UNDERPOWERED_MDE } from './walkforward.js';
+import { studentTCritical } from './dependence.js';
 
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 const na = (reason) => ({ available: false, reason });
@@ -228,14 +229,28 @@ export function nextRunPlan({
     // difference's SE, not by either series' own SE, so size it separately from
     // `barsToDetect` (which sizes a single series). `promotionTest.sharpeDifference`
     // is the whole `pairedClusterTest` block, so read `.se`/`.nClusters`/`.value`.
+    //
+    // R28 (BUGS.md #56): the two scales are DIFFERENT quantities and must be
+    // labelled. The paired SE comes from the delete-one-cluster jackknife over the
+    // DIFFERENCE; `dependence.seCluster` is the single-series SE of a Sharpe level.
+    // Falling back from the former to the latter silently sizes a paired decision
+    // with a single-series quantity, so the fallback is explicit and flagged in
+    // `pairedUnits.seScale`.
     const pairedDiff = candidate && candidate.promotionTest ? candidate.promotionTest.sharpeDifference : null;
-    const pairedSe = pairedDiff && isNum(pairedDiff.se) ? pairedDiff.se
+    const hasPairedSe = !!(pairedDiff && isNum(pairedDiff.se));
+    const pairedSe = hasPairedSe ? pairedDiff.se
         : (dependence && isNum(dependence.seCluster) ? dependence.seCluster : null);
+    const pairedSeScale = hasPairedSe ? 'paired' : (pairedSe == null ? null : 'single-series');
     const pairedClusters = pairedDiff && isNum(pairedDiff.nClusters) ? pairedDiff.nClusters
         : (dependence && isNum(dependence.nClusters) ? dependence.nClusters : null);
     const pairedObserved = pairedDiff == null ? null
         : (isNum(pairedDiff) ? Math.abs(pairedDiff) : (isNum(pairedDiff.value) ? Math.abs(pairedDiff.value) : null));
-    const pairedUnits = pairedUnitsNeeded({ se: pairedSe, nClusters: pairedClusters, targets: { observed: pairedObserved, mde95Dependent } });
+    const pairedAlpha = (pairedDiff && isNum(pairedDiff.alpha)) ? pairedDiff.alpha
+        : (candidate && candidate.promotionTest && isNum(candidate.promotionTest.alpha) ? candidate.promotionTest.alpha : 0.05);
+    const pairedUnits = pairedUnitsNeeded({
+        se: pairedSe, nClusters: pairedClusters, seScale: pairedSeScale, alpha: pairedAlpha,
+        targets: { observed: pairedObserved },
+    });
     return {
         available: true,
         effectiveBars,
@@ -255,7 +270,17 @@ export function nextRunPlan({
         projected,
         pairedUnits,
         cheapestFlip: flip,
-        reader: 'the sizing knobs for the next run: the honest effective sample and its MDE (i.i.d. and dependence-corrected), the bars a detection of Sharpe 1 / of the observed Sharpe would need at the measured design effect, the PAIRED clusters/seeds a variant-vs-baseline comparison would need for each target difference, the turnover break-even measured against 0/2/5/10 bps, the observed per-fold wall time, and the cheapest single lever that would move the verdict.',
+        // R28 (BUGS.md #56): every sizing field below is on ONE of two scales, and
+        // reading one as the other is what produced the old "×4.95 magnitude"
+        // artefact. `singleSeries` describes a Sharpe level against zero;
+        // `paired` describes the candidate-minus-baseline difference, which is the
+        // quantity the decision test actually uses.
+        scales: {
+            singleSeries: ['effectiveBars', 'observedSharpe', 'mde95', 'mde95Dependent', 'barsToDetect1', 'barsToDetectObserved', 'barsToDetectDependent'],
+            paired: ['pairedUnits.se', 'pairedUnits.neededForObserved', 'cheapestFlip.requiredSharpeDifference'],
+            note: 'a SINGLE-SERIES sizing describes one Sharpe level against zero; a PAIRED sizing describes the candidate-minus-baseline difference over the same fold windows. The two standard errors differ by the design effect, so they are not interchangeable.',
+        },
+        reader: 'the sizing knobs for the next run: the honest effective sample and its MDE (i.i.d. and dependence-corrected), the bars a detection of Sharpe 1 / of the observed Sharpe would need at the measured design effect, the PAIRED clusters/seeds a variant-vs-baseline comparison would need for each target difference (referenced to the one-sided cluster-t of the test that runs), the turnover break-even measured against 0/2/5/10 bps, the observed per-fold wall time, and the cheapest single lever that would move the verdict. Read `scales` before comparing any two fields: a single-series MDE and a paired requirement are different quantities (BUGS.md #56).',
     };
 }
 
@@ -284,25 +309,56 @@ function cheapestFlip({ candidate, dependence, pooledMetrics, breakEvenBps, leve
             reader: `the pooled edge is carried by window ${stability.worstCluster} (delete it and the paired Sharpe difference falls to ${stability.worstDelta}): the cheapest change is a signal whose edge is spread across windows.`,
         };
     }
-    const seCluster = dependence && isNum(dependence.seCluster) ? dependence.seCluster : null;
+    // R28 (BUGS.md #56): the magnitude lever is a PAIRED quantity and must be
+    // sized with the PAIRED standard error and the ONE-SIDED reference the test
+    // actually uses. The old form read `dependence.seCluster` (the SINGLE-SERIES
+    // jackknife SE of a Sharpe level) and multiplied it by the two-sided normal
+    // constant, then compared the product to the paired difference — mixing three
+    // incompatible quantities and overstating the requirement by ~4.7x on the
+    // round-27 Step-2 report (factor 4.95 instead of 1.06).
     // `pairedPromotionTest` returns the paired difference as the whole
-    // `pairedClusterTest` block (`.value`, `.se`, ...), so read the scalar from
-    // `.value`. Accepting a bare number keeps the helper usable with a plain
-    // fixture; requiring a number alone would silently never fire on a real report
-    // (the round-26 fixture originally passed a number and hid exactly that).
+    // `pairedClusterTest` block (`.value`, `.se`, `.df`, `.alpha`), so read those.
+    // Accepting a bare number keeps the helper usable with a plain fixture.
+    const pairedDiffBlock = check && check.sharpeDifference && typeof check.sharpeDifference === 'object'
+        ? check.sharpeDifference : null;
     const sharpeDifference = check && isNum(check.sharpeDifference) ? check.sharpeDifference
-        : (check && check.sharpeDifference && isNum(check.sharpeDifference.value) ? check.sharpeDifference.value : null);
-    if (gate && gate.requireSharpeDiff === 'applied' && check && check.available && seCluster != null && sharpeDifference != null) {
-        const required = 1.959964 * seCluster;
-        return {
-            available: true,
-            kind: 'magnitude',
-            binding: reasons[0] || null,
-            requiredSharpeDifference: required,
-            currentSharpeDifference: sharpeDifference,
-            factor: required > 0 && sharpeDifference !== 0 ? required / sharpeDifference : null,
-            reader: `the paired Sharpe difference is ${sharpeDifference} and the clustered test needs roughly ${required} (1.96 x the delete-one-cluster SE ${seCluster}): the cheapest change is a larger / less noisy edge, or more independent folds.`,
-        };
+        : (pairedDiffBlock && isNum(pairedDiffBlock.value) ? pairedDiffBlock.value : null);
+    const pairedSe = pairedDiffBlock && isNum(pairedDiffBlock.se) ? pairedDiffBlock.se : null;
+    const pairedAlpha = pairedDiffBlock && isNum(pairedDiffBlock.alpha) ? pairedDiffBlock.alpha
+        : (check && isNum(check.alpha) ? check.alpha : 0.05);
+    const pairedDf = pairedDiffBlock && isNum(pairedDiffBlock.df) ? pairedDiffBlock.df
+        : (pairedDiffBlock && isNum(pairedDiffBlock.nClusters) ? pairedDiffBlock.nClusters - 1 : null);
+    if (gate && gate.requireSharpeDiff === 'applied' && check && check.available && pairedSe != null && sharpeDifference != null) {
+        // The test is one-sided (`significant` is `pOneSided <= alpha`), so the
+        // reference is the one-sided critical value. With a known df it is the
+        // exact t quantile; without one, the one-sided normal quantile (never the
+        // two-sided 1.96, which would silently double the tail).
+        let reference;
+        let referenceKind;
+        if (pairedDf != null && pairedDf > 0) {
+            reference = studentTCritical(pairedDf, { alpha: pairedAlpha, twoSided: false });
+            referenceKind = `student-t(${pairedDf}) one-sided at alpha=${pairedAlpha}`;
+        } else {
+            reference = normalInvCdf(1 - pairedAlpha);
+            referenceKind = `normal one-sided at alpha=${pairedAlpha} (df unknown)`;
+        }
+        if (Number.isFinite(reference)) {
+            const required = reference * pairedSe;
+            return {
+                available: true,
+                kind: 'magnitude',
+                binding: reasons[0] || null,
+                scale: 'paired',
+                se: pairedSe,
+                alpha: pairedAlpha,
+                df: pairedDf,
+                reference: referenceKind,
+                requiredSharpeDifference: required,
+                currentSharpeDifference: sharpeDifference,
+                factor: required > 0 && sharpeDifference !== 0 ? required / sharpeDifference : null,
+                reader: `the PAIRED Sharpe difference is ${sharpeDifference} and the one-sided clustered test needs roughly ${required} (${referenceKind} x the paired delete-one-cluster SE ${pairedSe}): the cheapest change is a larger / less noisy edge, or more independent folds. This is a paired requirement, not a single-series MDE.`,
+            };
+        }
     }
     if (reasons.length) return { available: true, kind: 'gate', binding: reasons[0], reader: `the binding hurdle is: ${reasons[0]}.` };
     return { available: true, kind: 'search', binding: null, reader: 'no candidate cleared the gate; the cheapest change is a better candidate family (see the research leads) rather than more of the same data.' };
@@ -312,31 +368,83 @@ function cheapestFlip({ candidate, dependence, pooledMetrics, breakEvenBps, leve
 // its own Sharpe SE. A variant-vs-baseline decision is a PAIRED comparison, so its
 // power depends on the paired difference's SE — a different, usually much smaller,
 // number. For a paired SE `se` measured over `nClusters` fold-window clusters, the
-// SE over `n` clusters is `se * sqrt(nClusters / n)`, so the cluster (or independent
-// seed) count whose 95% half-width equals a target difference is
-// `nClusters * (1.959964 * se / target)^2`. Same leading-order z form as
-// `barsToDetect`; an 80%-powered test would need roughly
-// (1.96 + 0.84)^2 / 1.96^2 ~= 2.1x more, so this is a lower bound.
-function pairedUnitsNeeded({ se, nClusters, targets = {}, z = 1.959964 } = {}) {
+// SE over `n` clusters is `se * sqrt(nClusters / n)`, and the test is the ONE-SIDED
+// cluster-t at `alpha` with `n - 1` degrees of freedom (`pairedClusterTest`'s
+// `significant` is `pOneSided <= alpha`). So the cluster count whose resolvable
+// difference falls to a target is the smallest `n` with
+//
+//     tCritical(n - 1, alpha) * se * sqrt(nClusters / n) <= target
+//
+// (no closed form: the critical value moves with `n`), found by bisection. An
+// 80%-powered test adds the standard normal shift, i.e. replaces the critical
+// value with `tCritical(n - 1, alpha) + z_0.80`.
+//
+// R28 (BUGS.md #56): the previous form used the two-sided normal constant
+// 1.959964 in a one-sided t test, which at C = 36 overstated the requirement by
+// `1.959964 / 1.68957 = 16%` (55 clusters instead of 41 on the round-27 Step-2
+// report). It also sized a cross-scale `mde95Dependent` target with a paired SE;
+// that target is dropped — the paired MDE at the CURRENT cluster count is
+// `tCritical(C - 1, alpha) * se`, reported as `reference.critical * se`.
+function pairedUnitsNeeded({ se, nClusters, targets = {}, alpha = 0.05, seScale = 'paired' } = {}) {
     if (!isNum(se) || !(se > 0)) return na('no finite paired standard error to size a paired comparison from');
     if (!isNum(nClusters) || nClusters < 2) return na('no paired cluster/seed count to size a paired comparison from');
+    const z80 = normalInvCdf(0.80);
+    const resolvable = (n, extra = 0) => {
+        const t = studentTCritical(Math.max(1, n - 1), { alpha, twoSided: false });
+        if (!Number.isFinite(t)) return null;
+        return (t + extra) * se * Math.sqrt(nClusters / n);
+    };
+    // Smallest n >= 2 whose resolvable difference is <= target.
+    const clustersFor = (target, extra = 0) => {
+        if (!isNum(target) || !(target > 0)) return null;
+        const atTwo = resolvable(2, extra);
+        if (atTwo == null) return null;
+        if (atTwo <= target) return 2;
+        let lo = 2;
+        let hi = 4;
+        while (hi < 1e7 && (resolvable(hi, extra) == null || resolvable(hi, extra) > target)) { lo = hi; hi *= 2; }
+        if (resolvable(hi, extra) == null || resolvable(hi, extra) > target) return null;
+        for (let i = 0; i < 100; i++) {
+            const mid = Math.floor((lo + hi) / 2);
+            if (mid <= lo) break;
+            const r = resolvable(mid, extra);
+            if (r != null && r > target) lo = mid; else hi = mid;
+        }
+        return hi;
+    };
     const needed = {};
     for (const [name, target] of Object.entries(targets || {})) {
-        needed[name] = isNum(target) && target > 0 ? Math.ceil(nClusters * (z * se / target) ** 2) : null;
+        needed[name] = clustersFor(target);
     }
+    const observed = targets && isNum(targets.observed) ? targets.observed : null;
+    const df = Math.max(1, Math.floor(nClusters) - 1);
+    const critical = studentTCritical(df, { alpha, twoSided: false });
     return {
         available: true,
         se,
+        // R28: the SCALE of `se`. 'paired' = the delete-one-cluster SE of the
+        // candidate-minus-baseline difference (the right quantity). 'single-series'
+        // = the fallback `dependence.seCluster`, which sizes a Sharpe level and is
+        // flagged so a reader cannot mistake one for the other (BUGS.md #56).
+        seScale,
         nClusters,
-        z,
+        alpha,
+        side: 'one-sided',
+        reference: {
+            kind: 'student-t', df, alpha, side: 'one-sided',
+            critical: Number.isFinite(critical) ? critical : null,
+            pairedMde95: Number.isFinite(critical) ? critical * se : null,
+        },
+        z80,
         needed,
         // R27-5: flat, self-describing aliases. The old `required.observed` read as
         // an OBSERVATION ("we observed 37 clusters") when it is a REQUIREMENT ("you
-        // need 37 clusters to detect what you observed; you have 36"). It aliases
-        // `needed.observed`, and `needed.mde95Dependent` gets the same treatment.
+        // need 37 clusters to detect what you observed; you have 36").
         neededForObserved: needed.observed == null ? null : needed.observed,
-        neededForMde95Dependent: needed.mde95Dependent == null ? null : needed.mde95Dependent,
-        reader: 'the fold-window clusters (or independent seeds) a PAIRED variant-vs-baseline comparison would NEED for the 95% paired SE to fall to each target Sharpe difference: nClusters * (1.959964 * se / target)^2, from the measured paired SE (se) over nClusters clusters. `neededForObserved` is the requirement at the measured difference; `needed.mde95Dependent` is the requirement at the dependence-corrected MDE. A lower bound (an 80%-powered test needs ~2.1x more); barsToDetect sizes a single series, this sizes the paired difference the decision uses.',
+        // R28: the same requirement at 80% power (the plan's "81 clusters"), and
+        // NOT the old cross-scale `neededForMde95Dependent`.
+        neededForObservedPower80: observed == null ? null : clustersFor(observed, z80),
+        reader: 'the fold-window clusters (or independent seeds) a PAIRED variant-vs-baseline comparison would NEED for the one-sided cluster-t at alpha to resolve each target Sharpe difference: the smallest n with tCritical(n - 1, alpha) * se * sqrt(nClusters / n) <= target, from the measured PAIRED SE (se) over nClusters clusters. `neededForObserved` is the requirement at the measured difference; `neededForObservedPower80` is the same at 80% power (`+ z_0.80`). `reference.pairedMde95` is the difference the current cluster count can resolve. `seScale` names the scale of `se` (paired / single-series); `barsToDetect` sizes a single series, this sizes the paired difference the decision uses — do not compare them (BUGS.md #56).',
     };
 }
 
@@ -377,7 +485,14 @@ export function decisionReport({
         // stated as such, never rendered as a healthy model.
         model: effectiveModel || na('no model diagnostics were collected for this run (a pure-signal or bare run)'),
         modelReferent: modelReferent || null,
+        // R28 (BUGS.md #55): `labelPolicy` is the POLICY THE REFERENT MODEL RAN
+        // UNDER (the featured candidate's controller policy when the featured row
+        // is a model-backed candidate), and `runLabelPolicy` is the run-level flag.
+        // They differ when the featured row is a label-policy variant: the old
+        // field named the run flag while sitting beside a `label:conservative`
+        // row, so the report said `optimistic` about a conservative model.
         labelPolicy: meta.labelPolicy == null ? null : meta.labelPolicy,
+        runLabelPolicy: meta.runLabelPolicy == null ? null : meta.runLabelPolicy,
         labelHorizonBars: meta.labelHorizonBars == null ? null : meta.labelHorizonBars,
         seed: meta.seed == null ? null : meta.seed,
         trials: meta.trials == null ? null : meta.trials,
@@ -396,9 +511,10 @@ export function decisionReport({
             resolved: effectiveModel.resolved || null,
             heldBars: effectiveModel.heldBars || null,
         } : null,
-        reader: referentBaseline
+        reader: (referentBaseline
             ? 'the per-variant model diagnostics (training steps, label base rate, skill, resolved-barrier split, entry-to-close holding-period distribution) plus the label policy, seed and searched-roster size, WITH AN EXPLICIT REFERENT: the featured row is a pure signal with no model of its own, so `model` and `labelDistribution` are the BASELINE controller\'s, stated as such via `modelReferent`. A null model block means a pure-signal variant, not a trained one. The entry-to-training age (the FIFO/`processCount=1` drain lag) is NOT yet measured — see TODO #62.'
-            : 'the per-variant model diagnostics (training steps, label base rate, skill, resolved-barrier split, entry-to-close holding-period distribution) plus the label policy, seed and searched-roster size. A null model block means a pure-signal variant, not a trained one. The entry-to-training age (the FIFO/`processCount=1` drain lag) is NOT yet measured — see TODO #62.',
+            : 'the per-variant model diagnostics (training steps, label base rate, skill, resolved-barrier split, entry-to-close holding-period distribution) plus the label policy, seed and searched-roster size. A null model block means a pure-signal variant, not a trained one. The entry-to-training age (the FIFO/`processCount=1` drain lag) is NOT yet measured — see TODO #62.')
+            + ' `labelPolicy` is the policy the REFERENT model ran under (a label-policy variant reports its own); `runLabelPolicy` is the run-level flag (R28, BUGS.md #55).',
     };
     const edge = {
         available: true,
@@ -448,6 +564,12 @@ export function decisionReport({
             promote: candidate ? !!candidate.promote : null,
             candidateId: candidate && candidate.id != null ? candidate.id : null,
             reasons: candidate ? (candidate.reasons || []) : null,
+            // R28 (BUGS.md #55): every evaluated hurdle with its value, threshold
+            // and MARGIN, so a knife-edge miss (the round-27 `sig:momentum`
+            // adjusted DSR is 0.00124 short of the floor) is visible in the report
+            // instead of only inferable from two rounded numbers in a string.
+            hurdles: candidate && Array.isArray(candidate.hurdles) ? candidate.hurdles : null,
+            tightestHurdle: candidate && candidate.tightestHurdle ? candidate.tightestHurdle : null,
         },
         training,
         edge,
@@ -465,6 +587,16 @@ export function formatDecision(decision) {
     const lines = [];
     const v = decision.verdict || {};
     lines.push(`decision: ${v.promote ? 'PROMOTE' : 'keep-off'}${v.candidateId ? ` (${v.candidateId})` : ''}` + (v.reasons && v.reasons.length ? ` | binding: ${v.reasons[0]}` : ''));
+    // R28 (BUGS.md #55): the knife-edge margin, so a 0.00124 miss is visible.
+    const th = v.tightestHurdle;
+    if (th && isNum(th.margin)) {
+        lines.push(`  margin: tightest hurdle ${th.hurdle} value=${fmtPrec(th.value)} threshold=${fmtPrec(th.threshold)} margin=${th.margin >= 0 ? '+' : ''}${fmtPrec(th.margin)}${th.failed === false ? ' (passed)' : ''}`);
+    }
+    const pol = decision.training && decision.training.labelPolicy;
+    if (pol != null) {
+        const runPol = decision.training.runLabelPolicy;
+        lines.push(`  label policy: referent=${pol}${runPol != null && runPol !== pol ? ` run=${runPol}` : ''}`);
+    }
     const c = decision.concentration;
     if (c && c.available) {
         const top = (c.topKs || []).map((t) => `top${t.k}=${t.share == null ? 'n/a' : `${(t.share * 100).toFixed(1)}%`}`).join(' ');
@@ -477,11 +609,13 @@ export function formatDecision(decision) {
     }
     const n = decision.nextRun;
     if (n && n.available) {
-        lines.push(`  nextRun: effBars=${fmt(n.effectiveBars)} MDE95=${fmt(n.mde95)}` +
+        lines.push(`  nextRun: single-series effBars=${fmt(n.effectiveBars)} MDE95=${fmt(n.mde95)}` +
             (n.mde95Dependent == null ? '' : ` (dep ${fmt(n.mde95Dependent)})`) +
             ` breakEven=${n.breakEvenBps == null ? 'n/a' : `${fmt(n.breakEvenBps)}bps`}` +
             (n.pairedUnits && n.pairedUnits.available && n.pairedUnits.neededForObserved != null
-                ? ` | pairedClusters(need,obs)=${n.pairedUnits.neededForObserved}` : '') +
+                ? ` | paired clusters need=${n.pairedUnits.neededForObserved} have=${n.pairedUnits.nClusters}` +
+                  (n.pairedUnits.neededForObservedPower80 != null ? ` need(80%)=${n.pairedUnits.neededForObservedPower80}` : '')
+                : '') +
             (n.cheapestFlip && n.cheapestFlip.available ? ` | cheapest flip: ${n.cheapestFlip.kind}` : ''));
     } else {
         lines.push(`  nextRun: n/a (${n ? n.reason : 'none'})`);
@@ -490,3 +624,4 @@ export function formatDecision(decision) {
 }
 
 const fmt = (x) => (isNum(x) ? x.toFixed(3) : 'n/a');
+const fmtPrec = (x) => (isNum(x) ? (Math.abs(x) >= 1 ? x.toFixed(4) : x.toPrecision(5)) : 'n/a');

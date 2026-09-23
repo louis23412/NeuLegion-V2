@@ -60,7 +60,7 @@ import {
     pearsonCorrelation, meanPairwiseCorrelation, equicorrelationDesignEffect,
     equicorrelationEffectiveSize, foldWindowClusters, concatClusters, clusterJackknife,
     pairedClusterTest, pairedClusterSignTest, signTest, signTestFloor,
-    regularizedIncompleteBeta, studentTPValue, studentTCdf, clusterStability,
+    regularizedIncompleteBeta, studentTPValue, studentTCdf, studentTCritical, clusterStability,
 } from '../../../src/analysis/dependence.js';
 import {
     DEFAULT_SHOCK, shockFactor, shockCandles, makeCandleViewFor, worldFromCandles,
@@ -2976,17 +2976,34 @@ export async function run() {
             nr.clearsBps[5] === false && nr.clearsBps[10] === false);
         check('R26-8: nextRunPlan measures the per-fold wall time and projects a doubled fold count',
             nr.measuredPerFoldMs === 600 && nr.projected.folds === 200 && Math.abs(nr.projected.ms - 120000) < 1e-9);
-        check('R26-8: the magnitude cheapest-flip is exact (required = 1.96 x seCluster, factor = required/difference)',
-            nr.cheapestFlip.available && nr.cheapestFlip.kind === 'magnitude' &&
-            Math.abs(nr.cheapestFlip.requiredSharpeDifference - 1.959964 * 0.1) < 1e-9 &&
-            Math.abs(nr.cheapestFlip.factor - (1.959964 * 0.1) / 0.05) < 1e-9);
+        // R28 (BUGS.md #56): the requirement is the ONE-SIDED cluster-t — the test the
+        // gate actually runs (`pairedClusterTest.significant` is `pOneSided <=
+        // alpha`) — times the PAIRED SE, not the two-sided normal constant times the
+        // single-series `seCluster`. On this fixture both SEs are 0.1, so the whole
+        // change is the reference (1.959964 -> t(39) = 1.684875).
+        const t39 = studentTCritical(39, { alpha: 0.05, twoSided: false });
+        check('R28: the magnitude cheapest-flip is the one-sided cluster-t x the PAIRED SE (required = t(39) x 0.1, factor = required/difference)',
+            nr.cheapestFlip.available && nr.cheapestFlip.kind === 'magnitude' && nr.cheapestFlip.scale === 'paired' &&
+            nr.cheapestFlip.df === 39 &&
+            Math.abs(nr.cheapestFlip.requiredSharpeDifference - t39 * 0.1) < 1e-9 &&
+            Math.abs(nr.cheapestFlip.factor - (t39 * 0.1) / 0.05) < 1e-9,
+            JSON.stringify(nr.cheapestFlip));
         // R27-5: the requirement is named as a requirement. `required.observed` read
         // as an observation ("we observed 37 clusters") when it is what the run
         // NEEDS; it is now `neededForObserved`, with the generic map kept alongside.
-        check('R26-8/R27-5: nextRunPlan sizes a PAIRED comparison from the paired SE and the cluster count (R26-13)',
-            nr.pairedUnits.available && nr.pairedUnits.se === 0.1 && nr.pairedUnits.nClusters === 40 &&
-            nr.pairedUnits.neededForObserved === 615 && nr.pairedUnits.needed.observed === 615 &&
-            nr.pairedUnits.neededForMde95Dependent === 2 && nr.pairedUnits.needed.mde95Dependent === 2,
+        check('R26-8/R27-5/R28: nextRunPlan sizes a PAIRED comparison from the paired SE, the cluster count and the ONE-SIDED cluster-t',
+            nr.pairedUnits.available && nr.pairedUnits.se === 0.1 && nr.pairedUnits.seScale === 'paired' &&
+            nr.pairedUnits.nClusters === 40 && nr.pairedUnits.side === 'one-sided' &&
+            nr.pairedUnits.reference.kind === 'student-t' && nr.pairedUnits.reference.df === 39 &&
+            Math.abs(nr.pairedUnits.reference.critical - t39) < 1e-12 &&
+            Math.abs(nr.pairedUnits.reference.pairedMde95 - t39 * 0.1) < 1e-12 &&
+            // 435 clusters: the smallest n whose t(n-1) x 0.1 x sqrt(40/n) <= 0.05.
+            nr.pairedUnits.neededForObserved === 435 && nr.pairedUnits.needed.observed === 435 &&
+            // R28: the same requirement at 80% power, and NOT the old cross-scale
+            // `mde95Dependent` target (which sized a paired comparison with a
+            // single-series MDE).
+            nr.pairedUnits.neededForObservedPower80 === 991 &&
+            nr.pairedUnits.neededForMde95Dependent === undefined,
             JSON.stringify(nr.pairedUnits));
         // The branches the first fixture left untested: the round-26 stability hint
         // (the R26-7 feature) and the gate/search fallbacks.
@@ -3193,6 +3210,224 @@ export async function run() {
             formatRace(race) === 'race: winner=a rungs=1x9 -> 3x3 evals=12/9 arms', formatRace(race));
     } catch (e) {
         check('R26-15 race checks completed', false, e.stack);
+    }
+
+    // ---- AM. R28: the sizing block's two scales, the reporting gate and the
+    // knife-edge margins ---------------------------------------------------------
+    // BUGS.md #55/#56/#57/#58. The round-27 reports said several true things in a
+    // mixed vocabulary: a PAIRED Sharpe difference was sized with a SINGLE-SERIES
+    // standard error and the TWO-SIDED normal constant while the test runs
+    // ONE-SIDED; the raw fold-majority hurdle was an always-on reason over 288
+    // CORRELATED folds although `DESIGN.md` §6.1 had already made it a statistic;
+    // and a 0.00124 miss was invisible because only a message string carried it.
+    try {
+        // (a) the exact one-sided t quantile the paired test references, and its
+        // inverse. `pairedClusterTest.significant` is `pOneSided <= alpha`.
+        check('R28: studentTCritical is the exact one-sided t quantile on the frozen vector',
+            close(studentTCritical(35, { alpha: 0.05, twoSided: false }), 1.6895724577805789, 1e-12) &&
+            close(studentTCritical(39, { alpha: 0.05, twoSided: false }), 1.684875121708087, 1e-12) &&
+            close(studentTCritical(9, { alpha: 0.05, twoSided: false }), 1.833112932656209, 1e-12),
+            JSON.stringify([studentTCritical(35, { alpha: 0.05, twoSided: false }), studentTCritical(9, { alpha: 0.05, twoSided: false })]));
+        check('R28: studentTCritical inverts studentTPValue (one- and two-sided)',
+            close(studentTPValue(studentTCritical(35, { alpha: 0.05, twoSided: false }), 35, { twoSided: false }), 0.05, 1e-9) &&
+            close(studentTPValue(studentTCritical(35, { alpha: 0.05, twoSided: true }), 35, { twoSided: true }), 0.05, 1e-9) &&
+            close(studentTPValue(studentTCritical(11, { alpha: 0.10, twoSided: false }), 11, { twoSided: false }), 0.10, 1e-9));
+        check('R28: the two-sided critical value is the one-sided value at alpha/2 (a >19% difference at df=35)',
+            close(studentTCritical(35, { alpha: 0.05, twoSided: true }), studentTCritical(35, { alpha: 0.025, twoSided: false }), 1e-12) &&
+            studentTCritical(35, { alpha: 0.05, twoSided: true }) / studentTCritical(35, { alpha: 0.05, twoSided: false }) > 1.19,
+            JSON.stringify([studentTCritical(35, { alpha: 0.05, twoSided: false }), studentTCritical(35, { alpha: 0.05, twoSided: true })]));
+        check('R28: studentTCritical converges to the normal quantile as df grows (and is monotone in df)',
+            Math.abs(studentTCritical(1e9, { alpha: 0.05, twoSided: false }) - normalInvCdf(0.95)) < 1e-5 &&
+            studentTCritical(9, { alpha: 0.05, twoSided: false }) > studentTCritical(35, { alpha: 0.05, twoSided: false }) &&
+            studentTCritical(35, { alpha: 0.05, twoSided: false }) > studentTCritical(1e9, { alpha: 0.05, twoSided: false }),
+            JSON.stringify({ t9: studentTCritical(9, { alpha: 0.05, twoSided: false }), inf: studentTCritical(1e9, { alpha: 0.05, twoSided: false }), z: normalInvCdf(0.95) }));
+        check('R28: studentTCritical is NaN for a non-positive / non-finite df (never a fabricated finite value)',
+            Number.isNaN(studentTCritical(0, { alpha: 0.05 })) && Number.isNaN(studentTCritical(NaN, { alpha: 0.05 })) &&
+            Number.isNaN(studentTCritical(Infinity, { alpha: 0.05 })) && Number.isNaN(studentTCritical(5, { alpha: 1.5 })) &&
+            // ...and the consumers turn that into an explicit `null`, not a NaN in
+            // the report (`pairedUnitsNeeded` / `cheapestFlip`).
+            nextRunPlan({
+                dependence: { seCluster: 0.1, nClusters: 10 },
+                candidate: { id: 'c', promote: false, reasons: ['r'], gate: { requireSharpeDiff: 'applied' },
+                    promotionTest: { available: true, sharpeDifference: { value: 0.1, se: 0.1, nClusters: 10 } } },
+            }).pairedUnits.neededForObserved !== null,
+            JSON.stringify([studentTCritical(0, { alpha: 0.05 }), studentTCritical(Infinity, { alpha: 0.05 }), studentTCritical(5, { alpha: 1.5 })]));
+
+        // (b) the round-27 Step-2 shape, which is the defect's own evidence
+        // (`RUN-ANALYSIS.md` §13.3): pooled seCluster 0.54654, paired se 0.13554,
+        // 36 clusters, paired difference 0.21640. The corrected reading is a
+        // factor of 1.058 (not 4.95) and 41 clusters (not 55).
+        const step2 = nextRunPlan({
+            dependence: { seCluster: 0.54654, designEffect: 5.12, effectiveBars: 4000, nClusters: 36 },
+            candidate: {
+                id: 'label:conservative', promote: false, reasons: ['pooled DSR (dependence-adjusted) 0.25213 < 0.95'],
+                gate: { requireSharpeDiff: 'applied' },
+                promotionTest: { available: true, alpha: 0.05, sharpeDifference: { value: 0.21640, se: 0.13554, nClusters: 36, df: 35 } },
+                pooledMetrics: { breakEvenCostBps: 2.24 },
+            },
+            levels: [0, 2, 5, 10], periodsPerYear: 252,
+        });
+        check('R28 (BUGS.md #56): the magnitude cheapest-flip reads the PAIRED SE and the ONE-SIDED cluster-t (factor 1.058, not 4.95)',
+            step2.cheapestFlip.available && step2.cheapestFlip.kind === 'magnitude' &&
+            step2.cheapestFlip.scale === 'paired' && step2.cheapestFlip.se === 0.13554 && step2.cheapestFlip.df === 35 &&
+            close(step2.cheapestFlip.requiredSharpeDifference, studentTCritical(35, { alpha: 0.05, twoSided: false }) * 0.13554, 1e-12) &&
+            close(step2.cheapestFlip.factor, 1.0582470005895548, 1e-9) &&
+            // The old artefact: the two-sided constant x the SINGLE-SERIES se, read as
+            // a paired requirement. It is ~4.7x the honest factor.
+            (() => { const oldFactor = (1.959964 * 0.54654) / 0.21640; return oldFactor > 4.9 && oldFactor < 5.0 && oldFactor / step2.cheapestFlip.factor > 4.5; })(),
+            JSON.stringify(step2.cheapestFlip));
+        check('R28 (BUGS.md #56): pairedUnits sizes the requirement with the one-sided cluster-t — 41 clusters, not the two-sided 55',
+            step2.pairedUnits.seScale === 'paired' && step2.pairedUnits.side === 'one-sided' &&
+            step2.pairedUnits.se === 0.13554 && step2.pairedUnits.nClusters === 36 &&
+            step2.pairedUnits.reference.kind === 'student-t' && step2.pairedUnits.reference.df === 35 &&
+            step2.pairedUnits.neededForObserved === 41 && step2.pairedUnits.needed.observed === 41 &&
+            step2.pairedUnits.neededForObservedPower80 === 89,
+            JSON.stringify(step2.pairedUnits));
+        check('R28: the paired requirement is the smallest n whose resolvable difference reaches the target (its predecessor does not)',
+            (() => {
+                const resolvable = (n) => studentTCritical(n - 1, { alpha: 0.05, twoSided: false }) * 0.13554 * Math.sqrt(36 / n);
+                return resolvable(41) <= 0.21640 && resolvable(40) > 0.21640 && resolvable(41) < resolvable(30);
+            })());
+        // The two scales really are separable: a 5x larger SINGLE-SERIES SE must not
+        // move the paired factor by 5x (the old code could not tell them apart).
+        const sep = nextRunPlan({
+            dependence: { seCluster: 0.5 },
+            candidate: {
+                id: 'c', promote: false, reasons: ['r'], gate: { requireSharpeDiff: 'applied' },
+                promotionTest: { available: true, sharpeDifference: { value: 0.1, se: 0.1, nClusters: 25 } },
+                pooledMetrics: { breakEvenCostBps: 5 },
+            },
+            levels: [0, 2, 5, 10],
+        });
+        check('R28 (BUGS.md #56): a 5x larger single-series SE does not move the paired factor (the scales are distinct quantities)',
+            sep.cheapestFlip.se === 0.1 && sep.cheapestFlip.scale === 'paired' &&
+            close(sep.cheapestFlip.factor, studentTCritical(24, { alpha: 0.05, twoSided: false }) * 0.1 / 0.1, 1e-12) &&
+            // The old reading would have reported 1.959964 x 0.5 / 0.1 = 9.80, i.e.
+            // 5.7x the honest factor.
+            sep.cheapestFlip.factor < (1.959964 * 0.5 / 0.1) / 5,
+            JSON.stringify(sep.cheapestFlip));
+
+        // (c) the raw fold-majority hurdle: reported, not gated. The fixture's
+        // candidate LOSES the raw fold majority and WINS every error-controlled
+        // fold-window cluster — the exact round-27 pattern (`label:conservative`
+        // 0.20139 raw vs 0.500 cluster; `sig:momentum` 0.49306 raw vs 0.52778).
+        //
+        // 3 streams x 6 windows x 4 bars. Streams 0-1 are baseline-favourable folds
+        // (the candidate loses them); stream 2 is heavily negative for the baseline
+        // and mildly positive for the candidate, so every 12-bar WINDOW favours the
+        // candidate while only a third of the 18 FOLDS do.
+        const p1eMus = { b: [0.004, 0.004, -0.02], c: [-0.001, -0.001, 0.01] };
+        const p1eSeries = (which) => p1eMus[which].map((mu, s) =>
+            Array.from({ length: 24 }, (_, i) => mu + 0.002 * Math.sin(i * 1.7 + s * 2.3)));
+        const p1eBasePanel = p1eSeries('b');
+        const p1eCandPanel = p1eSeries('c');
+        const p1eFolds = (panel) => {
+            const out = [];
+            for (let w = 0; w < 6; w++) {
+                for (let s = 0; s < 3; s++) out.push(panel[s].slice(w * 4, w * 4 + 4));
+            }
+            return out;
+        };
+        const p1eFoldMetrics = (panel) => p1eFolds(panel).map((r) => ({ metrics: backtestMetrics({ returns: r, signals: r.map(() => 1), costBps: 0 }) }));
+        const p1eReport = (panel, { dsr, mean, posFrac }) => ({
+            aggregate: { mean, positiveFraction: posFrac },
+            pooledMetrics: { dsr, dsrAdjusted: dsr, effectiveBars: 4000 },
+            folds: p1eFoldMetrics(panel),
+            audit: { clean: true, violations: [] },
+            streamReturns: panel,
+            dependence: { available: true, foldLength: 4 },
+        });
+        const p1eB = p1eReport(p1eBasePanel, { dsr: 0.95, mean: 1, posFrac: 0.5 });
+        const p1eC = p1eReport(p1eCandPanel, { dsr: 0.99, mean: 2, posFrac: 0.9 });
+        const p1eOpts = { requireCleanAudit: true, requireSharpeDiff: true, requireBreadth: true, alpha: 0.05 };
+        const p1eOn = promoteDecision(p1eB, p1eC, { ...p1eOpts, rawFoldHurdles: true });
+        const p1eOff = promoteDecision(p1eB, p1eC, { ...p1eOpts, rawFoldHurdles: false });
+        const p1eWinH = p1eOff.hurdles.find((h) => h.hurdle === 'foldWinFraction');
+        check('R28 (BUGS.md #57): the raw fold majority is REPORTED in both modes and gates only when rawFoldHurdles is on',
+            close(p1eOn.foldWinFraction, 1 / 3, 1e-12) && p1eOn.foldWinFraction === p1eOff.foldWinFraction &&
+            p1eOn.promote === false && p1eOn.reasons.some((r) => /fold win fraction/.test(r)) &&
+            p1eWinH && p1eWinH.value === p1eOn.foldWinFraction &&
+            // It IS below its line (a real 1/3 vs 1/2) and would have gated; with the
+            // raw hurdles off it is recorded as `failed` but NOT `gated`.
+            p1eWinH.failed === true && p1eWinH.gated === false,
+            JSON.stringify({ on: p1eOn.reasons, win: p1eOn.foldWinFraction, h: p1eWinH }));
+        check('R28 (BUGS.md #57): with the raw hurdle off the error-controlled tests decide — and they ENDORSE a candidate the raw majority would have blocked',
+            p1eOff.promote === true && p1eOff.reasons.length === 0 &&
+            p1eOff.promotionTest.breadth.significant === true && p1eOff.promotionTest.breadth.wins === 6 &&
+            p1eOff.promotionTest.sharpeDifference.significant === true &&
+            p1eOn.promote === false && p1eOn.reasons.length === 1,
+            JSON.stringify({ off: p1eOff.reasons, breadth: p1eOff.promotionTest.breadth, sd: p1eOff.promotionTest.sharpeDifference }));
+        check('R28 (BUGS.md #57): a non-gated statistic keeps its own margin but can never be the tightest hurdle',
+            p1eWinH.gated === false && p1eWinH.margin != null && p1eWinH.margin < 0 &&
+            p1eOff.tightestHurdle != null && p1eOff.tightestHurdle.hurdle !== 'foldWinFraction' &&
+            p1eOn.tightestHurdle.hurdle === 'foldWinFraction',
+            JSON.stringify({ off: p1eOff.tightestHurdle, on: p1eOn.tightestHurdle }));
+        check('R28 (BUGS.md #57): the shipped gate uses the error-controlled form (a positive/negative-fold statistic is never a hurdle)',
+            p1eOff.hurdles.filter((h) => h.gated === false).map((h) => h.hurdle).sort().join(',') === 'foldWinFraction,positiveFoldFraction');
+
+        // (d) the knife-edge margin (`sig:momentum`'s 0.9487614 vs the 0.95 floor).
+        const knifeBase = {
+            aggregate: { mean: 1, positiveFraction: 0.5 },
+            pooledMetrics: { dsr: 0.95 },
+            folds: [{ metrics: { netSharpe: 1 } }],
+            audit: { clean: true, violations: [] },
+        };
+        const knifeCand = {
+            aggregate: { mean: 2, positiveFraction: 0.9 },
+            pooledMetrics: { dsr: 0.95, dsrAdjusted: 0.9487614, effectiveBars: 4000 },
+            folds: [{ metrics: { netSharpe: 2 } }],
+            audit: { clean: true, violations: [] },
+        };
+        const knife = promoteDecision(knifeBase, knifeCand, { rawFoldHurdles: false, minDsrAdjusted: 0.95 });
+        check('R28 (BUGS.md #55): a knife-edge miss is a recorded margin, not just a rounded message string',
+            knife.promote === false && knife.reasons.length === 1 &&
+            knife.tightestHurdle.hurdle === 'minDsrAdjusted' && knife.tightestHurdle.failed === true &&
+            close(knife.tightestHurdle.margin, -0.0012385999999999786, 1e-15) &&
+            close(knife.tightestHurdle.value, 0.9487614, 1e-12) && knife.tightestHurdle.threshold === 0.95,
+            JSON.stringify(knife.tightestHurdle));
+        check('R28 (BUGS.md #55): every evaluated hurdle carries value/threshold/direction/margin/gated',
+            knife.hurdles.length >= 5 &&
+            knife.hurdles.every((h) => typeof h.hurdle === 'string' && 'value' in h && 'threshold' in h &&
+                'margin' in h && typeof h.direction === 'string' && typeof h.failed === 'boolean' && typeof h.gated === 'boolean') &&
+            knife.hurdles.find((h) => h.hurdle === 'minDsrAdjusted').margin < 0 &&
+            knife.hurdles.filter((h) => h.failed).length === 1,
+            JSON.stringify(knife.hurdles.map((h) => [h.hurdle, h.margin, h.failed, h.gated])));
+        check('R28 (BUGS.md #55): the tightest hurdle is the closest one on the side that decided the verdict',
+            (() => {
+                const passed = promoteDecision(knifeBase, knifeCand, { rawFoldHurdles: false, minDsrAdjusted: 0.90 });
+                return passed.promote === true && passed.tightestHurdle != null &&
+                    passed.tightestHurdle.gated === true && passed.tightestHurdle.failed === false &&
+                    Math.abs(passed.tightestHurdle.margin) === Math.min(...passed.hurdles.filter((h) => h.gated).map((h) => Math.abs(h.margin)));
+            })());
+
+        // (e) the composer + formatter surface the margins and the referent policy
+        // (BUGS.md #55: the old `labelPolicy` named the RUN flag while sitting beside
+        // a `label:conservative` row, so the report said `optimistic` about a
+        // conservative model).
+        const decKnife = decisionReport({
+            candidate: { id: 'sig:momentum', promote: false, reasons: knife.reasons, hurdles: knife.hurdles, tightestHurdle: knife.tightestHurdle },
+            runMeta: { labelPolicy: 'conservative', runLabelPolicy: 'optimistic' },
+        });
+        check('R28 (BUGS.md #55): decisionReport carries BOTH the referent policy and the run flag, and the hurdle ledger by reference',
+            decKnife.training.labelPolicy === 'conservative' && decKnife.training.runLabelPolicy === 'optimistic' &&
+            decKnife.verdict.hurdles === knife.hurdles && decKnife.verdict.tightestHurdle === knife.tightestHurdle &&
+            /REFERENT model ran under/.test(decKnife.training.reader),
+            JSON.stringify(decKnife.training.labelPolicy));
+        const knifeLine = formatDecision(decKnife);
+        check('R28 (BUGS.md #55): formatDecision prints the tightest hurdle margin and the referent-vs-run label policy',
+            /margin: tightest hurdle minDsrAdjusted value=0\.94876 threshold=0\.95000 margin=-0\.0012386/.test(knifeLine) &&
+            /label policy: referent=conservative run=optimistic/.test(knifeLine),
+            knifeLine);
+        check('R28: formatDecision omits the run flag when it equals the referent (no redundant echo)',
+            /label policy: referent=optimistic\n/.test(formatDecision(decisionReport({ candidate: { id: 'x', promote: false, reasons: [] }, runMeta: { labelPolicy: 'optimistic', runLabelPolicy: 'optimistic' } }))) &&
+            !/run=optimistic/.test(formatDecision(decisionReport({ candidate: { id: 'x', promote: false, reasons: [] }, runMeta: { labelPolicy: 'optimistic', runLabelPolicy: 'optimistic' } }))));
+        check('R28: the sizing reader states the two scales and the report carries them explicitly',
+            step2.scales && Array.isArray(step2.scales.singleSeries) && Array.isArray(step2.scales.paired) &&
+            step2.scales.paired.includes('pairedUnits.se') && step2.scales.paired.includes('cheapestFlip.requiredSharpeDifference') &&
+            step2.scales.singleSeries.includes('mde95') && /not interchangeable|differ by the design effect/.test(step2.scales.note) &&
+            /Read `scales` before comparing/.test(step2.reader));
+    } catch (e) {
+        check('R28 reporting checks completed', false, e && e.stack ? e.stack : String(e));
     }
 
     const failed = checks.filter((c) => !c.pass);

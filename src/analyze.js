@@ -118,44 +118,130 @@ export const VARIANTS = Object.freeze([
     {
         id: 'pca-hash',
         label: 'pca-hash',
-        note: 'data-aware PCA-aligned LSH hyperplanes (BinaryPC arXiv 2608.04405), above-mean rank — LIVE via _refreshLshHyperplanes, which _retrieveTopRelevantProtos reads (R27-2)',
+        note: 'data-aware PCA-aligned LSH hyperplanes (BinaryPC arXiv 2608.04405), above-mean rank — LIVE via _refreshLshHyperplanes, which _retrieveTopRelevantProtos reads (R27-2); the round-28 P2 probe shows the retrieved prototype SET is INVARIANT to the basis at every tested pool/budget (80/200/600 prototypes, production + narrow width), though the returned list\'s duplicate multiplicity can differ at production width (lsh.test.js §K, RUN-ANALYSIS.md §14)',
         configure: (hm) => { hm._pcaHashConfig = { seed: 1, iters: 30, tol: 1e-6, minRows: 8, rankPolicy: 'above-mean' }; },
         afterFit: (hm) => { if (typeof hm._refreshLshHyperplanes === 'function') hm._refreshLshHyperplanes(); },
         appliesTo: 'model',
+        // R28 (BUGS.md #53): the mechanism IS reachable (the round-26 run measured
+        // 6/288 folds differing), and the round-28 P2 probe shows the basis can
+        // change the scored reader's OUTPUT (the returned list's duplicate
+        // multiplicity, at production width, with equal RNG draw counts — so the
+        // change is attributable to the basis, not to stream desync) while the
+        // retrieved prototype SET stays invariant at every tested budget. An inert
+        // certificate here is therefore a statement about THIS run's prototype pool
+        // / probe budget, never about reachability. The reason must say exactly
+        // that, or a false structural claim ends up in the report
+        // (`RUN-ANALYSIS.md` §13.2).
+        inertReason: ({ totalFolds }) =>
+            `the PCA-aligned hyperplane refresh ran on the scored mind but changed no emitted position on all ${totalFolds} folds at this run's prototype pool and probe budget — the mechanism is REACHABLE and reaches the scored reader (it changes the returned list's duplicate multiplicity at production width with equal RNG draw counts; 6/288 folds differed on the round-26 8x600 run; the retrieved prototype SET is invariant at every tested budget), so this is a measured behavioural inertness at this budget, not structural unreachability (BUGS.md #53; lsh.test.js §K)`,
     },
 ]);
 
 // Opt-in controller-scoped mechanism variants: resolvable by id, but deliberately
 // NOT part of the default roster. `sample-weights` was removed from the default
-// roster in round 27 (R27-3): on the shipped (`optimistic`) labeller every label
-// is one bar long, so no two label spans overlap, every uniqueness weight is
-// exactly 1, and the mechanism is a mathematical no-op — it cannot express an
-// effect there. It stays resolvable (with a `configure` that enables the causal
-// streaming window) so an explicit `--variants=sample-weights` run *measures*
-// that inertness, and so the mechanism can be exercised under the now-reachable
-// `triple` label, where labels DO overlap.
+// roster in round 27 (R27-3). The round-27 rationale — "on the shipped
+// (`optimistic`) labeller every label is one bar long, so no two label spans
+// overlap and every weight is 1" — rested on the PRE-#49 `heldBars == 1`
+// diagnostic, i.e. on the bug (BUGS.md #58). With #49 fixed the recorded holding
+// period is ~8 bars (`heldBars {mean 8.30, max 54}` on `optimistic`), so the
+// labels DO overlap; what made the weights all-ones was the ring's ASSUMED SPAN
+// HORIZON being configured to 1. R28 gives the ring a causal measured span (or an
+// explicit `--sample-weight-horizon`), so the mechanism is now expressible on
+// `optimistic` too. It stays resolvable (with a `configure` that enables the
+// causal streaming window) so an explicit `--variants=sample-weights` run
+// *measures* its effect rather than assuming it away, with the
+// `sample-weights-scale-control` arm isolating the emitted-scale (effective-LR)
+// change from the uniqueness dispersion (BUGS.md #54).
 export const OPT_IN_VARIANTS = Object.freeze([
     {
         id: 'sample-weights',
         label: 'sample-weights',
-        note: 'uniqueness loss weighting (AFML ch. 4) — causal streaming window; inert unless labels overlap (triple + label-horizon > 1)',
-        // R27-3: on the shipped (`optimistic`) labeller every label is one bar long,
-        // so no two spans overlap and every weight is exactly 1 — the mechanism DOES
-        // reach the model path, it just cannot express an effect there. The liveness
-        // certificate uses this variant-specific reason instead of the generic
-        // "never reaches the model path", so the inert report is a true statement.
-        inertReason: 'the shipped (optimistic) labeller emits one-bar labels, so no two label spans overlap and every uniqueness weight is exactly 1 — it cannot express an effect there (R27-3)',
+        note: 'uniqueness loss weighting (AFML ch. 4) — causal streaming window with a MEASURED span and a mean-1 emitted stream (R28); inert only when the assumed spans do not overlap',
+        // R28 (BUGS.md #58): the old reason ("the shipped labeller emits one-bar
+        // labels, so no two spans overlap") rested on the PRE-#49 `heldBars == 1`
+        // diagnostic — i.e. on the bug — and was a false certificate: the round-27
+        // runs measure a realized holding period of ~8 bars. What actually makes
+        // the weights all 1 is the ASSUMED SPAN HORIZON the ring was configured
+        // with, which the mechanism now reports (`horizonBars`/`measureHorizon`).
+        // The reason is therefore a function of the measured run context.
+        inertReason: ({ modelBlock, baselineModelBlock }) => {
+            const sw = modelBlock ? modelBlock.sampleWeights : null;
+            const held = baselineModelBlock ? baselineModelBlock.heldBars : null;
+            const measured = !!(sw && sw.measureHorizon);
+            const cfg = sw && Number.isFinite(sw.horizonBars)
+                ? `the causal ring assumed a ${measured ? 'MEASURED (causal EMA of drained holding periods)' : 'FIXED'} span horizon of ${sw.horizonBars} bar${sw.horizonBars === 1 ? '' : 's'}`
+                : 'the causal ring assumed a span horizon of 1 bar';
+            const w = sw
+                ? ` and every emitted weight was exactly 1 over ${sw.count} label(s)`
+                : ' and every emitted weight was exactly 1';
+            const heldTxt = held && Number.isFinite(held.mean)
+                ? `, although this run's REALIZED holding period is mean ${held.mean.toFixed(2)}${Number.isFinite(held.max) ? ` / max ${held.max}` : ''} bars`
+                : '';
+            // R28 (BUGS.md #58): the causal basis of the all-ones vector differs by
+            // how the horizon was obtained. A FIXED horizon of 1 is a *configuration*
+            // artefact (the ring was told the labels are one bar long while the run's
+            // realized holding period is ~8). A MEASURED horizon that still yields
+            // all-ones weights means no two assumed spans overlapped in practice —
+            // a real property of this run's trade timing, not of the labeller's name.
+            const tail = measured
+                ? ` — so no two assumed spans overlapped in this run, even with a measured span horizon (BUGS.md #58)`
+                : ` — so the all-ones vector is a property of the ASSUMED horizon, not of the labeller (BUGS.md #58)`;
+            return `${cfg}${w}${heldTxt}${tail}`;
+        },
         controllerScoped: true,
         appliesTo: 'controller',
         configure: (ctl) => {
-            const horizon = Number.isFinite(ctl._labelHorizonBars) && ctl._labelHorizonBars > 1
+            // R28 (BUGS.md #58 / P1c): the span horizon is, in priority order:
+            //   1. an explicit `--sample-weight-horizon=<n>`;
+            //   2. the run's label horizon when the labeller has a real vertical
+            //      barrier (`triple` + label-horizon > 1) — there the label span IS
+            //      that horizon;
+            //   3. otherwise null = MEASURED (the causal EMA of the holding periods
+            //      of the trades drained so far).
+            const explicit = Number.isFinite(ctl._sampleWeightHorizon) && ctl._sampleWeightHorizon > 0
+                ? Math.floor(ctl._sampleWeightHorizon)
+                : null;
+            const labelHorizon = Number.isFinite(ctl._labelHorizonBars) && ctl._labelHorizonBars > 1
                 ? Math.floor(ctl._labelHorizonBars)
-                : 1;
+                : null;
             ctl._sampleWeightConfig = {
                 mode: 'causal-window',
                 windowBars: SAMPLE_WEIGHT_WINDOW_BARS,
-                horizonBars: horizon,
+                horizonBars: explicit != null ? explicit : labelHorizon,
                 normalization: 'mean1',
+                emittedNormalization: 'mean1',
+            };
+        },
+        afterFit: null,
+    },
+    {
+        // R28 (P3, arm C): the SCALE-CONTROL arm. It applies the same mechanism to
+        // the same spans but emits a CONSTANT weight equal to the running mean of
+        // the raw window weight, i.e. it reproduces the learning-rate change with
+        // NO dispersion. `sample-weights` (arm A) vs baseline is the mechanism's
+        // honest effect; this arm vs baseline is the pure learning-rate effect; the
+        // difference between the two is the dispersion the uniqueness weighting
+        // actually contributes. Without it, a harmful `sample-weights` verdict
+        // cannot be attributed to dispersion rather than to the LR shift (the
+        // round-27 Step-3 confound, BUGS.md #54).
+        id: 'sample-weights-scale-control',
+        label: 'sample-weights:scale-control',
+        note: 'the SCALE-ONLY control for `sample-weights`: the same assumed spans, emitted as a constant equal to the running raw mean (no dispersion)',
+        controllerScoped: true,
+        appliesTo: 'controller',
+        configure: (ctl) => {
+            const explicit = Number.isFinite(ctl._sampleWeightHorizon) && ctl._sampleWeightHorizon > 0
+                ? Math.floor(ctl._sampleWeightHorizon)
+                : null;
+            const labelHorizon = Number.isFinite(ctl._labelHorizonBars) && ctl._labelHorizonBars > 1
+                ? Math.floor(ctl._labelHorizonBars)
+                : null;
+            ctl._sampleWeightConfig = {
+                mode: 'causal-window',
+                windowBars: SAMPLE_WEIGHT_WINDOW_BARS,
+                horizonBars: explicit != null ? explicit : labelHorizon,
+                normalization: 'mean1',
+                emittedNormalization: 'scale',
             };
         },
         afterFit: null,
@@ -229,7 +315,31 @@ export const notApplicableReason = (variant, model = 'controller') => {
     return null;
 };
 
-// R27-5: the forecast layer's grouping key. The controller family (the baseline,
+// R27-3 / R28 (BUGS.md #53, #58): the single reason an INERT candidate carries.
+//
+// A variant may supply a precise reason — a string, or a function of the MEASURED
+// run context (`{ totalFolds, identicalFolds, model, report, baseline }`). The
+// generic fallback must NOT claim a structural unreachability: a variant only
+// reaches the liveness comparison after `notApplicableReason` returned null, i.e.
+// it IS on the scored path and produced fold signals (it merely matched the
+// baseline on every fold). The old fallback asserted "the mechanism never reaches
+// the model path" for every inert candidate, which was a FALSE certificate for
+// `pca-hash` (a `model`-scoped mechanism that is live at some budgets — 6/288
+// folds on the round-26 run — and inert at others). A reason must be a measured
+// per-run statement, not a structural one (BUGS.md #44's corrected wording).
+export const inertReasonFor = (variant, ctx = {}) => {
+    const custom = variant && variant.inertReason;
+    if (typeof custom === 'function') {
+        try {
+            const r = custom(ctx);
+            if (typeof r === 'string' && r) return r;
+        } catch { /* a variant reason must never break the run */ }
+    }
+    if (typeof custom === 'string' && custom) return custom;
+    return `the mechanism reached the scored ${ctx.model || 'model'} path but changed no emitted position at this run's configuration over all ${ctx.totalFolds} folds (measured; the variant supplies no specific reason)`;
+};
+
+
 // the mechanism flags, the label policies) journals a confidence derived from a
 // probability — `confidenceFromProb(prob)` — so `(c+1)/2` recovers that
 // probability and a proper score is meaningful. A signal variant journals a
@@ -498,7 +608,7 @@ const emptyModelAccumulator = (minTrainingSteps = 1) => ({
     minTrainingSteps: Number.isFinite(minTrainingSteps) ? minTrainingSteps : 1,
     trainingStepsList: [],
     heldBarsCap: null,
-    sampleWeightsRaw: { count: 0, min: Infinity, max: -Infinity, sum: 0, essSum: 0, nSum: 0 },
+    sampleWeightsRaw: { count: 0, min: Infinity, max: -Infinity, sum: 0, rawSum: 0, essSum: 0, nSum: 0, horizonBars: null, measureHorizon: false },
     raw: {
         trainingSteps: 0, quarantinedRows: 0, droppedCandles: 0, openTradeWriteErrors: 0,
         takeProfit: 0, stopLoss: 0, brierSum: 0, brierCount: 0, wins: 0, scored: 0,
@@ -528,10 +638,16 @@ const mergeModelStats = (acc, s) => {
     if (sw && Number.isFinite(sw.count) && sw.count > 0) {
         acc.sampleWeightsRaw.count += sw.count;
         acc.sampleWeightsRaw.sum += sw.sum;
+        if (Number.isFinite(sw.rawSum)) acc.sampleWeightsRaw.rawSum += sw.rawSum;
         acc.sampleWeightsRaw.essSum += sw.essSum;
         acc.sampleWeightsRaw.nSum += sw.nSum;
         if (Number.isFinite(sw.min)) acc.sampleWeightsRaw.min = Math.min(acc.sampleWeightsRaw.min, sw.min);
         if (Number.isFinite(sw.max)) acc.sampleWeightsRaw.max = Math.max(acc.sampleWeightsRaw.max, sw.max);
+        // R28 (BUGS.md #58): the assumed span horizon is a CONFIGURATION, so the
+        // last-seen value is the run's; `measureHorizon` is sticky (any fold that
+        // used the causal estimate marks the run as measured).
+        if (Number.isFinite(sw.horizonBars)) acc.sampleWeightsRaw.horizonBars = sw.horizonBars;
+        if (sw.measureHorizon) acc.sampleWeightsRaw.measureHorizon = true;
     }
     const raw = s.raw || {};
     for (const key of Object.keys(acc.raw)) {
@@ -597,9 +713,16 @@ const summarizeModelStats = (acc) => {
                 min: sw.min,
                 max: sw.max,
                 mean: sw.sum / sw.count,
+                // R28 (BUGS.md #54): the RAW (un-normalised) emitted stream's mean,
+                // so the scale the weights applied to the learning rate is visible.
+                meanUnnormalised: (Number.isFinite(sw.rawSum) && sw.rawSum > 0) ? sw.rawSum / sw.count : sw.sum / sw.count,
                 ess: sw.essSum / sw.count,
                 n: sw.nSum / sw.count,
                 effectiveFraction: sw.nSum > 0 ? sw.essSum / sw.nSum : null,
+                // R28 (BUGS.md #58): the span horizon the mechanism ASSUMED, and
+                // whether it was the causal measured estimate or a fixed config.
+                horizonBars: sw.horizonBars,
+                measureHorizon: !!sw.measureHorizon,
             }
             : null,
         warmErrors: acc.warmErrors,
@@ -642,6 +765,10 @@ export const makeControllerModelFactory = ({
     saveInterval = 1,
     labelPolicy = 'optimistic',
     labelHorizonBars = null,
+    // R28 (BUGS.md #58 / P1c): an explicit span horizon for the causal sample-weight
+    // ring. When null the variant falls back to the label horizon (if it has a real
+    // vertical barrier) and then to the CAUSAL MEASURED estimate.
+    sampleWeightHorizon = null,
     // Round 26 (R26-13): see `makeHiveMindModelFactory`.
     commonRandomNumbers = true,
     priceObj = {
@@ -723,6 +850,11 @@ export const makeControllerModelFactory = ({
                     // default 'optimistic' is the shipped behaviour (bit-identical).
                     ctl._labelPolicy = labelPolicy;
                     ctl._labelHorizonBars = Number.isFinite(labelHorizonBars) ? labelHorizonBars : null;
+                    // R28 (BUGS.md #58): the explicit sample-weight span horizon
+                    // (null = the variant decides: label horizon, else measured).
+                    ctl._sampleWeightHorizon = Number.isFinite(sampleWeightHorizon) && sampleWeightHorizon > 0
+                        ? Math.floor(sampleWeightHorizon)
+                        : null;
                     if (variant.configure) variant.configure(ctl);
                     // Pre-create the mind so mind-level flags are reachable.
                     mind = new HiveMind(dir, ensembleSize, ctl._inputSize, `AN-${variant.id}`, true);
@@ -869,6 +1001,10 @@ export function evaluateAB({
     // checkpoint after every variant. Both are optional and have no arithmetic
     // effect on the returned reports.
     onEvent = null, onVariant = null,
+    // R28 (BUGS.md #53/#58): the per-variant model accumulator the caller fills
+    // through `makeSignalForVariant`'s `onStats`/`onModelStats`, handed to
+    // `finalizeAB` so an inert certificate's reason can quote measured numbers.
+    modelStats = null,
 } = {}) {
     if (typeof signalForVariant !== 'function') {
         throw new Error('evaluateAB: signalForVariant(variant) => signalForFold is required');
@@ -956,6 +1092,7 @@ export function evaluateAB({
         streamCount: streams.length, streamLabels: streams.map((s) => s.label || null),
         probe, auditProbesPerFold, requireReachable, auditReuseBase, costBps,
         gateOptions,
+        modelStats,
     });
 }
 
@@ -979,6 +1116,11 @@ const finalizeAB = ({
     variants, evaluated, baselineIndex, decisionsByIndex, alpha, audit, model,
     streamCount, streamLabels, probe, auditProbesPerFold, requireReachable, auditReuseBase, costBps,
     gateOptions = null,
+    // R28 (BUGS.md #53/#58): the per-variant model accumulator, so the liveness
+    // certificate's reason can quote MEASURED diagnostics (the emitted sample
+    // weights, the assumed span horizon, the realized holding period). Optional:
+    // `null` degrades the reason to the generic measured wording.
+    modelStats = null,
 }) => {
     const baselineEntry = evaluated[baselineIndex];
     const baseline = baselineEntry.report;
@@ -1034,12 +1176,23 @@ const finalizeAB = ({
                 cmp = compare(candSignals, baseSignals);
                 if (cmp.totalFolds > 0 && cmp.identicalFolds === cmp.totalFolds) {
                     status = 'inert';
-                    // R27-3: a variant may state WHY it is inert more precisely than
-                    // the generic reason (e.g. `sample-weights`: labels do not overlap,
-                    // so the mechanism reaches the model path and multiplies by 1).
-                    reason = variant.inertReason
-                        ? `inert: identical to the baseline on all ${cmp.totalFolds} folds — ${variant.inertReason}`
-                        : `inert: identical to the baseline on all ${cmp.totalFolds} folds (the mechanism never reaches the model path)`;
+                    // R27-3 / R28 (BUGS.md #53, #58): a variant may state WHY it is
+                    // inert from the MEASURED run context (the sample weights it
+                    // emitted, the reported span horizon, the baseline's realized
+                    // holding period). The generic fallback is deliberately NOT a
+                    // structural claim — a variant that got here IS on the scored
+                    // path (see `inertReasonFor`).
+                    const detail = inertReasonFor(variant, {
+                        variantId: variant.id,
+                        model,
+                        totalFolds: cmp.totalFolds,
+                        identicalFolds: cmp.identicalFolds,
+                        report: entry.report,
+                        baseline,
+                        modelBlock: modelStats ? summarizeModelStats(modelStats.get(variant.id)) : null,
+                        baselineModelBlock: modelStats ? summarizeModelStats(modelStats.get(variants[baselineIndex].id)) : null,
+                    });
+                    reason = `inert: identical to the baseline on all ${cmp.totalFolds} folds — ${detail}`;
                 } else {
                     const dup = liveIndices.find((xi) => {
                         const xs = foldSignals(evaluated[xi].report);
@@ -1226,6 +1379,8 @@ export async function evaluateABAsync({
     probe = 1e3, requireReachable = false, auditProbesPerFold = 0, model = 'bare',
     auditReuseBase = false, gateOptions = null,
     onEvent = null, onVariant = null, onModelStats = null, concurrency = 1,
+    // R28: the per-variant model accumulator (see `evaluateAB`).
+    modelStats = null,
 } = {}) {
     if (typeof signalForVariant !== 'function') {
         throw new Error('evaluateABAsync: signalForVariant(variant) => signalForFold is required');
@@ -1317,6 +1472,7 @@ export async function evaluateABAsync({
         streamCount: streams.length, streamLabels: streams.map((s) => s.label || null),
         probe, auditProbesPerFold, requireReachable, auditReuseBase, costBps,
         gateOptions,
+        modelStats,
     });
 }
 
@@ -1423,7 +1579,7 @@ export function formatAnalysis(result, extra = {}) {
     // does not control the FWER: arXiv 1612.04535).
     const fc = extra.familyCorrelation;
     if (fc && fc.available) {
-        const mp = fc.maxPair ? ` | maxPair=${familyPairLabel(fc.maxPair, result)} r=${f4(fc.maxPair.rho)}` : '';
+        const mp = fc.maxPair ? ` | maxPair=${familyPairLabel(fc.maxPair, result, fc.labels)} r=${f4(fc.maxPair.rho)}` : '';
         lines.push(`family: excessCorr=${f4(fc.meanPairwiseExcessCorr)} effectiveTrials=${f4(fc.effectiveTrials)} of ${fc.K}${mp}` +
             ' (diagnostic only; DSR keeps trials=K)');
     }
@@ -1492,10 +1648,15 @@ export function formatAnalysis(result, extra = {}) {
     return lines.join('\n');
 }
 
-// "candidate-a~candidate-b" for a family-correlation max pair, using the driver's
-// variant ids when they are available.
-function familyPairLabel(pair, result) {
+// "candidate-a~candidate-b" for a family-correlation max pair. R28 (BUGS.md #55):
+// prefer the labels the correlation object carries (`fc.labels`, the ACTIVE list
+// the matrix was built from); the driver's `result.candidates` is the FULL list,
+// so resolving against it names the wrong arms when an inactive candidate
+// precedes an active one (the round-27 summary printed `sample-weights~multiprobe`
+// for a `surprise~homeostasis` pair).
+function familyPairLabel(pair, result, labels = null) {
     const label = (i) => {
+        if (Array.isArray(labels) && labels[i] != null) return labels[i];
         const c = result && result.candidates ? result.candidates[i] : null;
         return c && c.variant ? c.variant.id : `#${i}`;
     };
@@ -1668,7 +1829,12 @@ const candidateRow = (entry, decision, search, modelStats = null) => {
         // `reasons` and a null promotion test; `active` is its complement.
         inactive: !!(decision && decision.inactive),
         reasons: decision ? decision.reasons : fallbackReason,
+        // R28 (BUGS.md #55): the structured hurdles with their margins, and the one
+        // closest to its line. Both ride through from `promoteDecision`.
+        hurdles: decision && Array.isArray(decision.hurdles) ? decision.hurdles : null,
+        tightestHurdle: decision && decision.tightestHurdle ? decision.tightestHurdle : null,
         foldWinFraction: decision ? decision.foldWinFraction : null,
+        positiveFoldFraction: decision && Number.isFinite(decision.positiveFoldFraction) ? decision.positiveFoldFraction : null,
         pooledMetrics: report ? report.pooledMetrics : null,
         aggregate: report ? report.aggregate : null,
         audit: auditBlock(report ? report.audit : null),
@@ -1787,6 +1953,11 @@ export async function runAnalysis({
     labelPolicy = 'optimistic',
     labelHorizonBars = null,
     labelPolicies = false,        // append the opt-in label variants to the roster
+    // R28 (BUGS.md #58 / P1c): a fixed span horizon (bars) for the opt-in
+    // `sample-weights` causal ring. `null` (default) lets the variant choose: the
+    // label horizon when it is a real vertical barrier, else the causal MEASURED
+    // estimate. Either way the ring never reads the label it is weighting.
+    sampleWeightHorizon = null,
     // Round 26 (R26-4): the fold loop's in-flight width. `1` (default) keeps the
     // serial driver byte-for-byte; `> 1` dispatches whole fold-passes to worker
     // threads through the settle-once dispatcher. The arithmetic and the emit order
@@ -1853,7 +2024,7 @@ export async function runAnalysis({
     const gateMode = gate === 'classic' ? 'classic' : 'dependence';
     const gateAlphaResolved = Number.isFinite(gateAlpha) ? gateAlpha : alpha;
     const gateOptions = gateMode === 'dependence'
-        ? { requireSharpeDiff: true, requireClusterStability: true, minDsrAdjusted: 0.95, alpha: gateAlphaResolved, periodsPerYear: 252 }
+        ? { requireSharpeDiff: true, requireClusterStability: true, minDsrAdjusted: 0.95, alpha: gateAlphaResolved, periodsPerYear: 252, rawFoldHurdles: false }
         : { alpha: gateAlphaResolved, periodsPerYear: 252 };
     const ladderLevels = Array.isArray(costLadderLevels)
         ? costLadderLevels.filter((x) => Number.isFinite(x) && x >= 0)
@@ -2002,6 +2173,7 @@ export async function runAnalysis({
             labelPolicy,
             labelHorizonBars: Number.isFinite(labelHorizonBars) ? labelHorizonBars : null,
             labelPolicies: !!labelPolicies,
+            sampleWeightHorizon: Number.isFinite(sampleWeightHorizon) ? sampleWeightHorizon : null,
             concurrency: width,
             intervalBars: intervalFactor,
             streamSelect: streamSelectKeep != null ? streamSelectKeep : streamSelectEnabled,
@@ -2217,7 +2389,7 @@ export async function runAnalysis({
         modelStats.set(variant.id, acc);
     };
     const factory = useController
-        ? makeControllerModelFactory({ HiveMind, HiveMindController, stateDir: modelRoot, seed, modelRetention, saveInterval, labelPolicy, labelHorizonBars, commonRandomNumbers: crn })
+        ? makeControllerModelFactory({ HiveMind, HiveMindController, stateDir: modelRoot, seed, modelRetention, saveInterval, labelPolicy, labelHorizonBars, sampleWeightHorizon, commonRandomNumbers: crn })
         : makeHiveMindModelFactory({ HiveMind, stateDir: modelRoot, seed, modelRetention, commonRandomNumbers: crn });
     const signalForVariant = makeSignalForVariant(factory, {
         // Round 26 (R26-3): ONE confidence->position policy for both families.
@@ -2263,13 +2435,13 @@ export async function runAnalysis({
                 worlds, variants, signalForVariant, foldExecutorFor, onModelStats: accumulateStats, concurrency: width,
                 costBps, audit, alpha,
                 probe, auditProbesPerFold, model: modelPath, requireReachable, auditReuseBase: reuseBase,
-                gateOptions,
+                gateOptions, modelStats,
                 onEvent, onVariant,
             })
             : evaluateAB({
                 worlds, variants, signalForVariant, costBps, audit, alpha,
                 probe, auditProbesPerFold, model: modelPath, requireReachable, auditReuseBase: reuseBase,
-                gateOptions,
+                gateOptions, modelStats,
                 onEvent, onVariant,
             });
     } catch (err) {
@@ -2327,6 +2499,12 @@ export async function runAnalysis({
         baseline: result.baseline,
         candidates: activeCandidates.map((c) => c.report),
         periodsPerYear: 252,
+        // R28 (BUGS.md #55): the LABELS of exactly the candidates above, in the
+        // same order, so `familyCorrelation.maxPair`'s indices resolve against the
+        // list the matrix was built from. Resolving them against the FULL candidate
+        // list (as `formatAnalysis` used to) names the wrong arms whenever an
+        // inactive candidate sits before an active one.
+        labels: activeCandidates.map((c) => c.variant.id),
     });
     // Round 26 (R26-3): the journaled raw confidence + the scored policy must
     // reproduce the emitted positions byte-for-byte. That is the precondition for
@@ -2410,13 +2588,21 @@ export async function runAnalysis({
         const modelReferent = (!featuredModel && baselineModelBlock)
             ? { kind: 'baseline', reason: 'the featured row is a pure signal; the referent is the baseline controller' }
             : null;
+        // R28 (BUGS.md #55): `labelPolicy` names the policy the REFERENT ran under
+        // (a featured label variant reports its own), and `runLabelPolicy` names
+        // the run-level flag. On a `label-conservative` run the two differ, and the
+        // old single field said `optimistic` beside a conservative model.
+        const featuredPolicy = (featuredRow && featuredRow.variant && featuredRow.variant.labelPolicy)
+            ? featuredRow.variant.labelPolicy
+            : labelPolicy;
         decisionBlock = decisionReport({
             model: featuredModel || (modelReferent ? baselineModelBlock : null),
             modelReferent,
             runMeta: {
                 gate: gateMode,
                 gateOptions,
-                labelPolicy,
+                labelPolicy: featuredPolicy,
+                runLabelPolicy: labelPolicy,
                 labelHorizonBars,
                 seed,
                 trials: variants.length,
@@ -2472,6 +2658,11 @@ export async function runAnalysis({
         // which one a run used is part of the result.
         labelPolicy,
         labelHorizonBars: Number.isFinite(labelHorizonBars) ? labelHorizonBars : null,
+        // R28 (BUGS.md #58): the fixed sample-weight span horizon this run used, or
+        // null when the variant falls back to the label horizon / the measured
+        // causal estimate. Part of the result: it decides whether the weighting
+        // can act at all.
+        sampleWeightHorizon: Number.isFinite(sampleWeightHorizon) ? sampleWeightHorizon : null,
         // Round 26 (R26-4): the fold loop's in-flight width. Off the arithmetic path
         // — it changes only how many fold-passes ran at once.
         concurrency: width,
@@ -2692,6 +2883,11 @@ export const ANALYZE_USAGE = [
     '                           optimistic = the shipped labeler, bit-identical)',
     '  --label-horizon=<n>      time barrier in bars for --label-policy=triple',
     '                           (required for the triple barrier to expire a trade)',
+    '  --sample-weight-horizon=<n>',
+    '                           fixed span horizon in bars for the opt-in',
+    '                           `sample-weights` causal ring (default: the label',
+    '                           horizon when it has a real time barrier, else the',
+    '                           causal MEASURED estimate — R28/BUGS.md #58)',
     '  --label-policies         add the opt-in label variants (conservative, triple)',
     '                           to the candidate roster (a training-set change)',
     '  --concurrency=<n>        fold-passes in flight via worker threads (default 1 =',
@@ -2782,6 +2978,7 @@ if (isMain) {
             saveInterval,
             labelPolicy: argOf('label-policy') || 'optimistic',
             labelHorizonBars: num('label-horizon', null),
+            sampleWeightHorizon: num('sample-weight-horizon', null),
             labelPolicies: has('label-policies'),
             concurrency: num('concurrency', 1),
             progressMs: num('progress-ms', 5000),

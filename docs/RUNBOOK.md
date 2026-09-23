@@ -4,15 +4,16 @@ Everything needed to install, configure, run, and verify the frozen core design
 (see [`DESIGN.md`](DESIGN.md)). This is a Node.js project and is **not** runnable
 in the Perchance preview.
 
-> **Round 27 is implemented (R27-1…R27-6, R27-8, R27-9); its runs are the operator's.** The
+> **Round 27 is implemented and run (R27-1…R27-9; R27-7a–d complete — `RUN-ANALYSIS.md` §13).** The
 > changes are in the tree: per-candidate liveness
 > certificates (with duplicate detection and a reduced-`K` DSR restatement),
 > fail-closed input handling, the #49 holding-period / `triple`-vertical-barrier fix,
-> and the commands that execute the never-completed label-policy and (re-scoped)
+> and the runs that execute the never-completed label-policy and (re-scoped)
 > sample-weighting experiments — all in
 > [`PLAN-round27.md`](PLAN-round27.md) §6. It changed two A/B defaults
 > (`requireReachable` → true, `--audit-probes` → 1); the sections below describe the
-> **shipped** behaviour, and the round-27 test totals are in §7.
+> **shipped** behaviour, the round-27 verdicts are summarised in §6.1, and the test
+> totals are in §7.
 
 ## 1. Requirements
 
@@ -165,7 +166,7 @@ imports `runAnalysis` directly, so the argument-parsing block is otherwise
 untested). `bench` is the only
 browser entry
 without a mirror (it prints timings). So `npm test` reports **127 `test()`
-blocks across 43 files** (44 with `helpers.js`) rather than 2347 checks; a green
+blocks across 43 files** (44 with `helpers.js`) rather than 2402 checks; a green
 run — plus `failed === 0` and the ledger count from every wrap-style mirror — is
 the gate. Measured **~5.9 min** at round 22 (`BUGS.md` #21): the `dimensions`
 sweep of both `forceMin` branches dominates (~353 s), then `lsh` (~177 s) and
@@ -179,9 +180,9 @@ wrap-style mirrors assert against. **Expected totals (all must be 0 failures):**
 
 | entry | checks | | entry | checks |
 | --- | ---: | --- | --- | ---: |
-| `sanity` | 60 | | `lsh` | 69 |
+| `sanity` | 60 | | `lsh` | 75 |
 | `core` | 46 | | `surprise` | 32 |
-| `indicators` | 75 | | `sample_weights` | 45 |
+| `indicators` | 75 | | `sample_weights` | 57 |
 | `features` | 11 | | `homeostasis` | 30 |
 | `consolidation` | 48 | | `evolve` | 36 |
 | `consolidation_worker` | 18 | | `multiprobe` | 77 |
@@ -190,12 +191,12 @@ wrap-style mirrors assert against. **Expected totals (all must be 0 failures):**
 | `modules` | 51 | | `querymod` | 51 |
 | `legion` | 57 | | `walkforward` | 63 |
 | `candles` | 95 | | `dimensions` | 185 |
-| `locks` | 41 | | `analysis` | 566 |
+| `locks` | 41 | | `analysis` | 586 |
 | `price_precision` | 29 | | `multisymbol` | 28 |
 | `guards` | 65 | | `observer` | 76 |
-| `analyze` | 245 | | `controller_invariants` | 16 |
+| `analyze` | 255 | | `controller_invariants` | 23 |
 
-**Total: 2347 checks.** Every one passed in the development sandbox's browser
+**Total: 2402 checks.** Every one passed in the development sandbox's browser
 harness (esbuild-wasm + sql.js shims) at the freeze; `npm test` is the local
 confirmation on the real native drivers. (Round 23 changed three counts:
 `walkforward` 31 → 48 from the `viewFor`/vacuity section K, `analysis` 354 → 390
@@ -266,6 +267,74 @@ blocks across 42 files**, `BUGS.md` #42), so the promotion still stands. The
 run-integrity code is
 **delivered and pinned in `analyze.test.js` §O/§P/§Q/§R**. `npm run preflight` and
 `npm run dryrun` remain the mandatory pre-run gates.
+
+**Round 27 then made a candidate prove it ran and ran the two stalled experiments**
+(`PLAN-round27.md`; forensics in `RUN-ANALYSIS.md` §13). Four runs, all complete, all
+`costBps: 0`, `seed: 1`, `concurrency: 4` except the liveness run:
+
+| run | id | verdict |
+| --- | --- | --- |
+| liveness validation (2 streams × 200 bars) | `20260923T105845-seed1` | taxonomy works; `sample-weights` inert with measured evidence; `surprise`/`homeostasis` live; **`pca-hash` inert on this run with the generic reason despite being live at 8×600** (`BUGS.md` #53) |
+| label policy (8 × 600) | `20260923T111159-seed1` | `label:conservative` paired ΔSharpe **+0.2164** (p 0.0597, stability 1.0/36, break-even +2.24 bps) — the best arm so far; `label:triple` reachable (`resolvedTimeBarrier 16244`); neither clears the DSR floor |
+| weighting under `triple` (8 × 600) | `20260923T133315-seed1` | `sample-weights` **live** (`ess/n 0.8248`) and **hurts** (−0.2276 paired, 0/36 windows) — confounded by a ≈2.6× effective-LR change (`BUGS.md` #54) |
+| near-miss seeds (8 × 600, `--seeds=1,2,3`) | `20260923T150720-seed1` | `sig-accel` **promotes at 0 bps only** (adjusted DSR 0.9742, paired p 0.0493, stability 1.0, audit 288/288; fails at 2 bps); `sig-momentum` fails two knife-edge floors; the signals are exactly seed-free so `--seeds` is vacuous for them |
+
+The follow-ups are `TODO.md` items 74–83 and [`PLAN-round28.md`](PLAN-round28.md).
+No code changed between the round-27 implementation and this plan, so the gate
+counts above still stood at that point (**2347** browser checks, **127/127** node
+blocks).
+
+**Round 28's coherence re-read of these four reports** (`RUN-ANALYSIS.md` §14;
+`PLAN-round28.md`) added three reading defects (`BUGS.md` #56/#57/#58) and corrected
+the round's sizing: the DSR floor is a **magnitude** gate (crossed at Sharpe ≈1.02–1.08,
+so `label:conservative`'s 0.1017 is ≈10× short and `barsToDetectObserved` 93 576 is not
+a budget), while the paired test needs **41** clusters for significance (89 for 80 % power —
+the plan's `81` is the normal approximation; `RUN-ANALYSIS.md` §14.7a), reachable with `--test=10` on the existing 600 bars (54 clusters) — the exact
+commands are in `PLAN-round28.md` §3. Also: the `sample-weights` inertness on
+`optimistic` is a *span-configuration* artefact (the #49-fixed `heldBars` is mean 8.3),
+so the mechanism is re-tested with a measured causal span and an emitted mean-1 stream;
+and `sig-accel`'s lever is cost/turnover, tested offline first.
+
+**Round 28 then implemented the plan** (`PLAN-round28.md` §1–§2, `BUGS.md`
+#53–#58): every reading defect those four runs exposed is now a *measured*
+certificate —
+
+* `pca-hash` and `sample-weights` carry **measured** inert reasons (the aligned
+  basis is REACHABLE and budget-dependent; the all-ones weight vector is a
+  property of the ASSUMED span horizon while the run's realized holding period is
+  ~8.3 bars), and the generic fallback may no longer assert a structural
+  unreachability (`analyze.test.js` §M2/R28);
+* the emitted sample-weight stream is **mean-1** by a causal EMA of the raw
+  weights, the span horizon is a causal measurement of drained holding periods (or
+  an explicit `--sample-weight-horizon`), and a **scale-control** arm
+  (`sample-weights-scale-control`) isolates the learning-rate change from the
+  uniqueness dispersion (`sample_weights.test.js` §E, `controller_invariants.test.js`
+  §D);
+* the sizing block no longer mixes a PAIRED difference with a SINGLE-SERIES
+  standard error: `cheapestFlip`'s magnitude branch and `pairedUnitsNeeded` read the
+  paired SE and the **one-sided** cluster-t the test runs (41 clusters on the
+  round-27 Step-2 shape, not 55; factor 1.058, not 4.95), and `nextRunPlan.scales`
+  names which fields are which;
+* the gate matches `DESIGN.md` §6.1: the raw fold-win / positive-fold fractions are
+  **reported statistics** (`gated:false`), not always-on reasons, and every evaluated
+  hurdle is recorded with its value, threshold and **margin** so a knife-edge miss
+  (the 0.00124 adjusted-DSR shortfall) is legible;
+* `training.labelPolicy` now names the **referent** model's policy with the run flag
+  beside it (`runLabelPolicy`), and the summary's `maxPair` resolves against the
+  ACTIVE arms the correlation matrix was built from.
+
+The shipped gate's `rawFoldHurdles:false` change is **verdict-neutral on all four
+round-27 reports** (every candidate that failed a raw fraction also failed the DSR
+floor and/or the paired test) and no golden fingerprint moved (`golden` 23/23), so
+the gate counts are now **2402** browser checks / **127/127** node blocks:
+`sample_weights` 45 → 57, `analysis` 566 → 586, `analyze` 245 → 255,
+`controller_invariants` 16 → 23 (the four entries whose counts the round-28
+additions moved), then `lsh` 69 → 75 for the P2 retrieval-liveness section K
+(six checks: the retrieved prototype SET is invariant to the PCA-aligned basis at
+production width with EQUAL RNG draw counts, the returned list's duplicate
+multiplicity *is* attributable to the basis at an 80-prototype pool, the
+600-prototype pool is unchanged, and the narrow 6-bit index desyncs — so the
+certificate uses the set + equal-draw-count test). No other entry changed.
 
 ### What to attach from an `analyze` run
 
@@ -408,5 +477,19 @@ disagreement on a real run is a real-driver bug, not noise.
   offline.
 - **A changed golden fingerprint** — expected only for an intentional hot-math
   change; re-freeze deliberately (see [`OPTIMIZATION.md`](OPTIMIZATION.md)).
+- **A candidate reads `liveness: inert` — is the mechanism dead?** Not necessarily.
+  The certificate is computed **per run** (it compares the candidate's per-fold
+  *positions* with the baseline's on *that* run's data and scale), so a variant can be
+  `live` at 8 × 600 and `inert` at 2 × 200 — `pca-hash` is the worked example
+  (`RUN-ANALYSIS.md` §13.2, `BUGS.md` #53). Read `identicalFolds/totalFolds` and
+  `maxAbsDiff`, and treat the reason text as a claim about the run, not the code, until
+  the variant carries its own `inertReason` (as `sample-weights` does). If you need a
+  structural answer, use `--list-variants`'s `appliesTo` column, not the liveness row.
+- **`sample-weights` is `live` but its `model.sampleWeights.mean` is ≫ 1.** That is
+  expected pre-#54 and it matters: the causal-window estimator is mean-1 over the
+  *window*, but only the newest span is trained, so the emitted (trained) weights do
+  not have mean 1 — Step 3 measured `mean 2.6112`, i.e. a ≈2.6× effective learning-rate
+  change versus the baseline (`BUGS.md` #54). Do not read a weighted-vs-unweighted
+  Sharpe difference as a pure weighting effect until the emission is renormalised.
 - **`forceMin`** — `true` (default) is the CPU-constrained branch; `false` is the
   full-size branch, both tested by `dimensions.test.js`.

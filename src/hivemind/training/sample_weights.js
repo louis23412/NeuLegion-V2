@@ -145,6 +145,66 @@ export function spanWeightsFromEntries(entries, config = null) {
     return sampleWeights(spans, cfg);
 }
 
+// Causal emitted-stream normalisation (round 28, BUGS.md #54/#58).
+//
+// `causalWindowWeight` normalises a new label's uniqueness against the WINDOW
+// (including the new label), so the value it returns is mean-1 OVER THE WINDOW —
+// but NOT over the emitted stream. The newest label overlaps fewer of the ring's
+// labels than the oldest does, so `normalized[n - 1]` is systematically above 1
+// and the emitted weights' mean drifts with the horizon/window ratio (measured:
+// mean 2.6112 on the round-27 `triple` run, i.e. a 2.6x effective learning-rate
+// change confounded with the weighting's dispersion). Since the trainer is plain
+// SGD (`gradients.js` subtracts `sum(grad) * lr / steps` with no momentum/Adam),
+// a per-sample weight scales the step directly, so that drift is an unintended
+// learning-rate change, not a credit reassignment.
+//
+// This primitive removes the drift CAUSALLY: each emitted weight is divided by
+// a causal exponentially-weighted running mean of the RAW weights emitted so far
+// (never the window's mean, never a future value), so the emitted stream's mean
+// converges to 1 and the mechanism changes only the RELATIVE credit per label. It
+// is exact (every weight exactly 1) for an all-ones raw stream, so the horizon-1 /
+// single-bar path stays a bit-exact no-op.
+//
+// modes (round 28, P3's experiment arms):
+//   'mean1' (default) — `raw / EMA(raw)`: dispersion at matched LR.
+//   'scale'           — `EMA(raw)`: the SCALE alone, no dispersion (the control
+//                       arm that separates the LR change from the uniqueness
+//                       redistribution).
+//   'none'            — `raw`: the un-normalised stream (reproduces the old
+//                       behaviour; mean != 1).
+//
+// The divisor is an exponentially-weighted running mean of the raw weights
+// emitted so far (`alpha = 0.1`), not a plain cumulative mean: a plain mean lags
+// a rising raw level, so the emitted stream's mean would sit ~10% high over the
+// bulk of a run (measured on the round-28 span fixtures), while the EMA tracks
+// the level and gives an emitted mean of exactly 1 on any constant-raw segment.
+// The first raw value is passed through unchanged (denominator = raw itself), so
+// an all-ones raw stream yields an all-ones emitted stream exactly.
+//
+// Pure: no I/O, no RNG, no lookahead — `normalize` reads only raw values it has
+// already been given.
+export function emittedWeightNormalizer({ mode = 'mean1', alpha = 0.1, floor = 1e-12 } = {}) {
+    let n = 0;
+    let level = null;
+    let sumEmitted = 0;
+    const a = Number.isFinite(alpha) && alpha > 0 && alpha <= 1 ? alpha : 0.1;
+    return {
+        normalize(raw) {
+            const r = Number.isFinite(raw) && raw > 0 ? raw : 1;
+            const denom = (level == null || !(level > floor)) ? r : level;
+            const w = mode === 'none' ? r : (mode === 'scale' ? denom : r / denom);
+            n += 1;
+            level = level == null ? r : level * (1 - a) + r * a;
+            sumEmitted += w;
+            return w;
+        },
+        get count() { return n; },
+        // The causal raw-level estimate the divisor uses (diagnostic).
+        get meanRaw() { return n ? level : null; },
+        get meanEmitted() { return n ? sumEmitted / n : null; },
+    };
+}
+
 // Causal streaming-window weight (round 27, R27-3). The controller keeps a ring
 // of the last `windowBars` OBSERVED label spans; a new label's weight is its
 // average uniqueness measured against that ring PLUS itself, mean-1 normalised

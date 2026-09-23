@@ -780,6 +780,98 @@ export async function run(options = {}) {
         check('dynamic-query-modification block completed', false, e.stack);
     }
 
+    // ---- K. retrieval liveness of the PCA-aligned basis (round 28, BUGS.md #53 / P2)
+    // `_retrieveTopRelevantProtos` is the SCORED reader (R27-2), and
+    // `_refreshLshHyperplanes` mutates the buckets it reads — so the open
+    // question is not reachability but whether the basis can change the
+    // *retrieved prototype set*. Its `Math.random()` draws are of two kinds:
+    // bucket-probe flips (basis-dependent) and index-picks over `semProtos`
+    // (`semProtos[floor(rand*numSem)]`, basis-independent). So under a FIXED
+    // retrieval RNG seed, EQUAL draw counts mean the two configs consume the
+    // same stream and every index-pick is identical — any retrieved-id
+    // difference is then attributable to the basis, not to stream desync.
+    //
+    // Measured (round-28 P2 probe, RUN-ANALYSIS.md §14): the unique retrieved
+    // SET is INVARIANT to the basis at every tested pool/budget (80/200/600
+    // prototypes, production and narrow width). What can differ at production
+    // width is the *returned list's duplicate multiplicity* — the fallback
+    // fillers in retrieval.js push without adding to their guard Set, so the
+    // same prototype can enter `candProtos` more than once (BUGS.md #59), and
+    // the basis changes which duplicates survive. At narrow (6-bit) width the
+    // draw stream desyncs, so a difference there would not be attributable at
+    // all — which is why the certificate uses the set + equal-draw-count test.
+    try {
+        const uniqIds = (s) => [...new Set(s.split(',').filter(Boolean))].sort().join(',');
+        const measure = (forceMin, pool, retSeeds, qCount) => {
+            const width = forceMin ? 'narrow' : 'prod';
+            const rows = [];
+            for (const rs of retSeeds) {
+                const build = (tag) => seeded(1000 + pool + rs, () => {
+                    const hm = new HiveMind(stateDir(`K-${width}-${pool}-${tag}-${rs}`), 2, 12, 'K', forceMin);
+                    const bank = makeAnisotropicBank(hm, 0, pool, 4000 + pool);
+                    return { hm, bank };
+                });
+                const b = build('b');
+                const p = build('p');
+                const makeQ = (hm, bank, seed) => {
+                    const rnd = mulberry32(seed);
+                    return Array.from({ length: qCount }, (_, i) => noisyQuery(hm, bank[(i * 7 + 3) % bank.length], 0.25, rnd));
+                };
+                const qSeed = 2000 + pool + rs;
+                const bq = makeQ(b.hm, b.bank, qSeed);
+                const pq = makeQ(p.hm, p.bank, qSeed);
+                p.hm._pcaHashConfig = { seed: 4242, iters: 48, tol: 1e-8 };
+                p.hm._refreshLshHyperplanes();
+                b.bank.forEach((pp, i) => { pp.__kId = i; });
+                p.bank.forEach((pp, i) => { pp.__kId = i; });
+                const run = (hm, qs) => {
+                    let draws = 0;
+                    const rnd = mulberry32(rs);
+                    const real = Math.random;
+                    Math.random = () => { draws++; return rnd(); };
+                    const sig = [];
+                    let hasDup = false;
+                    try {
+                        for (const q of qs) {
+                            const ids = hm._retrieveTopRelevantProtos(0, [q], 116).map((pp) => pp.__kId);
+                            if (new Set(ids).size !== ids.length) hasDup = true;
+                            sig.push(ids.sort((a, bb) => a - bb).join(','));
+                        }
+                    } finally { Math.random = real; }
+                    return { sig, draws, hasDup };
+                };
+                const rb = run(b.hm, bq);
+                const rp = run(p.hm, pq);
+                let setDiff = 0, listDiff = 0;
+                for (let i = 0; i < rb.sig.length; i++) {
+                    if (uniqIds(rb.sig[i]) !== uniqIds(rp.sig[i])) setDiff += 1;
+                    if (rb.sig[i] !== rp.sig[i]) listDiff += 1;
+                }
+                rows.push({ rs, setDiff, listDiff, drawsEq: rb.draws === rp.draws, baseDraws: rb.draws, pcaDraws: rp.draws, baseHasDup: rb.hasDup });
+            }
+            return rows;
+        };
+
+        const rows80 = measure(false, 80, [2, 3, 5], 4);
+        check('production width, 80-prototype bank: the retrieved prototype SET is INVARIANT to the aligned basis at every seeded query set (the P2 negative — the mechanism is retrieval-set-inert)',
+            rows80.every((r) => r.setDiff === 0), JSON.stringify(rows80));
+        check('production width, 80-prototype bank: the RNG draw count is invariant to the basis at every seed, so the returned-list difference below is attributable to the basis, not to stream desync',
+            rows80.every((r) => r.drawsEq), JSON.stringify(rows80.map((r) => [r.baseDraws, r.pcaDraws])));
+        check('production width, 80-prototype bank: the aligned basis DOES change the returned list on >=1 seeded query set (duplicate-multiplicity only, BUGS.md #59) while the set stays identical — so the mechanism reaches the scored reader\'s output without changing the retrieved neighbourhood',
+            rows80.some((r) => r.listDiff > 0 && r.setDiff === 0), JSON.stringify(rows80));
+
+        const rows600 = measure(false, 600, [5], 4);
+        check('production width, 600-prototype bank: the retrieved set (and list) is unchanged at this seed — the multiplicity effect is pool-size dependent, not universal',
+            rows600.every((r) => r.setDiff === 0 && r.listDiff === 0), JSON.stringify(rows600));
+
+        const rowsNarrow = measure(true, 200, [3, 5], 4);
+        check('narrow (6-bit) width: the draw stream DESYNCS across the basis at >=1 seed, so a set/list difference there would not be attributable — the reason the certificate uses the production-width, equal-draw-count test',
+            rowsNarrow.some((r) => !r.drawsEq), JSON.stringify(rowsNarrow.map((r) => [r.setDiff, r.listDiff, r.drawsEq, r.baseDraws, r.pcaDraws])));
+        check('SWEEP', true, JSON.stringify({ prod80: rows80, prod600: rows600, narrow200: rowsNarrow }));
+    } catch (e) {
+        check('retrieval-liveness block completed', false, e.stack);
+    }
+
     const failed = checks.filter((c) => !c.pass);
     return { total: checks.length, failed: failed.length, failures: failed, checks };
 }

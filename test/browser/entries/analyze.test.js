@@ -33,15 +33,16 @@
 import fs from 'fs';
 import path from 'path';
 import {
-    VARIANTS, SIGNAL_VARIANTS, ALL_VARIANTS, LABEL_VARIANTS, RESOLVABLE_VARIANTS,
+    VARIANTS, SIGNAL_VARIANTS, ALL_VARIANTS, LABEL_VARIANTS, OPT_IN_VARIANTS, RESOLVABLE_VARIANTS,
     FEATURE_LEN, resolveVariant, applyVariant, notApplicableReason, listVariants, formatVariantList, forecastKindOf,
+    inertReasonFor,
     featureVector, makeHiveMindModelFactory, makeControllerModelFactory, makeSignalForVariant,
     withSeed, evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, readCloses, readCandles, runAnalysis,
     replicateAnalysis,
     CONTROLLER_MODEL, CONTROLLER_POSITION_POLICY, probesPerFold, auditVerdict,
 } from '../../../src/analyze.js';
 import { walkForwardSplit } from '../../../src/analysis/splits.js';
-import { poolReports, auditNoLookahead, restateReportAtPolicy, confidenceToPosition, confidenceFromProb } from '../../../src/analysis/walkforward.js';
+import { poolReports, auditNoLookahead, restateReportAtPolicy, confidenceToPosition, confidenceFromProb, familyCorrelation } from '../../../src/analysis/walkforward.js';
 import { backtestMetrics } from '../../../src/analysis/backtest.js';
 import { shockCandles, volumeShockFactor, makeCandleViewFor } from '../../../src/analysis/world.js';
 import { CANDLE_MANIFEST } from '../../../src/candles_audit.js';
@@ -614,16 +615,36 @@ export async function run() {
         ];
         const res = evaluateAB({ returns: ret, folds, variants, signalForVariant: mkSignal, audit: false, costBps: 0 });
         const byId = Object.fromEntries(res.candidates.map((c) => [c.variant.id, c]));
-        check('R27-1: an inert candidate is certified inert, excluded from K/search, and carries exactly one reason',
+        check('R27-1/R28: an inert candidate is certified inert, excluded from K/search, and carries exactly one reason',
             byId['inert-a'].liveness.status === 'inert' && byId['inert-a'].active === false &&
             byId['inert-a'].search === null && byId['inert-a'].decision.inactive === true &&
             byId['inert-a'].decision.reasons.length === 1 &&
+            // R28 (BUGS.md #53/#44): the generic fallback is a MEASURED statement —
+            // it may NEVER claim a structural unreachability, because a variant only
+            // reaches the liveness comparison after the taxonomy approved it.
+            !/never reaches the model path|not-applicable|unreachable/.test(byId['inert-a'].liveness.reason) &&
+            /changed no emitted position/.test(byId['inert-a'].liveness.reason) &&
+            /all 6 folds/.test(byId['inert-a'].liveness.reason) &&
             // R27-3: a variant's own `inertReason` is used when it has one (the shipped
-            // `sample-weights` cites non-overlap), else the generic wording.
-            byId['inert-a'].liveness.reason.includes('never reaches the model path') &&
+            // `sample-weights` cites the assumed span horizon), else the generic wording.
             byId['inert-why'].liveness.status === 'inert' && byId['inert-why'].active === false &&
             byId['inert-why'].liveness.reason.includes('no two label spans overlap'),
             JSON.stringify({ inert: byId['inert-a'].liveness, why: byId['inert-why'].liveness }));
+        check('R28 (BUGS.md #53): a MODEL-scoped variant\'s inert reason can never be a structural claim (the pca-hash certificate)',
+            (() => {
+                const pca = resolveVariant('pca-hash');
+                const reason = inertReasonFor(pca, { totalFolds: 18, identicalFolds: 18, model: 'controller' });
+                return pca.appliesTo === 'model' && typeof pca.inertReason === 'function' &&
+                    /REACHABLE/.test(reason) && /6\/288/.test(reason) &&
+                    /SET is invariant/.test(reason) && /lsh\.test\.js §K/.test(reason) &&
+                    /18 folds/.test(reason) &&
+                    !/never reaches the model path/.test(reason) &&
+                    // ...and the generic fallback (a variant with no reason of its own)
+                    // is measured too, naming the model path and the fold count.
+                    /changed no emitted position/.test(inertReasonFor(resolveVariant('surprise'), { totalFolds: 7, model: 'controller' })) &&
+                    /all 7 folds/.test(inertReasonFor(null, { totalFolds: 7, model: 'bare' })) &&
+                    !/never reaches the model path/.test(inertReasonFor(null, { totalFolds: 7, model: 'bare' }));
+            })());
         check('R27-1: a candidate identical to an earlier live candidate is certified duplicate-of:<id>',
             byId['dup-a'].liveness.status === 'duplicate-of:live-diff' && byId['dup-a'].active === false &&
             byId['dup-a'].search === null && byId['dup-a'].decision.inactive === true,
@@ -641,6 +662,28 @@ export async function run() {
             byId['inert-a'].reportRoster.trials === 6 && byId['inert-a'].report.trials === 3 &&
             byId['live-diff'].report.trials === 3,
             JSON.stringify({ rosterK: byId['inert-a'].reportRoster.trials, activeK: byId['inert-a'].report.trials }));
+        // R28 (BUGS.md #55): the family-correlation readout resolves `maxPair` against
+        // the ACTIVE arms the matrix was built from. Resolving it against the FULL
+        // roster names the wrong arms whenever an inactive candidate sits before an
+        // active one — the round-27 summary printed `sample-weights~multiprobe` for a
+        // `surprise~homeostasis` pair.
+        check('R28 (BUGS.md #55): the summary maxPair names the ACTIVE arms, not the same indices of the full roster',
+            (() => {
+                const activeRows = res.candidates.filter((c) => c.active);
+                const fc = familyCorrelation({
+                    baseline: res.baseline,
+                    candidates: activeRows.map((c) => c.report),
+                    labels: activeRows.map((c) => c.variant.id),
+                });
+                if (!fc.available || !fc.maxPair || !fc.labels) return false;
+                const line = formatAnalysis(res, { familyCorrelation: fc });
+                const mp = /maxPair=([^~]+)~([^ ]+) r=/.exec(line);
+                if (!mp) return false;
+                const full = [res.baselineVariant, ...res.candidates.map((c) => c.variant)];
+                return mp[1] === fc.labels[fc.maxPair.a] && mp[2] === fc.labels[fc.maxPair.b] &&
+                    // the two resolutions really do disagree on this fixture
+                    (full[fc.maxPair.a].id !== mp[1] || full[fc.maxPair.b].id !== mp[2]);
+            })());
 
         // R27-2: the taxonomy is ENFORCED, not just declared. A broadcast-only
         // variant cannot reach the scored controller, so it is certified
@@ -923,10 +966,10 @@ export async function run() {
         // `conservative` and `triple` labels are opt-in A/B candidates: a label
         // change is a *training-set* change, so it must be asked for explicitly and
         // the default family must stay exactly 14 candidates.
-        check('R26-11: the label variants resolve by id but stay out of the default family (opt-in only)',
+        check('R26-11/R28: the label variants resolve by id but stay out of the default family (opt-in only)',
             resolveVariant('label-conservative').id === 'label-conservative' &&
             resolveVariant('label-triple').id === 'label-triple' &&
-            LABEL_VARIANTS.length === 2 && RESOLVABLE_VARIANTS.length === ALL_VARIANTS.length + 3 &&
+            LABEL_VARIANTS.length === 2 && RESOLVABLE_VARIANTS.length === ALL_VARIANTS.length + OPT_IN_VARIANTS.length + LABEL_VARIANTS.length &&
             ALL_VARIANTS.every((v) => v.kind !== 'label') &&
             LABEL_VARIANTS.every((v) => v.controllerScoped === true && v.kind === 'label' &&
                 typeof v.configure === 'function' && (v.labelPolicy === 'conservative' || v.labelPolicy === 'triple')),
@@ -988,6 +1031,100 @@ export async function run() {
             await runAnalysis({ file: worldFile, model: 'controller', writeFiles: false, labelPolicy: 'nope', HiveMind: FakeMind, HiveMindController: VaryCtl });
         } catch (err) { badPolicyThrew = /unknown labelPolicy/.test(String(err && err.message)); }
         check('R26-11: an unknown labelPolicy throws a named error (before reading any file)', badPolicyThrew);
+
+        // ---- R28: the weighting mechanism's configuration and scale, the measured
+        // span, and the shipped gate's raw-hurdle decision (BUGS.md #54/#57/#58) -----
+        // All of this is OFF the default path: both sample-weight arms are opt-in
+        // variants, so no default trajectory (and no golden fingerprint) moves.
+        const swCfg = (over) => {
+            const ctl = { ...over };
+            applyVariant(ctl, resolveVariant('sample-weights'));
+            return ctl._sampleWeightConfig;
+        };
+        check('R28 (BUGS.md #58): sample-weights configures a MEASURED span (horizon null) and a mean-1 emitted stream',
+            swCfg({}).mode === 'causal-window' && swCfg({}).horizonBars === null &&
+            swCfg({}).emittedNormalization === 'mean1' && swCfg({}).normalization === 'mean1' &&
+            swCfg({}).windowBars > 0,
+            JSON.stringify(swCfg({})));
+        check('R28 (P1c): an explicit span horizon wins over the label horizon, and a horizon-1 labeller is never adopted as a span',
+            swCfg({ _sampleWeightHorizon: 12 }).horizonBars === 12 &&
+            swCfg({ _labelHorizonBars: 20 }).horizonBars === 20 &&
+            swCfg({ _sampleWeightHorizon: 12, _labelHorizonBars: 20 }).horizonBars === 12 &&
+            // `optimistic` has no vertical barrier, so its label horizon is 1; adopting
+            // it would silently re-create the horizon-1 artefact of BUGS.md #58.
+            swCfg({ _labelHorizonBars: 1 }).horizonBars === null &&
+            swCfg({ _sampleWeightHorizon: Infinity }).horizonBars === null &&
+            swCfg({ _sampleWeightHorizon: 0 }).horizonBars === null);
+        check('R28 (P1c): --sample-weight-horizon is threaded onto the controller (null when absent, never NaN)',
+            (() => {
+                const mk = (over) => makeControllerModelFactory({
+                    HiveMind: FakeMind, HiveMindController: FakeController,
+                    stateDir: path.join('.nl-analyze-test', 'models'), seed: 5, warmup: 0, ...over,
+                });
+                mk({ sampleWeightHorizon: 7 })(resolveVariant('baseline')).fit([0, 1], [2], ctlView);
+                const withHorizon = FakeController.instances.at(-1)._sampleWeightHorizon;
+                mk({ sampleWeightHorizon: Infinity })(resolveVariant('baseline')).fit([0, 1], [2], ctlView);
+                const noHorizon = FakeController.instances.at(-1)._sampleWeightHorizon;
+                return withHorizon === 7 && noHorizon === null;
+            })());
+
+        // P3 arm C: the SCALE-CONTROL. Same spans, no dispersion — so a harmful
+        // sample-weights verdict can be attributed to dispersion rather than to the
+        // silent learning-rate shift (the round-27 Step-3 confound, BUGS.md #54).
+        const scaleVariant = resolveVariant('sample-weights-scale-control');
+        const scaleCtl = { _sampleWeightHorizon: 9 };
+        applyVariant(scaleCtl, scaleVariant);
+        const swCtl = { _sampleWeightHorizon: 9 };
+        applyVariant(swCtl, resolveVariant('sample-weights'));
+        check('R28 (P3/BUGS.md #54): the scale-control arm exists, is opt-in, and differs from sample-weights ONLY in the emitted normalisation',
+            !!scaleVariant && scaleVariant.controllerScoped === true && scaleVariant.appliesTo === 'controller' &&
+            OPT_IN_VARIANTS.length === 2 && !ALL_VARIANTS.some((v) => v.id === 'sample-weights-scale-control') &&
+            listVariants('controller').find((r) => r.id === 'sample-weights-scale-control').inDefaultRoster === false &&
+            scaleCtl._sampleWeightConfig.emittedNormalization === 'scale' &&
+            swCtl._sampleWeightConfig.emittedNormalization === 'mean1' &&
+            JSON.stringify({ ...scaleCtl._sampleWeightConfig, emittedNormalization: null }) ===
+                JSON.stringify({ ...swCtl._sampleWeightConfig, emittedNormalization: null }),
+            JSON.stringify({ scale: scaleCtl._sampleWeightConfig, sw: swCtl._sampleWeightConfig }));
+
+        // P1a′: the inert reason is the MEASURED cause, never the labeller's name.
+        const swModelBlock = { sampleWeights: { count: 100, min: 1, max: 1, mean: 1, meanUnnormalised: 1, horizonBars: 1, measureHorizon: false, effectiveFraction: 1 } };
+        const heldBlock = { heldBars: { count: 4369, mean: 8.301, max: 54 } };
+        const swReasonFixed = inertReasonFor(resolveVariant('sample-weights'), { modelBlock: swModelBlock, baselineModelBlock: heldBlock });
+        const swReasonMeasured = inertReasonFor(resolveVariant('sample-weights'), {
+            modelBlock: { sampleWeights: { count: 10, min: 1, max: 1, mean: 1, meanUnnormalised: 2.45, horizonBars: 8, measureHorizon: true, effectiveFraction: 1 } },
+            baselineModelBlock: heldBlock,
+        });
+        check('R28 (BUGS.md #58): the sample-weights inert reason names the ASSUMED span horizon and the MEASURED holding period — never "the labeller emits one-bar labels"',
+            /FIXED span horizon of 1 bar/.test(swReasonFixed) &&
+            /mean 8\.30 \/ max 54/.test(swReasonFixed) &&
+            /ASSUMED horizon, not of the labeller/.test(swReasonFixed) &&
+            /BUGS\.md #58/.test(swReasonFixed) &&
+            !/labeller emits one-bar labels/.test(swReasonFixed) &&
+            !/no two label spans overlap/.test(swReasonFixed) &&
+            // A MEASURED horizon that still yields all-ones is a real property of this
+            // run's trade timing, and the reason must say that instead.
+            /MEASURED \(causal EMA/.test(swReasonMeasured) &&
+            /no two assumed spans overlapped/.test(swReasonMeasured) &&
+            !/ASSUMED horizon, not of the labeller/.test(swReasonMeasured),
+            JSON.stringify({ fixed: swReasonFixed, measured: swReasonMeasured }));
+        check('R28 (BUGS.md #58): the reason degrades honestly when the run carries no sample-weight block at all',
+            (() => {
+                const r = inertReasonFor(resolveVariant('sample-weights'), {});
+                return /span horizon of 1 bar/.test(r) && /every emitted weight was exactly 1/.test(r) && !/undefined/.test(r) && !/NaN/.test(r);
+            })());
+
+        // The shipped gate: the raw fold fractions are reported, never gated.
+        check('R28 (BUGS.md #57): the shipped dependence gate reports the raw fold fractions but does not gate on them',
+            rep.gateOptions.rawFoldHurdles === false &&
+            rep.candidates.filter((c) => c.active).every((c) => Array.isArray(c.hurdles) &&
+                c.hurdles.filter((h) => h.hurdle === 'foldWinFraction' || h.hurdle === 'positiveFoldFraction').every((h) => h.gated === false)) &&
+            !rep.candidates.some((c) => (c.reasons || []).some((r) => /fold win fraction/.test(r))),
+            JSON.stringify({ raw: rep.gateOptions.rawFoldHurdles, rows: rep.candidates.filter((c) => c.active).map((c) => [c.id, (c.hurdles || []).filter((h) => !h.gated).map((h) => h.hurdle)]) }).slice(0, 300));
+        check('R28 (BUGS.md #55): every candidate row carries its hurdle ledger and the tightest one',
+            rep.candidates.every((c) => (c.hurdles === null || Array.isArray(c.hurdles)) &&
+                (c.tightestHurdle === null || (typeof c.tightestHurdle.hurdle === 'string' && typeof c.tightestHurdle.gated === 'boolean'))) &&
+            rep.candidates.filter((c) => c.active && !c.promote).some((c) => c.tightestHurdle && c.tightestHurdle.margin != null),
+            JSON.stringify(rep.candidates.filter((c) => c.active).map((c) => [c.id, c.tightestHurdle && c.tightestHurdle.hurdle, c.tightestHurdle && c.tightestHurdle.margin])));
 
         // ---- R26-13: seed replication + common random numbers ---------------
         // A single-seed ordering is not a ranking: seed-to-seed variation routinely

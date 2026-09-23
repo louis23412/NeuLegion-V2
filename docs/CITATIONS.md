@@ -368,3 +368,34 @@ the online metrics that watch the legion's *internal* health, as opposed to the
 - Kuncheva & Whitaker. *Measures of Diversity in Classifier Ensembles and Their Relationship with the Ensemble Accuracy.* Machine Learning 51(2):181–207, 2003. (the diversity-measure family and its accuracy relationship — grounds using agreement/entropy as the echo-chamber alarm for the hivemind broadcast)
 - Gini. *Variabilità e Mutabilità.* 1912. (the Gini coefficient — the influence-concentration readout)
 - Hirschman. *National Power and the Structure of Foreign Trade.* 1945. (the Herfindahl–Hirschman index — the concentration readout alongside Gini, so a single-controller consensus capture is visible)
+
+## Statistical sizing & decision coherence (round 28)
+
+Grounding for `PLAN-round28.md` P1d/P1e and `METHOD.md` §7/§8 — how a *paired* decision must be
+sized, and why a raw fold fraction is not a gate. The arithmetic is the project's own
+(`analysis/dependence.js`, `analysis/decision.js`); these are the external anchors.
+
+- Cameron & Miller. *A Practitioner's Guide to Cluster-Robust Inference.* Journal of Human Resources 50(2):317–372, 2015. (the cluster is the unit of independence; a test over correlated sub-observations over-states its own evidence — grounds using fold *windows*, not the 288 folds, and `pairedClusterTest`)
+- Demšar. *Statistical Comparisons of Classifiers over Multiple Data Sets.* JMLR 7:1–30, 2006. (the exact sign test over paired units is the distribution-free majority statement — the error-controlled replacement for a raw win fraction)
+- Ledoit & Wolf. *Robust Performance Hypothesis Testing with the Sharpe Ratio.* Journal of Empirical Finance 15(5):850–859, 2008. (the Sharpe *difference* and its standard error — the paired sizing is this SE, not the level's)
+- Künsch. *The Jackknife and the Bootstrap for General Stationary Observations.* Annals of Statistics 17(3):1217–1241, 1989. (delete-block/delete-cluster resampling for serially dependent observations — `clusterJackknife`)
+- Kish. *Survey Sampling.* Wiley 1965. (the design effect `deff = 1 + (m−1)ρ̄` — the effective-sample-size correction the DSR floor is evaluated on)
+- Harvey, Liu & Zhu. *…and the Cross-Section of Expected Returns.* Review of Financial Studies 29(1):5–68, 2016. (count the searches: the deflated Sharpe keeps `trials = K`)
+- arXiv 1612.04535. *Is the familywise error rate controlled by methods based on the effective number of independent tests?* (an effective test count is a diagnostic, never an FWER discount)
+- Cohen. *Statistical Power Analysis for the Behavioral Sciences.* 2nd ed., 1988. (the `(z_α + z_β)²` power factor — why an 80 %-powered paired test needs ≈2–2.3× the significance-only clusters; a *one-sided* α is the reference the shipped test uses, so the two-sided `z = 1.959964` in `pairedUnitsNeeded` over-states the requirement)
+
+## Cross-sectional / market-neutral sleeves (round 28 research lead)
+
+Grounding for `PLAN-round28.md` P6 — buying *independent* breadth by cancelling the common
+factor rather than by adding correlated streams (the design effect is the binding constraint:
+`effectiveStreams` 2.05–2.47 of 8).
+
+- Moskowitz & Grinblatt. *Do Industries Explain Momentum?* Journal of Finance 54(4):1249–1290, 1999. (cross-sectional momentum — rank the cross-section, long leaders / short laggards)
+- Moskowitz, Ooi & Pedersen. *Time Series Momentum.* Journal of Financial Economics 104(2):228–250, 2012. (the time-series counterpart; the two sleeves are weakly correlated, so combining them buys breadth)
+- Asness, Moskowitz & Pedersen. *Value and Momentum Everywhere.* Journal of Finance 68(3):929–985, 2013. (combining weakly correlated sleeves is the standard breadth purchase)
+- arXiv 2302.10175. *Spatio-Temporal Momentum: Jointly Learning Time-Series and Cross-Sectional Strategies.* (the joint time-series + cross-sectional formulation)
+- arXiv 2012.07149. *Building Cross-Sectional Systematic Strategies By Learning to Rank.* (a learned cross-sectional ranking objective)
+- arXiv 2208.09968. *Transfer Ranking in Finance: Applications to Cross-Sectional Momentum with Data Scarcity.* (cross-sectional momentum under small `m` — the 8-stream case)
+- arXiv 1908.02164. *Statistical Arbitrage for Multiple Co-Integrated Stocks.* (market-neutral eigenportfolio construction with backtests)
+- arXiv 1901.09309. *High-dimensional statistical arbitrage with factor models and stochastic control.* (factor-neutral construction)
+- Grinold. *The Fundamental Law of Active Management.* Journal of Portfolio Management 15(3):30–37, 1989. (breadth counts *independent* forecasts — the reason a market-neutral sleeve is worth more per stream than a ninth correlated one)
