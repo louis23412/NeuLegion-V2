@@ -20,5 +20,5 @@ test('walk-forward harness evaluates a live HiveMind out-of-sample on real candl
         result.failed, 0,
         `${result.failed}/${result.total} walk-forward checks failed:\n${JSON.stringify(result.failures, null, 2)}`,
     );
-    assert.equal(result.total, 62, `expected exactly the 62 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
+    assert.equal(result.total, 63, `expected exactly the 63 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
 });

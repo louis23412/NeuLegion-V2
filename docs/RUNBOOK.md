@@ -4,6 +4,16 @@ Everything needed to install, configure, run, and verify the frozen core design
 (see [`DESIGN.md`](DESIGN.md)). This is a Node.js project and is **not** runnable
 in the Perchance preview.
 
+> **Round 27 is implemented (R27-1…R27-6, R27-8, R27-9); its runs are the operator's.** The
+> changes are in the tree: per-candidate liveness
+> certificates (with duplicate detection and a reduced-`K` DSR restatement),
+> fail-closed input handling, the #49 holding-period / `triple`-vertical-barrier fix,
+> and the commands that execute the never-completed label-policy and (re-scoped)
+> sample-weighting experiments — all in
+> [`PLAN-round27.md`](PLAN-round27.md) §6. It changed two A/B defaults
+> (`requireReachable` → true, `--audit-probes` → 1); the sections below describe the
+> **shipped** behaviour, and the round-27 test totals are in §7.
+
 ## 1. Requirements
 
 - **Node.js ≥ 22** (the suite uses `node:test`, `worker_threads`, and ESM; the
@@ -115,22 +125,22 @@ workflow source lives at `docs/ci/update-candles.yml` (copy it to
 npm test               # full Node suite (real better-sqlite3 + worker_threads)
 ```
 
-The glob expands to all 41 `test/node/*.test.js` mirrors (`helpers.js` is not a
+The glob expands to all 42 `test/node/*.test.js` mirrors (`helpers.js` is not a
 test file and is excluded).
 
-The Node suite mirrors the browser entries in two styles: **22 mirrors** import
+The Node suite mirrors the browser entries in two styles: **23 mirrors** import
 the browser entry's `run()` and assert `failed === 0` **and**
 `result.total ===` that entry's count in the ledger below (analysis, analyze,
 binarypc, bitweight, candles, dimensions, evolve, golden, homeostasis, locks,
 lsh, modules, multiprobe, multisymbol, price_precision, querymod, sample_weights,
-surprise, walkforward — the counts are **exact** as of round 23, not floors; every
+surprise, walkforward, controller_invariants — the counts are **exact** as of round 23, not floors; every
 number was re-measured in the harness before pinning), and **19 mirrors**
 re-declare the same contracts directly with `node:test`
 against the real driver (sanity, core, features, indicators, fetcher,
 consolidation, consolidation_worker, legion) or check the mirror layout and
 invariants the browser harness cannot (the thirteen Node-only suites). The Node-only
 suites are `mirrors.test.js` (every browser entry has a mirror, no orphans, no
-stub mirror files, the ledger counts 30 entries / 42 mirrors, the `test` script
+stub mirror files, the ledger counts 31 entries / 43 mirrors, the `test` script
 passes a glob rather than a directory, and `engines.node` pins the required Node
 floor — `BUGS.md` #14); `engine_portability.test.js` (a single golden pass under
 a simulated last-ulp transcendental drift still satisfies all 23 checks —
@@ -146,14 +156,16 @@ dry run self-check); `preflight.test.js` (the environment gate); `http_view.test
 `config_env.test.js` (the config env overrides land before the DBs open); and
 `parallel_folds.test.js` (R26-4: a real `runAnalysis` serial vs 2-way parallel gives
 a byte-identical `folds.jsonl` and verdict — real `worker_threads`); and
-`analyze_cli.test.js` (R26-5 + R26-13: spawns the real `analyze` CLI to prove
-`--turnover-sweep`/`--turnover-target` and `--crn`/`--seeds` are documented and
-threaded into the run, and that the seed aggregate is written — the browser entry
+`analyze_cli.test.js` (R26-5 + R26-13 + R26-8 + R27-9: spawns the real `analyze` CLI to prove
+`--turnover-sweep`/`--turnover-target`, `--crn`/`--seeds`, `--decision=0` and the
+round-27 surface (`--list-variants`, `--reachable=0`, `--min-training-steps`,
+`--audit-probes`) are documented and threaded into the run, that `--list-variants`
+starts no run, and that the seed aggregate is written — the browser entry
 imports `runAnalysis` directly, so the argument-parsing block is otherwise
 untested). `bench` is the only
 browser entry
-without a mirror (it prints timings). So `npm test` reports **123 `test()`
-blocks across 42 files** (43 with `helpers.js`) rather than 2289 checks; a green
+without a mirror (it prints timings). So `npm test` reports **127 `test()`
+blocks across 43 files** (44 with `helpers.js`) rather than 2347 checks; a green
 run — plus `failed === 0` and the ledger count from every wrap-style mirror — is
 the gate. Measured **~5.9 min** at round 22 (`BUGS.md` #21): the `dimensions`
 sweep of both `forceMin` branches dominates (~353 s), then `lsh` (~177 s) and
@@ -167,23 +179,23 @@ wrap-style mirrors assert against. **Expected totals (all must be 0 failures):**
 
 | entry | checks | | entry | checks |
 | --- | ---: | --- | --- | ---: |
-| `sanity` | 59 | | `lsh` | 69 |
-| `core` | 42 | | `surprise` | 32 |
-| `indicators` | 75 | | `sample_weights` | 36 |
+| `sanity` | 60 | | `lsh` | 69 |
+| `core` | 46 | | `surprise` | 32 |
+| `indicators` | 75 | | `sample_weights` | 45 |
 | `features` | 11 | | `homeostasis` | 30 |
 | `consolidation` | 48 | | `evolve` | 36 |
 | `consolidation_worker` | 18 | | `multiprobe` | 77 |
 | `fetcher` | 101 | | `binarypc` | 39 |
 | `golden` | 23 | | `bitweight` | 69 |
 | `modules` | 51 | | `querymod` | 51 |
-| `legion` | 57 | | `walkforward` | 62 |
+| `legion` | 57 | | `walkforward` | 63 |
 | `candles` | 95 | | `dimensions` | 185 |
-| `locks` | 41 | | `analysis` | 562 |
+| `locks` | 41 | | `analysis` | 566 |
 | `price_precision` | 29 | | `multisymbol` | 28 |
 | `guards` | 65 | | `observer` | 76 |
-| `analyze` | 222 | | | |
+| `analyze` | 245 | | `controller_invariants` | 16 |
 
-**Total: 2289 checks.** Every one passed in the development sandbox's browser
+**Total: 2347 checks.** Every one passed in the development sandbox's browser
 harness (esbuild-wasm + sql.js shims) at the freeze; `npm test` is the local
 confirmation on the real native drivers. (Round 23 changed three counts:
 `walkforward` 31 → 48 from the `viewFor`/vacuity section K, `analysis` 354 → 390
@@ -197,7 +209,7 @@ reachability counter, `probesPerFold`/`auditVerdict`) and Q (run checkpointing:
 `run.json`/`report.json`/`partial-report.json`/`progress.json`/`folds.jsonl`/`run.log`,
 the roster-scaled event budget, `--fold-log=off`, `--keep-models`, and the
 failed-run post-mortem); total 1949 → 1980. The counts of only one entry changed, so the other 19
-wrap-style mirrors kept their number and only their operator changed. Round 24b changed two counts: `analyze` 129 → 143 (section R and the power-honesty line: the volume-shocked audit, the assumption-free break-even cost, `--reuse-base`, the offline-readable journal) and `walkforward` 48 → 49 (`barsToDetect`/`underpowered`); total 1980 → 1995.) Round 25 changed three counts: `analysis` 390 → 437 (section AD: the dependence primitives against exact hand-computed values — Pearson, the Kish design effect, the delete-one-cluster jackknife, the paired t(C-1) test against an independently derived closed form, the exact sign test, the Student-t CDF — plus the gate semantics, the cost ladder, the family-correlation diagnostic and a zero-skill size comparison of the classic vs dependence gates), `walkforward` 49 → 62 (section 9: `poolReports`' dependence block and honest `power*` line, byte-identical cost restatement, the ladder, the paired test, the new gate states, and the report's new render lines) and `analyze` 143 → 158 (section L2: `evaluateAB` threading `gateOptions` into every decision, the dependence-aware report, recorded timings; section N: the driver's `gate`/`gateAlpha`/`gateOptions`, `skipped-no-panel` on a single stream, the default cost ladder, the family diagnostic, per-variant `timings`, and the proof that `--gate=classic` promotes exactly the same set); total 1995 → 2070.) Round 26 (R26-0) changed two counts: `core` 20 → 26 (sections E/F/G: the `_updateOpenTrades` entry-timestamp guard, the production-window vs prefix re-insert contract, and the duplicate-open-trade degrade path) and `analyze` 158 → 160 (the controller factory's per-call *input* contract: every `getSignal` receives at most `cacheSize` candles, contiguous and advancing — the `BUGS.md` #33 regression guard); total 2070 → 2078. Round 26 (R26-12) changed the same two counts again: `core` 26 → 32 (section H: the `_saveInterval` default, the dump-count arithmetic at k=1/3/∞, and the proof that the emitted signal stream is identical at every interval — the throttle only changes *when* the ensemble state is written) and `analyze` 160 → 166 (the factory default/threading of `saveInterval`, the driver defaulting the A/B to `Infinity`, and the field recorded in `run.json`/`report.json`), and `modules` 50 → 51 (the controller's public API manifest now lists `flushState`); total 2078 → 2091. Round 26 (R26-2) changed the same two counts again: `core` 32 → 36 (section I: the label-lifecycle counters — the resolved-barrier split, the Brier components and their SQLite round-trip, and the non-enumerable dropped-candle diagnostic) and `analyze` 166 → 173 (the base-rate/skill diagnostics and the three-state status, the readiness gate replacing the dead `undertrained` guard, and the per-variant `model` block plus the `models:` summary line in `report.json`); total 2091 → 2102. Round 26 (R26-3) changed two counts: `analysis` 437 → 442 and `analyze` 173 → 177 (the one confidence→position pipeline: `confidenceToPosition`/`confidenceFromProb`, `restateReportAtPolicy`/`verifyPolicyRoundTrip`, the raw pre-policy confidence journaled in `folds.jsonl`, and the policy round-trip certificate in `report.json`); total 2102 → 2111. Round 26 (R26-11) changed the same two counts again: `core` 36 → 42 (section J: the trade-label policy — the `optimistic` default, the `conservative` stop-first tie-break and worst-price gapped stop, the `triple` time barrier, and the lifecycle-counter SQLite round-trip) and `analyze` 177 → 184 (the opt-in label variants: id resolution without a roster change, the controller-level policy override against the run default, `--label-policies` appending exactly two candidates, the controller-scoped exclusion on `--model=bare`, the recorded `labelPolicy`/`labelHorizonBars` in `run.json`/`report.json`, and the named error for an unknown policy); total 2111 → 2124. Round 26 (R26-4) changed two counts: `analysis` 442 → 453 (the order-preserving concurrent scheduler, the async fold twins byte-identical to the serial ones, and the executor reply contract) and `analyze` 184 → 191 (the `evaluateABAsync` driver byte-identical to `evaluateAB`, the worker-dispatcher contract, and `runAnalysis` recorded `concurrency`); total 2124 → 2142. Round 26 also **re-froze three controller fingerprints** in `golden.test.js` (`ctl:finalSignal`, `ctl:signalTrajectory`, `ctl:accuracyTotals`), deliberately: the controller block had been fed the whole growing candle prefix, which is the very input shape `#33` showed to be mislabelling; it is now fed the production window and the guard makes the two shapes agree (see `BUGS.md` #33 and `#36`-adjacent notes). Round 26 (R26-5) changed two counts: `analysis` 453 → 463 (section AF: the confidence→position layer with a holding rule — the byte-identical default path, the enter/exit hysteresis band, the minimum holding period, the frozen grid cross product, and the `turnoverSweep` enumeration/sort/participation/target logic) and `analyze` 191 → 198 (the opt-in turnover block: off-by-default nulls, the 8x1x6 grid and row count, the sorted rows, the rendered summary, the pure-post-processing proof against an identical sweep-off run, and the `run.json`/`report.json` persistence); total 2142 → 2159. A new node-only `analyze_cli.test.js` spawns the real CLI to prove `--turnover-sweep`/`--turnover-target` are documented and threaded into the run. Round 26 (R26-6) changed the same two counts: `analysis` 463 → 475 (section AG: the exact OHLCV resampler, the Kish design effect 1+(K-1)rbar, the single-stream/identical/hedging cases, and the greedy stream selection) and `analyze` 198 → 204 (the opt-in interval resampling and `--select-streams` basket measurement/keep-n, plus their `run.json`/`report.json` records); total 2159 → 2177. Round 26 (R26-13) changed the same two counts: `analysis` 475 → 491 (section AH: the interquartile mean, the stratified bootstrap CI — including the zero-width proof that it resamples within strata — the hand-computed seed/fold/residual variance split, the seed-distribution block and the CRN paired-variance criterion) and `analyze` 204 → 213 (CRN on by default with a variant-independent fold seed and `--crn=0` restoring the historical one, the per-fold net-Sharpe series on every row, and `replicateAnalysis`/`--seeds` aggregating the per-variant seed distribution); total 2177 → 2202. Round 26 (R26-14) changed the same two counts: `analysis` 491 → 523 (section AI: the forecast layer — exact Brier/logScore, the Murphy reliability/resolution/uncertainty partition and its identity, deterministic bootstrap means, the Diebold-Mariano degenerate and noisy cases, the Model Confidence Set dominance/elimination/monotonicity, and the whole-layer `forecastComparison`) and `analyze` 213 → 216 (the forecast block on by default, its summary line, and the proof that `forecast=false` nulls it while moving no scored number); total 2202 → 2229. A second node-only block in `analyze_cli.test.js` spawns the real CLI to prove `--seeds`/`--crn`/`--forecast` are documented, that the seed aggregate is written, and that CRN is recorded honestly. Round 26 (R26-7) changed one count: `analysis` 515 → 523 (section AJ: `clusterStability` against hand-computed stable/fragile/unavailable panels, plus the gate fixtures — a tiny edge fails the magnitude floor while a broad-but-thin edge fails stability and a real spread edge passes — and the rewritten gate reader) while `analyze` stayed 216, because the gate change lives in the dependence/walkforward layer rather than the driver — total 2229 → 2237. Round 26 (R26-8) changed two counts: `analysis` 523 → 547 (section AK: the decision-grade primitives — `foldConcentration` exact on a hand-built fold grid and against an independent leave-one-out Sharpe sweep, `confidencePersistence` exact on alternating/monotone/`[0,0,1,1,1]` series, `nextRunPlan` on a frozen power fixture, and the `decisionReport` composition + `formatDecision`) and `analyze` 216 → 220 (the decision block on by default, the featured candidate and pass-through blocks, the summary lines, and the proof that `decision=false` nulls it while moving no scored number) — total 2237 → 2265. A third node-only block in `analyze_cli.test.js` spawns the real CLI to prove `--decision=0` is documented, nulls the block and changes no scored number. Round 26 (R26-9) added three checks to `analysis` (section AL: the correlated-fold null — the exact sign test calibrated on independent fold windows, its measured size inflation under a common fold component, and the design-effect identity) while `analyze` stayed 220 — total 2265 → 2268; the decision itself is recorded in `docs/METHOD.md` §1. Round 26 (R26-10) added eight checks across two entries: section K in `guards.test.js` (the reader boundary-degradation matrix — empty, short, corrupt row, NaN, duplicate timestamp, shuffled order and `maxBars`) and the report-completeness contract in `analyze.test.js` — `guards` 58 → 65, `analyze` 220 → 221, total 2268 → 2276. Round 26 (R26-15) added nine checks to `analysis` (section AM: the successive-halving engine and its full-grid validation — `halvingRounds`/`halvingSchedule` exact, the race winner agreeing with the brute-force oracle, the budget-saving identity, a non-finite elimination, a minimise race, the unavailable guards and `formatRace`) while `analyze` stayed 221 — total 2276 → 2285; the engine is registered `LOCKED-invariant` but the `--race` driver stays GATED (see `docs/METHOD.md` §2). Round 26b (the final review) added one check to `analysis` (the paired-units sizing in `nextRunPlan` — R26-8 clause 6 / R26-13) and one to `analyze.test.js` (a real MULTI-STREAM run must populate the decision block's paired sizing, journal decay and leave-one-fold range — the integration shape a bare-number unit fixture cannot see), and corrected three defects found by that review (`BUGS.md` #38/#39/#40: the magnitude cheapest-flip read the paired difference as a scalar when a real report carries an object; the sign test was a leave-one-out form, not the per-window test it documents; the training label distribution read a field the model summary never produces) — `analysis` 559 → 562, `analyze` 221 → 222, total 2285 → 2289. The first local run passed every block
+wrap-style mirrors kept their number and only their operator changed. Round 24b changed two counts: `analyze` 129 → 143 (section R and the power-honesty line: the volume-shocked audit, the assumption-free break-even cost, `--reuse-base`, the offline-readable journal) and `walkforward` 48 → 49 (`barsToDetect`/`underpowered`); total 1980 → 1995.) Round 25 changed three counts: `analysis` 390 → 437 (section AD: the dependence primitives against exact hand-computed values — Pearson, the Kish design effect, the delete-one-cluster jackknife, the paired t(C-1) test against an independently derived closed form, the exact sign test, the Student-t CDF — plus the gate semantics, the cost ladder, the family-correlation diagnostic and a zero-skill size comparison of the classic vs dependence gates), `walkforward` 49 → 62 (section 9: `poolReports`' dependence block and honest `power*` line, byte-identical cost restatement, the ladder, the paired test, the new gate states, and the report's new render lines) and `analyze` 143 → 158 (section L2: `evaluateAB` threading `gateOptions` into every decision, the dependence-aware report, recorded timings; section N: the driver's `gate`/`gateAlpha`/`gateOptions`, `skipped-no-panel` on a single stream, the default cost ladder, the family diagnostic, per-variant `timings`, and the proof that `--gate=classic` promotes exactly the same set); total 1995 → 2070.) Round 26 (R26-0) changed two counts: `core` 20 → 26 (sections E/F/G: the `_updateOpenTrades` entry-timestamp guard, the production-window vs prefix re-insert contract, and the duplicate-open-trade degrade path) and `analyze` 158 → 160 (the controller factory's per-call *input* contract: every `getSignal` receives at most `cacheSize` candles, contiguous and advancing — the `BUGS.md` #33 regression guard); total 2070 → 2078. Round 26 (R26-12) changed the same two counts again: `core` 26 → 32 (section H: the `_saveInterval` default, the dump-count arithmetic at k=1/3/∞, and the proof that the emitted signal stream is identical at every interval — the throttle only changes *when* the ensemble state is written) and `analyze` 160 → 166 (the factory default/threading of `saveInterval`, the driver defaulting the A/B to `Infinity`, and the field recorded in `run.json`/`report.json`), and `modules` 50 → 51 (the controller's public API manifest now lists `flushState`); total 2078 → 2091. Round 26 (R26-2) changed the same two counts again: `core` 32 → 36 (section I: the label-lifecycle counters — the resolved-barrier split, the Brier components and their SQLite round-trip, and the non-enumerable dropped-candle diagnostic) and `analyze` 166 → 173 (the base-rate/skill diagnostics and the three-state status, the readiness gate replacing the dead `undertrained` guard, and the per-variant `model` block plus the `models:` summary line in `report.json`); total 2091 → 2102. Round 26 (R26-3) changed two counts: `analysis` 437 → 442 and `analyze` 173 → 177 (the one confidence→position pipeline: `confidenceToPosition`/`confidenceFromProb`, `restateReportAtPolicy`/`verifyPolicyRoundTrip`, the raw pre-policy confidence journaled in `folds.jsonl`, and the policy round-trip certificate in `report.json`); total 2102 → 2111. Round 26 (R26-11) changed the same two counts again: `core` 36 → 42 (section J: the trade-label policy — the `optimistic` default, the `conservative` stop-first tie-break and worst-price gapped stop, the `triple` time barrier, and the lifecycle-counter SQLite round-trip) and `analyze` 177 → 184 (the opt-in label variants: id resolution without a roster change, the controller-level policy override against the run default, `--label-policies` appending exactly two candidates, the controller-scoped exclusion on `--model=bare`, the recorded `labelPolicy`/`labelHorizonBars` in `run.json`/`report.json`, and the named error for an unknown policy); total 2111 → 2124. Round 26 (R26-4) changed two counts: `analysis` 442 → 453 (the order-preserving concurrent scheduler, the async fold twins byte-identical to the serial ones, and the executor reply contract) and `analyze` 184 → 191 (the `evaluateABAsync` driver byte-identical to `evaluateAB`, the worker-dispatcher contract, and `runAnalysis` recorded `concurrency`); total 2124 → 2142. Round 26 also **re-froze three controller fingerprints** in `golden.test.js` (`ctl:finalSignal`, `ctl:signalTrajectory`, `ctl:accuracyTotals`), deliberately: the controller block had been fed the whole growing candle prefix, which is the very input shape `#33` showed to be mislabelling; it is now fed the production window and the guard makes the two shapes agree (see `BUGS.md` #33 and `#36`-adjacent notes). Round 26 (R26-5) changed two counts: `analysis` 453 → 463 (section AF: the confidence→position layer with a holding rule — the byte-identical default path, the enter/exit hysteresis band, the minimum holding period, the frozen grid cross product, and the `turnoverSweep` enumeration/sort/participation/target logic) and `analyze` 191 → 198 (the opt-in turnover block: off-by-default nulls, the 8x1x6 grid and row count, the sorted rows, the rendered summary, the pure-post-processing proof against an identical sweep-off run, and the `run.json`/`report.json` persistence); total 2142 → 2159. A new node-only `analyze_cli.test.js` spawns the real CLI to prove `--turnover-sweep`/`--turnover-target` are documented and threaded into the run. Round 26 (R26-6) changed the same two counts: `analysis` 463 → 475 (section AG: the exact OHLCV resampler, the Kish design effect 1+(K-1)rbar, the single-stream/identical/hedging cases, and the greedy stream selection) and `analyze` 198 → 204 (the opt-in interval resampling and `--select-streams` basket measurement/keep-n, plus their `run.json`/`report.json` records); total 2159 → 2177. Round 26 (R26-13) changed the same two counts: `analysis` 475 → 491 (section AH: the interquartile mean, the stratified bootstrap CI — including the zero-width proof that it resamples within strata — the hand-computed seed/fold/residual variance split, the seed-distribution block and the CRN paired-variance criterion) and `analyze` 204 → 213 (CRN on by default with a variant-independent fold seed and `--crn=0` restoring the historical one, the per-fold net-Sharpe series on every row, and `replicateAnalysis`/`--seeds` aggregating the per-variant seed distribution); total 2177 → 2202. Round 26 (R26-14) changed the same two counts: `analysis` 491 → 523 (section AI: the forecast layer — exact Brier/logScore, the Murphy reliability/resolution/uncertainty partition and its identity, deterministic bootstrap means, the Diebold-Mariano degenerate and noisy cases, the Model Confidence Set dominance/elimination/monotonicity, and the whole-layer `forecastComparison`) and `analyze` 213 → 216 (the forecast block on by default, its summary line, and the proof that `forecast=false` nulls it while moving no scored number); total 2202 → 2229. A second node-only block in `analyze_cli.test.js` spawns the real CLI to prove `--seeds`/`--crn`/`--forecast` are documented, that the seed aggregate is written, and that CRN is recorded honestly. Round 26 (R26-7) changed one count: `analysis` 515 → 523 (section AJ: `clusterStability` against hand-computed stable/fragile/unavailable panels, plus the gate fixtures — a tiny edge fails the magnitude floor while a broad-but-thin edge fails stability and a real spread edge passes — and the rewritten gate reader) while `analyze` stayed 216, because the gate change lives in the dependence/walkforward layer rather than the driver — total 2229 → 2237. Round 26 (R26-8) changed two counts: `analysis` 523 → 547 (section AK: the decision-grade primitives — `foldConcentration` exact on a hand-built fold grid and against an independent leave-one-out Sharpe sweep, `confidencePersistence` exact on alternating/monotone/`[0,0,1,1,1]` series, `nextRunPlan` on a frozen power fixture, and the `decisionReport` composition + `formatDecision`) and `analyze` 216 → 220 (the decision block on by default, the featured candidate and pass-through blocks, the summary lines, and the proof that `decision=false` nulls it while moving no scored number) — total 2237 → 2265. A third node-only block in `analyze_cli.test.js` spawns the real CLI to prove `--decision=0` is documented, nulls the block and changes no scored number. Round 26 (R26-9) added three checks to `analysis` (section AL: the correlated-fold null — the exact sign test calibrated on independent fold windows, its measured size inflation under a common fold component, and the design-effect identity) while `analyze` stayed 220 — total 2265 → 2268; the decision itself is recorded in `docs/METHOD.md` §1. Round 26 (R26-10) added eight checks across two entries: section K in `guards.test.js` (the reader boundary-degradation matrix — empty, short, corrupt row, NaN, duplicate timestamp, shuffled order and `maxBars`) and the report-completeness contract in `analyze.test.js` — `guards` 58 → 65, `analyze` 220 → 221, total 2268 → 2276. Round 26 (R26-15) added nine checks to `analysis` (section AM: the successive-halving engine and its full-grid validation — `halvingRounds`/`halvingSchedule` exact, the race winner agreeing with the brute-force oracle, the budget-saving identity, a non-finite elimination, a minimise race, the unavailable guards and `formatRace`) while `analyze` stayed 221 — total 2276 → 2285; the engine is registered `LOCKED-invariant` but the `--race` driver stays GATED (see `docs/METHOD.md` §2). Round 26b (the final review) added one check to `analysis` (the paired-units sizing in `nextRunPlan` — R26-8 clause 6 / R26-13) and one to `analyze.test.js` (a real MULTI-STREAM run must populate the decision block's paired sizing, journal decay and leave-one-fold range — the integration shape a bare-number unit fixture cannot see), and corrected three defects found by that review (`BUGS.md` #38/#39/#40: the magnitude cheapest-flip read the paired difference as a scalar when a real report carries an object; the sign test was a leave-one-out form, not the per-window test it documents; the training label distribution read a field the model summary never produces) — `analysis` 559 → 562, `analyze` 221 → 222, total 2285 → 2289.) Round 27 changed seven counts: `core` 42 → 46 (R27-4b: the true, window-derived holding period, its `cacheSize − 1` cap, and the now-reachable `triple` vertical barrier), `sample_weights` 36 → 45 (R27-3: the pure causal-window uniqueness weight and its reference vectors), `controller_invariants` 0 → 16 (a NEW entry pair: controller determinism under a seed, the open-book invariants, the shipped-timestamp invariant, the off-state/liveness cases including the inert horizon-1 weight, and audit non-vacuity), `walkforward` 62 → 63 (R27-2: a broadcast-only flag is bit-identical through the model harness — the "not applicable to the scored model" claim, measured), `sanity` 59 → 60 (R27-4: `predict` returns NaN on an invalid vector and `train` returns the current step count plus a rejection counter — the stale `=== 0`/`=== undefined` assertions updated), `analysis` 562 → 566 (R27-5: the per-kind forecast grouping unit checks and the decision referent) and `analyze` 222 → 245 (R27-1: the liveness certificate and the active-K restatement; R27-2: the candidate taxonomy and `--list-variants`; R27-5: the per-kind forecast block, the `partial-report.json` config echo, the `underTrainedFolds` floor and the normalised stream label); total 2289 → 2347. The node-only block ledger rose 123 → 126 (the new `controller_invariants` mirror plus a fourth `analyze_cli` block for the R27-9 CLI surface). The native `npm test` that followed then exposed `BUGS.md` #52 — the `controller_invariants` mirror died at link time because its browser entry statically imported the sql.js shim, whose CDN `https:` module Node's default loader refuses (`ERR_UNSUPPORTED_ESM_URL_SCHEME`) — fixed by making that CDN import lazy and guarded by a new static-import-graph walk in `mirrors.test.js`, so the node-only block ledger is **127** (no browser check count moved; the `controller_invariants` entry still reports its 16). The first local run passed every block
 that executed on native SQLite (`BUGS.md` #15 records the run and the three
 mirror-harness defects it exposed — none in `src/`). `golden` (23) was
 subsequently given a node mirror, so the bit-exactness lock — and therefore every
@@ -225,8 +237,8 @@ the same commit and say why in the registry note) or a bug.
 
 Three controller bags were `NEEDS-LOCAL-RUN` (native `better-sqlite3`):
 `controllerDatabase`, `controllerAccuracy`, `controllerTrade`. The local gate is
-now green (`npm test`, **115/115 blocks, 0 failures** at round 22 — `docs/BUGS.md`
-#20/#21), so all
+now green (`npm test`, **127/127 blocks across 43 files, 0 failures** at round 27
+— `docs/BUGS.md` #20/#21/#42/#52), so all
 three are **promoted to `LOCKED-invariant`** in `test/lock-registry.js` and
 recorded in `docs/LOCKED.md`. The registry now has **0 `NEEDS-LOCAL-RUN`**
 entries; no local-run blocker remains. The **run integrity / observability /
@@ -243,7 +255,15 @@ symbols. **N3, the verdict, is now DELIVERED**: the power run
 with no golden re-frozen (`OPTIMIZATION.md`, `RUN-ANALYSIS.md` §5). What that run
 also showed is that the report's *own* claims needed work — the power readout
 ignores cross-stream correlation (`BUGS.md` #26) and the verdict is not
-cost-robust (`BUGS.md` #27) — which is round 25. The run-integrity code is
+cost-robust (`BUGS.md` #27) — which is round 25. **Round 26 then found that attempt
+3's baseline was not the shipped model (`BUGS.md` #33) and re-ran the identical
+design with the corrections**: `20260922T204248-seed1` (7.90 h) is the **current
+verdict** — all 14 keep-off, **SPA p = 0.4731**, nothing promoting at 0/2/5/10 bps,
+baseline Sharpe **-0.1147** with negative skill, and three mechanism candidates
+(`sample-weights`, `multi-probe`, `query-mod`) byte-identical to the baseline
+(`BUGS.md` #43/#44). The local gate re-measured green at round 26b (**123/123
+blocks across 42 files**, `BUGS.md` #42), so the promotion still stands. The
+run-integrity code is
 **delivered and pinned in `analyze.test.js` §O/§P/§Q/§R**. `npm run preflight` and
 `npm run dryrun` remain the mandatory pre-run gates.
 
@@ -268,7 +288,11 @@ at **0.708 MiB per fit** (~11.9 GiB for a full 15-variant, 8-symbol run), so it 
 never be attached or archived; `--keep-models` retains it for forensics. Attach
 `run.json` + `report.json` + `run.log` (add `folds.jsonl` to let an offline reader
 recompute the pooled metrics and the audit); `partial-report.json` and
-`progress.json` are diagnostics.
+`progress.json` are diagnostics — note that the checkpoint is **not** a full report:
+it lacks the `forecast` block and the config-echo fields (`trials`, `gateOptions`,
+`saveInterval`, `labelPolicy`, `intervalBars`, `commonRandomNumbers`, …), so a
+recovered interrupted run cannot be read for its gate semantics or the roster size
+its DSRs were deflated by (`BUGS.md`, TODO #66).
 
 **Watch a run — tell frozen from progressing.** With the default `--progress-ms=5000`
 the CLI prints one greppable line per 5 s (and at every variant boundary):
@@ -290,12 +314,24 @@ controls `folds.jsonl`. Round-24 flags: `--cost-bps=<n>`, `--reuse-base`, `--kee
 The power run —
 `npm run analyze -- --symbols=all --bars=600 --audit-probes=1 --reuse-base` —
 completed as `20260920T144633-seed1` in **11.98 h** (288 folds, 4,320 pooled bars)
-and returned the **N3 verdict**: all 14 candidates keep-off, SPA p = 0.5699
+and returned the N3 verdict: all 14 candidates keep-off, SPA p = 0.5699
 (Rejects = [none]), baseline pooled Sharpe **+0.4387** / DSR 0.5179 / break-even
 12.42 bps; `query-mod` (DSR 0.9992), `sig:momentum` (1.1059) and `sig:acceleration`
-(1.0502) miss only the fold-consistency hurdles (`RUN-ANALYSIS.md` §5). Read the
-printed `breakEven=` per candidate next to each `power:` line: an apparent edge
-whose break-even cost is below ~10-15 bps is inside a realistic taker cost.
+(1.0502) miss only the fold-consistency hurdles (`RUN-ANALYSIS.md` §5).
+**But that run predates the round-26 window-fidelity fix (`BUGS.md` #33), so its
+baseline/mechanism rows are not the shipped model's.** The **current verdict** is the
+identical design re-run with the round-26 corrections, `20260922T204248-seed1`
+(`RUN-ANALYSIS.md` §10, **7.90 h**): all 14 keep-off, **SPA p = 0.4731**, the cost
+ladder promotes `[none]` at 0/2/5/10 bps, baseline a *trained* model with negative
+skill (Sharpe **-0.1147**, `brierSkill -0.0751`), and `sig:momentum` (1.0848,
+break-even 14.64 bps) / `sig:acceleration` (1.0194, 11.57 bps) failing only the
+dependence-adjusted DSR floor. That run also showed three of the seven mechanism
+candidates are byte-identical to the baseline (`BUGS.md` #43/#44 — see TODO #64
+before trusting any mechanism row). Read the printed `breakEven=` per candidate next
+to each `power:` line: an apparent edge whose break-even cost is below ~10-15 bps is
+inside a realistic taker cost — but remember the break-even is **window-dependent**
+(a 600-bar run and a 2,200-bar run disagree by ~30× on the momentum family), so name
+the window before drawing a cost conclusion.
 
 **Sizing a run (measured; CORRECTED in round 25b).** The cost is **not** a fixed
 per-fit number. The fit warms an online controller by replaying all history
@@ -317,10 +353,16 @@ many short streams are far cheaper than a few long ones**
 `OPTIMIZATION.md` "Round 25b".
 
 **Sanity-checking a verdict before believing it.** `folds.jsonl` is enough to
-recompute the report end to end (`RUN-ANALYSIS.md` §5.3). Also recompute the
-decision at a couple of cost levels: at 0 bps this run says "keep-off", at 2 bps
-`sig:acceleration` promotes with zero reasons — so a verdict read off a single
-cost level is a verdict about that cost level (`BUGS.md` #27).
+recompute the report end to end (`RUN-ANALYSIS.md` §5.3, and §10.6 for the round-26
+run, which reproduced every per-fold and pooled metric exactly). Two conventions the
+journal does *not* state and that cost time to re-derive: `signals` is the position
+**as computed at bar `i`**, so the *traded* position at bar `i` is `signals[i-1]`
+(the first bar is flat) and the realised net return is `signals[i-1] × returns[i]`;
+`turnover` is the total variation of that lagged series. Also recompute the decision
+at a couple of cost levels (`--cost-ladder`). Attempt 3 flipped at 2 bps
+(`sig:acceleration` promoted with zero reasons) which is why cost-robustness is now a
+required readout (`BUGS.md` #27); the round-26 gate's cost ladder promotes `[none]`
+at every level (`RUN-ANALYSIS.md` §10.2).
 
 **Determinism smoke test.** Two identical small runs (`npm run analyze -- --bars=200
 --test=20`) must produce an identical `report.summary` and identical per-candidate
@@ -340,12 +382,17 @@ disagreement on a real run is a real-driver bug, not noise.
   the current one. Minimum supported Node is 22; Node 20 (EOL) can no longer run
    `npm test` at all. Recorded as `BUGS.md` #14.
 - **`ERR_UNSUPPORTED_ESM_URL_SCHEME ... Received protocol 'https:'` while a
-  mirror loads.** An entry gained a *static* import of the sql.js shim
-  (`test/browser/shims/better-sqlite3.js`), whose first import is
-  `https://cdn.jsdelivr.net/...`. The browser harness bundles that fine;
-  Node's ESM loader rejects the scheme. Import the shim (and run
-  `shim.__ensureSql()`) **lazily inside `run()`**, and have the mirror pass
-  `ensureSql: async () => {}`. Recorded as `BUGS.md` #15.3.
+  mirror loads.** The module graph a node mirror *statically* imports reached a
+  browser-only CDN module. The sql.js shim
+  (`test/browser/shims/better-sqlite3.js`) is the usual culprit: its CDN runtime
+  is `https://cdn.jsdelivr.net/...`, which the browser harness bundles fine but
+  Node's ESM loader rejects at link time. Since `BUGS.md` #52 the shim's CDN import
+  is itself **lazy**, so importing the shim statically no longer leaks the scheme;
+  an entry should still import it **lazily inside `run()`** (running
+  `shim.__ensureSql()` there) and have the mirror pass `ensureSql: async () => {}`.
+  `test/node/mirrors.test.js` walks every mirror's static graph and fails with the
+  offending specifier, so this is caught before the run reaches the gate.
+  Recorded as `BUGS.md` #15.3 (first occurrence) and #52 (recurrence).
 - **`ERR_MODULE_NOT_FOUND: .../test/src/...`.** A mirror's relative import depth
   is one level short: from `test/node/` it is `../../src/...` (the browser
   entries under `test/browser/entries/` use `../../../src/...`). Recorded as

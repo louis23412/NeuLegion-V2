@@ -97,9 +97,17 @@ class HiveMindController {
     // Sample-uniqueness-weighted training (Lopez de Prado ch. 4, see
     // training/sample_weights.js). null (default) disables it: every closed
     // trade trains with weight 1, exactly as before, so the golden fingerprints
-    // are unchanged. Set `{ horizonBars, intervalMs?, ...weightConfig }` to
-    // enable.
+    // are unchanged. Two opt-in modes:
+    //   * legacy batch-local: `{ horizonBars, intervalMs?, ...weightConfig }`;
+    //   * causal streaming window (R27-3): `{ mode: 'causal-window', windowBars,
+    //     horizonBars, intervalMs?, ...weightConfig }`, with `_sampleWeightRing`
+    //     holding the recent observed entry spans.
+    // `_sampleWeightStats` accumulates the weight statistics the A/B reports, so
+    // an all-ones (inert) weighting is visible rather than inferred.
     _sampleWeightConfig = null;
+    _sampleWeightRing = null;
+    _sampleWeightEpochMs = null;
+    _sampleWeightStats = null;
 
     // Trade-label policy (round 26, R26-11 / BUGS.md #36). `'optimistic'`
     // (default) is the historical behaviour — a bar that spans both barriers is
@@ -154,7 +162,12 @@ class HiveMindController {
 
         if (error) return { error };
 
-        this._updateOpenTrades(recentCandles);
+        // R27-4b (BUGS.md #49): the cached WINDOW (`fullCandles`, already computed
+        // above) is the true time axis for the holding period and the vertical
+        // barrier; `recentCandles` (the newly-inserted bars) is what the barrier
+        // FILL loop runs over, so the optimistic/conservative positions and the
+        // golden fingerprints are unchanged.
+        this._updateOpenTrades(recentCandles, fullCandles);
 
         const indicators = this._indicators.compute(fullCandles);
 
@@ -202,10 +215,12 @@ class HiveMindController {
             }
 
             const predictionVal = this._hivemind.predict(features);
-            // A non-finite prediction must never be bound to the NOT NULL
-            // `confidence` column (it would throw mid-batch). Fall back to the
-            // documented -1 sentinel (ROADMAP P0-1).
-            prediction = isValidNumber(predictionVal) ? Number((predictionVal * 100).toFixed(3)) : -1;
+            // R27-4 (BUGS.md #46): `prob` is used only when it is FINITE and
+            // >= 0. An invalid input now returns NaN (not the legal-looking 0), so
+            // a degraded bar abstains via the -1 sentinel rather than being read as
+            // a maximal short. A non-finite (or negative) value must never reach the
+            // NOT NULL `confidence` column (ROADMAP P0-1).
+            prediction = (isValidNumber(predictionVal) && predictionVal >= 0) ? Number((predictionVal * 100).toFixed(3)) : -1;
 
             this._shouldDumpState = true;
         }

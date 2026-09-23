@@ -278,3 +278,89 @@ test('the analyze CLI documents and threads the R26-8 decision-grade report flag
         fs.rmSync(root, { recursive: true, force: true });
     }
 });
+
+test('the analyze CLI documents and threads the R27-9 flag surface', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neulegion-analyze-r27-'));
+    try {
+        // (1) `--help` advertises the round-27 surface.
+        const help = spawnSync(process.execPath, [analyzePath, '--help'], { cwd: projectRoot, encoding: 'utf8' });
+        assert.equal(help.status, 0, `--help exited ${help.status}: ${help.stderr}`);
+        assert.match(help.stdout, /--list-variants/, '--help does not document --list-variants');
+        assert.match(help.stdout, /--reachable=0/, '--help does not document --reachable=0');
+        assert.match(help.stdout, /--min-training-steps=<n>/, '--help does not document --min-training-steps');
+        assert.match(help.stdout, /--audit-probes=<n>/, '--help does not document --audit-probes');
+
+        // (2) `--list-variants` prints the resolvable taxonomy (id/kind/applies-to/
+        //     default?/applicable-here) and exits WITHOUT starting a run. The
+        //     taxonomy is the only place an operator can see why a variant is
+        //     `not-applicable` on the controller (R27-2).
+        const listState = path.join(root, 'state-list');
+        const lv = spawnSync(process.execPath, [analyzePath, '--list-variants'], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: listState },
+        });
+        assert.equal(lv.status, 0, `--list-variants exited ${lv.status}:\n${lv.stderr}`);
+        assert.match(lv.stdout, /applies-to/, '--list-variants does not print the taxonomy header');
+        assert.match(lv.stdout, /not-applicable:/, '--list-variants does not explain the not-applicable variants');
+        for (const id of ['multiprobe', 'querymod', 'sample-weights', 'pca-hash', 'sig-momentum']) {
+            assert.ok(lv.stdout.includes(id), `--list-variants does not list ${id}`);
+        }
+        assert.ok(!fs.existsSync(path.join(listState, 'runs')), '--list-variants must not start a run');
+
+        // (3) The R27-9 defaults: reachability ON, one audit probe per fold, the
+        //     under-trained floor at 1 — recorded in BOTH the manifest and the report.
+        const file = path.join(root, 'candles.jsonl');
+        writeCandles(file, 100);
+        const tiny = [
+            `--file=${file}`,
+            '--bars=100', '--train=20', '--test=5',
+            '--model=controller', '--variants=sig-momentum',
+            '--audit=0', '--progress-ms=-1',
+        ];
+        const defDir = path.join(root, 'state-def');
+        const def = spawnSync(process.execPath, [analyzePath, ...tiny], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: defDir },
+        });
+        assert.equal(def.status, 0, `the default run exited ${def.status}:\n${def.stderr}`);
+        const defRuns = fs.readdirSync(path.join(defDir, 'runs'));
+        assert.equal(defRuns.length, 1, `expected exactly one run directory, got ${defRuns.length}`);
+        const defDirPath = path.join(defDir, 'runs', defRuns[0]);
+        const defManifest = JSON.parse(fs.readFileSync(path.join(defDirPath, 'run.json'), 'utf8'));
+        const defReport = JSON.parse(fs.readFileSync(path.join(defDirPath, 'report.json'), 'utf8'));
+        assert.equal(defManifest.requireReachable, true, 'run.json does not default requireReachable to true');
+        assert.equal(defManifest.auditProbesPerFold, 1, 'run.json does not default auditProbesPerFold to 1');
+        assert.equal(defManifest.minTrainingSteps, 1, 'run.json does not default minTrainingSteps to 1');
+        assert.equal(defReport.requireReachable, true, 'report.json does not record requireReachable');
+        assert.equal(defReport.auditProbesPerFold, 1, 'report.json does not record auditProbesPerFold');
+        assert.equal(defReport.minTrainingSteps, 1, 'report.json does not record minTrainingSteps');
+
+        // (4) The overrides thread through, and — being config/diagnostic knobs, not
+        //     scoring knobs — move no scored number.
+        const offDir = path.join(root, 'state-off');
+        const off = spawnSync(process.execPath, [
+            analyzePath, ...tiny,
+            '--reachable=0', '--min-training-steps=5', '--audit-probes=3',
+        ], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: offDir },
+        });
+        assert.equal(off.status, 0, `the override run exited ${off.status}:\n${off.stderr}`);
+        const offRuns = fs.readdirSync(path.join(offDir, 'runs'));
+        const offDirPath = path.join(offDir, 'runs', offRuns[0]);
+        const offManifest = JSON.parse(fs.readFileSync(path.join(offDirPath, 'run.json'), 'utf8'));
+        const offReport = JSON.parse(fs.readFileSync(path.join(offDirPath, 'report.json'), 'utf8'));
+        assert.equal(offManifest.requireReachable, false, '--reachable=0 was not recorded');
+        assert.equal(offManifest.minTrainingSteps, 5, '--min-training-steps was not recorded');
+        assert.equal(offManifest.auditProbesPerFold, 3, '--audit-probes was not recorded');
+        assert.equal(offReport.requireReachable, false, 'report.json did not honour --reachable=0');
+        assert.equal(offReport.minTrainingSteps, 5, 'report.json did not honour --min-training-steps');
+        const scored = (r) => JSON.stringify(r.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe]));
+        assert.equal(scored(offReport), scored(defReport), 'an R27-9 config knob changed a scored number');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});

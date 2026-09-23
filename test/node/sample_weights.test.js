@@ -19,5 +19,5 @@ test('sample-uniqueness weighting is exact and the train step is linear in the w
         result.failed, 0,
         `${result.failed}/${result.total} sample_weights checks failed:\n${JSON.stringify(result.failures, null, 2)}`,
     );
-    assert.equal(result.total, 36, `expected exactly the 36 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
+    assert.equal(result.total, 45, `expected exactly the 45 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
 });

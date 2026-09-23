@@ -19,22 +19,45 @@ A-B fidelity sweep` below); **#38, #39, #40 and #41** were found by the round-26
 implementation review and are also FIXED (`## Found by the round-26b
 implementation review` below), and **#42** was found by the first native `npm test`
 after that review and is FIXED (`## Found by the native npm test after the
-round-26b review` below),
-and #33 in particular changes the *reading* of every `npm run analyze` number ever
+round-26b review` below). **#43/#44/#45** were found by the first full-size run made
+*with* the round-26 corrections (`20260922T204248-seed1`; `RUN-ANALYSIS.md` §10) and
+are **OPEN** — report/roster wiring defects with no arithmetic impact
+(`## Found by the 20260922T204248-seed1 round-26 power run` below). The **round-27
+planning sweep** (`PLAN-round27.md`) re-derived #43/#44 from the code and both are
+stronger than the first reading — #43 is a mathematical no-op in the *shipped*
+pipeline (every drain is a single label, so the uniqueness weight is exactly 1), and
+#44's flags *cannot* act on the controller path (their only reader feeds a discarded
+result) — and added **#46** (a degraded prediction read as a full short; a rejected
+training row corrupts `trainingSteps`), **#47** (`undertrainedFolds` can never fire)
+and **#48** (`skipped` reported but not enforced; a stats schema type lie). A
+second round-27 sweep (code + the round-26 journal, `PLAN-round27.md` §2) then added
+**#49** (`heldBars` is structurally exactly 1, so the `triple` label policy's
+vertical barrier can never fire) — the finding that re-scoped the sample-weighting
+item. All seven are OPEN, all are in the same
+`## Found by the 20260922T204248-seed1 round-26 power run` section below. (The
+plan's own run-command typo, `sig-acceleration` for the real id `sig-accel`, is
+recorded in `PLAN-round27.md` §2.8 as a plan-internal correction, not a code bug.) The
+native `npm test` after the round-27 implementation then exposed **#52** (a
+recurrence of #15.3 — a node mirror whose static import graph reached a
+browser-only CDN module, so it died during linking before any check ran) —
+**FIXED** at the source and structurally, with a new guard in
+`mirrors.test.js`. And #33 in
+particular changes the *reading* of every `npm run analyze` number ever
 produced: the driver fed the controller the whole growing candle prefix where
 production feeds it a fixed window, so the controller's trade bookkeeping saw
 ancient candles and trained on mislabelled trades. Do not size or interpret a run
 until #33 is fixed. If you change anything
 under `src/`, run the full browser suite before and after
-(**2289 checks**: `sanity` 59, `core` 42, `indicators` 75, `features` 11,
+(**2347 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
 `consolidation` 48, `consolidation_worker` 18, `fetcher` 101,
 `golden` 23 (bit-exactness), `modules` 51 (assembly), `legion` 57,
-`candles` 95, `locks` 41, `analysis` 562, `price_precision` 29,
-`multisymbol` 28, `lsh` 69, `surprise` 32, `sample_weights` 36,
+`candles` 95, `locks` 41, `analysis` 566, `price_precision` 29,
+`multisymbol` 28, `lsh` 69, `surprise` 32, `sample_weights` 45,
 `homeostasis` 30, `evolve` 36, `multiprobe` 77, `binarypc` 39,
-`bitweight` 69, `querymod` 51, `walkforward` 62,
+`bitweight` 69, `querymod` 51, `walkforward` 63,
 `dimensions` 185, `guards` 65 (run integrity), `observer` 76 (legion health),
-`analyze` 222 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26)) — plus `golden` on
+`controller_invariants` 16 (R27-4b controller contracts),
+`analyze` 245 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26, and R27-1 liveness / R27-2 broadcast-liveness / R27-5 forecast-kind grouping / variant taxonomy after round 27)) — plus `golden` on
 its own after any `hivemind/` edit, `multisymbol` after any change to the
 controller's trade/target arithmetic, `lsh` after any change to the memory index,
 `surprise` after any change to the memory write path, `sample_weights` after
@@ -347,6 +370,9 @@ actually executed passed against the **real** native driver.
    loads the shim **lazily** behind the `{ ensureSql }` option; `multisymbol` was
    the one that didn't. Fix: the shim is imported lazily inside `run()`, and the
    node mirror passes `ensureSql: async () => {}` (real driver, nothing to init).
+   *(This fix was per-entry and did not hold: the same shape recurred in R27-6 and
+   is now fixed at the source — the shim's own CDN import is lazy — and guarded
+   structurally in `mirrors.test.js`. `BUGS.md` #52.)*
 
 Why the browser harness could not see any of this: it injects a label-pure state
 dir, resolves modules itself, and bundles the shim from the CDN, so it never
@@ -1540,6 +1566,357 @@ error when `audit` is requested with only a `foldExecutor` (instead of a bare
 the audit ON as well as off (folded into the existing check), so the path is now
 covered without a `node` run. No count moved (`analysis` 562, `analyze` 222,
 ledger 2289).
+
+## Found by the `20260922T204248-seed1` round-26 power run (#43, #44, #45) — sharpened by the round-27 plan; plus #46/#47/#48 found by the round-27 sweep, #49 by the second sweep, #51 while implementing R27-1, and #52 by the native gate
+
+The first full-size run made *with* the round-26 corrections (8 streams × 600 bars,
+288 folds, 4,320 pooled bars, 15 variants; `RUN-ANALYSIS.md` §10) exposed three
+defects of the *reading* kind rather than the arithmetic kind: the run's own numbers
+are reproducible end to end (§10.6), but three of the seven mechanism candidates turn
+out to be untested duplicates of the baseline, and the decision block's training
+answer describes only the winning row. All three are report/roster wiring; none
+moves a scored number.
+
+The **round-27 planning sweep** (`PLAN-round27.md` §2) then re-derived #43 and #44
+from the code and found both to be stronger — and *provable* — versions of the
+original diagnosis, and added **#46/#47/#48**, all in the same class (a controller or
+a report that can misdescribe itself). A **second sweep** (the code read against the
+round-26 journal) then added **#49**: the holding period is structurally always 1
+(`heldBars {count=sum=185937, max=1}`), because `_updateOpenTrades` counts bars only
+within the one newly-inserted candle it is handed per call — so `heldBars` is a false
+diagnostic, `resolvedTimeBarrier` can never fire, and the `triple` label policy's
+vertical barrier is unreachable for `horizonBars > 1`. #49 is what makes sample
+weighting inert even if wired: 1-bar labels do not overlap, so AFML ch.4 uniqueness is
+exactly 1.
+
+- **#43 is not a wiring gap, it is a mathematical no-op.** Sample weighting is inert
+  in the **shipped pipeline** as well as the A/B, because every drain is a batch of
+  one label and `spanWeightsFromEntries([k], cfg) === [1]` for every normalization
+  (measured). No `configure` can fix it; the mechanism has to be redefined for a
+  streaming trainer.
+- **#44 is not "the path is not reached", it is "the path cannot act".** The only
+  reader of `_getGlobalLSHCandidates` feeds `broadcastMemory`, whose returned memory
+  set is *discarded* (it is the signal payload, and `translateMemory` receives `[]`),
+  while the live retrieval path (`_retrieveTopRelevantProtos`) reads the buckets
+  directly and consults neither flag. And `pca-hash` is live only via that
+  *undocumented* reader, partly through a data-dependent `Math.random()` draw count.
+
+### 43. `sample-weights` is inert by construction — in the shipped pipeline, not just the A/B
+
+The `VARIANTS` roster entry for `sample-weights` carries `controllerScoped: true`
+and **`configure: null`**, so nothing ever sets the controller's
+`_sampleWeightConfig`. That was the original finding. The round-27 sweep shows a
+**`configure` alone would still be a no-op**:
+
+- `_processClosedTrades(processCount)` reads `LIMIT processCount` closed trades and
+  calls `_sampleWeightsForBatch(trades)` on *that batch*; the weight for
+  `rowIdx` comes from `spanWeightsFromEntries(entries, cfg)`.
+- The A/B calls `getSignal(candles, 1)` and production calls it with
+  **`CONFIG.baseProcessCount = 1`** (`legion/config.js:32`, threaded through
+  `legion/workers.js:90`). So the batch is always exactly one label.
+- Measured on the pure module: `spanWeightsFromEntries([k], { horizonBars: h })`
+  returns `[1]` for `normalization: 'none' | 'mean1' | 'sum1'` and for every `h` —
+  `mean1` renormalises a one-element vector to exactly 1. (Contrast: ten
+  consecutive entries at `horizonBars: 20` give 0.825–1.355 with effective sample
+  size 9.64 of 10, so the estimator itself is fine — it is the *batch* that is
+  degenerate.)
+
+Therefore **sample-uniqueness weighting is dead code in the shipped pipeline**, and
+TODO #5's experiment ("a run showing which normalisation/floor improves PSR/DSR") is
+unanswerable by *any* run: the weights are always 1, so the weighted objective is
+the unweighted objective. What was measured on the run is the consequence:
+**position series byte-identical to the baseline on 288/288 folds** (max abs diff 0),
+pooled Sharpe identical to 16 significant digits (`-0.11469136136703602`), identical
+turnover/tradeCount/DSR — while the report printed **5 reasons**
+(`pooled DSR … < 0.95`, `fold win fraction 0 < 0.5`, `paired cluster Sharpe
+difference … dSharpe=0 se=0 t=0 df=35 p=0.5`, `cluster stability 0 of 36`), every
+one an artefact of comparing a series with itself. That inflates `K` (the DSR
+deflation and the family-wise search) by one and manufactures evidence against a
+mechanism that never ran.
+
+The wiring *is* exercised, but only by a synthetic variant inside `analyze.test.js`
+(`configure: (c) => { c._sampleWeightConfig = { on: true }; }`), so the suite was
+green while the shipped candidate was inert — the "the test pins a shape the product
+never produces" pattern of #38/#39/#40.
+
+**Fix (round 27, `PLAN-round27.md` R27-3):** define the streaming analogue properly —
+a bounded ring of recent label spans, each new label weighted by its **causal**
+average uniqueness against the spans already observed, `mean1`-renormalised so the
+effective learning rate is unchanged; the run reports the weight distribution and
+its effective sample size, so a weight vector that is all 1 is *visible*; and R27-1's
+liveness certificate reports the candidate `inert` automatically if it ever happens
+again. The `null`-config path stays bit-identical (golden fingerprints unchanged).
+
+### 44. `multi-probe`/`query-mod` *cannot* reach the controller path; `pca-hash` is live only via an undocumented reader (and a data-dependent RNG draw count)
+
+`multi-probe` (`_multiProbeConfig`) and `query-mod` (`_queryModConfig`) *do* set
+their flags (on the controller and on the pre-created `_hivemind`), and their flags
+*are* read — inside `_getGlobalLSHCandidates`. The round-27 sweep traced every
+reader; the claim is static, not statistical:
+
+- `_getGlobalLSHCandidates` has exactly **one** caller in the tree: `transfer.js:74`,
+  inside `broadcastMemory`.
+- `broadcastMemory` is **read-only on the model**: the prototype methods it calls
+  (`_computeProtoUtility`, `_kernelSimilarity`, `_projSimilarity`,
+  `_computeMemberAffinity`, `_sortedByUtilityDesc`, `_sortByUtilityDescInPlace`)
+  only read; its result is returned as data.
+- Its only consumer, `hiveMindController.getSignal`, assigns
+  `this._memoryBroadcast = …` — used for the **signal payload** — and adds
+  `totalBroadcast` to the `memoriesSent` counter. Nothing is injected, because
+  `translateMemory(sharedMemories, …)` is called with `sharedMemories = []` (the A/B
+  never passes shared memories) and early-returns `{ memoriesInjected: 0, … }`
+  without mutating any state.
+- The **live** retrieval path is a *different* reader: `retrieval.js:251`/`:303`
+  probe `this._semanticLSHBuckets` directly, with their own flip loop and their own
+  random multi-bit probes, and consult **neither** `_multiProbeConfig` nor
+  `_queryModConfig`.
+
+So on a single-controller fold those two flags **cannot** change a position — they
+are not "inert in this regime", they are off the model path. Measured on the run:
+**both byte-identical to the baseline on 288/288 folds** (max abs diff 0), with
+identical pooled metrics and model diagnostics.
+
+`pca-hash` is the opposite case and the finding is subtler: it is live **only**
+because `_refreshLshHyperplanes` mutates `_lshHyperplanes`, `_lshAlignedRank` and
+`_semanticLSHBuckets`, which `_retrieveTopRelevantProtos` reads — i.e. via the
+*undocumented* reader, not the one the module's own docs name. Worse, that reader's
+random multi-bit probe draws `Math.random()` a **bucket-content-dependent** number of
+times (up to `maxCandidateCap`), so replacing the hash basis changes the RNG draw
+count and therefore the whole downstream trajectory. That makes `pca-hash` a
+legitimate live candidate *and* means "the run differs" is not by itself evidence
+that the intended mechanism caused the difference.
+
+Measured on the run: `pca-hash` differs on **6/288** folds, `surprise-gate` on
+99/288, `homeostasis` on 246/288. So **3 of the 7 mechanism candidates**
+(`multi-probe`, `query-mod`, `sample-weights`) contribute 15 fabricated keep-off
+reasons between them and make `K = 15` count three untested arms. Independent
+corroboration: `familyCorrelation.effectiveTrials = 6.10 of 14`.
+
+**Fix (round 27, `PLAN-round27.md` R27-1/R27-2):** a `liveness` certificate computed
+as pure post-processing of the already-journaled fold signals (no locked module
+touched); an `appliesTo: 'controller' | 'broadcast' | 'agnostic'` taxonomy, with
+`multi-probe`/`query-mod` marked `not-applicable` on the controller roster and one
+explanatory reason instead of fabricated hurdles; exclusion of
+`inert`/`skipped`/`not-applicable` candidates from `K` and the family-wise search
+(with `trialsRoster`/`trialsInactive` recorded); the `pca-hash` note corrected to name
+`_retrieveTopRelevantProtos`; and three tests that pin the whole claim (the flag
+changes `broadcastMemory`'s returned set; the flag does **not** change `getSignal`
+positions; the hash refresh **does** change them).
+
+### 45. The decision block's training answer describes only the winning row, so it asserts something false about the run
+
+`report.decision.training.model` is `{ available: false, reason: "no model
+diagnostics were collected for this run (a pure-signal or bare run)" }`. The reason
+is false about the *run*: seven variants are trained controllers with full
+diagnostics (170,004 training steps each, `warmErrors 0`, base rates and skill
+scores). The block is built from the **featured (winning) row** only —
+`decisionReport({ model: featuredRow ? featuredRow.model : null })` — and this run's
+winner is `sig:momentum`, a pure signal with no model block, so the winner's `null`
+is rendered with a reason that generalises to the whole run ("this run"), exactly the
+"a null a reader could mistake for a conclusion" failure `decision.js` exists to
+prevent (same class as #37). `training.labelDistribution` is consequently `null` too
+(correct for a signal, unhelpful here). No verdict moves. **Fix (R27-5):** when the
+featured row has no model but the *baseline* (or any family row) does, report the
+baseline's diagnostics under an explicit referent (e.g. `model: {…, referent:
+"baseline"}`) and change the `na` reason to name what is actually missing ("the
+*featured* candidate is a pure signal; the baseline's diagnostics are in
+`report.baseline.model`"), pinned by an `analysis.test.js` check on a signal-wins
+fixture — the run's real shape.
+
+### 46. A degraded prediction is read as a maximal short, and a rejected training row corrupts the step counter
+
+Two fail-open branches on the controller's input path:
+
+- `HiveMind.predict(inputs)` returns **`0`** for an invalid input
+  (`hiveMind.js:129`). The controller tests `isValidNumber(predictionVal)` — true for
+  `0` — so `prob = 0`, `confidenceFromProb(0) = (0 − 50)/50 = −1`, and with the
+  shipped `POSITION_POLICY { deadZone: 0.05, scale: 1 }` that is a **full short
+  (−1)**, not an abstention. A model that cannot read its input should abstain; today
+  it takes the most extreme legal position.
+- `HiveMind.train(inputs, target, w)` uses a **bare `return`** for an invalid input
+  (`hiveMind.js:136`) — i.e. `undefined`. `_processClosedTrades` assigns it straight
+  into `this._globalAccuracy.trainingSteps = result`, so the counter becomes
+  `undefined`; `_saveGlobalAccuracy` then binds `undefined` into a `NOT NULL` column
+  **inside a transaction**, and `getSignal`'s `finalScore` test (`trainingSteps > 0`)
+  silently reads false, and the readiness gate (`ready = trainingSteps > 0`) would
+  abstain forever.
+
+Both are latent on today's data path — the feature vector is validated numbers with a
+`0.5` fallback — which is precisely why they are worth removing rather than merely
+never observing: they are the "a faulty controller silently corrupts a reading" class
+the round-27 request asked to rule out. **Fix (R27-4):** `predict` invalid → `NaN`
+(the controller's documented `−1` abstention route); `train` invalid → the current
+step count plus a `rejectedTrainRows` counter; the controller's predict guard
+restated as "finite **and** `>= 0`, else abstain"; plus a `rejectedTrainRows` /
+monotone-`trainingSteps` test.
+
+### 47. `undertrainedFolds` is a counter that can never fire
+
+`makeControllerModelFactory` computes `undertrained = !(testStart >= warmup)` with
+`warmup = 40`, while the default split's first test bar is `≥ trainSize = 60`. So
+`undertrainedFolds` is **always 0**, and the run prints it in the model block beside
+real diagnostics (`folds`, `notTrainedFolds`, `warmError`s, base rate, skill) where a
+reader takes it as evidence the model was adequately warmed. This is the same class
+as #35 (the readiness gate that could never fire); #35 replaced the *gate* with
+`ready = trainingSteps > 0` but left the misleading *counter* behind. **Fix
+(R27-5):** report `shallowHistoryFolds` (the `testStart < warmup` count, under its
+true name) and a real `underTrainedFolds` derived from the fold's `trainingSteps`
+against its available history; delete the ambiguous field.
+
+### 48. `skipped` is reported but not enforced, and the stats schema lies about a type
+
+- `evaluateAB` computes `skipped = !!variant.controllerScoped && model !== 'controller'`
+  and records it — but still evaluates the variant and still passes it to
+  `walkForwardSearch`, so on `--model=bare --variants=sample-weights` the row would be
+  counted in `K` and carry five fabricated keep-off reasons. It does not bite the
+  *default* bare roster (controller-scoped variants are filtered out of it), which is
+  why this is minor rather than a second #43.
+- `global_stats.value` is declared `INTEGER NOT NULL` while `brier_sum` is stored as
+  a `REAL`. SQLite's INTEGER affinity converts only lossless values, so the float
+  survives and every number is correct — but the schema claims a type the data does
+  not have, and a future `CAST`/tooling assumption could silently truncate the Brier
+  sum.
+
+**Fix (R27-1/R27-4):** a `skipped`/`not-applicable` candidate is excluded from `K`
+and the search and carries exactly one reason; `global_stats.value` is declared
+`NUMERIC` (or the Brier sum is stored in integer micro-units).
+
+### 49. `heldBars` is structurally exactly 1, and the `triple` label policy's vertical barrier can never fire
+
+Found by the second round-27 sweep, reading the round-26 journal against the code
+(`PLAN-round27.md` §2.7). `getSignal` calls
+`this._updateOpenTrades(recentCandles)`, and `recentCandles` is **only the bars that
+were newly inserted this call** (`src/hivemind/controller/candles.js`:
+`INSERT OR IGNORE` + `result.changes > 0`). Both the A/B (`getSignal(window, 1)`,
+window advancing one bar) and production (`legion/workers.js:39` passes
+`state.cache.slice(-cacheSize)`, of which exactly one bar is new per call) therefore
+hand `_updateOpenTrades` **one candle per call** in steady state. Inside it,
+`barsAfterEntry` is a loop counter over that one-candle list, so whenever a trade
+closes `barsAfterEntry === 1`.
+
+Measured in `20260922T204248-seed1/report.json`:
+`heldBars { count: 185937, sum: 185937, max: 1, mean: 1 }` — a "holding-period
+distribution" with zero variance, over 185,937 closed trades. Consequences:
+
+1. `heldBars` (R26-2's label-lifecycle diagnostic, and the quantity the round-27
+   draft proposed to derive a uniqueness horizon from) is **false**: it is the
+   position of the close within the current call's new-bar list, not the holding
+   length.
+2. `resolvedTimeBarrier` can never fire.
+3. **The `triple` label policy's vertical barrier is unreachable for
+   `horizonBars > 1`** (`src/hivemind/controller/trades.js:115`:
+   `barsAfterEntry >= horizonBars`). With no `--label-horizon` the policy degrades
+   to `conservative` as designed, but *even with* `--label-horizon=H>1` it still
+   degrades to `conservative`, silently. So the R26-11 `triple` candidate is
+   untestable as shipped.
+4. A trade that never hits a horizontal barrier never closes and is never trained;
+   with a working vertical barrier it would be labelled at `H` bars.
+
+This is the enabling defect behind the sample-weighting question: the shipped
+labeler produces 1-bar labels (`heldBars ≡ 1`), so AFML ch.4 average uniqueness is
+exactly 1 (no two label spans overlap) and no wiring can make sample weighting
+non-trivial on the `optimistic` labeler. **Fix (R27-4b):** pass the cached window
+(`fullCandles`, already computed by `getSignal`) into `_updateOpenTrades` and compute
+`barsAfterEntry` from it (bars strictly after the entry timestamp), leaving the
+horizontal-barrier *fill* loop over the new bars so the optimistic/conservative
+position series — and every golden fingerprint — are byte-identical. The count is
+cache-bounded (`cacheSize − 1`), which is recorded. See `PLAN-round27.md` R27-3/R27-4b.
+
+### Note (not a defect): `nextRun.pairedUnits.required.observed` is a requirement, not an observation
+
+The console's `pairedClusters(obs)=37` and `nextRun.pairedUnits.required.observed = 37`
+read like "37 clusters were observed", but the field is the *number of clusters a
+paired test would need* to resolve the observed difference at 95 %
+(`nClusters × (1.96·se/target)²` = 36 × (1.96 × 0.6136 / 1.1995)² = 36.19 → 37). The
+run has 36 clusters. The reader string says this correctly; the field name does not.
+Renaming it (`neededForObserved`) is cosmetic and bundled with #45's report work. **Fixed in round 27 (R27-5):** the field is now `neededForObserved` (with the generic `needed.observed` map kept alongside), pinned by `analysis.test.js` and the `analyze.test.js` consumer check.
+
+### Note (not a defect): `partial-report.json` is less self-describing than `report.json`
+
+The crash-recovery checkpoint is written after every variant and carries the
+`baseline`/`candidates`/`familywise`/`costLadder`/`decision` blocks, but it lacks the
+`forecast` block and the config-echo fields (`trials`, `gateOptions`, `saveInterval`,
+`labelPolicy`, `labelHorizonBars`, `concurrency`, `intervalBars`, `commonRandomNumbers`,
+`turnoverSweep`, `streamSelection`, `policyRoundTrip`). Every number it *does* carry is
+correct, but a user recovering an interrupted run cannot read the gate semantics, the
+searched-roster size the DSRs were deflated by, or the forecast panel from the partial
+alone. **Fixed in round 27 (R27-5):** the config echo is now written into the
+checkpoint from the first write (and asserted in `analyze.test.js`); only the
+`forecast` block remains final-only, and `RUNBOOK.md` still lists the file as
+"diagnostics".
+
+**Round-27 implementation status (all four fixes landed; the round-27 tests are the acceptance criteria).** #43 is closed **not-applicable** for the stock `optimistic` labeller with the measured reason (labels do not overlap, so every AFML uniqueness weight is 1): `sample-weights` is removed from the default roster but stays resolvable as an opt-in, its causal-window estimator is the pure `causalWindowWeight` helper with reference-vector tests (`sample_weights.test.js`), and the A/B's `liveness` certificate reports it `inert` automatically if it is ever scored, with a reason citing the non-overlap (`analyze.test.js`, `controller_invariants.test.js`). #44 is fixed by R27-2: `multi-probe`/`query-mod` are `appliesTo: 'broadcast'` and `not-applicable` on the controller (one reason, outside K and the search), `pca-hash`'s note names `_retrieveTopRelevantProtos`, the taxonomy is printed by `--list-variants`, a broadcast-only flag is proved bit-identical through the model harness (`walkforward.test.js`), and a candidate identical to an earlier *live* one is certified `duplicate-of:<id>`. #45 is fixed by the baseline `modelReferent` (`analysis.test.js` signal-wins fixture). #46 is fixed by `predict` → `NaN` and `train` → the current step count plus `_rejectedTrainRows` (`sanity.test.js` browser + node, 60 checks). #47 is fixed by `shallowHistoryFolds` plus a fireable `underTrainedFolds` with an explicit `minTrainingSteps` floor and a per-fold training-step distribution (`analyze.test.js`). #48 is fixed by the `not-applicable` exclusion from K/search and the `global_stats.value` `NUMERIC` declaration. #49 is fixed by the window-derived `barsAfterEntry` (R27-4b): optimistic/conservative positions byte-identical, `heldBars` varying and capped at `cacheSize − 1`, and the `triple` vertical barrier reachable for `H > 1` (`core.test.js` browser + node, `controller_invariants.test.js`). The `restateReportAtCost` single-stream defect found while wiring R27-1 is recorded as #51.
+
+### 51. `restateReportAtCost` fabricated a dependence panel for a single-stream report
+
+Found while implementing R27-1's active-K restatement. `poolReports` returns a
+single-stream report untouched (no `streamFoldLengths`), but `restateReportAtCost`
+rebuilt the per-stream panel unconditionally, so restating a single-stream report
+invented a bogus `dependence` block (a one-stream design effect) instead of carrying
+the `null` the scored report had. **Fix:** `const hasPanel = Array.isArray(report.streamFoldLengths)
+&& report.streamFoldLengths.length > 0`; the panel is rebuilt only when `hasPanel`,
+otherwise the original `dependence`/`streamReturns` are carried through. The analyze
+single-stream contract (`dependence === null`, `analyze.test.js` R26-7) is the
+regression guard, and the equal-trials identity
+`restateReportAtCost(r, cost, { trials: r.trials }).pooledMetrics === r.pooledMetrics`
+now holds for single- **and** multi-stream reports.
+
+### 52. A static CDN import leaked into Node again — the R27-6 node mirror died at link time
+
+**This is a recurrence of #15.3**, which had been "fixed" per entry. Found by the
+native `npm test` immediately after the round-27 implementation: the whole suite
+was green except `test/node/controller_invariants.test.js`, which failed in 65 ms
+with
+
+> `Error [ERR_UNSUPPORTED_ESM_URL_SCHEME]: Only URLs with a scheme in: file and data
+> are supported by the default ESM loader. Received protocol 'https:'`
+> — `at getSourceSync (node:internal/modules/esm/load:46:11)`
+
+The new node mirror re-exports its browser entry, the entry imported the sql.js
+shim (`test/browser/shims/better-sqlite3.js`) *statically*, and the shim
+statically imported its CDN runtime
+(`import initSqlJs from "https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/sql-wasm.js/+esm"`).
+Node's default ESM loader resolves the entire static import graph while *linking*,
+before any test body runs, and refuses any scheme other than `file:`/`data:` (plus
+the built-in `node:`), so the mirror died during linking. The report showed only
+`✖ test/node/controller_invariants.test.js … 'test failed'` — the mirror's own 16
+checks never ran, so a reader could not tell which invariant had broken. The native
+driver never *needs* the CDN (every mirror injects its own `ensureSql` — the real
+`better-sqlite3`), but a static import is evaluated whether or not its binding is
+used.
+
+**Why #15.3's fix did not hold.** It made the one offending *entry* load the shim
+lazily. Six other entries still import the shim statically — `bench`, `core`,
+`features`, `legion`, `sanity`, `consolidation_worker` — harmless only because none
+of them happened to have a node mirror re-exporting them yet. Any of them gaining a
+mirror would have reproduced this exactly, and `controller_invariants` (R27-6) is
+the one that did.
+
+**Fix, in three layers.**
+1. **Root cause — the shim itself.** `better-sqlite3.js` now imports its CDN module
+   **lazily**, inside `__ensureSql()`, so the shim — and therefore *any* entry that
+   imports it, statically or not — is loadable by Node. The browser harness is
+   unaffected (it calls `__ensureSql()`, which now does the dynamic import). This
+   removes the class of defect rather than one instance of it.
+2. **Convention — the entry.** `test/browser/entries/controller_invariants.test.js`
+   does not statically import the shim: `run()` lazily imports it and calls
+   `shim.__ensureSql()` in the `else` branch of the `{ ensureSql }` option, exactly
+   as `golden.test.js`/`homeostasis.test.js`/`lsh.test.js`/`sample_weights.test.js`
+   do. Both layers are kept deliberately: the convention keeps the mirror's static
+   graph free of browser-only modules (the thing #15.3 asked for), and the shim fix
+   means a future entry that forgets the convention still cannot break the native
+   gate.
+3. **Guard — `test/node/mirrors.test.js`.** A new block (`staticImportsOf()`) walks
+   the **static** (`import`/`export … from`) graph of each of the 43 node mirrors and
+   fails if any specifier uses a scheme the default loader rejects. A dynamic
+   `import()` inside a function body is deliberately *not* followed — it executes
+   only on the browser path. Walking the whole graph (144 files reachable, including
+   `src/`) rather than just the mirrors' own imports is what catches the
+   shim-behind-an-entry shape that #15.3 and #52 both took; the pre-fix tree fails
+   the guard, the current tree passes it.
+
+No browser check count moved (still **2347**; `controller_invariants` still reports
+its 16); the node-only block ledger went 126 → **127**.
 
 ## Hand-rolled indicators — audit findings
 

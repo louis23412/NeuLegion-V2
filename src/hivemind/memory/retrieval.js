@@ -34,6 +34,14 @@ export const retrievalMethods = {
         return Math.exp(-this._kernelGamma * Math.max(0, D));
     },
 
+    // R27-2 (which reader is LIVE): this is the path the scored model actually
+    // reads. It probes `_semanticLSHBuckets` directly under `_lshHyperplanes` and
+    // draws `Math.random()` a bucket-content-dependent number of times, so a change
+    // to the hash basis (`_refreshLshHyperplanes` under `_pcaHashConfig`) reaches
+    // the emitted position through here — while `_multiProbeConfig` and
+    // `_queryModConfig` are consulted only by `_getGlobalLSHCandidates`, whose one
+    // caller (`broadcastMemory`) is a discard path (`BUGS.md` #44). See
+    // `memory/lsh.js` for the other, broadcast-only reader.
     _retrieveTopRelevantProtos (transformerIdx, currentProtos, maxRetrieve = this._maxRetrievedProtos) {
         if (currentProtos.length === 0) return [];
 

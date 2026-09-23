@@ -8,10 +8,10 @@
 import crypto from 'crypto';
 import HiveMind from './../hiveMind.js';
 import { isValidNumber, isValidTimestamp } from './../utils.js';
-import { spanWeightsFromEntries } from './../training/sample_weights.js';
+import { spanWeightsFromEntries, causalWindowWeight } from './../training/sample_weights.js';
 
 export const controllerTradeMethods = {
-    _updateOpenTrades (candles) {
+    _updateOpenTrades (candles, windowCandles = null) {
         if (!Array.isArray(candles) || candles.length === 0) return;
 
         // Entry-timestamp guard (round 26, R26-0 / BUGS.md #33).
@@ -26,6 +26,44 @@ export const controllerTradeMethods = {
         // trade, both lists tiny.
         const candleTimes = candles.map((c) =>
             (c && isValidTimestamp(c.timestamp)) ? Date.parse(c.timestamp) : NaN);
+
+        // Elapsed-bar measurement (round 27, R27-4b / BUGS.md #49).
+        //
+        // `barsAfterEntry` used to be a loop counter over the `candles` argument,
+        // which in production is the single newly-inserted bar (`_getRecentCandles`
+        // returns `recentCandles` = new bars only). So it was ALWAYS 1: `heldBars`
+        // had zero variance and the `triple` vertical barrier
+        // (`barsAfterEntry >= horizonBars`) could never fire for horizonBars > 1.
+        // The TRUE elapsed count is measured against the cached WINDOW the model
+        // holds (`fullCandles`, which `getSignal` already computes and now passes
+        // in as the second argument). The barrier FILL loop stays over the new
+        // bars, so the optimistic/conservative arithmetic and the golden
+        // fingerprints are untouched; only the diagnostic and the vertical barrier
+        // become real.
+        const window = (Array.isArray(windowCandles) && windowCandles.length > 0) ? windowCandles : candles;
+        const windowTimes = window.map((c) =>
+            (c && isValidTimestamp(c.timestamp)) ? Date.parse(c.timestamp) : NaN);
+        const windowIndexByTime = new Map();
+        for (let wi = 0; wi < windowTimes.length; wi++) {
+            const wt = windowTimes[wi];
+            if (Number.isFinite(wt) && !windowIndexByTime.has(wt)) windowIndexByTime.set(wt, wi);
+        }
+        // Strictly-after-entry window bars cannot exceed `cacheSize - 1` while the
+        // entry bar still occupies a cache slot; an entry that has scrolled out is
+        // capped, and the cap is what the report states.
+        const heldBarsCap = (Number.isFinite(this._cacheSize) && this._cacheSize > 1) ? this._cacheSize - 1 : null;
+        // Number of window bars whose timestamp is <= t (binary search; the window
+        // is ORDER BY timestamp ASC). The closing bar's window index minus this,
+        // plus one, is the true elapsed-bar count.
+        const windowBarsUpTo = (t) => {
+            let lo = 0, hi = windowTimes.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (Number.isFinite(windowTimes[mid]) && windowTimes[mid] <= t) lo = mid + 1;
+                else hi = mid;
+            }
+            return lo;
+        };
 
         const tradesStmt = this._db.prepare(`
             SELECT timestamp, sellPrice, stopLoss, entryPrice, features, confidence
@@ -63,6 +101,9 @@ export const controllerTradeMethods = {
             }
 
             const isLong = trade.sellPrice > trade.entryPrice;
+            // Window bars at or before the entry: the closing bar's window index
+            // minus this, plus one, is the true elapsed count (R27-4b).
+            const entryRank = Number.isFinite(entryTime) ? windowBarsUpTo(entryTime) : 0;
             let barsAfterEntry = 0;
 
             for (let ci = 0; ci < candles.length; ci++) {
@@ -74,6 +115,18 @@ export const controllerTradeMethods = {
                     : true;
                 if (!afterEntry) continue;
                 barsAfterEntry++;
+
+                // Prefer the window-derived elapsed count when the current bar can
+                // be located in the cached window; otherwise fall back to the
+                // new-bar counter (identical to the historical behaviour for a
+                // timestamp-less / window-less feed).
+                let elapsedBars = barsAfterEntry;
+                const windowIdx = Number.isFinite(candleTimes[ci]) ? windowIndexByTime.get(candleTimes[ci]) : undefined;
+                if (windowIdx != null) {
+                    elapsedBars = windowIdx - entryRank + 1;
+                    if (!(elapsedBars >= 1)) elapsedBars = 1;
+                    if (heldBarsCap != null && elapsedBars > heldBarsCap) elapsedBars = heldBarsCap;
+                }
 
                 const hitTakeProfit = isLong
                     ? candle.high >= trade.sellPrice
@@ -112,7 +165,7 @@ export const controllerTradeMethods = {
                     }
                 }
 
-                if (exitPrice == null && triple && horizonBars != null && barsAfterEntry >= horizonBars && isValidNumber(candle.close)) {
+                if (exitPrice == null && triple && horizonBars != null && elapsedBars >= horizonBars && isValidNumber(candle.close)) {
                     // The third barrier: expiry. Labelled from the horizon bar's close,
                     // on the take-profit side of the trade's direction.
                     exitPrice = candle.close;
@@ -129,8 +182,10 @@ export const controllerTradeMethods = {
                         features,
                         confidence: trade.confidence,
                         // Diagnostics only (not persisted): the holding length and
-                        // whether the time barrier resolved it.
-                        heldBars: barsAfterEntry,
+                        // whether the time barrier resolved it. R27-4b: `heldBars`
+                        // is now the true elapsed-bar count measured against the
+                        // cached window, not the (always-1) new-bar counter.
+                        heldBars: elapsedBars,
                         timeBarrier,
                     });
                     break;
@@ -270,7 +325,10 @@ export const controllerTradeMethods = {
                 const sampleWeight = sampleWeights ? (sampleWeights[rowIdx] ?? 1) : 1;
                 const result = this._hivemind.train(flatFeatures, trade.outcome, sampleWeight);
                 this._shouldDumpState = true;
-                this._globalAccuracy.trainingSteps = result;
+                // R27-4 (BUGS.md #46): `train` returns the (finite) step count, but
+                // guard anyway so a future non-finite return can never be bound into
+                // the NOT NULL `global_stats` value or make the counter non-monotone.
+                if (Number.isFinite(result)) this._globalAccuracy.trainingSteps = result;
 
                 insertEncodingStmt.run(encodingHash);
                 deleteTradeStmt.run(trade.timestamp);
@@ -284,16 +342,46 @@ export const controllerTradeMethods = {
     //
     // Returns null (the whole feature disabled) unless the controller has been
     // given a `_sampleWeightConfig` — so the default training path is unchanged
-    // and the golden fingerprints are untouched. When enabled, each trade's
-    // label is treated as spanning `horizonBars` bars from its entry, entry bars
-    // are derived from the trade timestamps at `intervalMs`, and the batch is
-    // weighted by average uniqueness (Lopez de Prado ch. 4, see
-    // training/sample_weights.js).
+    // and the golden fingerprints are untouched. Two modes:
+    //
+    //   * `mode: 'causal-window'` (R27-3): a streaming ring of the last
+    //     `windowBars` OBSERVED entry spans. Each new label's weight is its
+    //     average uniqueness against the ring (including itself), mean-1
+    //     normalised over the ring so the mean weight stays 1. This is the only
+    //     mode that can express an effect, and only when labels OVERLAP: on the
+    //     shipped (optimistic) labeller every label is one bar long, so no two
+    //     spans intersect, every weight is 1, and the path is a bit-exact no-op —
+    //     which the liveness certificate reports as `inert`.
+    //   * the legacy batch-local mode: each trade's label spans `horizonBars`
+    //     bars from its entry, entry bars are derived from the trade timestamps
+    //     at `intervalMs`, and the batch is weighted by average uniqueness
+    //     (Lopez de Prado ch. 4, see training/sample_weights.js).
     _sampleWeightsForBatch (trades) {
         const cfg = this._sampleWeightConfig;
         if (!cfg || !Array.isArray(trades) || trades.length === 0) return null;
 
         const intervalMs = Number.isFinite(cfg.intervalMs) && cfg.intervalMs > 0 ? cfg.intervalMs : 3600000;
+
+        if (cfg.mode === 'causal-window') {
+            const ring = this._sampleWeightRing || (this._sampleWeightRing = []);
+            const windowBars = Number.isFinite(cfg.windowBars) && cfg.windowBars > 0 ? Math.floor(cfg.windowBars) : 64;
+            const horizon = Number.isFinite(cfg.horizonBars) && cfg.horizonBars > 0 ? Math.floor(cfg.horizonBars) : 1;
+            const out = new Array(trades.length).fill(1);
+            for (let i = 0; i < trades.length; i++) {
+                const ms = Date.parse(trades[i].timestamp);
+                if (!Number.isFinite(ms)) continue;
+                if (!Number.isFinite(this._sampleWeightEpochMs)) this._sampleWeightEpochMs = ms;
+                const entry = Math.round((ms - this._sampleWeightEpochMs) / intervalMs);
+                const span = [entry, entry + horizon - 1];
+                const r = causalWindowWeight(ring, span, cfg);
+                out[i] = r.weight;
+                this._accumulateSampleWeightStats(r);
+                ring.push(span);
+                while (ring.length > windowBars) ring.shift();
+            }
+            return out;
+        }
+
         let t0 = Infinity;
         for (const row of trades) {
             const ms = Date.parse(row.timestamp);
@@ -306,6 +394,37 @@ export const controllerTradeMethods = {
             return Number.isFinite(ms) ? Math.round((ms - t0) / intervalMs) : 0;
         });
         return spanWeightsFromEntries(entries, cfg);
+    },
+
+    // Accumulate the causal-window weight statistics (R27-3). Diagnostic only: the
+    // report states what the weighting actually did, so an all-ones vector (the
+    // inert case) is visible rather than inferred.
+    _accumulateSampleWeightStats (r) {
+        const s = this._sampleWeightStats || (this._sampleWeightStats = {
+            count: 0, min: Infinity, max: -Infinity, sum: 0, essSum: 0, nSum: 0,
+        });
+        s.count += 1;
+        if (r.weight < s.min) s.min = r.weight;
+        if (r.weight > s.max) s.max = r.weight;
+        s.sum += r.weight;
+        s.essSum += r.ess;
+        s.nSum += r.n;
+    },
+
+    // The causal-window sample-weight summary, or null when the feature is off /
+    // never accumulated. Consumed by the A/B's model diagnostics (R27-3).
+    sampleWeightSummary () {
+        const s = this._sampleWeightStats;
+        if (!s || s.count === 0) return null;
+        return {
+            count: s.count,
+            min: s.min,
+            max: s.max,
+            mean: s.sum / s.count,
+            ess: s.essSum / s.count,
+            n: s.nSum / s.count,
+            effectiveFraction: s.nSum > 0 ? s.essSum / s.nSum : null,
+        };
     }
 
 };

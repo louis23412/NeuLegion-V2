@@ -186,3 +186,53 @@ test('R26-11: the label policies label correctly and round-trip their counters o
     assert.equal(tri2._globalAccuracy.heldBarsSum, 1);
     assert.equal(tri2._globalAccuracy.heldBarsMax, 1);
 });
+
+// Round 27 (R27-4b, BUGS.md #49): the true holding period (measured against the
+// cached window) and the now-reachable `triple` vertical barrier. This is the
+// native-driver proof of the browser entry's section K: the elapsed count is
+// derived from REAL ISO timestamps via `Date.parse`, and the barrier resolution
+// round-trips through REAL better-sqlite3.
+test('R27-4b: the holding period is window-derived, capped, and the vertical barrier is reachable', () => {
+    const T0 = '2024-01-01T00:00:00.000Z';
+    const bar = (n, high, low, close) => ({
+        timestamp: new Date(Date.parse(T0) + n * 60000).toISOString(),
+        open: close, high, low, close, volume: 1,
+    });
+    const mkCtl = (id, dir, cacheSize, policy = 'optimistic', horizon = null) => {
+        const c = new HiveMindController(id, dir, cacheSize, 4, 'positive', 1, PRICE, true);
+        c._labelPolicy = policy;
+        c._labelHorizonBars = horizon;
+        c._db.prepare('INSERT INTO open_trades (timestamp, sellPrice, stopLoss, entryPrice, features, confidence) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(T0, 102, 99, 100, JSON.stringify([0, 0, 0, 0, 0, 0]), 60);
+        return c;
+    };
+    const rows = (c) => c._db.prepare('SELECT exitPrice, outcome FROM closed_trades ORDER BY timestamp').all();
+
+    const a = mkCtl('K1', tempStateDir('core-held'), 60);
+    const winA = [bar(0, 100.2, 99.8, 100), bar(1, 101, 99.5, 100.5), bar(2, 101, 99.5, 100.5), bar(3, 101, 99.5, 100.5), bar(4, 103, 99.5, 102)];
+    a._updateOpenTrades([winA[4]], winA);
+    assert.deepEqual(rows(a), [{ exitPrice: 102, outcome: 1 }]);
+    assert.equal(a._globalAccuracy.heldBarsCount, 1);
+    assert.equal(a._globalAccuracy.heldBarsSum, 4);
+    assert.equal(a._globalAccuracy.heldBarsMax, 4);
+
+    const b = mkCtl('K2', tempStateDir('core-held-cap'), 6);
+    const winB = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => bar(n, n === 9 ? 103 : 101, 99.5, 100.5));
+    b._updateOpenTrades([winB[9]], winB);
+    assert.equal(b._globalAccuracy.heldBarsMax, 5);
+
+    const c = mkCtl('K3', tempStateDir('core-tri-h5'), 60, 'triple', 5);
+    const winC = [0, 1, 2, 3, 4, 5].map((n) => bar(n, 100.8, 99.6, 100.2));
+    c._updateOpenTrades([winC[5]], winC);
+    assert.equal(rows(c).length, 1);
+    assert.equal(c._globalAccuracy.resolvedTimeBarrier, 1);
+    assert.equal(c._globalAccuracy.heldBarsMax, 5);
+
+    const d1 = mkCtl('K4a', tempStateDir('core-fill-w'), 60);
+    const winD = [bar(0, 100.2, 99.8, 100), bar(1, 103, 98.5, 101)];
+    d1._updateOpenTrades([winD[1]], winD);
+    const d2 = mkCtl('K4b', tempStateDir('core-fill-nw'), 60);
+    d2._updateOpenTrades([winD[1]]);
+    assert.deepEqual(rows(d1), rows(d2));
+    assert.deepEqual(rows(d1), [{ exitPrice: 102, outcome: 1 }]);
+});

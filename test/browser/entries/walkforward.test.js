@@ -266,9 +266,17 @@ export async function run(options = {}) {
         check('A/B: feature-on candidates produce finite reports',
             [surpriseLive, homeoLive, multiProbe].every((r) => Number.isFinite(r.pooledMetrics.netSharpe) && r.pooledBars === 30),
             JSON.stringify([surpriseLive, homeoLive, multiProbe].map((r) => r.pooledMetrics.netSharpe)));
-        check('A/B: at least one live setting changes the walk-forward trajectory',
-            [surpriseLive, homeoLive, multiProbe].some((r) => !same(base, r)),
+        check('A/B: the live settings change the walk-forward trajectory',
+            !same(base, surpriseLive) && !same(base, homeoLive),
             JSON.stringify([surpriseLive, homeoLive, multiProbe].map((r) => r.pooledMetrics.finalEquity)));
+        // R27-2: multi-probe is a BROADCAST-path flag — `_getGlobalLSHCandidates` is
+        // read only by `broadcastMemory`, which the scored predict never consults —
+        // so through this harness it must be a bit-identical no-op. That is the
+        // "not applicable to the scored model" claim, measured (the taxonomy in
+        // analyze.js says the same, and the A/B reports it `not-applicable`).
+        check('R27-2: a broadcast-only flag (multi-probe) is bit-identical through the model harness',
+            same(base, multiProbe) && multiProbe.pooledBars === base.pooledBars,
+            `${base.pooledMetrics.finalEquity} vs ${multiProbe.pooledMetrics.finalEquity}`);
         const decision = promoteDecision(base, multiProbe, { requireCleanAudit: false });
         check('A/B: the promotion gate returns a well-formed decision',
             typeof decision.promote === 'boolean' && Array.isArray(decision.reasons) && Number.isFinite(decision.foldWinFraction));

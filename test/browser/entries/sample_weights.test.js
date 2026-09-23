@@ -42,6 +42,7 @@ import {
     weightedMean,
     sampleWeights,
     spanWeightsFromEntries,
+    causalWindowWeight,
 } from '../../../src/hivemind/training/sample_weights.js';
 import {
     sampleUniqueness as analysisSampleUniqueness,
@@ -300,6 +301,76 @@ export async function run(options = {}) {
             `clustered=${JSON.stringify(clustered.map((w) => Number(w.toFixed(4))))}`);
     } catch (error) {
         check('C: train linearity completed', false, error && error.stack ? error.stack : String(error));
+    }
+
+    // ---- D. R27-3: the causal streaming-window weight ------------------------
+    // The controller's online form of the same correction: a new label's weight is
+    // its average uniqueness against a ring of the last `windowBars` OBSERVED
+    // spans (plus itself), mean-1 normalised over the window. On non-overlapping
+    // labels (the shipped `optimistic` labeller, horizon 1) every weight is
+    // exactly 1 — the mechanism is a bit-exact no-op there, which the liveness
+    // certificate reports as `inert`.
+    try {
+        const w0 = causalWindowWeight([], [0, 0]);
+        check('D: a lone label in an empty window has weight 1 (nothing to overlap with)',
+            w0.weight === 1 && w0.n === 1 && w0.ess === 1 &&
+            JSON.stringify(w0.normalized) === JSON.stringify([1]),
+            JSON.stringify(w0));
+
+        // A point label against a duplicate point label: raw uniqueness is 1/2 each,
+        // and mean-1 normalisation restores both to 1 (the mean step size is kept).
+        const dupPoint = causalWindowWeight([[0, 0]], [0, 0]);
+        check('D: a duplicated point label normalises back to weight 1 (mean-1 keeps the step size)',
+            close(dupPoint.weight, 1, 1e-12) &&
+            dupPoint.windowUniqueness.every((u) => close(u, 0.5, 1e-15)) &&
+            dupPoint.n === 2 && close(dupPoint.ess, 2, 1e-12),
+            JSON.stringify(dupPoint));
+
+        // Point vs 3-bar: the raw uniqueness are 1/2 and 5/6, the mean-1 scale 3/2
+        // gives exactly [3/4, 5/4], so the new (longer) label earns more credit.
+        const asym = causalWindowWeight([[0, 0]], [0, 2]);
+        check('D: an asymmetric overlap yields the exact mean-1 weight 5/4 and Kish ESS 32/17',
+            close(asym.weight, 5 / 4, 1e-12) &&
+            JSON.stringify(asym.normalized.map((w) => Number(w.toFixed(12)))) === JSON.stringify([0.75, 1.25]) &&
+            close(asym.ess, 32 / 17, 1e-12) && asym.n === 2,
+            JSON.stringify(asym));
+        check('D: the mean-1 normalised window has mean exactly 1',
+            close(asym.normalized.reduce((a, b) => a + b, 0) / asym.normalized.length, 1, 1e-12));
+
+        // Disjoint spans share no bar, so both are fully unique (weight 1).
+        const disjoint = causalWindowWeight([[0, 0]], [5, 5]);
+        check('D: spans that share no bar are both fully unique (weight 1)',
+            close(disjoint.weight, 1, 1e-12) &&
+            disjoint.windowUniqueness.every((u) => u === 1) && disjoint.n === 2,
+            JSON.stringify(disjoint));
+
+        // Horizon-1, consecutive entries: no overlap at all, so every weight is 1 —
+        // this is the stock labeller, hence `inert` in the A/B.
+        let allOne = true;
+        const ring = [];
+        for (let i = 0; i < 5; i++) {
+            const r = causalWindowWeight(ring, [i, i]);
+            if (!close(r.weight, 1, 1e-12)) allOne = false;
+            ring.push([i, i]);
+        }
+        check('D: horizon-1 non-overlapping entries produce an all-ones weight stream (the inert case)', allOne);
+
+        // Purity: the ring is never mutated and a malformed new span degrades to 1.
+        const fixedRing = [[0, 0], [1, 1]];
+        const before = JSON.stringify(fixedRing);
+        causalWindowWeight(fixedRing, [2, 2]);
+        check('D: causalWindowWeight does not mutate the window ring', JSON.stringify(fixedRing) === before);
+        const bad = causalWindowWeight([[0, 0]], [3, 1]);
+        check('D: a malformed new span degrades to weight 1 with a null window vector',
+            bad.weight === 1 && bad.windowUniqueness === null && bad.normalized === null);
+
+        // A null config is byte-identical to the default config.
+        const defCfg = causalWindowWeight([[0, 0]], [0, 2]);
+        const nullCfg2 = causalWindowWeight([[0, 0]], [0, 2], null);
+        check('D: causalWindowWeight(null config) is byte-identical to the default',
+            JSON.stringify(defCfg) === JSON.stringify(nullCfg2));
+    } catch (error) {
+        check('D: causal-window weight completed', false, error && error.stack ? error.stack : String(error));
     }
 
     const failed = checks.filter((c) => !c.pass);

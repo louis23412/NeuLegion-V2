@@ -394,6 +394,82 @@ export async function run() {
         check('R26-11 label-policy checks completed', false, e.stack);
     }
 
+    // ---- K. R27-4b: the true holding period + the reachable vertical barrier --
+    // `_updateOpenTrades` used to count only the bars in its `candles` argument,
+    // which in production is the single newly-inserted bar, so `heldBars` was
+    // always 1 and the `triple` vertical barrier (`elapsed >= horizonBars`) could
+    // never fire for a horizon > 1 (BUGS.md #49). The true elapsed count is now
+    // measured against the cached WINDOW (`fullCandles`, which `getSignal` already
+    // passes in). The horizontal-barrier FILL loop stays over the NEW bars, so the
+    // optimistic/conservative arithmetic and the golden fingerprints are untouched.
+    try {
+        const T0 = '2024-01-01T00:00:00.000Z';
+        const bar = (n, high, low, close) => ({
+            timestamp: new Date(Date.parse(T0) + n * 60000).toISOString(),
+            open: close, high, low, close, volume: 1,
+        });
+        const mkCtl = (id, dir, cacheSize, policy = 'optimistic', horizon = null) => {
+            const c = new HiveMindController(id, dir, cacheSize, 4, 'positive', 1, PRICE, true);
+            c._labelPolicy = policy;
+            c._labelHorizonBars = horizon;
+            return c;
+        };
+        const openTrade = (c, tp = 102, sl = 99) => c._db.prepare(
+            'INSERT INTO open_trades (timestamp, sellPrice, stopLoss, entryPrice, features, confidence) VALUES (?, ?, ?, ?, ?, ?)',
+        ).run(T0, tp, sl, 100, JSON.stringify([0, 0, 0, 0, 0, 0]), 60);
+        const rows = (c) => c._db.prepare('SELECT exitPrice, outcome FROM closed_trades ORDER BY timestamp').all();
+
+        // (a) The holding period is the true number of window bars after entry. A
+        // 5-bar window; only the last bar crosses the take-profit. Entry rank is 1
+        // (T0 is the first window bar), so the closing bar is at elapsed 4.
+        const a = mkCtl('K1', 'state/core-held', 60);
+        openTrade(a);
+        const winA = [bar(0, 100.2, 99.8, 100), bar(1, 101, 99.5, 100.5), bar(2, 101, 99.5, 100.5), bar(3, 101, 99.5, 100.5), bar(4, 103, 99.5, 102)];
+        a._updateOpenTrades([winA[4]], winA);
+        check('R27-4b: heldBars is the true elapsed-bar count measured against the cached window (not the always-1 new-bar counter)',
+            rows(a).length === 1 && rows(a)[0].outcome === 1 && rows(a)[0].exitPrice === 102 &&
+            a._globalAccuracy.heldBarsCount === 1 && a._globalAccuracy.heldBarsSum === 4 && a._globalAccuracy.heldBarsMax === 4,
+            JSON.stringify({ rows: rows(a), held: a._globalAccuracy.heldBarsSum, max: a._globalAccuracy.heldBarsMax }));
+
+        // (b) The elapsed count is CAPPED at cacheSize-1: an entry that has scrolled
+        // out of a 6-bar cache cannot be claimed to have been held for 10 bars.
+        const b = mkCtl('K2', 'state/core-held-cap', 6);
+        openTrade(b);
+        const winB = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => bar(n, n === 9 ? 103 : 101, 99.5, 100.5));
+        b._updateOpenTrades([winB[9]], winB);
+        check('R27-4b: the holding period is capped at cacheSize-1 (a scrolled-out entry cannot claim more)',
+            rows(b).length === 1 && b._globalAccuracy.heldBarsMax === 5,
+            JSON.stringify({ max: b._globalAccuracy.heldBarsMax }));
+
+        // (c) The vertical barrier is REACHABLE at horizon H = 5: a quiet window
+        // whose bar at elapsed 5 triggers the time barrier. Before R27-4b
+        // `elapsed` was always 1, so this could never fire for H > 1.
+        const c = mkCtl('K3', 'state/core-tri-h5', 60, 'triple', 5);
+        openTrade(c);
+        const winC = [0, 1, 2, 3, 4, 5].map((n) => bar(n, 100.8, 99.6, 100.2));
+        c._updateOpenTrades([winC[5]], winC);
+        check('R27-4b: the triple-barrier vertical barrier fires for horizonBars=5 (unreachable at >1 before the fix)',
+            rows(c).length === 1 && c._globalAccuracy.resolvedTimeBarrier === 1 && c._globalAccuracy.heldBarsMax === 5,
+            JSON.stringify({ rows: rows(c), tb: c._globalAccuracy.resolvedTimeBarrier, max: c._globalAccuracy.heldBarsMax }));
+
+        // (d) Window-independence of the horizontal-barrier FILL: the same new bar
+        // resolves identically with and without the window (the fill loop is over
+        // the NEW bars; only the diagnostic elapsed count reads the window). This is
+        // the property that keeps the golden fingerprints untouched.
+        const d1 = mkCtl('K4a', 'state/core-fill-w', 60);
+        openTrade(d1);
+        const winD = [bar(0, 100.2, 99.8, 100), bar(1, 103, 98.5, 101)];
+        d1._updateOpenTrades([winD[1]], winD);
+        const d2 = mkCtl('K4b', 'state/core-fill-nw', 60);
+        openTrade(d2);
+        d2._updateOpenTrades([winD[1]]);
+        check('R27-4b: the barrier FILL is window-independent (identical outcome/exitPrice with and without the window)',
+            JSON.stringify(rows(d1)) === JSON.stringify(rows(d2)) && rows(d1)[0].outcome === 1 && rows(d1)[0].exitPrice === 102,
+            JSON.stringify({ withWindow: rows(d1), without: rows(d2) }));
+    } catch (e) {
+        check('R27-4b holding-period checks completed', false, e.stack);
+    }
+
     const failed = checks.filter((c) => !c.pass);
     return { total: checks.length, failed: failed.length, failures: failed, checks };
 }

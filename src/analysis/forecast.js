@@ -19,6 +19,13 @@
 //     whole project exists to avoid.
 //
 // All pure + seeded (reproducible). Measurement only: no training change, no golden.
+//
+// R27-5 (grouping): the affine map `(confidence + 1) / 2` recovers a *probability*
+// only for a controller-family candidate, whose journaled confidence is
+// `confidenceFromProb(prob)`. A signal candidate's confidence is a normalised
+// z-score, so the family is scored WITHIN its kind (one MCS per kind; the DM test
+// against the baseline only inside the baseline's kind) rather than mixing a
+// probability against a z-score. `forecastComparison` states this in its `reader`.
 
 import { mulberry32 } from '../legion/rng.js';
 import { mean } from './performance.js';
@@ -372,12 +379,12 @@ export function modelConfidenceSet({ losses = [], ids = null, alpha = 0.10, nBoo
 // `foldInputs` arrays; every variant shares the fold grid, so the per-bar losses
 // line up. Pure post-processing.
 export function forecastComparison({
-    baseline = null, candidates = [], alpha = 0.10,
-    nBoot = 1000, blockLength = null, seed = 12345, bins = 10,
+    baseline = null, candidates = [], baselineKind = 'mechanism', baselineId = 'baseline',
+    alpha = 0.10, nBoot = 1000, blockLength = null, seed = 12345, bins = 10,
 } = {}) {
     const base = forecastPairs(baseline);
     if (!base.bars) return { available: false, reason: 'the baseline journal carries no finite confidence/outcome pairs' };
-    const variants = [{ id: 'baseline', pairs: base }];
+    const variants = [{ id: baselineId, kind: baselineKind, pairs: base }];
     for (const c of candidates) {
         if (!c || c.foldInputs == null) continue;
         const pairs = forecastPairs(c.foldInputs);
@@ -386,14 +393,13 @@ export function forecastComparison({
             // silently compare mismatched windows.
             return { available: false, reason: `variant ${c.id} has ${pairs.bars} pairs, baseline has ${base.bars}` };
         }
-        variants.push({ id: c.id, pairs });
+        variants.push({ id: c.id, kind: c.kind || baselineKind, pairs });
     }
     const byId = {};
-    const lossSeries = [];
-    const names = [];
     for (const v of variants) {
         const decomp = brierDecomposition({ forecasts: v.pairs.forecasts, outcomes: v.pairs.outcomes, bins });
         byId[v.id] = {
+            kind: v.kind,
             bars: v.pairs.bars,
             brier: decomp.brier,
             brierBinned: decomp.brierBinned,
@@ -403,27 +409,60 @@ export function forecastComparison({
             uncertainty: decomp.uncertainty,
             baseRate: decomp.baseRate,
         };
-        lossSeries.push(brierLosses(v.pairs.forecasts, v.pairs.outcomes));
-        names.push(v.id);
     }
-    // Diebold–Mariano: each candidate vs the baseline.
+    // R27-5: score WITHIN a kind. `(c+1)/2` is a *probability* only for a
+    // controller-family candidate: its journaled confidence is
+    // `confidenceFromProb(prob) = prob/50 - 1`, which the affine map inverts
+    // exactly. A signal candidate's journaled confidence is a normalised z-score
+    // (`clamp(z/saturation, -1, 1)`), so mapping it to `(c+1)/2` yields a number
+    // that is neither a probability nor comparable across kinds — a cross-kind
+    // Brier/DM/MCS would compare a probability against a z-score. So each kind is
+    // scored separately: its own Model Confidence Set, and (only inside the
+    // baseline's kind, which is the run's reference) the Diebold–Mariano test
+    // against the baseline.
+    const kinds = [];
+    for (const v of variants) if (!kinds.includes(v.kind)) kinds.push(v.kind);
+    const byKind = {};
+    for (const kind of kinds) {
+        const group = variants.filter((v) => v.kind === kind);
+        const losses = group.map((v) => brierLosses(v.pairs.forecasts, v.pairs.outcomes));
+        const ids = group.map((v) => v.id);
+        byKind[kind] = {
+            members: ids,
+            n: ids.length,
+            mcs: {
+                at90: modelConfidenceSet({ losses, ids, alpha: 0.10, nBoot, blockLength, seed }),
+                at95: modelConfidenceSet({ losses, ids, alpha: 0.05, nBoot, blockLength, seed }),
+            },
+        };
+    }
     const baseLoss = brierLosses(base.forecasts, base.outcomes);
     for (const v of variants.slice(1)) {
-        byId[v.id].dm = dieboldMariano({
-            lossA: brierLosses(v.pairs.forecasts, v.pairs.outcomes),
-            lossB: baseLoss,
-            nBoot, blockLength, seed,
-        });
+        if (v.kind === baselineKind) {
+            byId[v.id].dm = dieboldMariano({
+                lossA: brierLosses(v.pairs.forecasts, v.pairs.outcomes),
+                lossB: baseLoss,
+                nBoot, blockLength, seed,
+            });
+        } else {
+            byId[v.id].dm = {
+                available: false,
+                reason: `cross-kind: ${v.id} is a ${v.kind} candidate, whose journaled confidence is a normalised z-score rather than a calibrated probability, so the paired DM test against the ${baselineKind} baseline is undefined (R27-5)`,
+            };
+        }
     }
-    const mcs90 = modelConfidenceSet({ losses: lossSeries, ids: names, alpha: 0.10, nBoot, blockLength, seed });
-    const mcs95 = modelConfidenceSet({ losses: lossSeries, ids: names, alpha: 0.05, nBoot, blockLength, seed });
+    const primary = byKind[baselineKind] || { mcs: { at90: null, at95: null } };
     return {
         available: true,
         bars: base.bars,
-        baseRate: byId.baseline.baseRate,
+        baseRate: byId[baselineId].baseRate,
+        baselineId,
+        kind: baselineKind,
+        kinds: kinds.map((k) => ({ kind: k, n: byKind[k].n, members: byKind[k].members })),
+        byKind,
         byId,
-        mcs: { at90: mcs90, at95: mcs95 },
-        reader: 'proper scores (Brier + reliability/resolution/uncertainty, log score) per variant; dm is the block-bootstrapped Diebold–Mariano test of the candidate per-bar Brier loss vs the baseline (favored = lower loss); mcs is the Hansen–Lunde–Nason Model Confidence Set at 90% and 95% — the families that cannot be distinguished from the best. A single sample-best variant is not a winner (selection bias).',
+        mcs: primary.mcs,
+        reader: `proper scores (Brier + reliability/resolution/uncertainty, log score) per variant, grouped by \`kind\` (R27-5): the ${baselineKind} family's journaled confidence is \`confidenceFromProb(prob)\`, which \`(c+1)/2\` inverts exactly, so its Brier is a proper score of a probability and \`dm\` is the block-bootstrapped Diebold–Mariano test vs the baseline (favored = lower loss); a non-${baselineKind} family's confidence is a normalised z-score, so those candidates carry \`dm.available=false\` with a reason and are scored only against each other. \`mcs\` is the Hansen–Lunde–Nason Model Confidence Set of the baseline's kind at 90% and 95% (\`byKind[kind].mcs\` holds every kind) — the families that cannot be distinguished from the best. A single sample-best variant is not a winner (selection bias).`,
     };
 }
 
@@ -433,7 +472,11 @@ export function formatForecast(block) {
     const f = (x, d = 3) => (Number.isFinite(x) ? x.toFixed(d) : 'n/a');
     const m90 = block.mcs && block.mcs.at90 && block.mcs.at90.available ? block.mcs.at90.memberIds.join(',') : 'n/a';
     const m95 = block.mcs && block.mcs.at95 && block.mcs.at95.available ? block.mcs.at95.memberIds.join(',') : 'n/a';
-    const base = block.byId && block.byId.baseline;
+    const base = block.byId && block.byId[block.baselineId || 'baseline'];
+    // R27-5: the block is scored per kind, so the summary names each group (a
+    // signal family is not comparable to the probability-calibrated controller).
+    const groups = Array.isArray(block.kinds) ? block.kinds.map((g) => `${g.kind}(${g.n})`).join(' ') : null;
     return `forecast: bars=${block.bars} baseRate=${f(block.baseRate)} ` +
-        `baseline(brier=${f(base && base.brier)} log=${f(base && base.logScore)}) | mcs90=[${m90}] mcs95=[${m95}]`;
+        `baseline(brier=${f(base && base.brier)} log=${f(base && base.logScore)}) | mcs90=[${m90}] mcs95=[${m95}]` +
+        (groups ? ` | groups: ${groups}` : '');
 }

@@ -605,6 +605,18 @@ keep-off under the DSR floor; SPA p = 0.5699, best = `sig:momentum`,
 Rejects = [none]. This is the run that showed the i.i.d. power line was lying, and
 it is why the pooled SE is now built from the panel.
 
+> **Correction (round 26, `BUGS.md` #33).** Attempt 3 predates the window-fidelity
+> fix, so its **baseline/mechanism** facts above are not the shipped model's (the
+> +0.4387 baseline, the 12.42 bps break-even, the DSR floor all being moot for the
+> mechanism rows). Its eight signal rows stand. The current measurement of the same
+> design is `20260922T204248-seed1` (`RUN-ANALYSIS.md` §10): baseline Sharpe
+> **-0.1147** (a *trained* model with `brierSkill -0.0751`), i.i.d. SE 0.2415 /
+> MDE95 ±0.4734, cross-stream corr 0.354 ⇒ design effect 4.87 ⇒ honest MDE95
+> **±1.0442** (`underpoweredDependent: true`), all 14 keep-off, SPA p = 0.4731,
+> cost ladder promotes `[none]` at 0/2/5/10 bps. The lesson the panel taught
+> (the i.i.d. line understates the SE) is *stronger*, not weaker, on the corrected
+> model: inflation 4.87× rather than ≈2.1×.
+
 ## The economic ceiling: turnover, cost and position policy
 
 The `20260921T062511-seed1` signal run (round 26's motivating evidence;
@@ -615,6 +627,15 @@ taker round-trip of 5-10 bps, and the signal family is invested ~93 % of bars
 (`nonZeroFraction ≈ 0.933`, `meanAbsPosition ≈ 0.45`) because its position mapping
 has no dead zone. So the honest question is not "does the feature predict" but "can
 the prediction be *held* long enough to pay for the trading it implies".
+
+> **Window-dependence caveat (round 26).** That 3.47 bps figure is the 2,200-bar
+> sample. On the 600-bar design the *same* signal family measures `sig:momentum`
+> **14.64 bps** and `sig:acceleration` **11.57 bps** — clearing a 5-10 bps taker —
+> at essentially the same per-bar turnover (~0.19), because the momentum gross P&L
+> per bar is ~29× higher in the recent window (`RUN-ANALYSIS.md` §10.5). So "the
+> signals die on cost" is a statement about the *sample*, not the strategy; the
+> statistic that agreed across both windows was the dependence-adjusted DSR, which
+> failed in both. Cite the window whenever a cost conclusion is drawn.
 
 Four strands of literature converge on the same structure:
 

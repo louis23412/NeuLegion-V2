@@ -34,7 +34,7 @@ significant digits — exactly like `hm:predictions` (Round 17/`BUGS.md` #16). T
 other ten fingerprints are byte-identical, and `golden.test.js` is 23/23. This is
 recorded here because any promote/re-freeze must be intentional and documented.
 
-## Round 23 — the evaluation is now *shipped-model* fidelity (no hot-path change; N3 verdict delivered by attempt 3 — nothing promotes)
+## Round 23 — the evaluation is now *shipped-model* fidelity (no hot-path change; N3 verdict delivered by attempt 3, then corrected by the round-26 re-run — nothing promotes)
 
 No optimization was applied in round 23 — it is a *measurement* round
 (`ROADMAP.md` N0-N3). It is recorded here because the project's rule is that any
@@ -111,6 +111,22 @@ fingerprint was re-frozen**. Round 24b fixed the five defects this run exposed
 (post-round-24b): COMPLETE in 43,129,704 ms (11.98 h), 12,960 passes, 15/15
 variants, 288 folds / 4,320 pooled bars. NOTHING PROMOTES — the N3 verdict.**
 
+> **⚠️ SUPERSEDED (round 26, `BUGS.md` #33).** This run predates the A/B's
+> window-fidelity fix, so `makeControllerModelFactory` fed the controller the whole
+> growing candle prefix instead of production's fixed `cacheSize` window. **Every
+> `baseline` and *mechanism* row in the table below — including `query-mod`'s
+> DSR-0.9992 / 33.73 bps — is therefore not the shipped model's**, and the table's
+> `fold-win`/`pos-fold` hurdles are computed against a baseline that never existed.
+> The **8 signal rows are unaffected** (a signal is pure array math and never
+> constructs a controller). The current verdict is the **same-design corrected
+> re-run `20260922T204248-seed1`** — all 14 keep-off, SPA p = 0.4731, baseline
+> Sharpe **-0.1147** (`brierSkill -0.0751`), `query-mod`/`multi-probe`/
+> `sample-weights` byte-identical to the baseline, `sig:momentum` 1.0848 /
+> `sig:acceleration` 1.0194 failing only the dependence-adjusted DSR floor, cost
+> ladder promotes `[none]` at 0/2/5/10 bps — in
+> [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) **§10**. Read the table below as the pre-fix
+> artifact it is.
+
 | candidate | kind | pooled Sharpe | DSR | fold-win | pos-fold | break-even | reachable | reasons |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | baseline | mechanism | 0.4387 | 0.5179 | — | 0.4444 | 12.42 bps | 243/288 | — |
@@ -162,6 +178,25 @@ The decision record is therefore: **no promote, no re-freeze, and the promotion
 gate itself is now on the work list** (round 25 — see `TODO.md` items 31-37 and
 `ROADMAP.md` round 25).
 
+**Round-26 update — the corrected re-run, and the current decision.**
+`20260922T204248-seed1` (the same 288-fold / 4,320-bar design, run *with* the
+round-26 corrections) completed in 28,418,998 ms (7.90 h) and is the current
+decision record: **all 14 candidates `keep-off`**, **SPA p = 0.4731**, the whole
+verdict promoted `[none]` at **every** cost level (0/2/5/10 bps — the §3 caveat
+above is fixed), baseline **Sharpe -0.1147 / PSR 0.3175 / DSR 0.0124 / break-even
+-2.58 bps** — a *trained* model (`trainingSteps 170,004`/variant, `warmErrors 0`)
+with **negative skill** (`brierSkill -0.0751`, `accuracySkill -0.1379`), which is the
+honest "no edge" reading §7.5 could not establish. `query-mod`, `multi-probe` and
+`sample-weights` are **byte-identical to the baseline on 288/288 folds**
+(`BUGS.md` #43/#44 — three untested candidates; their keep-off reasons are artefacts
+and `K = 15` counts them). The two real near-misses are `sig:momentum` (1.0848,
+break-even 14.64 bps; binding: fold-win 0.4931 + adjusted DSR 0.7375) and
+`sig:acceleration` (1.0194, 11.57 bps; binding: adjusted DSR 0.8343, with the paired
+cluster test significant at p = 0.0493, perfect stability and fold-win 0.5347). **No
+golden fingerprint was re-frozen; the run is entirely off the hot path.** Full
+forensics, including an exact offline reproduction of every per-fold and pooled
+metric from `folds.jsonl`: [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) **§10**.
+
 ## Verification method (bit-exact A/B)
 
 Any change that touches arithmetic is checked by training two copies of the
@@ -185,7 +220,7 @@ not raw buffers:
 
 A change is accepted only when every per-step fingerprint is identical,
 `maxPredDiff` is `0`, the semantic/memory counts match, and the LSH stats stay
-clean. The regression suites (`sanity.test.js` 59 checks, `core.test.js` 20,
+clean. The regression suites (`sanity.test.js` 60 checks, `core.test.js` 46,
 `indicators.test.js` 75) are then re-run.
 
 > Note: the earliest harness instrumented the class with `__weightHash` /
@@ -516,6 +551,30 @@ correlate the folds' trajectories and change the very fold-level statistics the
 cluster inference reads. That is a statistical decision, not an optimisation, so it
 stays out of this document. **Replaying history is the online training** — it must
 not be "optimised" away.
+
+### Round-26 measurement — the same design at 600 bars, and the combined 34 % saving
+
+The `20260922T204248-seed1` run (`RUN-ANALYSIS.md` §10) is the same design as §5's
+attempt 3 (8 streams × 600 bars ⇒ 36 folds/stream, `Σ_f(testStart_f)` = 11,610) with
+`saveInterval: "inf"`, so its `timings` give a corrected reading of the law:
+
+| variants | kind | folds | elapsed |
+| --- | --- | ---: | ---: |
+| 7 × mechanism (`baseline`…`sample-weights`) | mechanism | 288 | 3.89M – 4.19M ms each |
+| 8 × `sig:*` | signal | 288 | 50 – 162 ms each |
+
+Total 28,418,998 ms (7.90 h); the eight signals sum to ≈0.6 s, so the run is still
+entirely mechanism cost (≈4.06M ms per mechanism variant ⇒ ≈14.1 s per fold-pass).
+That backs out to ≈0.02-0.035 s per warm-up call, the same constant round 25b
+measured — the law is unchanged by the fidelity fix.
+
+**The identical design fell from 11.98 h to 7.90 h (a 34 % reduction).** This is *not*
+a controlled attribution: R26-12's checkpoint throttle (`saveInterval: inf`;
+`dumpState()` measured at ≈25 % of per-call cost — "Round 26b" below) and the #33
+window fix's removal of the re-insert churn (measured ≤ 8 %) both land in it, and the
+new run also does less training (2,362 baseline trades vs 2,671). Treat 34 % as the
+combined effect; the per-call breakdown in "Round 26b" is the only measured
+attribution.
 
 ## Round 26b — where the A/B's per-call cost actually goes, and the correction of round 25c
 

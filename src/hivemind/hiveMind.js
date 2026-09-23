@@ -67,6 +67,11 @@ class HiveMind {
     _baseAccessInc; _baseImpInc;
     _replaySizeScale; _mergeAccessScale; _coreBoostMultiplier;
     _trainingStepCount;
+    // Rows `train` rejected as invalid (BUGS.md #46). A rejected row returns the
+    // current step count rather than a bare `undefined`, so the persisted
+    // `global_stats.training_steps` (NOT NULL) can never be corrupted; this
+    // counter records that the rejection happened. Diagnostic only.
+    _rejectedTrainRows = 0;
     _ropeFreqs = null; _ropeCos = null; _ropeSin = null;
     _lshBitMasks = null;
     _lshKeyIsNumber = false;
@@ -126,14 +131,25 @@ class HiveMind {
     }
 
     predict (inputs) {
-        if ( !Array.isArray(inputs) || inputs.length !== this._inputSize || !inputs.every(isValidNumber) ) { return 0 }
+        // A degraded input must never be read as a legal extreme (BUGS.md #46):
+        // an invalid vector returns NaN, not 0 — a probability of 0 would map to a
+        // maximal short through the position policy. The controller turns a
+        // non-finite prediction into its documented -1 abstention sentinel.
+        if ( !Array.isArray(inputs) || inputs.length !== this._inputSize || !inputs.every(isValidNumber) ) { return NaN }
 
         const predictionResult = this._updateHiveState(inputs, null, false, false, false, true);
         return predictionResult.probability;
     }
 
     train (inputs, target, sampleWeight = 1) {
-        if ( !Array.isArray(inputs) || inputs.length !== this._inputSize || !inputs.every(isValidNumber) || !isValidNumber(target) ) { return }
+        // A rejected row must neither throw nor corrupt the monotone step counter
+        // (BUGS.md #46): return the CURRENT count (never a bare `undefined`, which
+        // `_processClosedTrades` would bind into the NOT NULL `global_stats` value)
+        // and record the rejection.
+        if ( !Array.isArray(inputs) || inputs.length !== this._inputSize || !inputs.every(isValidNumber) || !isValidNumber(target) ) {
+            this._rejectedTrainRows = (this._rejectedTrainRows || 0) + 1;
+            return this._trainingStepCount;
+        }
 
         // Optional per-sample loss weight (see training/sample_weights.js). The
         // default 1 makes the scaling a bit-exact no-op, so the golden

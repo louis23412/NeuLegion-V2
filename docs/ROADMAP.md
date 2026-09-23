@@ -7,8 +7,8 @@ scope freeze that bounds it.
 
 ## Status snapshot (this revision)
 
-- **Round 26 is planned and starts from a correctness finding, not from new
-  features.** The user asked for the round-26 draft to be re-checked for coherence
+- **Round 26 was planned and started from a correctness finding, not from new
+  features** (now implemented; its corrected re-run is the current verdict). The user asked for the round-26 draft to be re-checked for coherence
   and research grounding, and for a sweep + bug check of every controller before
   more compute is spent. The sweep's first pass found a **blocking** defect
   (`BUGS.md` #33): the
@@ -37,43 +37,109 @@ scope freeze that bounds it.
   fingerprints literal, `hm:predictions` **and** `hm:postReloadPrediction`
   compared at 6 significant digits ([`BUGS.md`](BUGS.md) #17, #19).
   `engine_portability.test.js` guards it.
-- **Local gate: green.** `npm test` is **123/123 `test()` blocks across 42
-  files, 0 failures, ~5.9 min** on the native driver (last re-run: round-26b, the
-  R26-4 parallel fix; [`BUGS.md`](BUGS.md) #42).
+- **Local gate: green.** `npm test` is **127/127 `test()` blocks across 43
+  files, 0 failures, ~5.9 min** on the native driver (last re-run: round 27, the
+  round-27 liveness/streaming additions; [`BUGS.md`](BUGS.md) #42/#52).
   The run exposed exactly one real defect in the new P0-P3 tooling — `preflight`
   counted the sampled candle window's truncated tail line as malformed, so it
   failed on a *healthy* checkout ([`BUGS.md`](BUGS.md) #20) — now fixed, with the
   test hardened to report the real failing check.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
-- **Browser suite**: 2289 checks across the 29 pass/fail entries (30 entries
-  including the non-pass/fail `bench`); 123 `test()` blocks across 42 node files
+- **Browser suite**: 2347 checks across the 30 pass/fail entries (31 entries
+  including the non-pass/fail `bench`); 127 `test()` blocks across 43 node files
   (R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second
-  block to it, all node-only suites),
+  block to it, R27-4b added `controller_invariants.test.js`, all node-only suites),
   all verified green in the browser harness for this revision (round 23 raised
   `walkforward` 31→48, `analysis` 354→390, `analyze` 47→98, round 24 raised
-  `analyze` 98→143, and made every
+  `analyze` 98→143, round 27 raised `sanity` 59→60, `core` 42→46, `analysis`
+  562→566, `sample_weights` 36→45, `walkforward` 62→63, `analyze` 222→245,
+  and made every
   wrap-style mirror assert its count **exactly**). The blocks are green on the
-  native driver — **confirmed locally at round-26b** (**123/123 `test()` blocks
-  across 42 files, 0 failures**, including the R26-12/R26-4/R26-5/R26-13 node-only
+  native driver — **confirmed locally at round 27** (**127/127 `test()` blocks
+  across 43 files, 0 failures**, including the R26-12/R26-4/R26-5/R26-13/R27-4b
+  node-only
   suites and the R26-4 parallel fix of `BUGS.md` #42) — and the browser checks are
   verified in the harness for this revision.
 - **No known live defect in the *math*.** The open work is now *run integrity*
   (fault isolation, reproducibility, a real end-to-end harness), *observability*
   (a monitor dashboard + a dedicated legion observer) and *evaluation* (the
   walk-forward A/B), in that order.
-- **N3 (the A/B verdict) is DELIVERED — nothing promotes.** The power run
-  (`20260920T144633-seed1`, 8 streams / 288 folds / 4,320 pooled bars, 11.98 h)
-  completed with a full report: **all 14 candidates `keep-off`**, family-wise
-  **SPA p = 0.5699** (best `sig:momentum`, Rejects = [none], K = 15, T = 4,032),
-  baseline pooled Sharpe **+0.4387** / DSR 0.5179. Three candidates
-  (`query-mod`, `sig:momentum`, `sig:acceleration`) have DSR ≈ 0.999 edges that
-  fail only the per-fold consistency hurdle; no golden was re-frozen. The run also
-  exposed two *report-honesty* defects — the power readout ignores cross-stream
-  correlation (`BUGS.md` #26) and the verdict is not cost-robust (`BUGS.md` #27) —
-  so **round 25 is the promotion-gate / report-honesty round**, not a construction
-  round. Forensics: [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §5.
+- **N3 (the A/B verdict) is DELIVERED — nothing promotes, and the verdict is now
+  the round-26 corrected one.** Attempt 3 (`20260920T144633-seed1`, 8 streams / 288
+  folds / 4,320 pooled bars, 11.98 h) returned **all 14 candidates `keep-off`**,
+  SPA p = 0.5699, but was made *before* the window-fidelity fix (`BUGS.md` #33), so
+  its baseline (+0.4387) and mechanism rows are not the shipped model's. The
+  **round-26 corrected re-run** (`20260922T204248-seed1`, the same design, 7.90 h)
+  is the current verdict: **all 14 `keep-off`**, **SPA p = 0.4731**, cost ladder
+  promotes `[none]` at 0/2/5/10 bps, baseline a *trained* model with **negative
+  skill** (Sharpe -0.1147, `brierSkill -0.0751`), and the two near-misses
+  (`sig:momentum` 1.0848, `sig:acceleration` 1.0194) failing only the
+  dependence-adjusted DSR floor. That run also exposed three *reading* defects
+  (`BUGS.md` #43/#44/#45 — three mechanism candidates are byte-identical to the
+  baseline, and the decision block's training answer describes only the winner), so
+  the immediate next work is the reading fixes plus the still-unrun sample-weighting
+  and label-policy experiments, not more compute. No golden was ever re-frozen.
+  Forensics: [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §5 (attempt 3, with the round-26
+  correction banner) and §10 (the corrected re-run).
+- **Round 27 is implemented** ([`PLAN-round27.md`](PLAN-round27.md)); its runs (R27-7) are pending:
+  make every candidate prove it ran (a `liveness` certificate; untested and
+  duplicate candidates out of `K`), make the input path fail closed, make the
+  holding period / `triple` vertical barrier reachable (`BUGS.md` #49), then run the
+  label-policy and (re-scoped, `triple`-conditional) sample-weighting experiments.
+  The second sweep sharpened `BUGS.md` #43/#44 into provable statements, added
+  #46/#47/#48/#49, and measured the K-sensitivity offline (`RUN-ANALYSIS.md`
+  §10.10). No golden is touched.
+
+## Round 27 — make a candidate prove it ran, make the labeler reachable, then run the two experiments (IMPLEMENTED; the runs are pending)
+
+**Deliverable: [`PLAN-round27.md`](PLAN-round27.md).** Status: **implemented (R27-1…R27-6, R27-8, R27-9); the runs are pending.** Round 26
+closed with three reading follow-ups (`BUGS.md` #43/#44/#45) and two experiments that
+had never run at power. Two planning sweeps then found that #43/#44 are stronger than
+first diagnosed, added #46/#47/#48, and — decisively — added **#49**: the holding
+period is structurally always 1, so the `triple` label policy's vertical barrier
+cannot fire and sample-uniqueness weighting is mathematically inert on the shipped
+labeler.
+
+Why the round exists, in one paragraph each:
+
+- **A candidate that never ran was reported as tested.** `sample-weights`,
+  `multi-probe` and `query-mod` were byte-identical to the baseline on 288/288 folds,
+  yet the report printed 15 keep-off "reasons" for them and counted all three in
+  `K = 15` (corroborated by `effectiveTrials 6.10 of 14`). The sweep *proved* why:
+  (a) `sample-weights` had no `configure`, the drain is always one label
+  (`baseProcessCount = 1`), **and the labels do not overlap** (`heldBars ≡ 1`,
+  #49) — so no wiring can make it non-trivial on `optimistic` (#43); (b)
+  `multi-probe`/`query-mod` read only `_getGlobalLSHCandidates`, whose single
+  caller's result is discarded, while the live retrieval path consults neither flag
+  (#44); and (c) `pca-hash` is live only through that *undocumented* reader, partly
+  via a bucket-content-dependent `Math.random()` draw count.
+- **Three more self-misdescription defects, plus the reachability defect.** A
+  degraded prediction is read as a **full short** and a rejected training row writes
+  `undefined` into `trainingSteps` (#46); `undertrainedFolds` can never fire (#47);
+  `skipped` is reported but not enforced and `global_stats.value` lies about its
+  type (#48); and `heldBars`/the `triple` vertical barrier are structurally
+  unreachable (#49).
+- **What round 27 does.** A liveness certificate over the already-journaled fold
+  signals (`live` / `inert` / `skipped` / `not-applicable` / `duplicate-of:<id>`),
+  with untested candidates outside `K` and the family-wise search and carrying one
+  explanatory reason (DSRs re-deflated at the reduced `K`); an `appliesTo` taxonomy;
+  a fix for the holding-period/vertical-barrier defect (#49) that leaves the
+  optimistic positions byte-identical; fail-closed input handling; diagnostics that
+  can fire; then the runs — a minutes-long liveness validation, a label-policy run
+  (`conservative` + the now-reachable `triple`), a weighting run with a `triple`
+  baseline (the only setting in which the item is answerable), and an optional 3-seed
+  replication of the near-misses.
+- **The design conclusion.** The run's own numbers (`effectiveStreams` 2.30 of 8,
+  dependence inflation 4.87×, MDE95 ±1.04) say the next *power* purchase is
+  independent information, not more bars of the same basket: **buy independence, not
+  bars** (R27-8). And any "costs kill the signals" claim must name its window
+  (momentum's break-even is 0.48 bps at 2,200 bars and 14.64 bps at 600).
+
+Acceptance criteria (§8), exact commands (§6), the file map (§7) and the resolved
+decisions (§3.5) are in the plan. **No item is implemented yet; no golden is
+touched.**
 
 ## Round 24 — make a verdict run survivable, then get it
 
@@ -212,7 +278,8 @@ All seven items are implemented, registered and test-guarded. The gate is green 
 the browser harness: **2289 checks, 0 failures** across all 29 pass/fail entries
 (`walkforward` 49 → 62, `analysis` 390 → 437, `analyze` 143 → 158; `locks` 41 and
 `modules` 50 unchanged). No golden fingerprint moved (nothing here is imported by
-the hot path). Full detail in `RUN-ANALYSIS.md` §6.
+the hot path). Full detail in `RUN-ANALYSIS.md` §6. *(Counts as at round 25; the
+current ledger is **2347** — see the status snapshot above.)*
 
 - **R25-1 ✅** `analysis/dependence.js` (new, LOCKED-invariant) + `dependenceSummary`
   in `analysis/walkforward.js`. Shipped the delete-one-cluster jackknife over
@@ -252,9 +319,10 @@ Two defects found while building it (both fixed, both in `BUGS.md`): #28
 candidate read as `not significant`) and #29 (a diversifying panel's
 "adjustment not needed" was reported as "no panel").
 
-### Round 26 — status: 🔵 **in progress** (R26-0 + R26-1 + R26-12 + R26-2 + R26-3 + R26-11 + R26-4 + R26-5 + R26-6 + R26-13 + R26-14 + R26-7 + R26-8 + R26-9 + R26-10 landed; correctness first, then economics)
+### Round 26 — status: ✅ **delivered, and run-verified** (R26-0 + R26-1 + R26-12 + R26-2 + R26-3 + R26-11 + R26-4 + R26-5 + R26-6 + R26-13 + R26-14 + R26-7 + R26-8 + R26-9 + R26-10 landed; the corrected full-size run `20260922T204248-seed1` closed the loop — `RUN-ANALYSIS.md` §10 — and opened three *reading*-only follow-ups, `BUGS.md` #43/#44/#45)
 
-Evidence and numbers: `RUN-ANALYSIS.md` §7 and §8; defects: `BUGS.md` #33-#37.
+Evidence and numbers: `RUN-ANALYSIS.md` §7, §8 and §10; defects: `BUGS.md` #33-#37
+(fixed) plus #43-#45 (open, report/roster wiring, no arithmetic).
 
 The draft of this round was six items (parallelise, journal, turnover, diversity,
 gate power, method). The user asked for it to be re-evaluated for coherence and
@@ -356,7 +424,7 @@ methodological point; one is housekeeping.
    `CITATIONS.md` "Experimental design, replication & model comparison".
 6. **Coherence fixes.** `RUN-ANALYSIS.md` §7.9 (cited twice) does not exist → §4;
    the status snapshot's browser-suite count was stale (1995 across 28 → **2070
-   across 29**; 2078 once the R26-0 contract tests landed, 2091 after R26-12, 2102 after R26-2, 2111 after R26-3, 2124 after R26-11, 2142 after R26-4, 2159 after R26-5, 2177 after R26-6, 2202 after R26-13, 2229 after R26-14, 2237 after R26-7, 2265 after R26-8, 2268 after R26-9, 2276 after R26-10, 2285 after R26-15, 2289 after the round-26b review); the round-23 "coherency audit" table is now labelled historical
+   across 29**; 2078 once the R26-0 contract tests landed, 2091 after R26-12, 2102 after R26-2, 2111 after R26-3, 2124 after R26-11, 2142 after R26-4, 2159 after R26-5, 2177 after R26-6, 2202 after R26-13, 2229 after R26-14, 2237 after R26-7, 2265 after R26-8, 2268 after R26-9, 2276 after R26-10, 2285 after R26-15, 2289 after the round-26b review, 2347 after the round-27 additions); the round-23 "coherency audit" table is now labelled historical
    with its ledger noted as the round-24b total; the sweep's standing output is
    named **§9** explicitly (§8 is the finding, §9 the matrix); and the acceptance /
    order-of-work below are updated for R26-11…R26-15.
@@ -1139,6 +1207,12 @@ R26-6).
    fingerprints unmoved; `RUN-ANALYSIS.md` §7's baseline numbers re-derived and §9
    written with the corrected readings. The native cost constant is re-measured
    after the fix (no churn-based saving is claimed without it).
+   **✅ done (round 26 run):** the corrected full-size run `20260922T204248-seed1`
+   is `RUN-ANALYSIS.md` §10 — it re-derives §5's (not §7's) design, which is the
+   same 288-fold/4,320-bar design, and records the corrected baseline
+   (Sharpe -0.1147, `brierSkill -0.0751`); §5 carries a correction banner. The
+   identical design fell from 11.98 h to 7.90 h (R26-12 + #33 combined; not a
+   controlled attribution).
 2. The sweep matrix complete (16 suspects × 10 invariants × every stateful
    component), every found defect either fixed with a contract test or recorded as
    a documented tradeoff — including the five "checked clean" cells.
@@ -1395,6 +1469,13 @@ These were established empirically before writing the plan below; they change it
 - **Controller-scoped variants stop being skipped.** With a controller-backed
   factory, `sample-weights` (`_sampleWeightConfig`) is evaluated like any other
   candidate; the `skipped` row disappears.
+  **Correction (the `20260922T204248-seed1` run, `BUGS.md` #43):** the `skipped`
+  row did disappear, but `sample-weights` was never *enabled* — the roster entry has
+  `configure: null` and nothing in the CLI or the factory sets `_sampleWeightConfig`,
+  so the candidate is byte-identical to the baseline and its keep-off reasons are
+  derived from a duplicate of the baseline series. `multi-probe` and `query-mod` are
+  likewise inert on the controller path (`BUGS.md` #44), so three of the seven
+  mechanism candidates carry no information and `K = 15` counts them.
 - **A fidelity self-check.** Every report states which model path produced the
   numbers (`model: 'bare-hivemind' | 'controller'`), the feature width and the
   indicator set, so a proxy result can never be misread as a shipped-model result.
@@ -1446,6 +1527,33 @@ These were established empirically before writing the plan below; they change it
   Two report-honesty defects surfaced (`BUGS.md` #26/#27) ⇒ **round 25**.
   Forensics, the exact offline journal verification and the supplemental
   cost/per-symbol/correlation analyses: [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §5.
+  **Correction (round 26):** attempt 3 was made *before* the window-fidelity fix
+  (`BUGS.md` #33), so its **baseline and mechanism rows are not the shipped model's**
+  — the `+0.4387` baseline and the `query-mod` DSR-0.9992 / 33.73 bps row are the
+  clearest casualties, and the whole of §5's cost ladder is superseded by §10. Its
+  eight *signal* rows stand (they are pure array math and are reproduced by §10).
+- **The round-26 corrected re-run (2026-09-22, seed 1) — THE CURRENT VERDICT.**
+  `20260922T204248-seed1` — the **same design as attempt 3** (8 streams × 600 bars,
+  288 folds, 4,320 pooled bars, 15 variants, seed 1, `costBps 0`), but the first run
+  made *with* the round-26 corrections — completed in 28,418,998 ms (7.90 h),
+  12,960 passes, 15/15 variants: **all 14 candidates `keep-off`**, **SPA p = 0.4731**
+  (Rejects = [none], best `sig:momentum`, K = 15, T = 4,032), and the cost ladder
+  promotes `[none]` at **all** of 0/2/5/10 bps (unlike attempt 3, which flipped to a
+  promote at 2 bps — `BUGS.md` #27). The fidelity fix moved exactly the rows it was
+  supposed to: the baseline is a **negative near-no-op** (Sharpe **-0.1147**, PSR
+  0.3175, DSR 0.0124, break-even -2.58 bps, meanAbsPos 0.0289) that is a *trained*
+  model with **negative skill** (170,004 steps/variant, `warmErrors 0`,
+  `brierSkill -0.0751`, `accuracySkill -0.1379`), closing §7.5's no-edge-vs-never-
+  trained ambiguity; `query-mod`, `multi-probe` and `sample-weights` are now
+  **byte-identical to the baseline on 288/288 folds** (`BUGS.md` #43/#44 — three
+  untested candidates, `K` inflated by 3). Every pure-signal row reproduces attempt 3
+  to ~1-2 % (`sig:momentum` 1.0848 / break-even 14.64 bps; `sig:acceleration` 1.0194
+  / 11.57 bps), and those two are the closest-to-promoting candidates the project has
+  had: each fails only the dependence-adjusted DSR floor (0.7375 / 0.8343 < 0.95),
+  with `sig:acceleration` also passing the paired cluster magnitude test (p = 0.0493),
+  the stability test and the fold-win test (0.5347). `RUN-ANALYSIS.md` §10 is the full
+  forensics, including an exact offline reproduction of every per-fold and pooled
+  metric from the journal.
 - **Attempts 1-2 (history).** Attempt 1 (2026-09-20, seed 1) was interrupted
   inside the second candidate — 1,862 fits, no `report.json`/`run.log`; attempt 2
   (the default smoke) was a complete but **underpowered** null (MDE95 ±2.0). Their
@@ -1764,7 +1872,10 @@ node mirror.
 > through a non-vacuous audit (`analysis/world.js`, `BUGS.md` #22) over a real
 > 15-candidate causal family. **The N3 verdict run is DONE**
 > (`20260920T144633-seed1`: nothing promotes, SPA p = 0.5699 —
-> [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §5, [`OPTIMIZATION.md`](OPTIMIZATION.md)).
+> [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §5, [`OPTIMIZATION.md`](OPTIMIZATION.md)),
+> **and the round-26 fidelity fix then corrected its baseline/mechanism rows** — the
+> current verdict is the same-design re-run `20260922T204248-seed1` (nothing
+> promotes, SPA p = 0.4731, `RUN-ANALYSIS.md` §10).
 
 This is the original P0, deliberately deferred behind P0/P1 so its verdict is
 reproducible and its report is evidenced. The plan itself is unchanged.
@@ -1896,12 +2007,12 @@ query-adaptive budget). None are in scope unless the definition of done in
 | Check | Result |
 | --- | --- |
 | Registry total & status split (53 = 17 + 36 + 0 + 0) | ✅ verified programmatically against `lock-registry.js` **at that revision** (current: 60 = 17 + 43 + 0 + 0) |
-| Ledger sum (1995, the round-24b total) vs `RUNBOOK.md` §6 table | ✅ exact match **at that revision**; the current ledger is 2289 |
+| Ledger sum (1995, the round-24b total) vs `RUNBOOK.md` §6 table | ✅ exact match **at that revision**; the current ledger is 2347 |
 | Manifest ↔ registry coverage (22 hivemind + 5 controller bags) | ✅ via `locks.test.js` |
 | Browser entries ↔ node mirrors ↔ `KNOWN_TESTS` (30/39/29) | ✅ via `mirrors.test.js` |
 | Golden fingerprint count (11) across all docs | ✅ consistent |
-| Syntax + relative-import resolution (169 JS files, 368 relative imports) | ✅ 0 errors (re-measured this revision) |
-| Counts in prose (115 blocks, 39 mirrors, 1995 checks) | ✅ synced **at that revision** (current: 123 blocks, 42 mirrors, 2289 checks) |
+| Syntax + relative-import resolution (185 JS files, 437 relative imports) | ✅ 0 errors (re-measured this revision) |
+| Counts in prose (115 blocks, 39 mirrors, 1995 checks) | ✅ synced **at that revision** (current: 127 blocks, 43 mirrors, 2347 checks) |
 | Exact check count in every wrap-style mirror | ✅ 20 mirrors now `assert.equal(result.total, N)` (was `>=`) |
 | Runner/worker/HTTP path in tests | ✅ **P0-3** delivered (`runner_smoke`, `http_view`, `dryrun`) |
 | Controller fault-isolation / malformed-input coverage | ✅ **P0-1** delivered (`guards`, `worker_pool`) |
@@ -1913,16 +2024,16 @@ query-adaptive budget). None are in scope unless the definition of done in
 | `hm:postReloadPrediction` raw-float surface | ✅ **P2-3** rounded; `5f703135` re-freeze recorded |
 | `legion/evolve.js` imported by nothing | ⚠️ orphan → **P3-2** (formal deferral) |
 | Native gate green (real `better-sqlite3` + `worker_threads`) | ✅ **115/115**, `BUGS.md` #21 |
-| A/B evaluates the **shipped** (controller) model path | ✅ **N0 delivered** — `makeControllerModelFactory` drives the real `HiveMindController` prequentially; `sample-weights` is evaluated, not skipped |
+| A/B evaluates the **shipped** (controller) model path | ✅ **N0 delivered** — `makeControllerModelFactory` drives the real `HiveMindController` prequentially; `sample-weights` is *included*, not skipped (⚠️ but inert — `BUGS.md` #43) |
 | The look-ahead audit is **non-vacuous** for a candle-driven model | ✅ **N0 delivered** — `viewFor` + a structural `vacuous` flag; the candle leak is now caught (`BUGS.md` #22) |
 | A real causal feature family is the candidate set | ✅ **N1 delivered** — 8 causal candidates in `analysis/features.js`, K = 15 on one family-wise gate |
 | The 8-symbol audited dataset is used | ✅ **N2 delivered** — `--symbols=all` + `readCandles` + `poolReports` (the *default* run is still BTCUSDT) |
 | Exact-count ledger floors | ✅ delivered — the 20 wrap mirrors assert exact counts (1845 → 1995 checks across rounds 23-24) |
 | Performance ceiling asserted | ✅ resolved as N/A — `bench` has no mirror so `npm test` never runs it; its `Math`-primitive counters are the hardware-independent regression signal |
-| The round-23 verdict itself | ✅ **N3 delivered** — `20260920T144633-seed1`, nothing promotes, SPA p = 0.5699 |
-| The report's own power claim | ⚠️ **round 25** — cross-stream correlation ⇒ honest MDE95 ≈ ±0.98, not ±0.47 (`BUGS.md` #26) |
-| The verdict's cost-robustness | ⚠️ **round 25** — the gate flips at 2 bps (`BUGS.md` #27) |
-| The fold-consistency hurdle | ⚠️ **round 25** — a raw 0.5 threshold on 288 correlated folds decides all three real candidates |
+| The round-23 verdict itself | ✅ **N3 delivered**, then corrected — the current verdict is `20260922T204248-seed1` (all 14 keep-off, SPA p = 0.4731, nothing promotes at 0/2/5/10 bps; `RUN-ANALYSIS.md` §10). Attempt 3's `+0.4387` baseline predates `BUGS.md` #33 and is superseded |
+| The report's own power claim | ✅ **round 25** — cross-stream correlation handled: the corrected run reports i.i.d. MDE95 ±0.4734 *and* the cluster-jackknife ±1.0442 with `underpoweredDependent`; the i.i.d. line no longer stands alone (`BUGS.md` #26) |
+| The verdict's cost-robustness | ✅ **round 26** — the dependence gate promotes `[none]` at 0/2/5/10 bps (`BUGS.md` #27 closed); the old fold-win/pos-fold hurdles are reported statistics, not the gate |
+| The fold-consistency hurdle | ✅ **round 26 (R26-7)** — replaced by the paired cluster significance test + the leave-one-window stability requirement (`analysis/dependence.js`); the sign test is reported-only |
 
 ## Open risks
 
@@ -1960,7 +2071,7 @@ query-adaptive budget). None are in scope unless the definition of done in
 - **Hardening must not move a fingerprint.** The P0-1 guards are error-path only;
   if any guard turns out to run on the clean path, it is a deliberate re-freeze,
   not a "cleanup".
-- **Ledger churn.** Ledger counts are (30 browser entries / 42 mirrors / 2289
+- **Ledger churn.** Ledger counts are (31 browser entries / 43 mirrors / 2347
   checks) and `mirrors.test.js` asserts the two layout constants exactly; every
   count in the docs must be re-synced in the same commit. Round 23 avoided adding
   entries by proving the new `analysis/world.js` and `analysis/features.js` inside

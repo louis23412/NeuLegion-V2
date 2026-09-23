@@ -145,6 +145,13 @@ catalogue, **not** a schedule.
    1.1059) and `sig:acceleration` (1.0502) miss only the fold-consistency hurdles.
    Nothing promoted ⇒ **no golden re-frozen**. Two report-honesty defects found
    (`BUGS.md` #26/#27) ⇒ round 25, items 31-37.
+   **SUPERSEDED (round 26, item 63): attempt 3 predated the window-fidelity fix
+   (`BUGS.md` #33), so its baseline/mechanism rows are not the shipped model's.** The
+   current verdict is the corrected re-run `20260922T204248-seed1` (`RUN-ANALYSIS.md`
+   §10): all 14 keep-off, SPA p = 0.4731, cost ladder promotes `[none]` at 0/2/5/10
+   bps, baseline Sharpe -0.1147 with `brierSkill -0.0751`, and `sig:momentum` (1.0848)
+   / `sig:acceleration` (1.0194) failing only the dependence-adjusted DSR floor. Its
+   eight signal rows reproduce attempt 3's to ~1-2 %.
    **Attempt 1 (2026-09-20, seed 1) ran out of road and produced NO verdict** —
    forensics in `RUN-ANALYSIS.md` §1: the manifest was exactly the intended power
    run, but the process died inside the second candidate (1,862 of ~17,280 fits,
@@ -188,7 +195,10 @@ catalogue, **not** a schedule.
    (`--symbols=all --bars=600 --audit-probes=1 --reuse-base`) then completed as
    `20260920T144633-seed1` in 11.98 h / 12,960 passes and gave the **N3 verdict**
    (item 18): all 14 candidates keep-off, SPA p = 0.5699, no promote, no golden
-   re-frozen. Only `run.json` + `report.json` + `run.log` + `folds.jsonl` were
+   re-frozen. **Superseded by the round-26 corrected re-run `20260922T204248-seed1`
+   (item 63):** attempt 3's baseline/mechanism rows predate the `BUGS.md` #33
+   fidelity fix; the current verdict is all 14 keep-off, SPA p = 0.4731, nothing
+   promotes at any cost level. Only `run.json` + `report.json` + `run.log` + `folds.jsonl` were
    uploaded (never `models/`), and the journal was verified offline end to end
    (`RUN-ANALYSIS.md` §5.3). Its forensics also produced the measured cost model
    (**10.7 s/controller fit** — `RUN-ANALYSIS.md` §4, ~2× the old 5.23 s estimate,
@@ -640,6 +650,164 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    fingerprints, so it needs its own A/B + golden decision, exactly like R26-12/13.
    Grounding: López de Prado 2018 ch. 3 (event-based sampling; the sample is only as
    fresh as the drain makes it).
+63. [x] **The round-26 corrected power run, and the offline forensics.**
+   `20260922T204248-seed1` — the first full-size run made *with* the round-26
+   corrections, on **attempt 3's exact design** (8 streams × 600 bars, 288 folds,
+   4,320 pooled bars, 15 variants, seed 1, `costBps 0`, `--audit-probes=1
+   --reuse-base`, `configFingerprint c0ba6493`) — completed in 28,418,998 ms
+   (7.90 h, vs 11.98 h for the same design pre-fix), 12,960 passes, 15/15 variants,
+   `phase: complete`, `policyRoundTrip {ok, mismatch 0, folds 288}`. Verdict: **all
+   14 candidates keep-off**, **SPA p = 0.4731** (Rejects = [none], best
+   `sig:momentum`, K = 15, T = 4,032); the cost ladder promotes `[none]` at
+   0/2/5/10 bps (**cost-robust**, unlike attempt 3's 2-bps flip — `BUGS.md` #27
+   closed). The fidelity fix moved exactly the intended rows: the baseline is
+   Sharpe **-0.1147** / PSR 0.3175 / DSR 0.0124 / break-even -2.58 bps, a *trained*
+   model with **negative skill** (170,004 steps/variant, `warmErrors 0`,
+   `brierSkill -0.0751`, `accuracySkill -0.1379`), and `query-mod`/`multi-probe`/
+   `sample-weights` are byte-identical to it (`BUGS.md` #43/#44). All eight signal
+   rows reproduce attempt 3 to ~1-2 % (`sig:momentum` 1.0848 / break-even 14.64 bps;
+   `sig:acceleration` 1.0194 / 11.57 bps), and those two are the closest-to-promoting
+   candidates the project has had: `sig:acceleration` passes the paired cluster
+   magnitude test (p = 0.0493), the stability test and the fold-win test (0.5347),
+   failing only `minDsrAdjusted` (0.8343); `sig:momentum` fails fold-win (0.4931) and
+   the adjusted DSR (0.7375). **The offline certificate:** `folds.jsonl` reproduces
+   every per-fold `netSharpe`/`turnover`/`meanAbsPosition`/`nonZeroFraction`/
+   `maxDrawdown` for all 4,320 folds with 0 mismatches, every pooled `grossPnl`/
+   `perPeriodNetSharpe` for all 15 variants exactly, and every `audit.reachableFolds`
+   count exactly; 4,320/4,320 base rows reused and byte-identical; 0 audit
+   violations. Forensics: `RUN-ANALYSIS.md` §10 (with an attempt-3 correction banner
+   added to §5).
+64. [x] **Candidate liveness — a candidate must prove it ran (`BUGS.md` #43/#44/#48;
+   round-27 plan R27-1/R27-2/R27-3).** The round-27 sweep sharpened this item
+   substantially; the full spec is `PLAN-round27.md` §2/§3. In short: (a) *report it*
+   — `evaluateAB` computes a `liveness` certificate per candidate as pure
+   post-processing of the already-journaled fold signals (`live` / `inert` /
+   `skipped` / `not-applicable`), gives an untested candidate exactly **one**
+   explanatory reason, and excludes it from `K` and the family-wise search
+   (`trialsRoster`/`trialsInactive` recorded). (b) *taxonomy* — `appliesTo: controller |
+   broadcast | agnostic`; `multi-probe`/`query-mod` are `not-applicable` on the
+   controller because their single reader's result (the `broadcastMemory` memory set)
+   is discarded, while the live retrieval path (`retrieval.js:251`/`:303`) consults
+   neither flag; `pca-hash`'s note is corrected to name `_retrieveTopRelevantProtos`.
+   (c) *make sample weighting real — only where it is expressible*: the drain is
+   always one label (`CONFIG.baseProcessCount = 1`; the A/B hardcodes `1`), and the
+   shipped labeler's labels do not overlap at all (`BUGS.md` #49: `heldBars ≡ 1`),
+   so uniqueness weighting is mathematically inert on `optimistic`. Close TODO #5
+   `not-applicable` for `optimistic` and implement the causal-window uniqueness
+   mechanism of R27-3 as a modifier of the (now reachable) `triple` label — off by
+   default, bit-identical off-state, weight distribution + ESS reported, tested with
+   a `triple` baseline. (d) *contract test* — at least one mechanism
+   candidate's positions differ from the baseline's on the shipped controller roster,
+   so this class cannot recur silently. Grounding: the non-vacuity discipline of
+   `BUGS.md` #22 applied to candidates (and Adebayo et al. 2018's randomised-control
+   rule: a mechanism that cannot change the output cannot be tested by it).
+65. [x] **Fix the decision block's training referent (`BUGS.md` #45; R27-5).** With a
+   signal winner, `report.decision.training.model` renders "no model diagnostics were
+   collected for this run (a pure-signal or bare run)" although the run trained seven
+   controllers with full diagnostics — the block is built from the featured
+   (winning) row only. Report the baseline's diagnostics under an explicit referent
+   when the featured row has no model, reword the `reason`, and pin it with an
+   `analysis.test.js` check on a *signal-wins* fixture (the run's real shape).
+   Cosmetic rider: rename `nextRun.pairedUnits.required.observed` (it is a
+   requirement — 37 clusters needed — not an observation; the run has 36), e.g.
+   `neededForObserved`.
+66. [x] **Checkpoint/journal completeness (R27-5).** `partial-report.json` (the crash-recovery
+   artifact) omits the `forecast` block and the config-echo fields (`trials`,
+   `gateOptions`, `saveInterval`, `labelPolicy`, `labelHorizonBars`, `concurrency`,
+   `intervalBars`, `commonRandomNumbers`, `turnoverSweep`, `streamSelection`,
+   `policyRoundTrip`), so an interrupted run's partial cannot be read for the gate
+   semantics, the searched-roster size the DSRs were deflated by, or the forecast
+   panel. Write the config echo into the first checkpoint (or name what is
+   final-only in `RUNBOOK.md`). Also: `run.log`'s variant checkpoints still do not
+   carry the variant's `kind`/`elapsedMs` (the console line does — R25-7 landed it
+   there), so the journal's 0.7 s tail for the eight signal variants still needs the
+   cost model to explain it.
+67. [x] **Method note: the forecast/MCS panel compares across `kind` (R27-5).** R26-14's
+   panel scores each variant's `confidence` as a probability. For a mechanism
+   variant that is calibrated-ish (baseline brier 0.2522 at base rate 0.5005), but
+   for a signal variant `confidence` is a *raw score* (sig:momentum brier 0.3394,
+   sig:range 0.3492 — worse than a constant), so all eight signals are eliminated
+   from the MCS for not being probabilities, not for having worse P&L forecasts.
+   Decide whether to group the MCS by `kind`, or to map a signal's score through the
+   unified position policy to a probability before scoring it (the MCS is diagnostic
+   and moves no verdict, so this is a legibility/grounding item) — and record the
+   decision in `METHOD.md`.
+68. [x] **Fail-closed input path (`BUGS.md` #46; R27-4).** `HiveMind.predict` returns
+   `0` for an invalid input, which the controller maps to `prob=0` →
+   `confidence −1` → a **full short** (`POSITION_POLICY.deadZone 0.05` does not catch
+   a magnitude of 1). `HiveMind.train` bare-returns `undefined` for an invalid input,
+   which `_processClosedTrades` writes into `trainingSteps` (then `_saveGlobalAccuracy`
+   binds `undefined` into a `NOT NULL` column inside a transaction). Make invalid
+   `predict` → `NaN` (the controller's `−1` abstention route), invalid `train` →
+   the current step count + a `rejectedTrainRows` counter, restate the controller's
+   guard as "finite **and** `>= 0`, else abstain", and declare `global_stats.value`
+   `NUMERIC` (or store the Brier sum in integer micro-units). Tests: a poisoned
+   input abstains; `trainingSteps` is monotone non-decreasing and finite over a long
+   stream.
+69. [x] **Diagnostics that can fire (`BUGS.md` #47; R27-5).** `undertrainedFolds` is
+   `testStart < warmup(40)` and the first test bar is `≥ trainSize(60)`, so it is
+   always 0 while being printed beside real diagnostics. Report
+   `shallowHistoryFolds` (its true meaning) plus a real `underTrainedFolds` from the
+   fold's `trainingSteps` against its available history; delete the ambiguous field.
+   Add the `heldBars`/`resolved`/monotone-`trainingSteps` invariant test.
+70. [ ] **Round 27's runs (R27-7).** (a) the liveness validation on two streams
+   (`--symbols=BTCUSDT,ETHUSDT --bars=200 --train=60 --test=15 --audit-probes=1
+   --reuse-base --variants=sample-weights,multiprobe,querymod,pca-hash,surprise,homeostasis`);
+   (b) the label-policy run
+   (`--symbols=all --bars=600 --train=60 --test=15 --seed=1 --audit-probes=1
+   --reuse-base --concurrency=4 --variants=label-conservative,label-triple
+   --label-horizon=20 --cost-ladder=0,2,5,10`); (c) the weighting run with a
+   **`triple` baseline** (`--label-policy=triple --label-horizon=20
+   --variants=sample-weights`), the only setting in which TODO #5 is answerable, and
+   itself conditional on R27-4b; (d) optional `--seeds=1,2,3` on
+   `sig-momentum,sig-accel` (the id is `sig-accel`; `sig-acceleration` does not exist
+   and `resolveVariant` throws — `PLAN-round27.md` §2.8) for a seed distribution
+   (Bouthillier et al. 2019). Step 0.5 is the offline K restatement of the existing
+   journal. Commands and expected readouts are in `PLAN-round27.md` §6.
+71. [x] **Bake the defaults in (R27-9).** `runAnalysis.requireReachable` → `true`
+   (CLI `--reachable=0` opts out); CLI `--audit-probes` default `2` → `1` (the
+   round-26 run already passed `1` explicitly, so this protects the no-flag case);
+   the liveness block / inert+duplicate exclusion / taxonomy are always on (no
+   flag); `sample-weights` is removed from the controller default roster. Rationale:
+   the runs must be a list of commands, not a list of decisions. Pinned by a fourth
+   `analyze_cli.test.js` block, which spawns the real CLI: the flags are documented
+   in `--help`, threaded into `run.json`/`report.json`, `--list-variants` starts no
+   run, and the defaults (`requireReachable=true`, `auditProbesPerFold=1`,
+   `minTrainingSteps=1`) are recorded.
+72. [x] **Design note: buy independence, not bars (R27-8).** Record in `METHOD.md`
+   that the run's own dependence panel (`effectiveStreams` 2.30 of 8, inflation
+   4.87×, MDE95 ±1.04 vs ±0.47 i.i.d.) fixes the next *power* purchase as
+   independent information, not more bars of the same basket, and name the three
+   levers (new streams/source, more fold-window clusters via a smaller `testSize`,
+   a second interval) with their trade-offs.
+73. [x] **Make the holding period and the vertical barrier reachable (`BUGS.md` #49;
+   R27-4b).** `heldBars` is structurally exactly 1 (the round-26 journal:
+   `{count=sum=185937, max=1}`) because `_updateOpenTrades` counts bars only within
+   the one newly-inserted candle it is handed per call, so the `triple` policy's
+   vertical barrier (`barsAfterEntry >= horizonBars`) can never fire for
+   `horizonBars > 1` and `label-triple` silently degrades to `conservative`. Compute
+   `barsAfterEntry` from the cached window (`fullCandles`) — leaving the
+   horizontal-barrier fill loop over the new bars, so optimistic/conservative
+   positions and every golden fingerprint are byte-identical — and record the
+   `cacheSize − 1` cap. Tests: before/after byte-identity, `heldBars` varying,
+   `resolvedTimeBarrier > 0` on a `triple` fold at `H > 1`.
+
+**Round-27 status: items 64–69 and 71–73 are DONE** (item 70's runs are the
+operator's). The code and tests landed: the `liveness` certificate + active-K
+restatement (64), the taxonomy and `--list-variants` (64), sample-weighting
+re-scoped to `not-applicable` on `optimistic` with a `triple`-conditional
+causal-window estimator (64, item 5), the baseline `modelReferent` and
+`neededForObserved` rename (65), the `partial-report.json` config echo and the
+`run.log` `kind`/`elapsedMs` checkpoints (66), the per-kind forecast block (67),
+the fail-closed input path + `NUMERIC` `global_stats.value` (68), the fireable
+`underTrainedFolds`/`shallowHistoryFolds` diagnostics (69), the baked-in defaults
+(71), the independence design note in `METHOD.md` (72), and the window-derived
+holding period + reachable vertical barrier (73). Dispositions and the test that
+pins each are in `BUGS.md` #43–#52 and `RUNBOOK.md` §6. One plan deviation: the
+controller-level cross-run determinism test is not expressible in the harness
+(two controller streams in one worker share model module state), so determinism is
+pinned on a bare `HiveMind` (identical predictions **and** identical
+`Math.random()` draw counts) in `controller_invariants.test.js`.
 
 **Deferred — research leads (NOT scheduled; see `DESIGN.md` §5)**
 
@@ -1293,7 +1461,24 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    controller bridge (`_sampleWeightsForBatch`) ships off by default. Still to do
    before promotion to on-by-default: a walk-forward run showing which
    normalisation/floor improves PSR/DSR vs the unweighted baseline on the
-   shipped candles. Grounding: `financial-validation.md`.
+   shipped candles. **Round-27 status (R27-3; closed `not-applicable` for `optimistic`):** the A/B
+   candidate named `sample-weights` no longer sits in the default controller roster
+   (it stays resolvable as an opt-in, with a real `configure`), and the mechanism is
+   **mathematically inert on the `optimistic` labeler** — every drain is a batch of
+   one label (`CONFIG.baseProcessCount = 1`; the A/B hardcodes `1`) *and* the shipped
+   labeler's labels do not overlap (the round-26 journal records `heldBars { count:
+   185937, sum: 185937, max: 1, mean: 1 }`, `BUGS.md` #49), so AFML ch.4 average
+   uniqueness is exactly 1 for every label and no wiring can change that. R27-4b
+   fixes #49 (a label can now span `H > 1` bars and overlap) and R27-3 ships the
+   causal-window estimator (`causalWindowWeight` in
+   `src/hivemind/training/sample_weights.js`) as an opt-in modifier of the `triple`
+   label: off by default, bit-identical when off, the weight distribution + ESS
+   reported so an all-ones vector is visible, and the A/B's `liveness` certificate
+   reports the candidate `inert` automatically. `sample_weights.test.js` (45 checks)
+   pins the pure mathematics and the reference vectors. The run that answers the
+   PSR/DSR question (`--label-policy=triple --label-horizon=20
+   --variants=sample-weights`, R27-7c) is the operator's; if it reports ESS ≈ n, close
+   this item permanently. Grounding: `financial-validation.md`; `METHOD.md` §4.
 6. ~~**Homeostatic plasticity controller** (arXiv 2609.13771).~~ **DONE**
    (Round 2) — see the in-progress list above.
    `src/hivemind/ensemble/homeostasis.js` + `homeostasis.test.js` (30 checks)

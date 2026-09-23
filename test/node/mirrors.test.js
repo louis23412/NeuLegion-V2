@@ -12,6 +12,11 @@
 //      <= 21 accepted but Node >= 22 loads as a module, so the run dies with
 //      `Cannot find module '.../test/node'` before executing anything
 //      (docs/BUGS.md #14), or `engines.node` dropping below the 22 the glob needs.
+//   5. a node mirror whose STATIC import graph reaches a module with a URL
+//      scheme the default ESM loader rejects (e.g. a browser-only CDN `https:`
+//      import), which kills the mirror at import time before a single check runs
+//      (docs/BUGS.md #52); a browser-only module must be reached through a
+//      dynamic `import()` inside a function body instead.
 //
 // Run with `npm test`.
 import { test } from 'node:test';
@@ -61,11 +66,47 @@ const NODE_ONLY = new Set([
 const testFiles = (dir) => fs.readdirSync(dir).filter((f) => f.endsWith('.test.js')).sort();
 const exists = (...parts) => fs.existsSync(path.join(...parts));
 
-// The ledger the two structural counts below are pinned to: 30 browser entries
-// (29 with a pass/fail contract, plus `bench`) and 42 node mirrors (29 mirrors +
+// Schemes Node's default ESM loader resolves. Anything else (in practice `https:`)
+// throws ERR_UNSUPPORTED_ESM_URL_SCHEME. Bare specifiers and relative paths are
+// resolved through node_modules / the filesystem and are always loadable; only
+// the recursive walk below needs the allow-list.
+const LOADABLE_SCHEMES = new Set(['node', 'file', 'data']);
+
+// Every specifier reachable from `entryFile` through STATIC `import`/`export ...
+// from` declarations (i.e. exactly what Node resolves while linking the module
+// graph, before any test body runs). A dynamic `import(x)` inside a function is
+// deliberately NOT followed: it only executes on the browser path, so it cannot
+// break the native run.
+function staticImportsOf(entryFile) {
+    const staticRe = /(?:^|\n)\s*(?:import|export)\s+(?:[^'"]*?\sfrom\s+)?["']([^"']+)["']/g;
+    const seen = new Set();
+    const out = [];
+    const walk = (file) => {
+        if (seen.has(file)) return;
+        seen.add(file);
+        let src;
+        try { src = fs.readFileSync(file, 'utf8'); } catch { return; }
+        let m;
+        staticRe.lastIndex = 0;
+        while ((m = staticRe.exec(src))) {
+            const spec = m[1];
+            const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(spec);
+            if (scheme) {
+                if (!LOADABLE_SCHEMES.has(scheme[1])) out.push({ via: file, spec });
+                continue;
+            }
+            if (spec.startsWith('.')) walk(path.resolve(path.dirname(file), spec));
+        }
+    };
+    walk(entryFile);
+    return out;
+}
+
+// The ledger the two structural counts below are pinned to: 31 browser entries
+// (30 with a pass/fail contract, plus `bench`) and 43 node mirrors (30 mirrors +
 // the 13 Node-only suites). See RUNBOOK.md §6.
-const BROWSER_ENTRY_LEDGER = 30;
-const NODE_MIRROR_LEDGER = 42;
+const BROWSER_ENTRY_LEDGER = 31;
+const NODE_MIRROR_LEDGER = 43;
 
 test('every pass/fail browser entry has a node mirror', () => {
     const entries = testFiles(entriesDir);
@@ -88,6 +129,25 @@ test('every node mirror declares at least one test case', () => {
 test('every node mirror corresponds to a browser entry', () => {
     const orphans = testFiles(here).filter((f) => !NODE_ONLY.has(f) && !exists(entriesDir, f));
     assert.deepEqual(orphans, [], `node mirrors with no browser entry: ${orphans.join(', ')}`);
+});
+
+test('no node mirror statically imports a URL the Node loader rejects', () => {
+    // docs/BUGS.md #52: the R27-6 mirror re-exported a browser entry that
+    // statically imported the sql.js shim, whose CDN `https:` import Node's
+    // default ESM loader refuses (`ERR_UNSUPPORTED_ESM_URL_SCHEME`) — so the
+    // mirror died during linking, before a single check ran, and `npm test`
+    // reported only a bare `test failed`. The walk catches the whole class: any
+    // module reachable from a mirror through static `import`/`export ... from`
+    // must be loadable by Node, so a browser-only CDN module has to be reached
+    // by a dynamic `import()` (which the native driver never executes).
+    const offenders = [];
+    for (const f of testFiles(here)) {
+        for (const { via, spec } of staticImportsOf(path.join(here, f))) {
+            offenders.push(`${f} -> ${spec} (imported by ${path.relative(projectRoot, via)})`);
+        }
+    }
+    assert.deepEqual(offenders, [],
+        `node mirrors whose static import graph reaches a URL Node cannot load:\n${offenders.join('\n')}`);
 });
 
 test('the lock registry knows every browser entry', async () => {

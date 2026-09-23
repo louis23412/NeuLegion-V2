@@ -320,17 +320,23 @@ function cheapestFlip({ candidate, dependence, pooledMetrics, breakEvenBps, leve
 function pairedUnitsNeeded({ se, nClusters, targets = {}, z = 1.959964 } = {}) {
     if (!isNum(se) || !(se > 0)) return na('no finite paired standard error to size a paired comparison from');
     if (!isNum(nClusters) || nClusters < 2) return na('no paired cluster/seed count to size a paired comparison from');
-    const required = {};
+    const needed = {};
     for (const [name, target] of Object.entries(targets || {})) {
-        required[name] = isNum(target) && target > 0 ? Math.ceil(nClusters * (z * se / target) ** 2) : null;
+        needed[name] = isNum(target) && target > 0 ? Math.ceil(nClusters * (z * se / target) ** 2) : null;
     }
     return {
         available: true,
         se,
         nClusters,
         z,
-        required,
-        reader: 'the fold-window clusters (or independent seeds) a PAIRED variant-vs-baseline comparison would need for the 95% paired SE to fall to each target Sharpe difference: nClusters * (1.959964 * se / target)^2, from the measured paired SE (se) over nClusters clusters. A lower bound (an 80%-powered test needs ~2.1x more); barsToDetect sizes a single series, this sizes the paired difference the decision uses.',
+        needed,
+        // R27-5: flat, self-describing aliases. The old `required.observed` read as
+        // an OBSERVATION ("we observed 37 clusters") when it is a REQUIREMENT ("you
+        // need 37 clusters to detect what you observed; you have 36"). It aliases
+        // `needed.observed`, and `needed.mde95Dependent` gets the same treatment.
+        neededForObserved: needed.observed == null ? null : needed.observed,
+        neededForMde95Dependent: needed.mde95Dependent == null ? null : needed.mde95Dependent,
+        reader: 'the fold-window clusters (or independent seeds) a PAIRED variant-vs-baseline comparison would NEED for the 95% paired SE to fall to each target Sharpe difference: nClusters * (1.959964 * se / target)^2, from the measured paired SE (se) over nClusters clusters. `neededForObserved` is the requirement at the measured difference; `needed.mde95Dependent` is the requirement at the dependence-corrected MDE. A lower bound (an 80%-powered test needs ~2.1x more); barsToDetect sizes a single series, this sizes the paired difference the decision uses.',
     };
 }
 
@@ -339,6 +345,11 @@ function pairedUnitsNeeded({ se, nClusters, targets = {}, z = 1.959964 } = {}) {
 // ---------------------------------------------------------------------------
 export function decisionReport({
     model = null,
+    // R27-5: when the featured row has no model block of its own (a pure signal
+    // candidate that won), the caller passes the BASELINE's model here, so the
+    // training question is answered by the baseline controller and labelled as such
+    // instead of degrading to n/a. `{ kind: 'baseline' }` is the only kind today.
+    modelReferent = null,
     runMeta = {},
     baseline = null,
     candidate = null,
@@ -353,10 +364,19 @@ export function decisionReport({
     positionPolicy = null,
 } = {}) {
     const meta = runMeta || {};
+    const referentBaseline = !!(modelReferent && modelReferent.kind === 'baseline');
+    const modelBlock = model || null;
+    const candModel = candidate && candidate.model ? candidate.model : null;
+    // Which model block the training question is answered by. Without a referent
+    // this is the featured candidate's own model (or the `model` argument); with a
+    // baseline referent it is the baseline's, explicitly labelled.
+    const effectiveModel = referentBaseline ? modelBlock : (candModel || modelBlock);
+    const modelAvailable = !!(effectiveModel && effectiveModel.available !== false);
     const training = {
         // Question 1: did the models train, and on what? Null model diagnostics is
         // stated as such, never rendered as a healthy model.
-        model: model || na('no model diagnostics were collected for this run (a pure-signal or bare run)'),
+        model: effectiveModel || na('no model diagnostics were collected for this run (a pure-signal or bare run)'),
+        modelReferent: modelReferent || null,
         labelPolicy: meta.labelPolicy == null ? null : meta.labelPolicy,
         labelHorizonBars: meta.labelHorizonBars == null ? null : meta.labelHorizonBars,
         seed: meta.seed == null ? null : meta.seed,
@@ -367,14 +387,18 @@ export function decisionReport({
         // `labelDistribution` field — so reading `candidate.model.labelDistribution`
         // here was always a silent null (the same shape-mismatch class as `BUGS.md`
         // #38). A model-backed candidate now carries its label distribution; a pure
-        // signal candidate (no model) is still an explicit null.
-        labelDistribution: candidate && candidate.model ? {
-            status: candidate.model.status == null ? null : candidate.model.status,
-            baseRate: candidate.model.baseRate == null ? null : candidate.model.baseRate,
-            resolved: candidate.model.resolved || null,
-            heldBars: candidate.model.heldBars || null,
+        // signal candidate (no model) is still an explicit null. R27-5: when a
+        // referent is supplied, the distribution follows the referent (the effective
+        // model block above), so the two always agree on whose model they describe.
+        labelDistribution: modelAvailable ? {
+            status: effectiveModel.status == null ? null : effectiveModel.status,
+            baseRate: effectiveModel.baseRate == null ? null : effectiveModel.baseRate,
+            resolved: effectiveModel.resolved || null,
+            heldBars: effectiveModel.heldBars || null,
         } : null,
-        reader: 'the per-variant model diagnostics (training steps, label base rate, skill, resolved-barrier split, entry-to-close holding-period distribution) plus the label policy, seed and searched-roster size. A null model block means a pure-signal variant, not a trained one. The entry-to-training age (the FIFO/`processCount=1` drain lag) is NOT yet measured — see TODO #62.',
+        reader: referentBaseline
+            ? 'the per-variant model diagnostics (training steps, label base rate, skill, resolved-barrier split, entry-to-close holding-period distribution) plus the label policy, seed and searched-roster size, WITH AN EXPLICIT REFERENT: the featured row is a pure signal with no model of its own, so `model` and `labelDistribution` are the BASELINE controller\'s, stated as such via `modelReferent`. A null model block means a pure-signal variant, not a trained one. The entry-to-training age (the FIFO/`processCount=1` drain lag) is NOT yet measured — see TODO #62.'
+            : 'the per-variant model diagnostics (training steps, label base rate, skill, resolved-barrier split, entry-to-close holding-period distribution) plus the label policy, seed and searched-roster size. A null model block means a pure-signal variant, not a trained one. The entry-to-training age (the FIFO/`processCount=1` drain lag) is NOT yet measured — see TODO #62.',
     };
     const edge = {
         available: true,
@@ -456,8 +480,8 @@ export function formatDecision(decision) {
         lines.push(`  nextRun: effBars=${fmt(n.effectiveBars)} MDE95=${fmt(n.mde95)}` +
             (n.mde95Dependent == null ? '' : ` (dep ${fmt(n.mde95Dependent)})`) +
             ` breakEven=${n.breakEvenBps == null ? 'n/a' : `${fmt(n.breakEvenBps)}bps`}` +
-            (n.pairedUnits && n.pairedUnits.available && n.pairedUnits.required && n.pairedUnits.required.observed != null
-                ? ` | pairedClusters(obs)=${n.pairedUnits.required.observed}` : '') +
+            (n.pairedUnits && n.pairedUnits.available && n.pairedUnits.neededForObserved != null
+                ? ` | pairedClusters(need,obs)=${n.pairedUnits.neededForObserved}` : '') +
             (n.cheapestFlip && n.cheapestFlip.available ? ` | cheapest flip: ${n.cheapestFlip.kind}` : ''));
     } else {
         lines.push(`  nextRun: n/a (${n ? n.reason : 'none'})`);

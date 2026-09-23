@@ -97,7 +97,7 @@ export const CONTROLLER_COMPONENTS = {
         '_robustNormalize', '_computeProtoQuality', '_interleave',
         '_extractFeatures', '_chooseDimension',
     ],
-    controllerTrade: ['_updateOpenTrades', '_processClosedTrades', '_sampleWeightsForBatch'],
+    controllerTrade: ['_updateOpenTrades', '_processClosedTrades', '_sampleWeightsForBatch', '_accumulateSampleWeightStats', 'sampleWeightSummary'],
 };
 
 // The controller class body keeps the constructor and the public getSignal().

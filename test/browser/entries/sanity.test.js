@@ -248,13 +248,27 @@ export async function run() {
     try {
         const hm = new HiveMind('state/sanity-G', 2, 8, 'S', true);
         Math.random = mulberry32(3);
-        check('predict rejects wrong length', hm.predict([1, 2, 3]) === 0);
-        check('predict rejects non-numeric', hm.predict(new Array(8).fill('x')) === 0);
-        check('predict rejects non-array', hm.predict('nope') === 0);
-        check('train rejects wrong length', hm.train([1, 2], 1) === undefined);
-        check('train rejects NaN target', hm.train(new Array(8).fill(0.5), NaN) === undefined);
+        const startSteps = hm._trainingStepCount;
+        // R27-4 (BUGS.md #46): a degraded input must not be read as a legal extreme.
+        // `predict` on an invalid vector returns NaN (not 0, which the position
+        // policy would read as a maximal short); the controller turns a non-finite
+        // prediction into its -1 abstention.
+        check('R27-4: predict rejects a wrong-length input with NaN (never a legal-looking 0)',
+            Number.isNaN(hm.predict([1, 2, 3])));
+        check('R27-4: predict rejects a non-numeric input with NaN',
+            Number.isNaN(hm.predict(new Array(8).fill('x'))));
+        check('R27-4: predict rejects a non-array input with NaN',
+            Number.isNaN(hm.predict('nope')));
+        // `train` returns the CURRENT step count (never a bare `undefined`, which
+        // would be bound into the NOT NULL `global_stats` value) and counts the drop.
+        check('R27-4: train rejects a wrong-length row without corrupting the step counter',
+            hm.train([1, 2], 1) === startSteps && hm._trainingStepCount === startSteps);
+        check('R27-4: train rejects a NaN target without corrupting the step counter',
+            hm.train(new Array(8).fill(0.5), NaN) === startSteps && hm._trainingStepCount === startSteps);
+        check('R27-4: every rejected training row is counted (the drop is visible, not silent)',
+            hm._rejectedTrainRows === 2, `rejected=${hm._rejectedTrainRows}`);
         const step = hm.train(new Array(8).fill(0.5), 1);
-        check('train accepts valid input', typeof step === 'number' && step > 0, `step=${step}`);
+        check('train accepts valid input', typeof step === 'number' && step === startSteps + 1, `step=${step}`);
     } catch (e) {
         check('API validation block completed', false, e.stack);
     }

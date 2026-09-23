@@ -144,3 +144,45 @@ export function spanWeightsFromEntries(entries, config = null) {
     }
     return sampleWeights(spans, cfg);
 }
+
+// Causal streaming-window weight (round 27, R27-3). The controller keeps a ring
+// of the last `windowBars` OBSERVED label spans; a new label's weight is its
+// average uniqueness measured against that ring PLUS itself, mean-1 normalised
+// over the whole window so the mean weight stays 1 (the effective learning rate
+// is unchanged). Pure: no I/O, no RNG, no mutation of `windowSpans`.
+//
+// `windowSpans` / `newSpan` are `[startBar, endBar]` inclusive spans in a shared
+// bar-index space. The spans are rebased before the concurrency sweep so the
+// internal `Float64Array` stays O(windowBars + horizon) regardless of how far the
+// bar clock has advanced. Returns the new label's normalised weight, the window's
+// Kish effective sample size (`ess`) and size (`n`), and the raw window vector —
+// so an all-ones result (the non-overlapping/inert case) is visible.
+export function causalWindowWeight(windowSpans, newSpan, config = null) {
+    const cfg = resolveWeightConfig(config);
+    const spans = [];
+    if (Array.isArray(windowSpans)) {
+        for (const s of windowSpans) {
+            if (Array.isArray(s) && Number.isFinite(s[0]) && Number.isFinite(s[1]) && s[1] >= s[0]) {
+                spans.push([s[0], s[1]]);
+            }
+        }
+    }
+    const usable = Array.isArray(newSpan) && Number.isFinite(newSpan[0]) && Number.isFinite(newSpan[1]) && newSpan[1] >= newSpan[0];
+    if (!usable) {
+        return { weight: 1, ess: spans.length, n: spans.length, windowUniqueness: null, normalized: null };
+    }
+    spans.push([newSpan[0], newSpan[1]]);
+    let minStart = Infinity;
+    for (const s of spans) if (s[0] < minStart) minStart = s[0];
+    const rebased = spans.map(([s, e]) => [s - minStart, e - minStart]);
+    const uniqueness = overlapUniqueness(rebased);
+    const normalized = normalizeWeights(clampWeights(uniqueness, cfg.minWeight, cfg.maxWeight), cfg.normalization);
+    const n = normalized.length;
+    return {
+        weight: normalized[n - 1],
+        ess: weightEffectiveSampleSize(normalized),
+        n,
+        windowUniqueness: uniqueness,
+        normalized,
+    };
+}

@@ -185,6 +185,14 @@ export const lshMethods = {
         this._insertProtoToLSH(transformerIdx, proto);
     },
 
+    // The BROADCAST-path candidate probe (R27-2): its only caller in the tree is
+    // `broadcastMemory` (knowledge/transfer.js), whose result `getSignal` stores in
+    // `_memoryBroadcast` for the signal payload only — nothing reads it back into
+    // the model — so `_multiProbeConfig`/`_queryModConfig` cannot move a scored
+    // position and the A/B reports them `not-applicable` (BUGS.md #44). The LIVE
+    // retrieval reader is `_retrieveTopRelevantProtos` (memory/retrieval.js), which
+    // probes the buckets directly and consults neither flag; `_refreshLshHyperplanes`
+    // mutates the buckets that reader reads, so `pca-hash` IS live.
     _getGlobalLSHCandidates (queryMean, queryProjs, maxCandidates = 200) {
         if (!queryMean || !queryProjs || !queryProjs.length) return [];
 

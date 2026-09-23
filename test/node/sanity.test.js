@@ -201,13 +201,20 @@ test('sanity F: persistence round-trip is stable', () => {
 // ---- G. public API input validation -----------------------------------------
 test('sanity G: public API rejects malformed input', () => {
     const hm = withSeed(3, () => new HiveMind(tempStateDir('sanity-G'), 2, 8, 'S', true));
-    assert.equal(withSeed(3, () => hm.predict([1, 2, 3])), 0);
-    assert.equal(withSeed(3, () => hm.predict(new Array(8).fill('x'))), 0);
-    assert.equal(withSeed(3, () => hm.predict('nope')), 0);
-    assert.equal(withSeed(3, () => hm.train([1, 2], 1)), undefined);
-    assert.equal(withSeed(3, () => hm.train(new Array(8).fill(0.5), NaN)), undefined);
+    // R27-4 (BUGS.md #46): an invalid vector returns NaN (not the legal-looking 0,
+    // which the position policy would read as a maximal short), and a rejected
+    // training row returns the CURRENT step count (never a bare `undefined`) while
+    // incrementing the rejection counter.
+    const startSteps = hm._trainingStepCount;
+    assert.ok(Number.isNaN(withSeed(3, () => hm.predict([1, 2, 3]))));
+    assert.ok(Number.isNaN(withSeed(3, () => hm.predict(new Array(8).fill('x')))));
+    assert.ok(Number.isNaN(withSeed(3, () => hm.predict('nope'))));
+    assert.equal(withSeed(3, () => hm.train([1, 2], 1)), startSteps);
+    assert.equal(withSeed(3, () => hm.train(new Array(8).fill(0.5), NaN)), startSteps);
+    assert.equal(hm._trainingStepCount, startSteps);
+    assert.equal(hm._rejectedTrainRows, 2, `rejected=${hm._rejectedTrainRows}`);
     const step = withSeed(3, () => hm.train(new Array(8).fill(0.5), 1));
-    assert.ok(typeof step === 'number' && step > 0, `step=${step}`);
+    assert.ok(typeof step === 'number' && step === startSteps + 1, `step=${step}`);
 });
 
 // ---- H. broadcastMemory / translateMemory shape -----------------------------

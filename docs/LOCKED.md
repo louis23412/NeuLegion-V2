@@ -30,7 +30,7 @@ entries in the core** — additives live in separate modules (`src/analysis/`) a
 are only promoted into the registry once a test proves them.
 
 There are also **no `NEEDS-LOCAL-RUN` entries left**. The native `npm test`
-suite is green (**115/115 blocks** at round 22, `docs/BUGS.md` #20/#21), so the
+suite is green (**127/127 blocks across 43 files** at round 27, `docs/BUGS.md` #20/#21/#42/#52), so the
 three controller DB
 bags (`controllerDatabase`, `controllerAccuracy`, `controllerTrade`) were
 promoted to `LOCKED-invariant` exactly as `RUNBOOK.md` §6.1 prescribes. The
@@ -75,13 +75,13 @@ A/B-driver support modules: `sanitize.js`, `rng.js`, `legion_metrics.js`,
 | `controllerAccuracy` | load/save global accuracy | LOCKED-invariant | ensemble | live DB; `ctl:accuracyTotals` / `ctl:signalTrajectory` pin the accumulated counters end-to-end on the native driver |
 | `controllerCandle` | `_getRecentCandles` | LOCKED-invariant | finance | window + entryPrice==close |
 | `controllerFeature` | normalise/quality/interleave/extract | LOCKED-invariant | attention | exact feature sequence |
-| `controllerTrade` | open/closed trade bookkeeping | LOCKED-invariant | finance | live DB; direction invariants in core + across all 8 symbols (`multisymbol.test.js`) and the per-bar bookkeeping via `ctl:*`, all on the native driver; target grid owned by `price_precision.js` |
+| `controllerTrade` | open/closed trade bookkeeping | LOCKED-invariant | finance | live DB; direction invariants in core + across all 8 symbols (`multisymbol.test.js`), the per-bar bookkeeping via `ctl:*`, and the R27-4b holding-period/vertical-barrier invariants (`controller_invariants.test.js`), all on the native driver; target grid owned by `price_precision.js` |
 
 ### Analysis supercharges (`src/analysis/`)
 
 Registered separately (they are not bags of either class). All `LOCKED-invariant`,
-proven by `analysis.test.js` (562 checks) with exact reference vectors (the harness additionally
-has a real-candle end-to-end run in `walkforward.test.js`, 62 checks, whose
+proven by `analysis.test.js` (566 checks) with exact reference vectors (the harness additionally
+has a real-candle end-to-end run in `walkforward.test.js`, 63 checks, whose
 section K is the round-23 audit-vacuity guard, while `analysis.test.js` §AC pins
 the world and signal-family arithmetic). They never import from
 the locked hot path, so they cannot move a golden fingerprint.
@@ -217,7 +217,7 @@ Domain `memory`, citation Titans (arXiv 2501.00663). The semantic write path
   equals `surpriseGate(1 - bestSim)` (not merely correlated), and a genuinely
   novel candidate is written more than 2× more strongly than a predictable one.
 
-### Sample-uniqueness loss weighting (`sample_weights.test.js`, 36 checks)
+### Sample-uniqueness loss weighting (`sample_weights.test.js`, 45 checks)
 
 Domain `finance`, citation Lopez de Prado, *Advances in Financial Machine
 Learning*, ch. 4. Overlapping labels share information; weighting each
@@ -536,7 +536,7 @@ candidate). That is an honest, measured **negative**, and it matches the
 synthetic crossover exactly — the mechanism is correct, the operating regime is
 just past the crossover.
 
-### Walk-forward evaluation harness (`walkforward.test.js`, 62 checks; `analysis.test.js` section S)
+### Walk-forward evaluation harness (`walkforward.test.js`, 63 checks; `analysis.test.js` section S)
 
 Domain `finance`, citations Pardo 2008 (walk-forward analysis), López de Prado
 AFML (purged CV, DSR) and decision-time leakage (arXiv 2605.23959).
@@ -928,7 +928,7 @@ on the same window grid. Every number is pinned from the seeded generator.
 - Browser: `test/browser/entries/locks.test.js` (part of the standard suite).
 - Local (Node + better-sqlite3): `npm test` — includes `test/node/locks.test.js`
   and every mirror, on the real driver. Green as of the run recorded in
-  `docs/BUGS.md` #21 (**115/115 blocks**).
+  `docs/BUGS.md` #21, re-confirmed at round 27 (**127/127 blocks across 43 files**, #42/#52).
 
 ## Promoting a component
 

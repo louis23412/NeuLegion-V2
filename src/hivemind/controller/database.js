@@ -37,7 +37,7 @@ export const controllerDatabaseMethods = {
             );
             CREATE TABLE IF NOT EXISTS global_stats (
                 key TEXT PRIMARY KEY,
-                value INTEGER NOT NULL
+                value NUMERIC NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_open_trades_sellPrice ON open_trades(sellPrice);
             CREATE INDEX IF NOT EXISTS idx_open_trades_stopLoss ON open_trades(stopLoss);

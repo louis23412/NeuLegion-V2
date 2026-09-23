@@ -184,7 +184,12 @@ Grounding for round 26 (R26-3/R26-5): the *economic* half of the ceiling the
 `20260921T062511-seed1` run exposed. The signal family's gross edge per unit of
 turnover is 0.09-3.47 bps against a 5-10 bps taker cost, so the question is not
 whether a signal predicts but whether its prediction can be *held* long enough to
-pay for the trading it implies.
+pay for the trading it implies. **(Window-dependence caveat, round 26: that figure
+is the 2,200-bar sample. On the 600-bar design the same family measures 14.64 bps
+(`sig:momentum`) and 11.57 bps (`sig:acceleration`) — clearing a 5-10 bps taker —
+at the same per-bar turnover, because the momentum edge is concentrated in the
+recent window. Cite the sample when a cost conclusion is drawn —
+`RUN-ANALYSIS.md` §10.5.)**
 
 - Constantinides. *Capital Market Equilibrium with Transaction Costs.* Journal of
   Political Economy 94(4):842–862, 1986. (a proportional transaction cost makes the
@@ -316,6 +321,38 @@ aware comparison.
   Dumps.* Future Generation Computer Systems 22(3), 2006. (the refined interval for
   large dumps — the same tradeoff for the A/B, where the dump is large and the
   failure window is a whole run)
+
+Added in round 27 — the **liveness / non-vacuity** discipline, which is what makes a
+candidate's "it did not promote" a statement about the candidate rather than about
+the harness:
+
+- Adebayo, Gilmer, Muelly, Goodfellow, Hardt & Kim. *Sanity Checks for Saliency
+  Maps.* NeurIPS 2018. arXiv 1810.03292. (the discipline: a mechanism must be
+  subjected to a **randomised control** before its explanation/effect is believed —
+  a method whose output is unchanged when the thing it claims to explain is
+  randomised is untested, not validated. The candidate analogue is the round-27
+  `liveness` certificate: a candidate that cannot differ from the baseline is
+  `inert`, and an inert candidate must not contribute a "reason" or a `K` trial —
+  the same rule `BUGS.md` #22 already applies to the look-ahead audit's probes)
+- Fisher, Rudin & Dominici. *All Models are Wrong, but Many are Useful: Learning a
+  Variable's Importance by Studying an Entire Class of Prediction Models
+  Simultaneously.* JMLR 20(177):1–81, 2019. arXiv 1801.01489. (**model reliance** —
+  the quantity a feature-ablation study is estimating, and the argument that
+  attribution must be defined against the unit the feature can actually act on; the
+  reason `multi-probe`/`query-mod` being off the controller's path is a
+  *taxonomy* fact, not a performance result, `BUGS.md` #44)
+- Gelman & Loken. *The Garden of Forking Paths: Why Multiple Comparisons Can Be a
+  Problem, Even When There Is No "Fishing Expedition" or "p-Hacking" and the
+  Research Hypothesis Was Posited Ahead of Time.* 2013 (unpublished). (a `K` that
+  silently includes untested arms is not a conservative correction but a
+  mis-statement of the search that was actually run; grounds the round-27
+  `trialsRoster`/`trialsInactive` split)
+- Abadie, Athey, Imbens & Wooldridge. *When Should You Adjust Standard Errors for
+  Clustering?* Quarterly Journal of Economics 138(1):1–35, 2023. (the decisive
+  question is whether the treatment varies within the cluster; with few clusters the
+  t(C−1) reference is the honest one — together with Cameron & Miller 2015, the frame
+  for the `pairedUnits.neededForObserved` sizing that names the next run's cheapest
+  lever, R27-8)
 
 ## Observability, calibration & monitoring
 

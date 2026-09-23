@@ -34,7 +34,7 @@ import fs from 'fs';
 import path from 'path';
 import {
     VARIANTS, SIGNAL_VARIANTS, ALL_VARIANTS, LABEL_VARIANTS, RESOLVABLE_VARIANTS,
-    FEATURE_LEN, resolveVariant, applyVariant,
+    FEATURE_LEN, resolveVariant, applyVariant, notApplicableReason, listVariants, formatVariantList, forecastKindOf,
     featureVector, makeHiveMindModelFactory, makeControllerModelFactory, makeSignalForVariant,
     withSeed, evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, readCloses, readCandles, runAnalysis,
     replicateAnalysis,
@@ -44,6 +44,7 @@ import { walkForwardSplit } from '../../../src/analysis/splits.js';
 import { poolReports, auditNoLookahead, restateReportAtPolicy, confidenceToPosition, confidenceFromProb } from '../../../src/analysis/walkforward.js';
 import { backtestMetrics } from '../../../src/analysis/backtest.js';
 import { shockCandles, volumeShockFactor, makeCandleViewFor } from '../../../src/analysis/world.js';
+import { CANDLE_MANIFEST } from '../../../src/candles_audit.js';
 
 // A deterministic synthetic return series with a persistent, learnable rhythm:
 // slow up/down blocks, so a causal signal can genuinely carry an edge (and a
@@ -88,8 +89,8 @@ export async function run() {
     // ---- A. variant table -------------------------------------------------
     check('baseline is present and first', VARIANTS[0].id === 'baseline');
     check('variant ids are unique', new Set(VARIANTS.map((v) => v.id)).size === VARIANTS.length);
-    check('every non-baseline variant has a configure (except the controller-scoped one)',
-        VARIANTS.every((v) => v.id === 'baseline' || typeof v.configure === 'function' || v.controllerScoped === true));
+    check('every non-baseline default variant has a configure',
+        VARIANTS.every((v) => v.id === 'baseline' || typeof v.configure === 'function'));
     check('the default family ships the Round-2..16 features',
         ['surprise', 'homeostasis', 'multiprobe', 'querymod', 'pca-hash'].every((id) => VARIANTS.some((v) => v.id === id)));
     check('resolveVariant returns the right entry', resolveVariant('homeostasis').id === 'homeostasis');
@@ -122,10 +123,47 @@ export async function run() {
     const stub4 = {};
     applyVariant(stub4, resolveVariant('pca-hash'));
     check('applyVariant applies the pca-hash config', stub4._pcaHashConfig && stub4._pcaHashConfig.rankPolicy === 'above-mean');
-    const stub5 = {};
-    check('applyVariant reports the controller-scoped variant as not applied', applyVariant(stub5, resolveVariant('sample-weights')) === false);
+    // R27-3: `sample-weights` is now an opt-in variant WITH a real configure, so
+    // the "no configure" example is a synthetic controller-scoped variant.
+    check('applyVariant applies the opt-in sample-weights configure to a controller',
+        (() => { const c = {}; return applyVariant(c, resolveVariant('sample-weights')) === true && c._sampleWeightConfig && c._sampleWeightConfig.mode === 'causal-window'; })());
+    check('applyVariant reports a controller-scoped variant with no configure as not applied',
+        applyVariant({}, { id: 'x', controllerScoped: true, configure: null }) === false);
     check('applyVariant is a no-op for a signal candidate (no configure)',
         applyVariant({}, resolveVariant(SIGNAL_VARIANTS[0].id)) === false);
+
+    // ---- B2. R27-2: the candidate taxonomy (which code path each variant reaches)
+    // A variant that cannot reach the scored model must say so, so the report marks
+    // it `not-applicable` instead of presenting it as a tested arm (BUGS.md #44).
+    const taxonomy = listVariants('controller');
+    check('R27-2: every resolvable variant declares a taxonomy (id, kind, appliesTo, applicable)',
+        taxonomy.length === RESOLVABLE_VARIANTS.length &&
+        taxonomy.every((r) => typeof r.id === 'string' && ['mechanism', 'signal', 'label'].includes(r.kind) &&
+            ['agnostic', 'model', 'controller', 'broadcast'].includes(r.appliesTo) && typeof r.applicable === 'boolean') &&
+        taxonomy.every((r) => r.applicable || (typeof r.reason === 'string' && r.reason.length > 0)),
+        JSON.stringify(taxonomy.map((r) => [r.id, r.appliesTo, r.applicable])));
+    check('R27-2: multi-probe and query-mod are broadcast-only, so they are not-applicable on the scored controller',
+        notApplicableReason(resolveVariant('multiprobe'), 'controller').includes('broadcastMemory') &&
+        notApplicableReason(resolveVariant('querymod'), 'controller').includes('broadcastMemory') &&
+        listVariants('controller').filter((r) => !r.applicable).map((r) => r.id).sort().join(',') === 'multiprobe,querymod');
+    check('R27-2: pca-hash stays applicable on the controller (its live reader is _retrieveTopRelevantProtos)',
+        notApplicableReason(resolveVariant('pca-hash'), 'controller') === null &&
+        resolveVariant('pca-hash').note.includes('_retrieveTopRelevantProtos'));
+    check('R27-2: a controller-scoped variant is not-applicable on a non-controller model',
+        notApplicableReason(resolveVariant('sample-weights'), 'bare').includes('controller-backed') &&
+        notApplicableReason(resolveVariant('surprise'), 'bare') === null &&
+        notApplicableReason(resolveVariant(SIGNAL_VARIANTS[0].id), 'bare') === null);
+    check('R27-2: the taxonomy table renders one row per resolvable variant with an applies-to column',
+        (() => { const s = formatVariantList(taxonomy); return s.split('\n').length === taxonomy.length + 2 && s.includes('applies-to') && s.includes('broadcast'); })());
+    check('R27-2: sample-weights is resolvable (opt-in) but NOT in the default roster',
+        !ALL_VARIANTS.some((v) => v.id === 'sample-weights') && resolveVariant('sample-weights').id === 'sample-weights' &&
+        listVariants('controller').find((r) => r.id === 'sample-weights').inDefaultRoster === false &&
+        listVariants('controller').find((r) => r.id === 'sample-weights').controllerScoped === true);
+    check('R27-5: forecastKindOf groups the controller family (baseline/mechanism/label) apart from the signals',
+        forecastKindOf(resolveVariant('baseline')) === 'controller' &&
+        forecastKindOf(resolveVariant('surprise')) === 'controller' &&
+        forecastKindOf(resolveVariant('label-triple')) === 'controller' &&
+        forecastKindOf(resolveVariant(SIGNAL_VARIANTS[0].id)) === 'signal');
 
     // ---- C. featureVector -------------------------------------------------
     const r = [0.01, -0.02, 0.03, 0.04, -0.05, 0.06];
@@ -541,6 +579,91 @@ export async function run() {
     check('the controller model reports its position policy in the result',
         JSON.stringify(ctlRun.positionPolicy) === JSON.stringify(CONTROLLER_POSITION_POLICY));
 
+    // ---- M2. R27-1: the liveness certificate + the active-K restatement -------
+    // A candidate that never reaches the model path (an inert mechanism, a
+    // duplicate of an earlier live candidate) used to be scored, counted in K and
+    // handed a fabricated hurdle list. It is now certified, excluded from K and the
+    // family-wise search, and carries exactly one reason.
+    {
+        const ret = synthReturns(120);
+        const folds = walkForwardSplit({ n: 120, trainSize: 60, testSize: 10 });
+        const mkSignal = (variant) => {
+            let call = 0;
+            return (tr, te, view) => {
+                const foldIndex = call++;
+                const base = te.map((t) => Math.sign(view.returns[t] || 0));
+                switch (variant.id) {
+                    case 'inert-a': return base;
+                    case 'live-diff': return base.map((s) => -s);
+                    case 'dup-a': return base.map((s) => -s);
+                    case 'flip-one': return base.map((s, i) => (foldIndex === 1 && i === 0 ? -s : s));
+                    default: return base;
+                }
+            };
+        };
+        const variants = [
+            { id: 'baseline', label: 'baseline', configure: null },
+            { id: 'live-diff', label: 'live-diff', configure: null },
+            { id: 'inert-a', label: 'inert-a', configure: null },
+            { id: 'dup-a', label: 'dup-a', configure: null },
+            { id: 'flip-one', label: 'flip-one', configure: null },
+            // R27-3: a variant may carry its own precise inert reason (the shipped
+            // `sample-weights` does: labels do not overlap, so it reaches the model
+            // path and multiplies by 1) instead of the generic "never reaches" wording.
+            { id: 'inert-why', label: 'inert-why', inertReason: 'no two label spans overlap', configure: null },
+        ];
+        const res = evaluateAB({ returns: ret, folds, variants, signalForVariant: mkSignal, audit: false, costBps: 0 });
+        const byId = Object.fromEntries(res.candidates.map((c) => [c.variant.id, c]));
+        check('R27-1: an inert candidate is certified inert, excluded from K/search, and carries exactly one reason',
+            byId['inert-a'].liveness.status === 'inert' && byId['inert-a'].active === false &&
+            byId['inert-a'].search === null && byId['inert-a'].decision.inactive === true &&
+            byId['inert-a'].decision.reasons.length === 1 &&
+            // R27-3: a variant's own `inertReason` is used when it has one (the shipped
+            // `sample-weights` cites non-overlap), else the generic wording.
+            byId['inert-a'].liveness.reason.includes('never reaches the model path') &&
+            byId['inert-why'].liveness.status === 'inert' && byId['inert-why'].active === false &&
+            byId['inert-why'].liveness.reason.includes('no two label spans overlap'),
+            JSON.stringify({ inert: byId['inert-a'].liveness, why: byId['inert-why'].liveness }));
+        check('R27-1: a candidate identical to an earlier live candidate is certified duplicate-of:<id>',
+            byId['dup-a'].liveness.status === 'duplicate-of:live-diff' && byId['dup-a'].active === false &&
+            byId['dup-a'].search === null && byId['dup-a'].decision.inactive === true,
+            JSON.stringify(byId['dup-a'].liveness));
+        check('R27-1: a candidate that differs on one fold is live, in the search, and reports its max fold diff',
+            byId['live-diff'].active === true && byId['live-diff'].search !== null && byId['live-diff'].liveness.maxAbsDiff > 0 &&
+            byId['flip-one'].active === true && byId['flip-one'].search !== null && byId['flip-one'].liveness.maxAbsDiff > 0,
+            JSON.stringify({ live: byId['live-diff'].liveness, flip: byId['flip-one'].liveness }));
+        check('R27-1: trials is the ACTIVE K (baseline + live), trialsRoster the requested roster, and the counts add up',
+            res.trials === 3 && res.trialsRoster === 6 && res.trialsInactive === 3 &&
+            res.inactiveCounts.inert >= 1 && res.inactiveCounts.duplicate >= 1 &&
+            res.liveness.active === 3 && res.liveness.roster === 6,
+            JSON.stringify({ trials: res.trials, roster: res.trialsRoster, inactive: res.trialsInactive, counts: res.inactiveCounts }));
+        check('R27-1: an inactive row keeps its roster-K report in reportRoster while every row carries the active K in report',
+            byId['inert-a'].reportRoster.trials === 6 && byId['inert-a'].report.trials === 3 &&
+            byId['live-diff'].report.trials === 3,
+            JSON.stringify({ rosterK: byId['inert-a'].reportRoster.trials, activeK: byId['inert-a'].report.trials }));
+
+        // R27-2: the taxonomy is ENFORCED, not just declared. A broadcast-only
+        // variant cannot reach the scored controller, so it is certified
+        // `not-applicable` (naming the broadcast path), excluded from K and the
+        // search, and given exactly one reason — never scored and handed fabricated
+        // hurdles. Note the signal would be identical to the baseline here, so
+        // without the taxonomy it would be misreported as `inert` (a tested arm).
+        const variantsB = [
+            { id: 'baseline', label: 'baseline', configure: null },
+            { id: 'live-diff', label: 'live-diff', configure: null },
+            { id: 'multiprobe', label: 'multi-probe', appliesTo: 'broadcast', configure: null },
+        ];
+        const resB = evaluateAB({ returns: ret, folds, variants: variantsB, signalForVariant: mkSignal, audit: false, costBps: 0, model: 'controller' });
+        const byB = Object.fromEntries(resB.candidates.map((c) => [c.variant.id, c]));
+        check('R27-2: a broadcast-only variant on the controller is not-applicable, outside K/search, naming the broadcast path',
+            byB['multiprobe'].liveness.status === 'not-applicable' && byB['multiprobe'].active === false &&
+            typeof byB['multiprobe'].notApplicable === 'string' && byB['multiprobe'].notApplicable.includes('broadcastMemory') &&
+            byB['multiprobe'].search === null && byB['multiprobe'].decision.inactive === true &&
+            byB['multiprobe'].decision.reasons.length === 1 &&
+            resB.trials === 2 && resB.trialsRoster === 3 && resB.inactiveCounts.notApplicable === 1,
+            JSON.stringify({ status: byB['multiprobe'].liveness.status, ro: resB.trialsRoster, act: resB.trials }));
+    }
+
     // ---- N. runAnalysis (the CLI core, with injected fakes) ----------------
     // A deterministic *varying* controller stand-in, so the pooled streams are not
     // flat and the family-wise cross-check is actually exercised.
@@ -589,39 +712,45 @@ export async function run() {
             rep.trainSize === 60 && rep.testSize === 15 && rep.maxBars === 120 &&
             rep.auditProbesPerFold === 2 && Number.isFinite(rep.probe) && rep.probe > 0 &&
             rep.power && rep.power.bars > 0 && JSON.stringify(rep.positionPolicy) === JSON.stringify(CONTROLLER_POSITION_POLICY));
-        check('runAnalysis evaluates the full 15-candidate family on the controller path (sample-weights included, not skipped)',
-            rep.variants.length === 15 && rep.variants.some((v) => v.id === 'sample-weights' && v.skipped === false) &&
+        check('runAnalysis evaluates the default 14-candidate family on the controller path (sample-weights is opt-in, not in the roster)',
+            rep.variants.length === 14 && !rep.variants.some((v) => v.id === 'sample-weights') &&
             rep.variants.filter((v) => v.kind === 'signal').length === 8);
         check('runAnalysis reports the audit as skipped when audit=false', rep.baseline.audit === null);
         check('the run summary names the model, streams and probe', typeof rep.summary === 'string' && rep.summary.includes('model: controller') && rep.summary.includes('streams=1'));
         check('the run carries a family-wise cross-check over the pooled stream',
-            rep.familywise && Number.isFinite(rep.familywise.K) && typeof rep.familywise.best === 'string' && rep.familywise.K === 15,
+            rep.familywise && Number.isFinite(rep.familywise.K) && typeof rep.familywise.best === 'string' && rep.familywise.K === rep.trials,
             JSON.stringify(rep.familywise).slice(0, 200));
         check('every candidate row carries a decision, a reason list and a pooled metrics block',
-            rep.candidates.length === 14 && rep.candidates.every((c) => typeof c.promote === 'boolean' && Array.isArray(c.reasons) && !!c.pooledMetrics && c.kind));
+            rep.candidates.length === 13 && rep.candidates.every((c) => typeof c.promote === 'boolean' && Array.isArray(c.reasons) && !!c.pooledMetrics && c.kind));
         check('R26-7: runAnalysis states the dependence gate, its alpha and every hurdle it applies',
             rep.gate === 'dependence' && rep.gateAlpha === 0.05 && rep.gateOptions.requireSharpeDiff === true &&
             rep.gateOptions.requireClusterStability === true && rep.gateOptions.minDsrAdjusted === 0.95 && rep.gateOptions.alpha === 0.05 &&
             rep.gateOptions.requireBreadth === undefined);
         check('R26-7: a single-stream run has no panel, so the dependence block is null and the panel hurdles read skipped-no-panel',
             rep.baseline.dependence === null && rep.candidates.every((c) => c.dependence === null) &&
-            rep.candidates.every((c) => c.gate && c.gate.requireSharpeDiff === 'skipped-no-panel' &&
-                c.gate.requireClusterStability === 'skipped-no-panel' && c.gate.minDsrAdjusted === 'skipped-no-panel'));
+            rep.candidates.filter((c) => c.active).every((c) => c.gate && c.gate.requireSharpeDiff === 'skipped-no-panel' &&
+                c.gate.requireClusterStability === 'skipped-no-panel' && c.gate.minDsrAdjusted === 'skipped-no-panel') &&
+            // R27-1: an inactive candidate is not gated at all — it carries one
+            // explicit reason and is excluded from K and the search.
+            rep.candidates.filter((c) => !c.active).every((c) => c.inactive === true && c.liveness && typeof c.liveness.reason === 'string' && c.liveness.reason.length > 0),
+            JSON.stringify({ dep: rep.baseline.dependence, active: rep.candidates.filter((c) => c.active).map((c) => [c.id, c.gate && c.gate.requireSharpeDiff, c.dependence]), inactive: rep.candidates.filter((c) => !c.active).map((c) => [c.id, c.inactive, c.liveness && c.liveness.reason && c.liveness.reason.slice(0, 30)]) }));
         check('every candidate row carries the paired promotion test object (available:false with a reason, never absent)',
             rep.candidates.every((c) => c.promotionTest && c.promotionTest.available === false && typeof c.promotionTest.reason === 'string'));
         check('the run carries the default cost ladder, restating the baseline at every level',
-            rep.costLadder && rep.costLadder.available && rep.costLadder.trials === rep.variants.length &&
+            rep.costLadder && rep.costLadder.available && rep.costLadder.trials === rep.trials &&
             rep.costLadder.rows.length === 4 && rep.costLadder.rows.map((r) => r.costBps).join(',') === '0,2,5,10' &&
             rep.costLadder.rows.every((r) => r.baseline.dsrAdjusted === null) &&
             rep.costLadder.rows[0].baseline.netSharpe >= rep.costLadder.rows[3].baseline.netSharpe);
-        check('the run carries the family-correlation diagnostic over the whole searched family',
-            rep.familyCorrelation && rep.familyCorrelation.available && rep.familyCorrelation.K === 14 && rep.familyCorrelation.folds === rep.folds);
+        check('the run carries the family-correlation diagnostic over the whole active family (baseline excluded)',
+            rep.familyCorrelation && rep.familyCorrelation.available &&
+            rep.familyCorrelation.K === rep.candidates.filter((c) => c.active).length &&
+            rep.familyCorrelation.folds === rep.folds);
         // R26-5: the turnover attack is opt-in and, off, contributes nothing.
         check('R26-5: the turnover attack is off by default (null block and target, no summary line)',
             rep.turnoverSweep === null && rep.turnoverTargetBps === null && !rep.summary.includes('turnover '));
         const tsCfg = {
             file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
-            variantIds: ['surprise', 'sig-momentum'], model: 'controller', writeFiles: false, audit: false,
+            variantIds: ['sig-momentum', 'sig-accel'], model: 'controller', writeFiles: false, audit: false,
             HiveMind: FakeMind, HiveMindController: VaryCtl,
         };
         const tsOff = await runAnalysis({ ...tsCfg });
@@ -660,7 +789,9 @@ export async function run() {
             model: 'controller', writeFiles: false, audit: false,
             HiveMind: FakeMind, HiveMindController: VaryCtl,
         };
-        const msRep = (await runAnalysis({ ...msCfg, streamSelect: true })).report;
+        const msRun = await runAnalysis({ ...msCfg, streamSelect: true });
+        const msRep = msRun.report;
+        const msLabels = msRun.result.streamLabels;
         check('R26-6: --select-streams measures the basket (K streams, design effect, greedy order) without dropping any',
             msRep.streams === 2 && msRep.streamSelection && msRep.streamSelection.available &&
             msRep.streamSelection.order.length === 2 && msRep.streamSelection.keep === null &&
@@ -673,13 +804,56 @@ export async function run() {
             keptRep.streamSelection.kept.length === 1 && keptRep.streamSelection.keptDesignEffect.designEffect === 1 &&
             keptRep.summary.includes('streams kept=1'),
             JSON.stringify({ streams: keptRep.streams, kept: keptRep.streamSelection && keptRep.streamSelection.kept }));
+
+        // R27-5: journal/report hygiene — a stream label is the SYMBOL (a manifest
+        // match) or the uppercased file basename, never the operator's absolute
+        // path (the round-26 journal embedded `/home/<operator>/.../candles.jsonl`).
+        check('R27-5: stream labels are symbols/basenames, never filesystem paths',
+            msLabels.length === 2 && msLabels.join(',') === 'WORLD,BIG' &&
+            msLabels.every((l) => typeof l === 'string' && l.length > 0 && !l.includes('/') && !l.includes('\\')),
+            JSON.stringify(msLabels));
+        const symDir = path.join(dir, 'src');
+        if (typeof fs.mkdirSync === 'function') { try { fs.mkdirSync(symDir, { recursive: true }); } catch { /* exists */ } }
+        const symbolPath = path.join(dir, CANDLE_MANIFEST[0].file);
+        fs.writeFileSync(symbolPath, mkRows(120, 100));
+        const symRun = await runAnalysis({
+            file: symbolPath, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+            model: 'controller', writeFiles: false, audit: false,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R27-5: a manifest-matched candle file is labelled by its SYMBOL, not its path',
+            JSON.stringify(symRun.result.streamLabels) === JSON.stringify([CANDLE_MANIFEST[0].symbol]) && symRun.report.streams === 1,
+            JSON.stringify({ labels: symRun.result.streamLabels, symbol: CANDLE_MANIFEST[0].symbol, file: CANDLE_MANIFEST[0].file }));
+
+        // R27-5: the two always-zero diagnostics are replaced by statistics that
+        // mean something. `underTrainedFolds` counts folds whose model trained on
+        // fewer rows than the explicit `minTrainingSteps` floor (so it CAN fire);
+        // `shallowHistoryFolds` is the old `testStart < warmup` count under its true
+        // name. The per-fold training-step distribution lets the floor be set from
+        // evidence.
+        const utRep = (await runAnalysis({
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
+            model: 'controller', writeFiles: false, audit: false, minTrainingSteps: 1e9,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        })).report;
+        check('R27-5: underTrainedFolds CAN fire (a floor above the observed steps) and the floor/distribution are recorded',
+            utRep.minTrainingSteps === 1e9 && utRep.baseline.model.minTrainingSteps === 1e9 &&
+            utRep.baseline.model.underTrainedFolds > 0 && utRep.baseline.model.underTrainedFolds <= utRep.baseline.model.folds &&
+            utRep.baseline.model.trainingStepsDistribution && utRep.baseline.model.trainingStepsDistribution.max > 0,
+            JSON.stringify({ under: utRep.baseline.model.underTrainedFolds, dist: utRep.baseline.model.trainingStepsDistribution }));
+        check('R27-5: at the default floor no fold is under-trained and the old always-zero certificate is gone',
+            rep.baseline.model.underTrainedFolds === 0 && rep.baseline.model.minTrainingSteps === 1 &&
+            typeof rep.baseline.model.shallowHistoryFolds === 'number' &&
+            Object.prototype.hasOwnProperty.call(rep.baseline.model, 'undertrainedFolds') === false,
+            JSON.stringify({ under: rep.baseline.model.underTrainedFolds, shallow: rep.baseline.model.shallowHistoryFolds }));
         check('per-variant wall times and the trial count are recorded on every row (baseline first)',
-            rep.timings.length === 15 && rep.timings[0].role === 'baseline' &&
+            rep.timings.length === 14 && rep.timings[0].role === 'baseline' &&
             rep.timings.every((t) => typeof t.id === 'string' && Number.isFinite(t.elapsedMs) && t.elapsedMs >= 0) &&
             // The candidate rows must carry the same provenance: elapsedMs/streams
             // (dropped by evaluateAB's projection before round 25b) and the K every
-            // DSR was deflated by.
-            rep.trials === rep.variants.length &&
+            // DSR was deflated by (R27-1: the ACTIVE roster, not the requested one).
+            rep.trials === 1 + rep.candidates.filter((c) => c.active).length &&
+            rep.trialsRoster === rep.variants.length &&
             rep.candidates.every((c) => Number.isFinite(c.elapsedMs) && c.streams === rep.streams && c.trials === rep.trials));
         check('the run summary renders the gate, the cost ladder, the family diagnostic and the paired line',
             rep.summary.includes('gate:   dependence') && rep.summary.includes('cost-ladder +0bps:') &&
@@ -748,11 +922,11 @@ export async function run() {
         // `optimistic` is the shipped labeller and the baseline behaviour. The
         // `conservative` and `triple` labels are opt-in A/B candidates: a label
         // change is a *training-set* change, so it must be asked for explicitly and
-        // the default family must stay exactly 15 candidates.
+        // the default family must stay exactly 14 candidates.
         check('R26-11: the label variants resolve by id but stay out of the default family (opt-in only)',
             resolveVariant('label-conservative').id === 'label-conservative' &&
             resolveVariant('label-triple').id === 'label-triple' &&
-            LABEL_VARIANTS.length === 2 && RESOLVABLE_VARIANTS.length === ALL_VARIANTS.length + 2 &&
+            LABEL_VARIANTS.length === 2 && RESOLVABLE_VARIANTS.length === ALL_VARIANTS.length + 3 &&
             ALL_VARIANTS.every((v) => v.kind !== 'label') &&
             LABEL_VARIANTS.every((v) => v.controllerScoped === true && v.kind === 'label' &&
                 typeof v.configure === 'function' && (v.labelPolicy === 'conservative' || v.labelPolicy === 'triple')),
@@ -798,8 +972,8 @@ export async function run() {
             model: 'controller', writeFiles: false, audit: false, labelPolicies: true,
             HiveMind: FakeMind, HiveMindController: VaryCtl,
         });
-        check('R26-11: --label-policies appends exactly the two label variants to the 15-candidate family',
-            lpFull.report.variants.length === 17 &&
+        check('R26-11: --label-policies appends exactly the two label variants to the 14-candidate family',
+            lpFull.report.variants.length === 16 &&
             lpFull.report.variants.slice(-2).map((v) => v.id).join(',') === 'label-conservative,label-triple',
             JSON.stringify(lpFull.report.variants.map((v) => v.id)));
         check('R26-11: the label variants are controller-scoped, so --model=bare never runs them even when asked',
@@ -903,17 +1077,46 @@ export async function run() {
         // The family scored as forecasters: proper scores per variant + the
         // Diebold–Mariano test vs baseline + the family Model Confidence Set. Pure
         // post-processing of the journaled confidence, so it moves no scored number.
-        check('R26-14: the run carries the forecast block by default (scores + DM + MCS over every non-skipped variant)',
+        check('R26-14: the run carries the forecast block by default (scores for every ACTIVE variant, grouped by forecast kind)',
             rep.forecast && rep.forecast.available === true && rep.forecast.bars > 0 &&
             rep.forecast.byId.baseline && rep.forecast.mcs.at90.available && rep.forecast.mcs.at95.available &&
             rep.forecast.mcs.at90.memberIds.length > 0 &&
             rep.forecast.mcs.at90.memberIds.every((id) => rep.forecast.byId[id]) &&
-            rep.candidates.filter((c) => !c.skipped).every((c) => rep.forecast.byId[c.id] &&
+            rep.candidates.filter((c) => c.active).every((c) => rep.forecast.byId[c.id] &&
                 Number.isFinite(rep.forecast.byId[c.id].brier) && Number.isFinite(rep.forecast.byId[c.id].logScore) &&
-                rep.forecast.byId[c.id].dm && rep.forecast.byId[c.id].dm.available === true),
+                // R27-5: the DM test is defined only inside the baseline's kind; a
+                // cross-kind candidate carries an explicit reason instead.
+                (rep.forecast.byId[c.id].kind === rep.forecast.kind
+                    ? rep.forecast.byId[c.id].dm.available === true
+                    : rep.forecast.byId[c.id].dm.available === false && typeof rep.forecast.byId[c.id].dm.reason === 'string')),
             JSON.stringify({ bars: rep.forecast && rep.forecast.bars, m90: rep.forecast && rep.forecast.mcs.at90.memberIds }));
         check('R26-14: the run summary renders the forecast line and both MCS sets',
             rep.summary.includes('forecast:') && rep.summary.includes('mcs90=[') && rep.summary.includes('mcs95=['));
+        // R27-5: the forecast family is scored WITHIN a kind. The controller
+        // family's journaled confidence is `confidenceFromProb(prob)`, which the
+        // affine `(c+1)/2` inverts exactly; a signal's is a normalised z-score.
+        // Mixing them would score a probability against a z-score, so each kind
+        // gets its own MCS and the DM-vs-baseline is defined only inside the
+        // baseline's (controller) kind.
+        const fcSigCand = rep.candidates.find((c) => c.active && c.kind === 'signal');
+        const fcCross = rep.candidates.filter((c) => c.active && c.kind === 'signal');
+        const fcSame = rep.candidates.filter((c) => c.active && c.kind !== 'signal');
+        check('R27-5: the forecast block groups by forecast kind, one MCS per kind, controller first',
+            rep.forecast.kind === 'controller' && rep.forecast.baselineId === 'baseline' &&
+            rep.forecast.kinds.map((g) => g.kind).join(',') === 'controller,signal' &&
+            rep.forecast.kinds.find((g) => g.kind === 'controller').n === 1 + rep.candidates.filter((c) => c.active && c.kind !== 'signal').length &&
+            rep.forecast.kinds.find((g) => g.kind === 'signal').n === rep.candidates.filter((c) => c.active && c.kind === 'signal').length &&
+            rep.forecast.byKind.controller.mcs.at90.available && rep.forecast.byKind.signal.mcs.at90.available &&
+            rep.forecast.reader.includes('grouped by `kind`'),
+            JSON.stringify(rep.forecast.kinds));
+        check('R27-5: the DM test is defined only inside the baseline kind; every cross-kind candidate states why',
+            !!fcSigCand && fcCross.length > 0 &&
+            fcCross.every((c) => rep.forecast.byId[c.id].kind === 'signal' &&
+                rep.forecast.byId[c.id].dm.available === false && rep.forecast.byId[c.id].dm.reason.includes('cross-kind')) &&
+            fcSame.every((c) => rep.forecast.byId[c.id].kind === 'controller' && rep.forecast.byId[c.id].dm.available === true),
+            JSON.stringify({ active: rep.candidates.filter((c) => c.active).map((c) => [c.id, c.kind]) }));
+        check('R27-5: the forecast summary names the grouped roster',
+            rep.summary.includes('groups: controller(') && rep.summary.includes('signal('));
         const fcOff = await runAnalysis({
             file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state'),
             model: 'controller', writeFiles: false, audit: false, forecast: false,
@@ -974,11 +1177,15 @@ export async function run() {
             msRep.decision.nextRun.pairedUnits.available === true &&
             Number.isFinite(msRep.decision.nextRun.pairedUnits.se) &&
             msRep.decision.nextRun.pairedUnits.nClusters >= 2 &&
-            'observed' in msRep.decision.nextRun.pairedUnits.required &&
+            msRep.decision.nextRun.pairedUnits.neededForObserved != null &&
+            msRep.decision.nextRun.pairedUnits.needed.observed === msRep.decision.nextRun.pairedUnits.neededForObserved &&
             msRep.decision.economics.confidence.available === true &&
             msRep.decision.concentration.deleteOneCluster.available === true,
             JSON.stringify({
-                pairedUnits: msRep.decision.nextRun.pairedUnits.required,
+                pairedUnits: {
+                    neededForObserved: msRep.decision.nextRun.pairedUnits.neededForObserved,
+                    neededForMde95Dependent: msRep.decision.nextRun.pairedUnits.neededForMde95Dependent,
+                },
                 confidenceAvailable: msRep.decision.economics.confidence.available,
                 looAvailable: msRep.decision.concentration.deleteOneCluster.available,
             }));
@@ -1246,9 +1453,9 @@ export async function run() {
     });
     const q1Run = qReadJson(q1.runDir, 'run.json');
     check('run.json records the round-24 integrity config (retention, reachability, fold log, folds, roster)',
-        q1Run.modelRetention === 'discard' && q1Run.requireReachable === false && q1Run.foldLog === 'all' &&
+        q1Run.modelRetention === 'discard' && q1Run.requireReachable === true && q1Run.foldLog === 'all' &&
         q1Run.reuseBase === false && q1Run.costBps === 0 &&
-        q1Run.folds === 4 && Array.isArray(q1Run.variants) && q1Run.variants.length === 15,
+        q1Run.folds === 4 && Array.isArray(q1Run.variants) && q1Run.variants.length === 14,
         JSON.stringify({ retention: q1Run.modelRetention, folds: q1Run.folds, variants: q1Run.variants.length }));
     const q1Rep = qReadJson(q1.runDir, 'report.json');
     check('R26-12: run.json and report.json record the checkpoint throttle (the A/B default is the never-dump "inf")',
@@ -1266,15 +1473,38 @@ export async function run() {
         q1Run.intervalBars === 1 && q1Run.streamSelect === false && q1Rep.intervalBars === 1 && q1Rep.streamSelection === null,
         JSON.stringify({ interval: q1Run.intervalBars, select: q1Run.streamSelect }));
     check('report.json is the canonical complete verdict with the machine-readable audit block',
-        q1Rep.status === 'complete' && q1Rep.schema === 'nl.analyze.v1' && q1Rep.candidates.length === 14 &&
+        q1Rep.status === 'complete' && q1Rep.schema === 'nl.analyze.v1' && q1Rep.candidates.length === 13 &&
         !!q1Rep.baseline.audit && typeof q1Rep.baseline.audit.clean === 'boolean' && typeof q1Rep.baseline.audit.probes === 'number' &&
         typeof q1Rep.candidates[0].audit.clean === 'boolean' && !!q1Rep.familywise && typeof q1Rep.reader === 'string' && !!q1Rep.artifacts);
     const q1Part = qReadJson(q1.runDir, 'partial-report.json');
     check('partial-report.json is the per-variant checkpoint, matching the final report row counts',
-        q1Part.status === 'complete' && q1Part.schema === 'nl.analyze.v1' && q1Part.candidates.length === 14 && q1Part.variants.length === 15);
+        q1Part.status === 'complete' && q1Part.schema === 'nl.analyze.v1' && q1Part.candidates.length === 13 && q1Part.variants.length === 14);
+    // R27-5: the FIRST checkpoint carries the full config echo, so a kill-and-recover
+    // reader can reconstruct the run's design (gate, K, throttle, label, concurrency,
+    // resampling, CRN, selection floor) without guessing it from the code.
+    check('R27-5: partial-report.json carries the run config echo in its checkpoint',
+        q1Part.gate === 'dependence' && q1Part.gateOptions && q1Part.gateOptions.requireSharpeDiff === true &&
+        q1Part.trials === q1Rep.trials && q1Part.variantsTotal === 14 && q1Part.saveInterval === 'inf' && q1Part.labelPolicy === 'optimistic' &&
+        q1Part.labelHorizonBars === null && Number.isFinite(q1Part.concurrency) &&
+        q1Part.intervalBars === 1 && q1Part.commonRandomNumbers === true && q1Part.streamSelection === null &&
+        q1Part.turnoverSweep === false && q1Part.minTrainingSteps === 1 &&
+        Object.prototype.hasOwnProperty.call(q1Part, 'policyRoundTrip'),
+        JSON.stringify({ gate: q1Part.gate, reqSharpe: q1Part.gateOptions && q1Part.gateOptions.requireSharpeDiff, trials: q1Part.trials, repTrials: q1Rep.trials,
+            vt: q1Part.variantsTotal, save: q1Part.saveInterval, lp: q1Part.labelPolicy, lh: q1Part.labelHorizonBars, conc: q1Part.concurrency,
+            iv: q1Part.intervalBars, crn: q1Part.commonRandomNumbers, ss: q1Part.streamSelection, ts: q1Part.turnoverSweep,
+            prt: typeof q1Part.policyRoundTrip, min: q1Part.minTrainingSteps }));
+    // R27-5: the per-variant checkpoint in run.log names the variant's KIND and its
+    // wall time, so a long run's log is self-describing.
+    check('R27-5: run.log variant checkpoints name the variant kind and its elapsed time',
+        (() => {
+            const log = fs.readFileSync(path.join(q1.runDir, 'run.log'), 'utf8').trim().split('\n')
+                .map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+            const vc = log.filter((r) => r.message === 'progress' && r.data && r.data.phase === 'variant-checkpoint');
+            return vc.length === 14 && vc.every((r) => typeof r.data.variantId === 'string' && typeof r.data.kind === 'string' && Number.isFinite(r.data.elapsedMs));
+        })());
     const q1Prog = qReadJson(q1.runDir, 'progress.json');
     check('progress.json is a complete heartbeat (every budgeted pass accounted for)',
-        q1Prog.phase === 'complete' && q1Prog.counters.events === q1Prog.counters.eventsTotal && q1Prog.counters.eventsTotal === 240 &&
+        q1Prog.phase === 'complete' && q1Prog.counters.events === q1Prog.counters.eventsTotal && q1Prog.counters.eventsTotal === 224 &&
         q1Prog.reuseBase === false && q1Prog.costBps === 0,
         JSON.stringify(q1Prog.counters));
     const q1Folds = fs.readFileSync(path.join(q1.runDir, 'folds.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
@@ -1392,7 +1622,7 @@ export async function run() {
 
     const q8 = await runAnalysis({
         file: qWorld, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(qDir, 's8'),
-        variantIds: ['surprise'], model: 'controller', writeFiles: true, audit: false,
+        variantIds: ['sig-momentum'], model: 'controller', writeFiles: true, audit: false,
         turnoverSweep: true, turnoverTarget: 7, streamSelect: true, progressMs: -1, HiveMind: FakeMind, HiveMindController: DiskCtl,
     });
     const q8Run = qReadJson(q8.runDir, 'run.json');
@@ -1401,7 +1631,7 @@ export async function run() {
         q8Run.turnoverSweep === true && q8Run.turnoverTarget === 7 &&
         q8Rep.turnoverSweep && q8Rep.turnoverSweep.available === true && q8Rep.turnoverSweep.targetBps === 7 &&
         q8Rep.turnoverTargetBps === 7 && q8Rep.turnoverSweep.rows.length === 48 &&
-        q8Rep.turnoverSweep.rows.every((r) => r.id === 'surprise') &&
+        q8Rep.turnoverSweep.rows.every((r) => r.id === 'sig-momentum') &&
         typeof q8Rep.turnoverSweep.targetMet === 'boolean',
         JSON.stringify({ run: q8Run.turnoverSweep, target: q8Run.turnoverTarget, rows: q8Rep.turnoverSweep && q8Rep.turnoverSweep.rows.length }));
     check('R26-6: run.json and report.json persist the interval and the stream selection',

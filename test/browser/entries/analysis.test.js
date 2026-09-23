@@ -2789,6 +2789,29 @@ export async function run() {
             (() => { const s = formatForecast(cmp); return typeof s === 'string' && s.includes('forecast:') && s.includes('mcs90=[') && s.includes('mcs95=['); })());
         check('R26-14: formatForecast states unavailability rather than rendering NaN',
             formatForecast({ available: false, reason: 'none' }).includes('unavailable'));
+        // R27-5: the family is scored WITHIN a kind. `(c+1)/2` inverts
+        // `confidenceFromProb` exactly, so a controller candidate's Brier is a
+        // proper score of a probability and the DM test vs the baseline is
+        // meaningful; a signal's journaled confidence is a normalised z-score, so
+        // it is scored only against the other signals (no cross-kind DM).
+        const gRet = Array.from({ length: 30 }, (_, i) => 0.01 * Math.sin(i * 0.7));
+        const gFI = (scale) => [{ returns: gRet.slice(), confidence: gRet.map((_, i) => scale * Math.sin(i * 0.7)) }];
+        const grp = forecastComparison({
+            baseline: gFI(0.4), baselineKind: 'controller',
+            candidates: [{ id: 'ctl', kind: 'controller', foldInputs: gFI(0.6) }, { id: 'sig', kind: 'signal', foldInputs: gFI(0.2) }],
+            nBoot: 200, seed: 21,
+        });
+        check('R27-5: forecastComparison groups by kind — the DM test vs the baseline runs only inside the baseline kind',
+            grp.available && grp.kind === 'controller' &&
+            grp.kinds.map((g) => g.kind).join(',') === 'controller,signal' &&
+            grp.byKind.controller.members.join(',') === 'baseline,ctl' && grp.byKind.signal.members.join(',') === 'sig' &&
+            grp.byId.ctl.kind === 'controller' && grp.byId.ctl.dm.available === true &&
+            grp.byId.sig.kind === 'signal' && grp.byId.sig.dm.available === false && grp.byId.sig.dm.reason.includes('cross-kind') &&
+            grp.mcs.at90.available && grp.mcs.at90.memberIds.every((id) => grp.byId[id].kind === 'controller') &&
+            grp.reader.includes('grouped by `kind`'),
+            JSON.stringify({ kinds: grp.kinds, ctl: grp.byId.ctl.dm.available, sig: grp.byId.sig.dm.available }));
+        check('R27-5: the forecast summary names the grouped roster',
+            (() => { const s = formatForecast(grp); return s.includes('groups: controller(') && s.includes('signal('); })());
     } catch (e) {
         check('R26-14 forecast checks completed', false, e.stack);
     }
@@ -2957,9 +2980,13 @@ export async function run() {
             nr.cheapestFlip.available && nr.cheapestFlip.kind === 'magnitude' &&
             Math.abs(nr.cheapestFlip.requiredSharpeDifference - 1.959964 * 0.1) < 1e-9 &&
             Math.abs(nr.cheapestFlip.factor - (1.959964 * 0.1) / 0.05) < 1e-9);
-        check('R26-8: nextRunPlan sizes a PAIRED comparison from the paired SE and the cluster count (R26-13)',
+        // R27-5: the requirement is named as a requirement. `required.observed` read
+        // as an observation ("we observed 37 clusters") when it is what the run
+        // NEEDS; it is now `neededForObserved`, with the generic map kept alongside.
+        check('R26-8/R27-5: nextRunPlan sizes a PAIRED comparison from the paired SE and the cluster count (R26-13)',
             nr.pairedUnits.available && nr.pairedUnits.se === 0.1 && nr.pairedUnits.nClusters === 40 &&
-            nr.pairedUnits.required.observed === 615 && nr.pairedUnits.required.mde95Dependent === 2,
+            nr.pairedUnits.neededForObserved === 615 && nr.pairedUnits.needed.observed === 615 &&
+            nr.pairedUnits.neededForMde95Dependent === 2 && nr.pairedUnits.needed.mde95Dependent === 2,
             JSON.stringify(nr.pairedUnits));
         // The branches the first fixture left untested: the round-26 stability hint
         // (the R26-7 feature) and the gate/search fallbacks.
@@ -3029,6 +3056,26 @@ export async function run() {
             decModel.training.labelDistribution.baseRate === 0.27 && decModel.training.labelDistribution.status === 'base-rate' &&
             decModel.training.labelDistribution.resolved.total === 4 && decModel.training.labelDistribution.heldBars.mean === 2 &&
             decisionReport({ candidate: { id: 's', promote: false, reasons: [], model: null } }).training.labelDistribution === null);
+
+        // R27-5: the round-26 winner is a pure signal (no model block), so the old
+        // decision block rendered the training question as "no model diagnostics
+        // were collected" — false, because the controllers did train. A winner with
+        // no model of its own now borrows the BASELINE controller's diagnostics and
+        // names it as an explicit referent.
+        const baselineModel = { available: true, status: 'base-rate', baseRate: 0.38, trainingSteps: 900, resolved: { takeProfit: 1, stopLoss: 3, total: 4 }, heldBars: { count: 4, mean: 1 } };
+        const decRef = decisionReport({
+            candidate: { id: 'sig:momentum', promote: false, reasons: ['r'], model: null },
+            model: baselineModel,
+            modelReferent: { kind: 'baseline', reason: 'the featured row is a pure signal; the referent is the baseline controller' },
+        });
+        check('R27-5: a signal-wins decision names the BASELINE controller as its model referent (not n/a)',
+            decRef.training.model === baselineModel && decRef.training.modelReferent && decRef.training.modelReferent.kind === 'baseline' &&
+            decRef.training.labelDistribution && decRef.training.labelDistribution.baseRate === 0.38 &&
+            decRef.training.labelDistribution.heldBars.mean === 1 && /EXPLICIT REFERENT/.test(decRef.training.reader),
+            JSON.stringify({ referent: decRef.training.modelReferent, baseRate: decRef.training.labelDistribution && decRef.training.labelDistribution.baseRate }));
+        check('R27-5: without a referent a pure-signal decision still states the absence of a model (no fabricated referent)',
+            decisionReport({ candidate: { id: 'sig:x', promote: false, reasons: [], model: null } }).training.model.available === false &&
+            decisionReport({ candidate: { id: 'sig:x', promote: false, reasons: [], model: null } }).training.modelReferent === null);
 
         // (f) the formatter.
         const line = formatDecision(dec);

@@ -1004,6 +1004,12 @@ export function restateReportAtCost(report, costBps, { periodsPerYear = 252, tri
     // reports a different DSR. Default to the report's own recorded `trials`
     // rather than to 1.
     const effectiveTrials = Number.isFinite(trials) ? trials : (Number.isFinite(report.trials) ? report.trials : 1);
+    // A single-stream report is returned untouched by `poolReports` (no re-pool),
+    // so it carries NO `streamFoldLengths` / `dependence` / `streamReturns`. Only a
+    // pooled multi-stream report has a cross-stream panel to rebuild; restating a
+    // single-stream report must not fabricate one (it would turn a `null`
+    // dependence into a bogus `available:false` block and move `power`).
+    const hasPanel = Array.isArray(report.streamFoldLengths) && report.streamFoldLengths.length > 0;
     const perFold = [];
     const pooled = [];
     const pooledGross = [];
@@ -1023,19 +1029,23 @@ export function restateReportAtCost(report, costBps, { periodsPerYear = 252, tri
         });
         for (const r of bt.returns) pooled.push(r);
         for (const r of bt.gross) pooledGross.push(r);
-        if (streamRemaining <= 0) {
-            // Rebuild the per-stream panel greedily from the flat fold list: the
-            // report's `streamFoldLengths` says how many folds each stream owns.
-            streamReturns.push([]);
-            streamIndex++;
-            const lens = report.streamFoldLengths && report.streamFoldLengths[streamIndex];
-            streamRemaining = Array.isArray(lens) ? lens.length : 0;
+        if (hasPanel) {
+            if (streamRemaining <= 0) {
+                // Rebuild the per-stream panel greedily from the flat fold list: the
+                // report's `streamFoldLengths` says how many folds each stream owns.
+                streamReturns.push([]);
+                streamIndex++;
+                const lens = report.streamFoldLengths[streamIndex];
+                streamRemaining = Array.isArray(lens) ? lens.length : 0;
+            }
+            streamReturns[streamIndex].push(...bt.returns);
+            streamRemaining--;
         }
-        streamReturns[streamIndex].push(...bt.returns);
-        streamRemaining--;
     }
-    const streamFoldLengths = report.streamFoldLengths || null;
-    const dependence = dependenceSummary({ streamReturns, streamFoldLengths, periodsPerYear });
+    const streamFoldLengths = hasPanel ? report.streamFoldLengths : null;
+    const dependence = hasPanel
+        ? dependenceSummary({ streamReturns, streamFoldLengths, periodsPerYear })
+        : (report.dependence || null);
     const effectiveBars = dependence && dependence.available ? dependence.effectiveBars : null;
     const { pooledMetrics } = poolFolds(perFold, pooled, pooledGross, { periodsPerYear, trials: effectiveTrials, effectiveBars });
     return {
@@ -1046,7 +1056,7 @@ export function restateReportAtCost(report, costBps, { periodsPerYear = 252, tri
         pooledBars: pooled.length,
         pooledReturns: pooled,
         pooledGross,
-        streamReturns,
+        streamReturns: hasPanel ? streamReturns : report.streamReturns,
         streamFoldLengths,
         foldInputs: report.foldInputs,
         foldLengths: report.foldLengths,

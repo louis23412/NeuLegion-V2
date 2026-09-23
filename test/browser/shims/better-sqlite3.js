@@ -5,7 +5,13 @@
 // Supported: new Database(path[, opts]), pragma, exec, prepare -> run/all/get/pluck,
 // transaction (nested via SAVEPOINT), close, and BLOB <-> Uint8Array round-tripping.
 
-import initSqlJs from "https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/sql-wasm.js/+esm";
+// The CDN module is imported LAZILY (inside `__ensureSql`), never statically:
+// the node mirrors import the browser entries, which import this shim, and Node's
+// default ESM loader rejects `https:` specifiers (`ERR_UNSUPPORTED_ESM_URL_SCHEME`).
+// A static import here would therefore kill every node mirror of such an entry
+// before a single test ran; the native driver never calls `__ensureSql` (the
+// mirrors inject their own `ensureSql`), so the browser CDN is untouched there.
+const SQL_CDN = "https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/sql-wasm.js/+esm";
 
 let SQL = null;
 let SQLPromise = null;
@@ -13,9 +19,11 @@ let SQLPromise = null;
 export function __ensureSql() {
     if (SQL) return Promise.resolve(SQL);
     if (!SQLPromise) {
-        SQLPromise = initSqlJs({
-            locateFile: (f) => `https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/${f}`,
-        }).then((s) => { SQL = s; return s; });
+        SQLPromise = import(SQL_CDN)
+            .then((mod) => (mod.default || mod)({
+                locateFile: (f) => `https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/${f}`,
+            }))
+            .then((s) => { SQL = s; return s; });
     }
     return SQLPromise;
 }

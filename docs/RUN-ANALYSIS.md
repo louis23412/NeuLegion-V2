@@ -8,19 +8,24 @@ for each candidate; this file holds the *evidence and the plan* that leads to it
 It is written so a future session can pick the work up cold: every claim below
 cites a file, a line, or a measured number from an artifact.
 
-**Current verdict: §5** — run `20260920T144633-seed1` (the N3 power run,
-2026-09-20, seed 1): complete, 14 candidates `keep-off`, nothing promotes, and the
-report overstates its own power (§5.5). The decision record is in
+**Current verdict: §10** — run `20260922T204248-seed1` (the round-26 corrected power
+run, 2026-09-22, seed 1; the same design as §5): complete, 14 candidates `keep-off`,
+nothing promotes at any cost level, the baseline is a *trained* model with negative
+skill (§10.4), and three of the seven mechanism candidates turn out to be inert
+duplicates of the baseline (§10.7, `BUGS.md` #43/#44). The decision record is in
 [`OPTIMIZATION.md`](OPTIMIZATION.md).
 
-> **READ §8 FIRST.** The `20260921T062511-seed1` run (§7) is the first run sized by
-> the round-25 machinery, and §8 shows why its `baseline` row is **not** the shipped
-> model: `npm run analyze` feeds the controller the whole growing candle prefix
+> **READ §8, THEN §10.** The `20260921T062511-seed1` run (§7) is the first run sized
+> by the round-25 machinery, and §8 shows why its `baseline` row is **not** the
+> shipped model: `npm run analyze` fed the controller the whole growing candle prefix
 > where production feeds it a fixed `cacheSize` window, so the controller's trade
-> bookkeeping sees ancient bars and its training labels are systematically wrong
+> bookkeeping saw ancient bars and its training labels were systematically wrong
 > (`BUGS.md` #33, measured: 78/144 wins in the A/B vs 156/64 with the production
-> window). The signal-family rows of §7 are unaffected, so §7's verdict stands, but
-> its "the baseline is a no-op" reading does not. Round 26 starts by fixing this.
+> window). **The same defect invalidates §5's baseline and mechanism rows** (its
+> `+0.4387` baseline and the `query-mod` DSR-0.9992 row), and §5 now carries a
+> correction banner. §10 is the corrected re-run of §5's design: the fix moved every
+> mechanism row as predicted and left every pure-signal row unchanged. §7's verdict
+> stands for the signal family; its "the baseline is a no-op" reading did not.
 
 ---
 
@@ -593,6 +598,19 @@ This is the N3 run: the first `npm run analyze` at full size with a complete
 report. It is the run that produced the recorded verdict. It is also the run that
 showed the report **overstating its own power** (§5.5) and the verdict being
 **knife-edge on two assumptions that were never part of the experiment** (§5.6).
+
+> **Correction (round 26, `BUGS.md` #33).** This run was made *before* the A/B's
+> window-fidelity fix, so it fed the controller the whole growing candle prefix
+> where production feeds a fixed `cacheSize` window. **Every `baseline` and
+> *mechanism* row below is therefore not the shipped model's** — the baseline's
+> `+0.4387` and `query-mod`'s DSR-0.9992 / 33.73 bps rows are the clearest
+> casualties. The **8 signal rows are unaffected** (a signal is pure array math on
+> the view and never constructs a controller) and are reproduced to ~1-2 % by the
+> corrected re-run of the *same design* in **§10** (which is `20260922T204248-seed1`;
+> its baseline is `-0.1147` and `query-mod`/`multi-probe`/`sample-weights` are
+> byte-identical to it). Read §5's mechanism/baseline numbers as the pre-fix
+> artifact they are; read §5's signal numbers and §5.6's cost ladder as history
+> that §10 replaces. The offline-verification method in §5.3 remains correct.
 
 ### 5.1 Manifest and completion
 
@@ -1376,3 +1394,496 @@ the purge-exclusion limitation (#9), the unbounded default backlog (#6, bounded 
 the opt-in `triple`), and the pending contract tests above. None of those changes a
 reported number; each is recorded so a later reader cannot mistake it for checked.
 
+> **Update — the `20260922T204248-seed1` round-26 run (§10).** The arithmetic half of
+> this certification held at scale: the corrected run's journal reproduces every
+> per-fold and pooled metric exactly, with a clean audit and 4,320/4,320 base
+> reuses. But the run exposed a class of defect this sweep was not looking for — a
+> **reading** defect, not an arithmetic one: three of the seven mechanism candidates
+> emit byte-identical positions to the baseline (#43 `sample-weights` never enables
+> its mechanism; #44 `multi-probe`/`query-mod` steer a path a fold never reaches), so
+> their rows and their 15 keep-off "reasons" are artefacts of a duplicated series and
+> `K = 15` counts three untested candidates; and the decision block's training answer
+> describes only the winning row (#45). Invariant 4 (*counter provenance*) and the
+> non-vacuity discipline of #22 should be extended to **candidate liveness** — "did
+> this candidate differ from the baseline at all?" — as a report-level check. See
+> §10.7 and `BUGS.md` #43/#44/#45.
+
+---
+
+## 10. Run `20260922T204248-seed1` — the round-26 corrected power run: the fidelity fix moved exactly the rows it should have, the gate holds at every cost, and three mechanism rows turn out to carry no information (#43/#44)
+
+This is the first full-size run made **with** the round-26 corrections — R26-0's
+window-fidelity fix (`BUGS.md` #33), R26-2/R26-8's model & label diagnostics
+(#35/#37), R26-3's confidence→position policy, R26-7's shipped dependence gate,
+R26-12's checkpoint throttle, R26-13's CRN, R26-14's forecast/MCS panel. It is
+deliberately the **same design as §5's attempt-3 power run**, so §5 and §10 are a
+controlled before/after of the fidelity fix alone: 8 streams × 600 bars, 288 folds,
+4,320 pooled bars, 15 variants, seed 1, `costBps 0`,
+`positionPolicy {deadZone 0.05, scale 1}`, `--audit-probes=1`, `--reuse-base`. The
+`configFingerprint` is unchanged (`c0ba6493`). Everything else that moved is a
+round-26 report change.
+
+### 10.1 Manifest and completion
+
+`run.json` (fingerprint `c0ba6493`):
+
+| field | value |
+| --- | --- |
+| `type` / `model` | `analyze` / `controller` |
+| `files` / `streams` | 8 (candles.jsonl + the 7 `candles_*_1h` symbols) |
+| `candles` / `folds` / `maxBars` | 4,800 / 288 (36 per stream) / 600 |
+| `trainSize` / `testSize` | 60 / 15 |
+| `probe` / `auditProbesPerFold` | 0.05 / 1 |
+| `reuseBase` / `costBps` / `requireReachable` | `true` / 0 / `false` |
+| `modelRetention` / `foldLog` / `saveInterval` | `discard` / `all` / `inf` |
+| `labelPolicy` / `labelHorizonBars` | `optimistic` / `null` |
+| `concurrency` / `intervalBars` / `streamSelect` | 1 / 1 / `false` |
+| `commonRandomNumbers` / `forecast` / `decision` | `true` / `true` / `true` |
+| `gate` / `gateAlpha` / `gateOptions` | `dependence` / 0.05 / `{requireSharpeDiff, requireClusterStability, minDsrAdjusted 0.95, alpha 0.05, periodsPerYear 252}` |
+| `trials` / `positionPolicy` | 15 / `{deadZone 0.05, scale 1}` |
+| `seed` / `node` | 1 / `v25.9.0` |
+
+`progress.json` ends at `phase: complete`, counters 4,320 score / 4,320 base /
+4,320 probe = 12,960 / 12,960 events, 15/15 variants, `etaMs: null`.
+`durationMs` = **28,418,998.5 ms (7.90 h)**; `run.log` has the matching
+`analyze complete` line. Artifacts:
+
+```
+run.json              1,943 B
+progress.json           816 B
+run.log               4,323 B    (18 journal lines: 1 start, 15 checkpoints, complete)
+partial-report.json 533,243 B
+report.json         551,481 B    (the verdict)
+folds.jsonl      12,955,808 B    (12,960 lines = 4,320 score + 4,320 base + 4,320 probe)
+```
+
+Two new certificates are present and clean:
+
+```
+policyRoundTrip: { ok: true, mismatch: 0, folds: 288 }   // R26-3: confidence -> position -> report
+audit:           clean over 4,320 probe passes, 0 violations, 288 base passes reused per variant
+```
+
+### 10.2 The verdict: same in kind as §5, and now cost-robust
+
+**All 14 candidates `keep-off`; nothing promotes.** Family-wise:
+`SPA p = 0.4731, best = sig:momentum, Rejects = [none], K = 15, T = 4032`.
+
+| candidate | kind | pooled Sharpe | DSR | adj. DSR | turn. | break-even | fold-win | reachable | reasons |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **baseline** | mechanism | **-0.1147** | 0.0124 | 0.0235 | 31.1 | -2.58 bps | — | 229/288 | — |
+| surprise-gate | mechanism | -0.0284 | 0.0295 | 0.0344 | 30.9 | -0.67 | 0.1563 | 226/288 | 7 |
+| homeostasis | mechanism | -0.1627 | 0.0071 | 0.0185 | 30.6 | -3.52 | 0.4375 | 219/288 | 7 |
+| multi-probe | mechanism | **-0.1147** | 0.0124 | 0.0235 | 31.1 | -2.58 | 0.0000 | 229/288 | 5 |
+| query-mod | mechanism | **-0.1147** | 0.0124 | 0.0235 | 31.1 | -2.58 | 0.0000 | 229/288 | 5 |
+| pca-hash | mechanism | -0.1104 | 0.0130 | 0.0240 | 31.1 | -2.48 | 0.0104 | 228/288 | 6 |
+| sample-weights | mechanism | **-0.1147** | 0.0124 | 0.0235 | 31.1 | -2.58 | 0.0000 | 229/288 | 5 |
+| **sig:momentum** | signal | **1.0848** | **0.9984** | 0.7375 | 810.4 | **14.64 bps** | 0.4931 | 288/288 | **2** |
+| sig:frac-momentum | signal | -0.4185 | 0.0003 | 0.0091 | 2091.9 | -1.67 | 0.4479 | 288/288 | 7 |
+| sig:vol-regime | signal | -0.3135 | 0.0011 | 0.0053 | 677.6 | -4.34 | 0.4826 | 288/288 | 6 |
+| sig:agreement | signal | 0.3912 | 0.4381 | 0.1811 | 1024.6 | 3.71 | 0.4618 | 288/288 | 5 |
+| sig:range | signal | 0.4490 | 0.5366 | 0.2265 | 832.8 | 5.57 | 0.4097 | 288/288 | 5 |
+| sig:volume | signal | -0.0008 | 0.0380 | 0.0381 | 581.7 | -0.01 | 0.4792 | 288/288 | 5 |
+| sig:autocorr | signal | -0.0996 | 0.0147 | 0.0240 | 793.2 | -1.23 | 0.4688 | 288/288 | 6 |
+| **sig:acceleration** | signal | **1.0194** | **0.9953** | 0.8343 | 860.5 | **11.57 bps** | 0.5347 | 288/288 | **1** |
+
+Baseline detail: PSR 0.3175, MDD 0.0195, hit 0.4947, grossPnl -0.0080, tradeCount
+2,362, nonZero 0.5081, meanAbsPos 0.0289; folds mean -0.0441 / median 0 / std 3.6914
+/ positive 0.3646. Power (baseline): SE 0.2415, **MDE95 ±0.4734**,
+`underpowered false`, `barsToDetect1` 969; under the cluster jackknife
+**SE 0.5328, MDE95 ±1.0442, `underpoweredDependent true`, inflation 4.87×,
+effective bars 887.9**. The signals' own fold-cluster design effects differ
+(momentum 3.62, accel 2.46, vol-regime 2.73, frac-momentum 7.00; the baseline's
+4.87), and their positions are more correlated across symbols than the controller's
+(mean pairwise stream corr 0.520 for momentum vs 0.354 for the baseline) — the two
+dependence readings (fold-cluster jackknife vs stream equicorrelation) are both
+reported per variant and need not agree.
+
+**The cost ladder promotes `[none]` at all four rungs** (0 / 2 / 5 / 10 bps), unlike
+§5 where 2 bps promoted `sig:acceleration` (`BUGS.md` #27). The round-26 gate
+replaced the raw fold-win / positive-fold hurdles with the dependence-adjusted DSR
+floor, which is *much* stricter, so the verdict no longer flips with the unstated
+cost assumption. At 5 bps momentum's fold-win does cross 0.5 (0.5104) yet it still
+keeps off, on adjusted DSR 0.3881; at 10 bps both real candidates keep off on
+adjusted DSR 0.1344 / 0.0745.
+
+Family correlation: `excessCorr` 0.0996, `effectiveTrials` **6.10 of 14**,
+`maxPair = sig-agreement ~ sig-range r = 0.8098`; `sig:momentum ~ sig:acceleration`
+r = 0.697, `sig:momentum ~ sig:range` 0.709. Forecast/MCS: base rate 0.5005,
+baseline brier 0.2522 / log 0.6975; **MCS90 = MCS95 = the 7 mechanism variants**
+(baseline + the 6 flags); all 8 signals eliminated (each at p = 0.000999),
+`lastPValue` 0.4346 — see §10.8.
+
+### 10.3 The fidelity fix moved exactly the rows it was supposed to — and left the signals alone
+
+§5 and §10 are the same design, so the delta is the round-26 correction (principally
+#33). It is a clean causal fingerprint: the *mechanism* rows move enormously, the
+*pure-array-math signal* rows are reproduced to ~1-2 % (a change to the controller
+path cannot move a signal).
+
+| variant | §5 Sharpe | §10 Sharpe | §5 break-even | §10 break-even |
+| --- | ---: | ---: | ---: | ---: |
+| baseline | **+0.4387** | **-0.1147** | 12.42 | -2.58 |
+| surprise-gate | -0.3766 | -0.0284 | -10.39 | -0.67 |
+| homeostasis | +0.3090 | -0.1627 | 7.83 | -3.52 |
+| multi-probe | +0.3101 | -0.1147 (≡ baseline) | 8.92 | -2.58 |
+| query-mod | **+1.0025** (DSR 0.9992) | -0.1147 (≡ baseline) | 33.73 | -2.58 |
+| pca-hash | -0.0037 | -0.1104 | -0.09 | -2.48 |
+| sample-weights | +0.1945 | -0.1147 (≡ baseline) | 4.31 | -2.58 |
+| sig:momentum | 1.1059 | 1.0848 | 15.02 | 14.64 |
+| sig:frac-momentum | -0.4330 | -0.4185 | -1.66 | -1.67 |
+| sig:vol-regime | -0.3223 | -0.3135 | -4.46 | -4.34 |
+| sig:agreement | 0.4044 | 0.3912 | 3.83 | 3.71 |
+| sig:range | 0.4586 | 0.4490 | 5.70 | 5.57 |
+| sig:volume | 0.0173 | -0.0008 | 0.27 | -0.01 |
+| sig:autocorr | -0.1146 | -0.0996 | -1.42 | -1.23 |
+| sig:acceleration | 1.0502 | 1.0194 | 11.95 | 11.57 |
+
+Three consequences:
+
+1. **§5.2's reading is falsified.** The buggy controller appeared to be "the
+   strongest mechanism" (+0.4387) and `query-mod` appeared to be a DSR-0.9992,
+   33.7 bps, low-drawdown star that missed promotion by a hair. With the
+   production-shaped window, the baseline is a *negative* near-no-op and `query-mod`
+   is identical to it. Neither was a real reading; §5 is annotated accordingly.
+2. **§8.2's "not invalidated: every signal-family row" is now *demonstrated*, not
+   argued.** Every signal Sharpe, break-even and turnover reproduces. The
+   family-wise null, the signals' cost/participation profile and §7's economic
+   verdict all stand on this design.
+3. **Round 26 cost 34 % of the wall clock.** The identical design took 11.98 h in §5
+   and 7.90 h here. The measurable causes are R26-12's checkpoint throttle
+   (`saveInterval: "inf"`; §8.4 attributes ≈25 % of per-call cost to the
+   never-read `dumpState()`) plus the #33 window fix's removal of the re-insert
+   churn (measured ≤ 8 %); this run is *not* a controlled measurement of either, so
+   treat 34 % as the combined effect, not an attribution.
+
+### 10.4 The baseline is a trained model with negative skill
+
+§7.5 could not separate "no edge" from "never trained" and (b) "outputs near 50 kept
+flat by the dead zone"; R26-2/R26-8 close that. Every model-backed variant reports
+`trainingSteps 170,004`, `warmErrors 0`, `notTrainedFolds 0`, `undertrainedFolds 0`,
+`quarantinedRows 0`, `openTradeWriteErrors 0`, `resolved {takeProfit 64,197,
+stopLoss 105,447, total 169,644}`, `heldBars {count 185,937, max 1, mean 1}`,
+`status: "base-rate"`, `baseRate 0.3784`, **`brierSkill -0.0751`,
+`accuracySkill -0.1379`**.
+
+So the answer is (a): the controller *trained, on ~170k labelled bars, and is worse
+than its own base rate*. The near-flat positions (meanAbsPos 0.0289, nonZero 0.508)
+and the 59/288 folds whose audit probe is **vacuous** (every emitted position is
+zero, so perturbing the future cannot change anything) are the consequence of a
+model with no skill, not of a dead code path. That is the honest "no edge on this
+data" reading, and it is now *evidence* rather than inference.
+
+### 10.5 What binds, and the closest-to-promoting candidate yet
+
+* **`sig:acceleration` now fails exactly one hurdle**: the dependence-adjusted DSR
+  floor (0.8343 < 0.95). It passes `requireSharpeDiff` (paired dSharpe 1.1341,
+  se 0.6684, **t 1.6969, one-sided p = 0.0493**), the stability half (all 36
+  leave-one-window differences positive) and the fold-win half (0.5347). In §5 the
+  same candidate bound on fold-win 0.4896 (three folds short); restoring the window
+  fidelity moved it above 0.5 and left the DSR floor as the only binding hurdle.
+* **`sig:momentum`** binds on **fold-win 0.4931** (one fold short of 0.5) and the
+  adjusted DSR (0.7375). Its paired test is significant (dSharpe 1.1995, se 0.6136,
+  p = 0.0293), its stability is perfect (`full` 1.1995, worst-window delta 0.8515,
+  all 36 positive), and its width/index breadth is 19/36 (p = 0.434).
+* Both are *magnitude*-limited, not cost-limited: `nextRun.cheapestFlip` names the
+  binding lever as **magnitude** (needed ≈ 0.9022 = 1.96 × seCluster; current
+  1.1995; factor 0.752). Concentration is real but not a lottery: top-1 fold 4.6 %,
+  top-5 22.1 %, top-20 69.3 % of a gross 1.1865 built from +2.0010 / -0.8145, and
+  the leave-one-fold-out Sharpe stays in [1.045, 1.139] (worst #262).
+* Sizing: effective bars 1,192 (design effect 3.62); `mde95` 0.474, dependence-corrected
+  0.902; `underpowered: false` for the *candidate* (`barsToDetectObserved` 823,
+  `barsToDetectDependent` 3,512); a 576-fold run is projected at 56.8 M ms
+  (≈15.8 h, a lower bound — the replay is O(n²)); the paired test would need **37
+  clusters** to resolve the observed difference (64 for the dependence-corrected
+  target) against the 36 it has.
+
+**A caveat the two runs together expose.** §7's 2,200-bar signal-family run put
+`sig:momentum`'s break-even at **0.48 bps** (and `sig:volume`, at 0.2266, was the
+family's best). This 600-bar design puts it at **14.64 bps** — clearing a realistic
+5-10 bps taker cost, which §7.4 concluded no signal did. The per-bar turnover is
+essentially the same (0.19/bar in both) while the gross P&L per bar is ~29× higher
+in the recent window, i.e. **the momentum edge is concentrated in the most recent
+~600 bars and is absent over the longer sample**. The two runs do not contradict each
+other's method; they are different samples. But it means the "costs kill every
+signal" verdict (`METHOD.md` §2 rests on it) is *window-dependent* and should not be
+treated as a property of the strategy. The dependence-adjusted DSR — the shipped
+gate — is the statistic that is stable across both windows (0.7375 / 0.8343 < 0.95
+in both), which is the argument for keeping it as the decision axis rather than the
+break-even.
+
+### 10.6 The journal verifies the report end-to-end (again)
+
+`folds.jsonl` carries every pass, so the report was recomputed here from the journal
+alone (no model, no run process). All exact:
+
+1. **Shape** — 12,960 lines = exactly 4,320 score + 4,320 base + 4,320 probe; 288 of
+   each per variant.
+2. **Base reuse / determinism** — 4,320/4,320 base rows are `reused: true` and
+   byte-identical to their scored row (`0` signal mismatches).
+3. **Look-ahead audit** — 0 violations across 4,320 probe passes: for every fold the
+   emitted position at `probeIndex` is unchanged when only information after that bar
+   changes, while the later bars do move (`viewDiffers`), so no probe is vacuous in
+   the fold. Recomputing reachability per variant reproduces `report.audit.reachableFolds`
+   **exactly on all 15 variants** (baseline 229, surprise 226, homeostasis 219,
+   multiprobe 229, querymod 229, pca-hash 228, sample-weights 229, every signal
+   288/288). The 59 unreachable baseline folds are the all-abstain folds.
+4. **Per-fold metrics** — recomputing from the journaled positions (`signals` is the
+   position *as computed at bar i*; the traded position at bar i is `signals[i-1]`,
+   the first bar flat) reproduces, for **all 4,320 folds with 0 mismatches**:
+   `netSharpe` (sample-sd, annualised √252), `turnover` (total variation of the
+   lagged position), `meanAbsPosition`, `nonZeroFraction` and `maxDrawdown`.
+5. **Pooled metrics** — concatenating the per-fold realised net returns
+   (`signals[i-1] × returns[i]`) reproduces `grossPnl` **and** `perPeriodNetSharpe`
+   **exactly for all 15 variants** (agreement to machine precision), hence
+   `netSharpe` too. PSR/DSR come from the same locked `backtestMetrics` primitive.
+
+So the verdict (and every number in §10.2/§10.3) is citable: it is reproducible from
+the uploaded journal end to end. The upload set is `run.json` + `report.json` +
+`run.log` (+ `folds.jsonl` for the offline recomputation); `models/` was reclaimed
+(`modelRetention: discard`).
+
+### 10.7 Three of the seven mechanism candidates carry no information (`BUGS.md` #43/#44)
+
+Comparing the journaled position series fold by fold:
+
+| candidate | folds byte-identical to baseline | maxAbsDiff |
+| --- | ---: | ---: |
+| surprise-gate | 189/288 | 0.1488 |
+| homeostasis | 42/288 | 0.1598 |
+| pca-hash | 282/288 | 0.0581 |
+| **multi-probe** | **288/288** | **0** |
+| **query-mod** | **288/288** | **0** |
+| **sample-weights** | **288/288** | **0** |
+
+Three candidates emit **byte-identical positions to the baseline on every fold**, so
+their rows (and the 15 keep-off "reasons" they contribute: `fold win fraction 0 <
+0.5`, `cluster stability 0 of 36`, `dSharpe=0 se=0 t=0 p=0.5`) are artefacts of a
+duplicated series, and `K = 15` counts three candidates that were never exercised.
+`familyCorrelation.effectiveTrials = 6.10 of 14` is a second, independent symptom.
+This is `BUGS.md` #43 (nothing ever sets the controller's `_sampleWeightConfig`, so
+the sample-weights candidate cannot differ from the baseline — and `TODO.md` #5's
+"walk-forward run showing sample weighting improves PSR/DSR" therefore cannot be
+answered by this run) and #44 (multi-probe/query-mod set
+`_multiProbeConfig`/`_queryModConfig` on the mind, but the path they steer —
+`knowledge/transfer.js → _getGlobalLSHCandidates` — is not reached in a fold's
+training, so the flags are inert on the shipped model). The report should mark an
+inert candidate rather than printing reasons derived from a duplicate of the
+baseline.
+
+The **round-27 planning sweep** re-derived both from the code and both are stronger
+than this run's first reading — see `PLAN-round27.md` §2 and `BUGS.md` #43/#44/#46/#47/#48:
+
+- **#43 is a mathematical no-op, in production too, not a missing `configure`.** The
+  drain is always a batch of *one* label (`CONFIG.baseProcessCount = 1`; the A/B
+  hardcodes `1`), and `spanWeightsFromEntries([k], cfg)` is `[1]` for every
+  normalization (measured; ten consecutive entries give 0.825–1.355, ESS 9.64 of 10,
+  so the estimator is fine and the batch is degenerate). No wiring can fix it — the
+  mechanism must be redefined for a streaming trainer (R27-3).
+- **#44 is "the path cannot act", not "the path is not reached".**
+  `_getGlobalLSHCandidates` has one caller (`transfer.js:74`, inside the read-only
+  `broadcastMemory`), whose result is the *signal payload* while `translateMemory`
+  receives `[]` and early-returns without mutating; the live retrieval path
+  (`retrieval.js:251`/`:303`) reads the buckets directly and consults neither flag.
+  `pca-hash` is live **only** through that undocumented reader (and partly through a
+  bucket-content-dependent `Math.random()` draw count), which is why it moved 6/288
+  folds while the other two moved none (R27-1/R27-2).
+
+### 10.7b The `20260922T204248-seed1` positions, one line per candidate (round-27 re-read)
+
+| candidate | folds byte-identical to baseline | maxAbsDiff | status (round-27 taxonomy) |
+| --- | ---: | ---: | --- |
+| surprise-gate | 189/288 | 0.1488 | live (memory write gate, in-path) |
+| homeostasis | 42/288 | 0.1598 | live (per-member LR, in-path) |
+| pca-hash | 282/288 | 0.0581 | live **via `_retrieveTopRelevantProtos`** (undocumented reader) |
+| multi-probe | 288/288 | 0 | **not-applicable** on the controller (`broadcastMemory`'s result is discarded) |
+| query-mod | 288/288 | 0 | **not-applicable** on the controller (same) |
+| sample-weights | 288/288 | 0 | **inert by construction** (batch of one ⇒ weight exactly 1) |
+
+### 10.8 The forecast/MCS panel: a real result, with a cross-kind caveat
+
+The R26-14 panel is the run's second family-level check and it does something the
+Sharpe ranking does not: it rejects **all eight signal variants** from the Model
+Confidence Set at both 90 % and 95 %, leaving only the seven mechanism variants.
+The mechanism behind that is visible in the scores: the baseline's `confidence` is a
+probability-like number (brier 0.2522, log 0.6975, i.e. at the base rate), while the
+signals' `confidence` is a *raw signal score* whose per-bar Brier loss is far worse
+(sig:momentum 0.3394, sig:range 0.3492 — worse than a constant 0.5), so the DM test
+favours the baseline for every signal.
+
+That is a genuine, reportable result (a signal's raw magnitude is not a calibrated
+probability) **and** a caveat: the panel is comparing incommensurable quantities
+across `kind` — a mechanism's calibrated confidence against a signal's uncalibrated
+score — so "eliminated from the MCS" for a signal means "its score is not a
+probability", not "its P&L forecast is worse". The block carries `kind` per variant
+but does not group by it. Recorded as a method note (TODO), not a defect: no verdict
+moves, because the MCS is diagnostic and the family-wise SPA (on Sharpe) is the
+cross-check the decision cites.
+
+### 10.9 What this run means for the next one
+
+1. **The round-26 correction is validated.** A controlled before/after on the same
+   design moved the baseline and every mechanism row (as predicted) and left every
+   pure-signal row unchanged (as required). The recorded N3 verdict's *baseline and
+   mechanism* content is superseded by §10; its signal-family content stands.
+2. **Nothing promotes, at any cost level, and the reason is now the honest
+   statistic** — the dependence-adjusted DSR floor and, for momentum, fold-win by a
+   single fold. The two near-misses (`sig:momentum`, `sig:acceleration`) are the
+   first candidates the project has had that pass the paired cluster magnitude test,
+   the stability test and (accel) the fold-win test, and fail only the corrected-DSR
+   floor.
+3. **Fix the reading defects before another run.** #43/#44 mean 3 of 7 mechanism
+   candidates are untested and inflate `K`; #45 means the decision block's training
+   answer describes only the winning (signal) row. None changes arithmetic; all
+   three mislead a reader of a run. #43 additionally blocks the *only* experiment
+   that can answer the sample-weighting question.
+4. **Do not read the economic ceiling off one window.** Momentum's break-even is
+   0.48 bps over 2,200 bars and 14.64 bps over 600. Any "costs kill the signals"
+   (or "the signals clear costs") claim must name the window; the
+   dependence-adjusted DSR is the statistic that agrees across both.
+5. **The sample-weighting item is still open, and so is the label-policy
+   experiment** (`--label-policies`, R26-11) — both are opt-in and neither has been
+   run at power. Once #43 is fixed, `--label-policies` + a fixed `sample-weights`
+   are the cheapest remaining falsifiable experiments, at 600 bars.
+
+### 10.10 The round-27 re-read: the journal is an exact witness, and K is not what holds the near-misses back
+
+Two results from the second round-27 sweep (`PLAN-round27.md` §1.3/§2.7), both
+computed **offline from the uploaded journal** (`folds.jsonl`), with no model:
+
+**(a) The journal reproduces every pooled metric exactly.** Reconstructing each
+variant's pooled net returns from the per-fold `returns` + `signals`
+(`analysis/backtest.js#strategyReturns`, `costBps: 0`) and re-deriving
+`sharpeRatio`/`skewness`/`kurtosis` → `deflatedSharpeRatio` reproduces the report's
+`perPeriodNetSharpe` to ~1e-9 and every `dsr` to the printed 6 dp for all 15
+variants (baseline recon `−0.007224877` vs report `−0.0072248766596337685`;
+`sig-accel` recon `dsr 0.995306` vs report `0.995306`). A trials/K or cost
+restatement is therefore pure post-processing of the journal — it never needs a
+model re-run.
+
+**(b) Excluding the three structurally inert arms from K cannot manufacture a
+promotion.** `dsrAdjusted` (the failing `minDsrAdjusted 0.95` hurdle) restated at
+K = 15 / 12 / 8 (K = 12 = 15 − multiprobe − querymod − sample-weights; K = 8 is
+further than the correction can go):
+
+| candidate | K=15 | K=12 | K=8 | promotes at 0.95? |
+| --- | ---: | ---: | ---: | --- |
+| `sig-accel` | 0.8343 | 0.8608 | 0.9036 | no (would need K ≲ 2) |
+| `sig:momentum` | 0.7375 | 0.7736 | 0.8350 | no |
+| `surprise` | 0.0344 | 0.0433 | 0.0658 | no |
+| `baseline` | 0.0235 | 0.0301 | 0.0471 | — |
+
+So the R27-1 K correction is a *reading* fix, not a verdict flip: even at K = 8 the
+two near-misses stay under the floor. This is the property that makes the K
+exclusion safe to ship, and it is measured rather than assumed.
+
+**(c) The `triple`-label and sample-weighting experiments were never expressible.**
+`report.json` records `heldBars { count: 185937, sum: 185937, max: 1, mean: 1 }`:
+every closed trade was "held" one bar, because `_updateOpenTrades` counts bars only
+within the single newly-inserted candle it is handed per call (`BUGS.md` #49). The
+shipped labeler therefore produces **non-overlapping 1-bar labels**, so
+sample-uniqueness weighting is mathematically inert on it (uniqueness ≡ 1), and the
+`triple` policy's vertical barrier is unreachable for `horizonBars > 1`. Both the
+sample-weighting item (TODO #5) and the label-policy experiment are blocked on the
+R27-4b fix, not on a `configure`.
+
+---
+
+## 11. The round-27 plan (IMPLEMENTED: R27-1…R27-6, R27-8 and R27-9; the runs are the operator's)
+
+Round 26 closed with three *reading* follow-ups and two unrun experiments. The
+round-27 planning sweep (triggered by the user's "plan the next step, double-check
+the controller, add the checks you think are needed, and bake the flags in") turned
+those into a concrete, tested plan and found four more findings in the same class
+(`BUGS.md` #43/#44 sharpened, #46/#47/#48 new). The plan is
+[`PLAN-round27.md`](PLAN-round27.md); it is **implemented (R27-1…R27-6, R27-8,
+R27-9); the runs are the operator's** (§12 has the implementation record).
+
+Its shape:
+
+- **Liveness first.** Every candidate carries a `liveness` certificate computed from
+  the already-journaled fold signals (`live` / `inert` / `skipped` /
+  `not-applicable` / `duplicate-of:<id>`); an untested candidate contributes exactly
+  one explanatory reason, is excluded from `K` and the family-wise search, and is
+  listed in the report. The DSRs are re-deflated at the reduced `K` via the existing
+  `restateReportAtCost`, with `trialsRoster`/`trialsInactive` recorded; §10.10(b) shows
+  the correction cannot promote the near-misses. A contract test requires at least
+  one live mechanism candidate on the shipped controller roster.
+- **Honest taxonomy.** `appliesTo: controller | broadcast | agnostic`; `multi-probe`
+  and `query-mod` are `not-applicable` on the controller (their only reader's result
+  is discarded), and `pca-hash`'s note names the reader that actually makes it live.
+- **Reachability (#49).** `heldBars` is structurally 1 and the `triple` policy's
+  vertical barrier is unreachable; R27-4b computes the elapsed bars from the cached
+  window, leaving the optimistic/conservative positions byte-identical. This is the
+  enabling fix for the label experiment.
+- **Sample weighting re-scoped.** Because the shipped labeler's labels do not
+  overlap, uniqueness weighting is inert on it; the causal-window mechanism is
+  implemented as a modifier of the (now reachable) `triple` label, and TODO #5 is
+  closed `not-applicable` for `optimistic` (with a clean falsification test under
+  `triple`).
+- **Fail-closed inputs:** a degraded prediction abstains instead of taking a full
+  short; a rejected training row cannot corrupt `trainingSteps`.
+- **Diagnostics that can fire:** `undertrainedFolds` (always 0) is replaced by
+  `shallowHistoryFolds` + a real `underTrainedFolds`; the decision block names its
+  model referent; the partial report carries the config echo; `streamLabel` is
+  normalised (the journal currently embeds the operator's absolute paths).
+- **Runs:** a minutes-long liveness validation on two streams; a label-policy run
+  (`conservative` + the now-reachable `triple`); a weighting run with a `triple`
+  baseline (the only setting in which the weighting question is answerable); and an
+  optional 3-seed replication of the two near-miss signals (id `sig-accel`, not
+  `sig-acceleration`).
+- **A design note (R27-8): buy independence, not bars.** The run's own numbers say
+  so (`effectiveStreams` 2.30 of 8, dependence inflation 4.87×) — more bars of the
+  same basket barely move the statistic the gate uses.
+
+Acceptance criteria, the exact commands, the file map and the resolved decisions
+(§3.5) are in `PLAN-round27.md` §3–§9.
+
+## 12. Round-27 implementation record (what landed; the runs are the operator's)
+
+Round 27's code and tests are in the tree and `npm test` is green (`RUNBOOK.md` §6
+ledger, 2347 checks). What changed, and what pins each item:
+
+- **R27-1 — liveness + active-K restatement.** Every candidate carries a `liveness`
+  certificate computed by comparing its per-fold position series with the baseline's
+  (`live` / `inert` / `duplicate-of:<id>` / `not-applicable` / `skipped`); an inactive
+  candidate is excluded from `K` and the family-wise search with exactly one reason and
+  its pre-restatement report kept in `reportRoster`, and every row then carries the
+  active K (`trialsRoster = trials + trialsInactive`). Pinned by `analyze.test.js`
+  section M2 and `controller_invariants.test.js`. The K change is a reading fix, not a
+  verdict flip: §10.10's restatement of this journal shows no near-miss promotes at any
+  K ≥ 8.
+- **R27-2 — taxonomy.** `appliesTo ∈ {agnostic, model, controller, broadcast}`;
+  `multi-probe`/`query-mod` are `not-applicable` on the controller (their only reader's
+  result is discarded) and `pca-hash`'s note names the live reader
+  (`_retrieveTopRelevantProtos`); `--list-variants` prints the taxonomy. Pinned by the
+  taxonomy contract in `analyze.test.js` and the broadcast-flag bit-identity check in
+  `walkforward.test.js`.
+- **R27-3 — sample weighting re-scoped.** Closed `not-applicable` on `optimistic`; the
+  causal-window estimator is a pure helper (`causalWindowWeight`) usable as an opt-in
+  modifier of the `triple` label. A variant may carry its own precise `inertReason`
+  (the shipped `sample-weights` states that one-bar labels do not overlap, so it
+  reaches the model path and multiplies by 1) instead of the generic "never reaches"
+  wording. Pinned by `sample_weights.test.js` (45), `analyze.test.js` and
+  `controller_invariants.test.js`.
+- **R27-4 / R27-4b — fail-closed inputs and a reachable vertical barrier.** `predict`
+  → `NaN`, `train` → the current count + `rejectedTrainRows`; the controller's guard
+  is `finite && >= 0` (a negative can never reach the NOT NULL `confidence` column);
+  `barsAfterEntry` is
+  window-derived (capped at `cacheSize − 1`) so `triple` can fire at `H > 1`, with the
+  optimistic/conservative positions byte-identical. Pinned by `sanity.test.js`,
+  `core.test.js` (browser + node) and `controller_invariants.test.js`.
+- **R27-5 — report honesty.** `shallowHistoryFolds` + a fireable `underTrainedFolds`
+  (with the `minTrainingSteps` floor and the per-fold distribution); the decision
+  block's baseline `modelReferent`; `neededForObserved`; the `partial-report.json`
+  config echo; the `run.log` variant `kind`/`elapsedMs`; the per-kind forecast block;
+  and the normalised `streamLabel`.
+- **R27-9 — defaults baked in.** `requireReachable: true` (`--reachable=0` opts out),
+  `--audit-probes` default 1, liveness/taxonomy always on, `sample-weights` out of the
+  default roster. Pinned by a fourth `analyze_cli.test.js` block (spawns the real CLI:
+  the flags are documented, threaded into `run.json`/`report.json`, and
+  `--list-variants` starts no run).
+
+**Not yet done (operator):** R27-7's four runs (§11's commands; Step 0.5's offline K
+restatement is already measured in §10.10). Their results belong in new sections of
+this file. (R27-8's design note is already written — `METHOD.md` §5.)

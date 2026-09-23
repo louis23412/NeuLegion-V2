@@ -30,7 +30,7 @@ import { CONFIG } from './legion/config.js';
 import { mulberry32, hashString } from './legion/rng.js';
 import { runWorkerThread } from './legion/workers.js';
 import { makeFoldExecutor, normaliseConcurrency } from './analysis/parallel.js';
-import { walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision, formatReport, walkForwardSearch, probToPosition, confidenceToPosition, confidenceFromProb, restateReportAtPolicy, verifyPolicyRoundTrip, poolReports, costLadder, familyCorrelation, DEPENDENCE_GATE_READER } from './analysis/walkforward.js';
+import { walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision, formatReport, walkForwardSearch, probToPosition, confidenceToPosition, confidenceFromProb, restateReportAtCost, restateReportAtPolicy, verifyPolicyRoundTrip, poolReports, costLadder, familyCorrelation, DEPENDENCE_GATE_READER } from './analysis/walkforward.js';
 import { turnoverSweep as runTurnoverSweep, formatTurnoverSweep } from './analysis/holding.js';
 import { resampleCandles, designEffectOfStreams, selectStreams as runStreamSelection, formatStreamSelection } from './analysis/streams.js';
 import { seedDistribution, formatSeedReplication } from './analysis/replication.js';
@@ -48,14 +48,32 @@ import { configFingerprint } from './legion/sanitize.js';
 // from here is comparable to the suite's pinned numbers.
 export const FEATURE_LEN = 6;
 
+// The causal streaming window's size for R27-3's `sample-weights` mechanism: how
+// many recent observed entry spans the uniqueness ring retains. Only used by the
+// opt-in `sample-weights` variant; the default (null config) path is untouched.
+export const SAMPLE_WEIGHT_WINDOW_BARS = 64;
+
 // ---------------------------------------------------------------------------
 // Variants — the default-off features, enabled one at a time.
 // ---------------------------------------------------------------------------
 //
-// Each variant is `{ id, label, note, configure(hm), afterFit(hm)? }`. The
-// `configure`/`afterFit` bodies use the EXACT settings the walk-forward suite
+// Each variant is `{ id, label, note, configure(hm), afterFit(hm)?, appliesTo }`.
+// The `configure`/`afterFit` bodies use the EXACT settings the walk-forward suite
 // already proves are either inert or live, so a promotion here is comparable to
 // the suite. `baseline` configures nothing (every feature at its default/off).
+//
+// `appliesTo` (round 27, R27-2) says which code path the mechanism can actually
+// reach, so the report can honestly mark a candidate `not-applicable` instead of
+// presenting it as a tested arm:
+//   'model'      — acts on the HiveMind the model is built from (applies to both
+//                  the controller and the bare model);
+//   'controller' — needs the shipped controller (sample-weights, label policy);
+//   'broadcast'  — acts ONLY on the memory broadcast/transfer payload
+//                  (`broadcastMemory` -> `_getGlobalLSHCandidates`), whose result
+//                  the scored path never reads back — so it cannot move a
+//                  position and is always not-applicable here;
+//   'agnostic'   — a pure signal, applicable to any model.
+// `SIGNAL_VARIANTS` are 'agnostic'.
 export const VARIANTS = Object.freeze([
     {
         id: 'baseline',
@@ -63,6 +81,7 @@ export const VARIANTS = Object.freeze([
         note: 'all optional features at their default (off)',
         configure: null,
         afterFit: null,
+        appliesTo: 'agnostic',
     },
     {
         id: 'surprise',
@@ -70,6 +89,7 @@ export const VARIANTS = Object.freeze([
         note: 'surprise-gated memory writes (Titans arXiv 2501.00663), floor=0.3',
         configure: (hm) => { hm._surpriseGateEnabled = true; hm._surpriseConfig = { floor: 0.3, sharpness: 1 }; },
         afterFit: null,
+        appliesTo: 'model',
     },
     {
         id: 'homeostasis',
@@ -77,35 +97,68 @@ export const VARIANTS = Object.freeze([
         note: 'homeostatic per-member learning rates (arXiv 2609.13771), gain=0.5',
         configure: (hm) => { hm._homeostasisEnabled = true; hm._homeostasisConfig = { gain: 0.5, target: 1, minScale: 0.5, maxScale: 1.5 }; },
         afterFit: null,
+        appliesTo: 'model',
     },
     {
         id: 'multiprobe',
         label: 'multi-probe',
-        note: 'margin-ordered multi-probe LSH (Lv et al. VLDB 2007), maxFlips=2',
+        note: 'margin-ordered multi-probe LSH (Lv et al. VLDB 2007), maxFlips=2 — BROADCAST path only (R27-2: cannot reach the scored model)',
         configure: (hm) => { hm._multiProbeConfig = { maxFlips: 2, budget: 8 }; },
         afterFit: null,
+        appliesTo: 'broadcast',
     },
     {
         id: 'querymod',
         label: 'query-mod',
-        note: 'dynamic query modification (arXiv 2605.23807) — centroid re-query',
+        note: 'dynamic query modification (arXiv 2605.23807) — centroid re-query — BROADCAST path only (R27-2: cannot reach the scored model)',
         configure: (hm) => { hm._queryModConfig = { enabled: true }; },
         afterFit: null,
+        appliesTo: 'broadcast',
     },
     {
         id: 'pca-hash',
         label: 'pca-hash',
-        note: 'data-aware PCA-aligned LSH hyperplanes (BinaryPC arXiv 2608.04405), above-mean rank',
+        note: 'data-aware PCA-aligned LSH hyperplanes (BinaryPC arXiv 2608.04405), above-mean rank — LIVE via _refreshLshHyperplanes, which _retrieveTopRelevantProtos reads (R27-2)',
         configure: (hm) => { hm._pcaHashConfig = { seed: 1, iters: 30, tol: 1e-6, minRows: 8, rankPolicy: 'above-mean' }; },
         afterFit: (hm) => { if (typeof hm._refreshLshHyperplanes === 'function') hm._refreshLshHyperplanes(); },
+        appliesTo: 'model',
     },
+]);
+
+// Opt-in controller-scoped mechanism variants: resolvable by id, but deliberately
+// NOT part of the default roster. `sample-weights` was removed from the default
+// roster in round 27 (R27-3): on the shipped (`optimistic`) labeller every label
+// is one bar long, so no two label spans overlap, every uniqueness weight is
+// exactly 1, and the mechanism is a mathematical no-op — it cannot express an
+// effect there. It stays resolvable (with a `configure` that enables the causal
+// streaming window) so an explicit `--variants=sample-weights` run *measures*
+// that inertness, and so the mechanism can be exercised under the now-reachable
+// `triple` label, where labels DO overlap.
+export const OPT_IN_VARIANTS = Object.freeze([
     {
         id: 'sample-weights',
         label: 'sample-weights',
-        note: 'uniqueness loss weighting (AFML ch. 4) — CONTROLLER-scoped; it is only evaluable on the controller-backed model (round 23, N0)',
-        configure: null,
-        afterFit: null,
+        note: 'uniqueness loss weighting (AFML ch. 4) — causal streaming window; inert unless labels overlap (triple + label-horizon > 1)',
+        // R27-3: on the shipped (`optimistic`) labeller every label is one bar long,
+        // so no two spans overlap and every weight is exactly 1 — the mechanism DOES
+        // reach the model path, it just cannot express an effect there. The liveness
+        // certificate uses this variant-specific reason instead of the generic
+        // "never reaches the model path", so the inert report is a true statement.
+        inertReason: 'the shipped (optimistic) labeller emits one-bar labels, so no two label spans overlap and every uniqueness weight is exactly 1 — it cannot express an effect there (R27-3)',
         controllerScoped: true,
+        appliesTo: 'controller',
+        configure: (ctl) => {
+            const horizon = Number.isFinite(ctl._labelHorizonBars) && ctl._labelHorizonBars > 1
+                ? Math.floor(ctl._labelHorizonBars)
+                : 1;
+            ctl._sampleWeightConfig = {
+                mode: 'causal-window',
+                windowBars: SAMPLE_WEIGHT_WINDOW_BARS,
+                horizonBars: horizon,
+                normalization: 'mean1',
+            };
+        },
+        afterFit: null,
     },
 ]);
 
@@ -114,11 +167,13 @@ export const VARIANTS = Object.freeze([
 // the driver evaluates. They share the ONE family-wise gate and the one baseline,
 // so the multiple-testing correction covers the whole searched universe.
 export const SIGNAL_VARIANTS = Object.freeze(
-    SIGNAL_CANDIDATES.map((c) => ({ ...c, signal: signalForCandidate(c) })),
+    SIGNAL_CANDIDATES.map((c) => ({ ...c, signal: signalForCandidate(c), appliesTo: 'agnostic' })),
 );
 
 // Every candidate the A/B can resolve by id: the mechanism flags plus the signal
-// family. `kind` (default 'mechanism') distinguishes them in the report.
+// family. `kind` (default 'mechanism') distinguishes them in the report. The
+// opt-in variants are NOT here (so the default roster stays lean) but ARE in
+// `RESOLVABLE_VARIANTS`.
 export const ALL_VARIANTS = Object.freeze([...VARIANTS, ...SIGNAL_VARIANTS]);
 
 // The trade-label policies as opt-in A/B candidates (round 26, R26-11 /
@@ -139,6 +194,7 @@ export const LABEL_VARIANTS = Object.freeze([
         note: 'stop-first tie-break on a both-barrier bar + a gapped stop filled at the worst traded price (BUGS.md #36)',
         configure: (ctl) => { ctl._labelPolicy = 'conservative'; },
         afterFit: null,
+        appliesTo: 'controller',
     },
     {
         id: 'label-triple',
@@ -149,13 +205,72 @@ export const LABEL_VARIANTS = Object.freeze([
         note: 'conservative + a time barrier at `labelHorizonBars` (the triple-barrier label, López de Prado 2018 ch. 3)',
         configure: (ctl) => { ctl._labelPolicy = 'triple'; },
         afterFit: null,
+        appliesTo: 'controller',
     },
 ]);
 
-// The full resolvable universe: the default A/B family plus the opt-in label
-// variants. `resolveVariant` searches this (so `--variants=label-triple` works),
-// while the default roster stays the 15-candidate family.
-export const RESOLVABLE_VARIANTS = Object.freeze([...ALL_VARIANTS, ...LABEL_VARIANTS]);
+// The full resolvable universe: the default A/B family plus the opt-in mechanism
+// variants (`sample-weights`) and the opt-in label variants. `resolveVariant`
+// searches this (so `--variants=label-triple` / `--variants=sample-weights` work),
+// while the default roster stays the lean family (varianRoster below).
+export const RESOLVABLE_VARIANTS = Object.freeze([...ALL_VARIANTS, ...OPT_IN_VARIANTS, ...LABEL_VARIANTS]);
+
+// R27-2: can this variant's mechanism reach the code path the A/B scores? Returns
+// a one-line reason when it cannot (so the report marks it `not-applicable`
+// instead of presenting it as a tested arm), or null when it can.
+export const notApplicableReason = (variant, model = 'controller') => {
+    if (!variant) return null;
+    if (variant.appliesTo === 'broadcast') {
+        return `not-applicable: acts only on the memory broadcast path (broadcastMemory -> _getGlobalLSHCandidates), whose output the scored ${model} model never reads back`;
+    }
+    if (variant.appliesTo === 'controller' && model !== 'controller') {
+        return `not-applicable: acts only on the controller-backed model, not the ${model} model`;
+    }
+    return null;
+};
+
+// R27-5: the forecast layer's grouping key. The controller family (the baseline,
+// the mechanism flags, the label policies) journals a confidence derived from a
+// probability — `confidenceFromProb(prob)` — so `(c+1)/2` recovers that
+// probability and a proper score is meaningful. A signal variant journals a
+// normalised z-score, which is NOT a probability, so it is scored only against
+// the other signals. Grouping by this key (rather than raw `kind`) keeps a
+// `label` candidate in the controller family where it belongs.
+export const forecastKindOf = (variant) => (variant && variant.signal ? 'signal' : 'controller');
+
+// R27-2: a human-readable taxonomy table for `--list-variants`. Columns:
+// id | label | kind | appliesTo | applicable-here. `model` decides the last
+// column; the default roster marks opt-in variants too.
+export const listVariants = (model = 'controller') => {
+    const kindOf = (v) => v.kind || (v.signal ? 'signal' : 'mechanism');
+    return RESOLVABLE_VARIANTS.map((v) => {
+        const reason = notApplicableReason(v, model);
+        const inDefaultRoster = ALL_VARIANTS.includes(v);
+        return {
+            id: v.id,
+            label: v.label,
+            kind: kindOf(v),
+            appliesTo: v.appliesTo || 'agnostic',
+            controllerScoped: !!v.controllerScoped,
+            inDefaultRoster,
+            applicable: reason == null,
+            reason: reason || null,
+        };
+    });
+};
+
+// R27-5: a fixed-width table for `--list-variants`, so an operator can see the
+// full resolvable universe (id | kind | appliesTo | default? | applicable-here)
+// and the one-line reason a variant cannot reach the scored model.
+export const formatVariantList = (rows) => {
+    const w = (s, n) => String(s == null ? '-' : s).padEnd(n);
+    const header = `${w('id', 22)} ${w('kind', 10)} ${w('applies-to', 11)} ${w('default', 8)} applicable`;
+    const lines = [header, '-'.repeat(header.length)];
+    for (const r of rows) {
+        lines.push(`${w(r.id, 22)} ${w(r.kind, 10)} ${w(r.appliesTo, 11)} ${w(r.inDefaultRoster ? 'yes' : (r.controllerScoped ? 'opt-in' : 'no'), 8)} ${r.applicable ? 'yes' : `no — ${r.reason}`}`);
+    }
+    return lines.join('\n');
+};
 
 // The confidence→position policy for the A/B (round 26, R26-3 / BUGS.md #34).
 //
@@ -374,9 +489,16 @@ const labelDiagnostics = (ga = {}) => {
     };
 };
 
-// Cross-fold accumulator for a variant's model diagnostics (round 26, R26-2).
-const emptyModelAccumulator = () => ({
-    folds: 0, notTrainedFolds: 0, undertrainedFolds: 0, warmErrors: 0,
+// Cross-fold accumulator for a variant's model diagnostics (round 26, R26-2;
+// renamed/re-scoped in round 27, R27-5). `trainingStepsList` retains each fold's
+// training-step count so the report can print a real min/median/max distribution
+// rather than a single pooled scalar.
+const emptyModelAccumulator = (minTrainingSteps = 1) => ({
+    folds: 0, notTrainedFolds: 0, shallowHistoryFolds: 0, underTrainedFolds: 0, warmErrors: 0,
+    minTrainingSteps: Number.isFinite(minTrainingSteps) ? minTrainingSteps : 1,
+    trainingStepsList: [],
+    heldBarsCap: null,
+    sampleWeightsRaw: { count: 0, min: Infinity, max: -Infinity, sum: 0, essSum: 0, nSum: 0 },
     raw: {
         trainingSteps: 0, quarantinedRows: 0, droppedCandles: 0, openTradeWriteErrors: 0,
         takeProfit: 0, stopLoss: 0, brierSum: 0, brierCount: 0, wins: 0, scored: 0,
@@ -388,8 +510,29 @@ const mergeModelStats = (acc, s) => {
     if (!acc || !s) return acc;
     acc.folds += 1;
     acc.warmErrors += Number.isFinite(s.warmErrors) ? s.warmErrors : 0;
-    if (s.undertrained) acc.undertrainedFolds += 1;
-    if (!(s.trainingSteps > 0)) acc.notTrainedFolds += 1;
+    // R27-5: `s.undertrained` is `testStart < warmup` — the OLD always-zero
+    // certificate. It is now reported under its true name (`shallowHistoryFolds`),
+    // and `underTrainedFolds` is a statistic that CAN fire: a fold whose model
+    // trained, but on fewer than `minTrainingSteps` rows.
+    if (s.undertrained) acc.shallowHistoryFolds += 1;
+    const ts = Number.isFinite(s.trainingSteps) ? s.trainingSteps : null;
+    if (ts == null) {
+        acc.notTrainedFolds += 1;
+    } else {
+        acc.trainingStepsList.push(ts);
+        if (!(ts > 0)) acc.notTrainedFolds += 1;
+        else if (ts < acc.minTrainingSteps) acc.underTrainedFolds += 1;
+    }
+    if (Number.isFinite(s.heldBarsCap)) acc.heldBarsCap = s.heldBarsCap;
+    const sw = s.sampleWeightsRaw;
+    if (sw && Number.isFinite(sw.count) && sw.count > 0) {
+        acc.sampleWeightsRaw.count += sw.count;
+        acc.sampleWeightsRaw.sum += sw.sum;
+        acc.sampleWeightsRaw.essSum += sw.essSum;
+        acc.sampleWeightsRaw.nSum += sw.nSum;
+        if (Number.isFinite(sw.min)) acc.sampleWeightsRaw.min = Math.min(acc.sampleWeightsRaw.min, sw.min);
+        if (Number.isFinite(sw.max)) acc.sampleWeightsRaw.max = Math.max(acc.sampleWeightsRaw.max, sw.max);
+    }
     const raw = s.raw || {};
     for (const key of Object.keys(acc.raw)) {
         const v = raw[key];
@@ -399,6 +542,12 @@ const mergeModelStats = (acc, s) => {
         else acc.raw[key] += v;
     }
     return acc;
+};
+
+const median = (sorted) => {
+    if (!sorted.length) return null;
+    const mid = sorted.length >> 1;
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 };
 
 // The per-variant `model` block: the pooled diagnostics, or null when the variant
@@ -423,11 +572,36 @@ const summarizeModelStats = (acc) => {
         heldBarsCount: r.heldBarsCount,
         heldBarsMax: r.heldBarsMax,
     });
+    const tsSorted = acc.trainingStepsList.slice().sort((a, b) => a - b);
+    const sw = acc.sampleWeightsRaw;
     return {
         folds: acc.folds,
         trained: d.trainingSteps > 0,
         notTrainedFolds: acc.notTrainedFolds,
-        undertrainedFolds: acc.undertrainedFolds,
+        // R27-5: `shallowHistoryFolds` is the (always-zero-at-default-split) count
+        // of folds below the warm-up floor; `underTrainedFolds` is the count of
+        // folds whose model trained on fewer than `minTrainingSteps` rows.
+        shallowHistoryFolds: acc.shallowHistoryFolds,
+        underTrainedFolds: acc.underTrainedFolds,
+        minTrainingSteps: acc.minTrainingSteps,
+        // The per-fold training-step distribution (min/median/max), so the floor
+        // can be set from evidence. Named `trainingStepsDistribution` to avoid
+        // colliding with the pooled `trainingSteps` scalar below.
+        trainingStepsDistribution: tsSorted.length
+            ? { min: tsSorted[0], median: median(tsSorted), max: tsSorted[tsSorted.length - 1] }
+            : null,
+        heldBarsCap: acc.heldBarsCap,
+        sampleWeights: sw.count > 0
+            ? {
+                count: sw.count,
+                min: sw.min,
+                max: sw.max,
+                mean: sw.sum / sw.count,
+                ess: sw.essSum / sw.count,
+                n: sw.nSum / sw.count,
+                effectiveFraction: sw.nSum > 0 ? sw.essSum / sw.nSum : null,
+            }
+            : null,
         warmErrors: acc.warmErrors,
         ...d,
     };
@@ -593,6 +767,13 @@ export const makeControllerModelFactory = ({
             stats: () => ({
                 warmErrors, folds, undertrained, ready,
                 retention: modelRetention, reclaimed,
+                // R27-4b/R27-3 diagnostics: the cache-bounded holding cap and the
+                // causal-window sample-weight raw counters (null when the mechanism
+                // is off, which is the default and every golden fingerprint).
+                heldBarsCap: (Number.isFinite(cacheSize) && cacheSize > 1) ? cacheSize - 1 : null,
+                sampleWeightsRaw: (ctl && ctl._sampleWeightStats)
+                    ? { ...ctl._sampleWeightStats }
+                    : null,
                 ...labelDiagnostics(ctl ? ctl._globalAccuracy : {}),
             }),
         };
@@ -710,10 +891,14 @@ export function evaluateAB({
     const evaluateOne = (vi) => {
         const variant = variants[vi];
         const startedAt = Date.now();
-        // A controller-scoped variant (sample-weights) can only be evaluated on
-        // the controller-backed model; on a bare HiveMind it is flagged so the
-        // report is honest rather than pretending it ran.
+        // A controller-scoped variant (sample-weights, the label policies) can only
+        // run on the controller-backed model; a 'broadcast'-path variant
+        // (multi-probe, query-mod) cannot reach the scored model at all (R27-2).
+        // Both are still EVALUATED here (so the claim "identical to the baseline"
+        // is measured, not assumed); `finalizeAB` marks them inactive and excludes
+        // them from K and the search.
         const skipped = !!variant.controllerScoped && model !== 'controller';
+        const notApplicable = notApplicableReason(variant, model);
         const reports = streams.map((s, si) => {
             // One fold function per (variant, stream): it holds the raw-confidence
             // cache the journal reads (round 26, R26-3).
@@ -733,13 +918,13 @@ export function evaluateAB({
                     : null,
             });
         });
-        const report = poolReports(reports, { periodsPerYear, trials: variants.length });
+        const report = reports.length ? poolReports(reports, { periodsPerYear, trials: variants.length }) : null;
         // Per-variant wall time (round 25, observability): the cost law
         // (`~0.035 s x sum_f(testStart_f) x streams x passes x mechanismVariants`,
         // O(n^2) per stream — docs/RUN-ANALYSIS.md section 4) can only be checked,
         // and the next run sized, if the run says how long each variant actually
         // took. Pure reporting — it has no arithmetic effect.
-        return { variant, report, skipped, streams: reports.length, elapsedMs: Date.now() - startedAt };
+        return { variant, report, skipped, notApplicable, streams: reports.length, elapsedMs: Date.now() - startedAt };
     };
 
     const evaluated = new Array(variants.length);
@@ -752,12 +937,16 @@ export function evaluateAB({
         evaluated[vi] = evaluateOne(vi);
         // Round 25: the driver's dependence-aware hurdles ride on `gateOptions`;
         // each variant's own `decision` overrides them, and with `gateOptions`
-        // null/absent the round-23/24 decision path is unchanged.
-        const decision = promoteDecision(baseline, evaluated[vi].report, {
-            requireCleanAudit: audit,
-            ...(variants[vi].decision || {}),
-            ...(gateOptions || {}),
-        });
+        // null/absent the round-23/24 decision path is unchanged. This decision is
+        // PROVISIONAL (computed at the roster K) and feeds the live checkpoint;
+        // `finalizeAB` recomputes the authoritative decision at the active K.
+        const decision = evaluated[vi].report
+            ? promoteDecision(baseline, evaluated[vi].report, {
+                requireCleanAudit: audit,
+                ...(variants[vi].decision || {}),
+                ...(gateOptions || {}),
+            })
+            : null;
         decisionsByIndex.set(vi, decision);
         if (onVariant) onVariant({ role: 'candidate', index: vi, entry: evaluated[vi], decision });
     }
@@ -766,6 +955,7 @@ export function evaluateAB({
         variants, evaluated, baselineIndex, decisionsByIndex, alpha, audit, model,
         streamCount: streams.length, streamLabels: streams.map((s) => s.label || null),
         probe, auditProbesPerFold, requireReachable, auditReuseBase, costBps,
+        gateOptions,
     });
 }
 
@@ -773,48 +963,237 @@ export function evaluateAB({
 // candidate projection, the family-wise search and the returned result object. It
 // reads only already-computed reports, so the serial and concurrent drivers cannot
 // drift and the concurrency change stays strictly off the arithmetic path.
+//
+// Round 27 (R27-1) adds the LIVENESS CERTIFICATE and the K RESTATEMENT. A
+// candidate that never reached the model path (a mechanism bolted to a dead
+// reader, a label policy with no horizon) used to be scored, counted in K, and
+// handed a fabricated hurdle list - so an untested arm looked tested and inflated
+// every DSR. Each candidate is now compared, fold by fold, against the baseline
+// (and against earlier LIVE candidates, for duplicate detection); only `live`
+// candidates enter the family-wise search and the trial count K, and every
+// inactive candidate carries exactly one explanatory reason. K affects the DSR,
+// and `restateReportAtCost` re-pools a retained report at a new K, so the active
+// reports are restated at the active K (it is proven to be the identity at the
+// report's own K - see `analysis.test.js`).
 const finalizeAB = ({
     variants, evaluated, baselineIndex, decisionsByIndex, alpha, audit, model,
     streamCount, streamLabels, probe, auditProbesPerFold, requireReachable, auditReuseBase, costBps,
+    gateOptions = null,
 }) => {
-    const baseline = evaluated[baselineIndex].report;
-    const candidates = evaluated
-        .map((entry, vi) => ({ ...entry, decision: decisionsByIndex.get(vi) || null }))
-        .filter((_, i) => i !== baselineIndex);
-    const decisions = candidates.map((c) => c.decision);
+    const baselineEntry = evaluated[baselineIndex];
+    const baseline = baselineEntry.report;
 
+    // --- R27-1: per-fold position series + the liveness comparison -------------
+    const foldSignals = (r) => (r && Array.isArray(r.foldInputs)
+        ? r.foldInputs.map((f) => (f && Array.isArray(f.signals)) ? f.signals : [])
+        : null);
+    const compare = (aSignals, bSignals) => {
+        const totalFolds = Math.max(aSignals.length, bSignals.length);
+        let identicalFolds = 0, maxAbsDiff = 0, firstDifferingFold = null;
+        for (let fi = 0; fi < totalFolds; fi++) {
+            const a = aSignals[fi] || [];
+            const b = bSignals[fi] || [];
+            const n = Math.max(a.length, b.length);
+            let diff = 0;
+            for (let i = 0; i < n; i++) {
+                const d = Math.abs((Number.isFinite(a[i]) ? a[i] : 0) - (Number.isFinite(b[i]) ? b[i] : 0));
+                if (d > diff) diff = d;
+            }
+            if (diff === 0) identicalFolds += 1;
+            else {
+                if (firstDifferingFold === null) firstDifferingFold = fi;
+                if (diff > maxAbsDiff) maxAbsDiff = diff;
+            }
+        }
+        return { identicalFolds, totalFolds, maxAbsDiff, firstDifferingFold };
+    };
+
+    const baseSignals = foldSignals(baseline);
+    const liveIndices = [];
+    const livenessByIndex = new Map();
+    for (let vi = 0; vi < variants.length; vi++) {
+        if (vi === baselineIndex) continue;
+        const entry = evaluated[vi];
+        const variant = entry.variant;
+        let status = 'live';
+        let reason = null;
+        let cmp = null;
+        const naReason = entry.notApplicable || notApplicableReason(variant, model);
+        if (naReason) {
+            status = 'not-applicable';
+            reason = naReason;
+        } else if (entry.skipped) {
+            status = 'skipped';
+            reason = `skipped: a controller-scoped variant on the ${model} model`;
+        } else if (!baseSignals || !entry.report) {
+            status = 'skipped';
+            reason = 'skipped: the candidate was not evaluated';
+        } else {
+            const candSignals = foldSignals(entry.report);
+            if (candSignals) {
+                cmp = compare(candSignals, baseSignals);
+                if (cmp.totalFolds > 0 && cmp.identicalFolds === cmp.totalFolds) {
+                    status = 'inert';
+                    // R27-3: a variant may state WHY it is inert more precisely than
+                    // the generic reason (e.g. `sample-weights`: labels do not overlap,
+                    // so the mechanism reaches the model path and multiplies by 1).
+                    reason = variant.inertReason
+                        ? `inert: identical to the baseline on all ${cmp.totalFolds} folds — ${variant.inertReason}`
+                        : `inert: identical to the baseline on all ${cmp.totalFolds} folds (the mechanism never reaches the model path)`;
+                } else {
+                    const dup = liveIndices.find((xi) => {
+                        const xs = foldSignals(evaluated[xi].report);
+                        if (!xs) return false;
+                        const c2 = compare(candSignals, xs);
+                        return c2.totalFolds > 0 && c2.identicalFolds === c2.totalFolds;
+                    });
+                    if (dup != null) {
+                        const dupId = evaluated[dup].variant.id;
+                        status = `duplicate-of:${dupId}`;
+                        reason = `duplicate-of:${dupId}: identical to the earlier live candidate ${evaluated[dup].variant.label || dupId}`;
+                    }
+                }
+            }
+        }
+        const cert = { status, reason, ...(cmp || {}) };
+        livenessByIndex.set(vi, cert);
+        entry.liveness = cert;
+        if (status === 'live') liveIndices.push(vi);
+    }
+    if (baselineEntry) baselineEntry.liveness = { status: 'baseline', reason: null };
+
+    // --- R27-1: the active set + the K restatement -----------------------------
+    const activeIndices = [baselineIndex, ...liveIndices];
+    const trialsRoster = variants.length;
+    const trialsActive = activeIndices.length;
+    const restate = (report) => {
+        if (!report || !Array.isArray(report.foldInputs) || !report.foldInputs.length) return report;
+        const r = restateReportAtCost(report, costBps, { trials: trialsActive });
+        if (!r) return report;
+        // Swap only what K (and the cost) affect; keep the scored report's audit,
+        // foldInputs, probed flag, foldSharpes and stream labels.
+        return {
+            ...report,
+            trials: r.trials,
+            pooledMetrics: r.pooledMetrics,
+            power: r.power,
+            aggregate: r.aggregate,
+            dependence: r.dependence,
+            folds: r.folds,
+            pooledBars: r.pooledBars,
+        };
+    };
+    const baselineRestated = restate(baseline);
+    // R27-1: restate EVERY candidate report at the active K, not just the live
+    // ones. An inactive candidate's DSR is not a family-wise statistic (it is
+    // outside K and the search), but its row must still carry the same K the run
+    // was deflated by, so a reader never sees two different `trials` values in one
+    // report. Its pre-restatement (roster-K) report is kept in `reportRoster`.
+    for (let vi = 0; vi < variants.length; vi++) {
+        if (vi === baselineIndex || !evaluated[vi].report) continue;
+        evaluated[vi].reportRestated = restate(evaluated[vi].report);
+    }
+
+    // --- R27-1: the final decisions over the ACTIVE set ------------------------
+    const finalDecision = new Map();
+    for (let vi = 0; vi < variants.length; vi++) {
+        if (vi === baselineIndex) continue;
+        const entry = evaluated[vi];
+        if (entry.liveness.status === 'live' && entry.reportRestated) {
+            finalDecision.set(vi, promoteDecision(baselineRestated, entry.reportRestated, {
+                requireCleanAudit: audit,
+                ...(variants[vi].decision || {}),
+                ...(gateOptions || {}),
+            }));
+        } else {
+            finalDecision.set(vi, {
+                promote: false,
+                reasons: [entry.liveness.reason || `${entry.liveness.status} candidate`],
+                foldWinFraction: null,
+                promotionTest: {
+                    available: false,
+                    reason: 'candidate is not active (inert / duplicate / not-applicable / skipped): it is excluded from K and the family-wise search',
+                },
+                gate: { minDsrAdjusted: 'off', requireSharpeDiff: 'off', requireBreadth: 'off', requireClusterStability: 'off' },
+                inactive: true,
+            });
+        }
+    }
+
+    // --- R27-1: the family-wise search over the ACTIVE set ---------------------
     let search = null;
     try {
-        search = walkForwardSearch({
-            baseline,
-            candidates: candidates.map((c) => c.report),
-            labels: candidates.map((c) => c.variant.label),
-            alpha,
-        });
+        if (!liveIndices.length) {
+            // R27-1: a skipped search keeps the normal search shape (with an empty
+            // candidate list and explicit nulls), so a reader that expects
+            // `spaPValue`/`rejectedLabels`/`bestLabel` never crashes on it.
+            search = {
+                skipped: true,
+                reason: 'no active candidates (every candidate was inert / duplicate / not-applicable / skipped)',
+                K: 1, T: null, alpha: alpha ?? null,
+                spaPValue: null, bestLabel: null, rejectedLabels: [],
+                candidates: [],
+            };
+        } else {
+            search = walkForwardSearch({
+                baseline: baselineRestated,
+                candidates: liveIndices.map((vi) => evaluated[vi].reportRestated),
+                labels: liveIndices.map((vi) => evaluated[vi].variant.label),
+                alpha,
+            });
+        }
     } catch (err) {
         search = { error: err.message || String(err) };
+    }
+    const searchRowFor = (vi) => {
+        if (!search || !Array.isArray(search.candidates)) return null;
+        const pos = activeIndices.indexOf(vi);
+        return pos >= 0 ? (search.candidates[pos] || null) : null;
+    };
+
+    const counts = { inert: 0, duplicate: 0, notApplicable: 0, skipped: 0 };
+    for (let vi = 0; vi < variants.length; vi++) {
+        if (vi === baselineIndex) continue;
+        const s = livenessByIndex.get(vi).status;
+        if (s === 'inert') counts.inert += 1;
+        else if (s.startsWith('duplicate-of:')) counts.duplicate += 1;
+        else if (s === 'not-applicable') counts.notApplicable += 1;
+        else if (s === 'skipped') counts.skipped += 1;
+    }
+
+    const candidates = [];
+    for (let vi = 0; vi < variants.length; vi++) {
+        if (vi === baselineIndex) continue;
+        const entry = evaluated[vi];
+        candidates.push({
+            variant: entry.variant,
+            report: entry.reportRestated || entry.report,
+            // The report BEFORE the K restatement (same foldInputs/audit, the
+            // roster K); kept so an offline reader can compare the two Ks.
+            reportRoster: entry.report || null,
+            skipped: entry.skipped,
+            notApplicable: entry.notApplicable || null,
+            liveness: entry.liveness || null,
+            // R27-1: whether this candidate entered K and the family-wise search.
+            // The report side filters on this (cost ladder, family correlation,
+            // forecast comparison, decision feature), so it must live on the
+            // result object, not only on the projected `candidateRow`.
+            active: !!(entry.liveness && entry.liveness.status === 'live'),
+            elapsedMs: entry.elapsedMs,
+            streams: entry.streams,
+            decision: finalDecision.get(vi) || null,
+            search: searchRowFor(vi),
+        });
     }
 
     return {
         baselineIndex,
         baselineVariant: variants[baselineIndex],
-        baseline,
+        baseline: baselineRestated,
         variants: evaluated,
-        candidates: candidates.map((c, i) => ({
-            variant: c.variant,
-            report: c.report,
-            skipped: c.skipped,
-            // Round 25b: carry the per-variant wall time and stream count through
-            // to the caller — the report's `timings` block and the checkpoint
-            // stream already had them, but this projection dropped them, so
-            // `candidates[].elapsedMs` in `report.json` was always null.
-            elapsedMs: c.elapsedMs,
-            streams: c.streams,
-            decision: decisions[i],
-            search: search && Array.isArray(search.candidates) ? (search.candidates[i + 1] || null) : null,
-        })),
+        candidates,
         search,
-        auditClean: audit ? !!(baseline.audit && baseline.audit.clean) : null,
+        auditClean: audit ? !!(baseline && baseline.audit && baseline.audit.clean) : null,
         model,
         streams: streamCount,
         probe,
@@ -824,9 +1203,15 @@ const finalizeAB = ({
         costBps,
         positionPolicy: model === 'controller' ? CONTROLLER_POSITION_POLICY : null,
         streamLabels,
+        // R27-1: the trial accounting. `trials` is the K every DSR was deflated by
+        // (the ACTIVE roster); `trialsRoster` is what was requested.
+        trials: trialsActive,
+        trialsRoster,
+        trialsInactive: trialsRoster - trialsActive,
+        inactiveCounts: counts,
+        liveness: { roster: trialsRoster, active: trialsActive, ...counts },
     };
 }
-
 // The concurrent twin of `evaluateAB` (round 26, R26-4). Same options, plus
 // `foldExecutorFor(variant, streamIndex, stream)` — returning a fold executor for a
 // unit (e.g. a worker dispatch), or null/undefined to run that variant in-process
@@ -860,6 +1245,7 @@ export async function evaluateABAsync({
         const variant = variants[vi];
         const startedAt = Date.now();
         const skipped = !!variant.controllerScoped && model !== 'controller';
+        const notApplicable = notApplicableReason(variant, model);
         const reports = [];
         for (let si = 0; si < streams.length; si++) {
             const s = streams[si];
@@ -902,8 +1288,8 @@ export async function evaluateABAsync({
                     : null,
             }));
         }
-        const report = poolReports(reports, { periodsPerYear, trials: variants.length });
-        return { variant, report, skipped, streams: reports.length, elapsedMs: Date.now() - startedAt };
+        const report = reports.length ? poolReports(reports, { periodsPerYear, trials: variants.length }) : null;
+        return { variant, report, skipped, notApplicable, streams: reports.length, elapsedMs: Date.now() - startedAt };
     };
 
     const evaluated = new Array(variants.length);
@@ -913,11 +1299,15 @@ export async function evaluateABAsync({
     for (let vi = 0; vi < variants.length; vi++) {
         if (vi === baselineIndex) continue;
         evaluated[vi] = await evaluateOne(vi);
-        const decision = promoteDecision(evaluated[baselineIndex].report, evaluated[vi].report, {
-            requireCleanAudit: audit,
-            ...(variants[vi].decision || {}),
-            ...(gateOptions || {}),
-        });
+        // Provisional (roster-K) decision for the live checkpoint; `finalizeAB`
+        // recomputes the authoritative decision at the active K.
+        const decision = evaluated[vi].report
+            ? promoteDecision(evaluated[baselineIndex].report, evaluated[vi].report, {
+                requireCleanAudit: audit,
+                ...(variants[vi].decision || {}),
+                ...(gateOptions || {}),
+            })
+            : null;
         decisionsByIndex.set(vi, decision);
         if (onVariant) onVariant({ role: 'candidate', index: vi, entry: evaluated[vi], decision });
     }
@@ -926,6 +1316,7 @@ export async function evaluateABAsync({
         variants, evaluated, baselineIndex, decisionsByIndex, alpha, audit, model,
         streamCount: streams.length, streamLabels: streams.map((s) => s.label || null),
         probe, auditProbesPerFold, requireReachable, auditReuseBase, costBps,
+        gateOptions,
     });
 }
 
@@ -990,26 +1381,39 @@ export function formatAnalysis(result, extra = {}) {
     }
     lines.push(formatReport(result.baseline, { label: `baseline(${result.baselineVariant.label})` }));
     for (const c of result.candidates) {
-        const verdict = c.decision.promote ? 'PROMOTE' : 'keep-off';
+        const decision = c.decision || { promote: false, reasons: [], gate: null, promotionTest: null };
+        const verdict = decision.promote ? 'PROMOTE' : 'keep-off';
         const kind = c.variant.kind === 'signal' ? ' |signal' : '';
         const fw = c.search ? ` | StepM p=${f4(c.search.pValue)} rejected=${!!c.search.rejected}` : '';
         // Name any round-25 hurdle that was SKIPPED for lack of a panel, so a
         // green gate can never be read as "all hurdles passed".
-        const skippedHurdles = c.decision.gate
-            ? Object.entries(c.decision.gate).filter(([, v]) => v === 'skipped-no-panel').map(([k2]) => k2)
+        const skippedHurdles = decision.gate
+            ? Object.entries(decision.gate).filter(([, v]) => v === 'skipped-no-panel').map(([k2]) => k2)
             : [];
         const gt = skippedHurdles.length ? ` | gate-skipped=${skippedHurdles.join(',')}` : '';
+        // R27-1: an inactive candidate (inert / duplicate / not-applicable / skipped)
+        // names its status inline, and a candidate with no report (never evaluated)
+        // is stated as such rather than crashing the formatter on a null report.
+        const liveTag = c.active ? '' : ` [${(c.liveness && c.liveness.status) || (c.skipped ? 'skipped' : 'inactive')}]`;
+        const label = `${c.variant.label} [${verdict}]${kind}${liveTag}${c.skipped ? ' (skipped: controller-scoped)' : ''}${fw}${gt}`;
+        if (!c.report) {
+            lines.push(`[${label}] not evaluated`);
+            lines.push(`  reasons: ${(decision.reasons || []).join('; ')}`);
+            continue;
+        }
         // The paired cluster test belongs to the candidate-vs-baseline DECISION,
         // not to the report, so it is handed to the formatter here (round 25). A
         // single-stream run still renders it — as `paired: n/a (reason)` — so the
         // absence of a panel is stated rather than silently omitted.
         lines.push(formatReport(c.report, {
-            label: `${c.variant.label} [${verdict}]${kind}${c.skipped ? ' (skipped: controller-scoped)' : ''}${fw}${gt}`,
-            promotionTest: c.decision ? c.decision.promotionTest : null,
+            label,
+            promotionTest: decision.promotionTest,
         }));
-        if (!c.decision.promote) lines.push(`  reasons: ${c.decision.reasons.join('; ')}`);
+        if (!decision.promote) lines.push(`  reasons: ${(decision.reasons || []).join('; ')}`);
     }
-    if (s && Array.isArray(s.candidates)) {
+    if (s && s.skipped) {
+        lines.push(`family-wise: skipped (${s.reason || 'no active candidates'})`);
+    } else if (s && Array.isArray(s.candidates)) {
         lines.push(`family-wise: SPA p=${f4(s.spaPValue)} best=${s.bestLabel} Rejects=[${s.rejectedLabels.length ? s.rejectedLabels.join(',') : 'none'}] K=${s.K} T=${s.T}`);
     } else if (s && s.error) {
         lines.push(`family-wise: unavailable (${s.error})`);
@@ -1197,7 +1601,12 @@ const variantRosterRow = (entry, modelStats = null) => ({
     id: entry.variant.id,
     label: entry.variant.label,
     kind: entry.variant.kind || 'mechanism',
+    appliesTo: entry.variant.appliesTo || 'agnostic',
     skipped: entry.skipped,
+    notApplicable: entry.notApplicable || null,
+    // R27-1: the liveness certificate (null before finalizeAB has run).
+    liveness: entry.liveness || null,
+    inDefaultRoster: ALL_VARIANTS.includes(entry.variant),
     streams: entry.streams,
     // Round 26 (R26-2): null for a pure signal candidate (it never fits a model),
     // so an absent model block is never mistaken for a healthy one.
@@ -1231,40 +1640,62 @@ const baselineRow = (result, modelStats = null) => {
 };
 
 // One candidate row: the decision, the pooled metrics, the audit block and (when
-// the family-wise cross-check has run) the joint `search` statistics.
-const candidateRow = (entry, decision, search, modelStats = null) => ({
-    id: entry.variant.id,
-    label: entry.variant.label,
-    kind: entry.variant.kind || 'mechanism',
-    skipped: entry.skipped,
-    // Round 26 (R26-2): the per-variant model diagnostics (null for a signal).
-    model: summarizeModelStats(modelStats && modelStats.get(entry.variant.id)),
-    promote: decision.promote,
-    reasons: decision.reasons,
-    foldWinFraction: decision.foldWinFraction,
-    pooledMetrics: entry.report.pooledMetrics,
-    aggregate: entry.report.aggregate,
-    audit: auditBlock(entry.report.audit),
-    auditClean: entry.report.audit ? !!entry.report.audit.clean : null,
-    power: entry.report.power || null,
-    // Round 25: the dependence panel, the paired cluster test behind the new
-    // hurdles, and which hurdles were actually applied (vs skipped for lack of a
-    // cross-stream panel) — so the report can never claim a gate it did not run.
-    dependence: entry.report.dependence || null,
-    promotionTest: decision.promotionTest || null,
-    gate: decision.gate || null,
-    elapsedMs: entry.elapsedMs ?? null,
-    // How many streams actually contributed to this variant's pooled report.
-    streams: entry.streams ?? null,
-    // The number of searches this candidate's DSR was deflated by (K, the whole
-    // roster). It rides on the report, but it was not surfaced in `report.json`,
-    // so a reader could not see the trial count the verdict assumed.
-    trials: entry.report && Number.isFinite(entry.report.trials) ? entry.report.trials : null,
-    pooledBars: entry.report.pooledBars,
-    // Round 26 (R26-13): the per-fold net Sharpe series (seed x fold panel input).
-    foldSharpes: (entry.report.folds || []).map((f) => (f && f.metrics ? f.metrics.netSharpe : NaN)),
-    search: search ? { pValue: search.pValue, rejected: search.rejected, statistic: search.statistic, kfwerPValue: search.kfwerPValue ?? null, fdp: search.fdp ?? null } : null,
-});
+// the family-wise cross-check has run) the joint `search` statistics. R27-1: a
+// candidate that was NOT evaluated (not-applicable / skipped) has a null report,
+// so every report-derived field is null rather than a crash; it still carries its
+// liveness certificate and its single reason.
+const candidateRow = (entry, decision, search, modelStats = null) => {
+    const report = entry.report || null;
+    const fallbackReason = entry.liveness && entry.liveness.reason
+        ? [entry.liveness.reason]
+        : (entry.notApplicable ? [entry.notApplicable] : []);
+    return {
+        id: entry.variant.id,
+        label: entry.variant.label,
+        kind: entry.variant.kind || 'mechanism',
+        appliesTo: entry.variant.appliesTo || 'agnostic',
+        skipped: entry.skipped,
+        notApplicable: entry.notApplicable || null,
+        // R27-1: the liveness certificate. `status` is one of
+        // live | inert | skipped | not-applicable | duplicate-of:<id>.
+        liveness: entry.liveness || null,
+        active: !!(entry.liveness && entry.liveness.status === 'live'),
+        // Round 26 (R26-2): the per-variant model diagnostics (null for a signal).
+        model: summarizeModelStats(modelStats && modelStats.get(entry.variant.id)),
+        promote: decision ? decision.promote : false,
+        // R27-1: true for a candidate excluded from K / the search (inert,
+        // duplicate, not-applicable or skipped). It carries exactly one reason in
+        // `reasons` and a null promotion test; `active` is its complement.
+        inactive: !!(decision && decision.inactive),
+        reasons: decision ? decision.reasons : fallbackReason,
+        foldWinFraction: decision ? decision.foldWinFraction : null,
+        pooledMetrics: report ? report.pooledMetrics : null,
+        aggregate: report ? report.aggregate : null,
+        audit: auditBlock(report ? report.audit : null),
+        auditClean: report && report.audit ? !!report.audit.clean : null,
+        power: report ? (report.power || null) : null,
+        // Round 25: the dependence panel, the paired cluster test behind the new
+        // hurdles, and which hurdles were actually applied (vs skipped for lack of a
+        // cross-stream panel) — so the report can never claim a gate it did not run.
+        dependence: report ? (report.dependence || null) : null,
+        promotionTest: decision ? (decision.promotionTest || null) : null,
+        gate: decision ? (decision.gate || null) : null,
+        elapsedMs: entry.elapsedMs ?? null,
+        // How many streams actually contributed to this variant's pooled report.
+        streams: entry.streams ?? null,
+        // The number of searches this candidate's DSR was deflated by (K, the
+        // ACTIVE roster after R27-1). It rides on the report, but it was not
+        // surfaced in `report.json`, so a reader could not see the trial count the
+        // verdict assumed.
+        trials: report && Number.isFinite(report.trials) ? report.trials : null,
+        pooledBars: report ? report.pooledBars : null,
+        // Round 26 (R26-13): the per-fold net Sharpe series (seed x fold panel input).
+        foldSharpes: report && Array.isArray(report.folds)
+            ? report.folds.map((f) => (f && f.metrics ? f.metrics.netSharpe : NaN))
+            : [],
+        search: search ? { pValue: search.pValue, rejected: search.rejected, statistic: search.statistic, kfwerPValue: search.kfwerPValue ?? null, fdp: search.fdp ?? null } : null,
+    };
+};
 
 const foldRecord = (event) => ({
     stage: event.t === 'fold' ? 'score' : event.stage,
@@ -1330,9 +1761,15 @@ export async function runAnalysis({
     trainSize = 60, testSize = 15, maxBars = 300, variantIds = null, costBps = 0, seed = 1,
     audit = true, alpha = 0.05, model = 'controller', writeFiles = true,
     probe = DEFAULT_SHOCK.probe, auditProbesPerFold = 2,
+    // Round 27 (R27-9): `requireReachable` now defaults ON — a structurally
+    // reachable but behaviourally unreachable audit must never certify a
+    // promotion. `--reachable=0` opts out. The CLI also defaults
+    // `--audit-probes` to 1 (below); this direct-call default stays 2 so the
+    // historical behaviour is available to a direct caller.
+    minTrainingSteps = 1,        // R27-5: folds training on fewer rows than this are `underTrainedFolds`
     // Round 24 run-integrity options (all off the arithmetic path).
     modelRetention = 'discard',   // 'discard' reclaims each fit's state dir after use; 'keep' for forensics
-    requireReachable = false,     // enforce the audit's behavioural non-vacuity (not just structural)
+    requireReachable = true,      // enforce the audit's behavioural non-vacuity (not just structural)
     reuseBase = false,            // reuse the scored pass as the audit base pass (one less refit/fold)
     foldLog = 'all',              // 'all' | 'score' | 'off': what folds.jsonl records
     progressMs = 5000,            // stdout + progress.json cadence; 0 = every event, -1 = silent
@@ -1438,9 +1875,19 @@ export async function runAnalysis({
         : null;
 
     const inputs = files && files.length ? files : (symbols && symbols.length ? resolveSymbolFiles(symbols) : [file]);
+    // R27-5 journal/report hygiene: a stream's label is its SYMBOL (or the file
+    // basename), never the operator's absolute path. The round-26 journal embedded
+    // `/home/<operator>/.../candles.jsonl` because the world label was the path.
+    const inputLabels = inputs.map((f) => {
+        const entry = CANDLE_MANIFEST.find((e) => f === e.file || String(f).endsWith(e.file));
+        if (entry) return entry.symbol;
+        const base = path.basename(String(f)).replace(/\.jsonl$/i, '').replace(/^candles[_-]?/i, '');
+        return base ? base.toUpperCase() : String(f);
+    });
 
     let worlds = [];
-    for (const f of inputs) {
+    for (let ii = 0; ii < inputs.length; ii++) {
+        const f = inputs[ii];
         // Round 26 (R26-6): optionally resample the raw 1h stream to a coarser bar
         // interval before the world is built, so a second horizon can be added to
         // the panel without a second dataset.
@@ -1459,7 +1906,7 @@ export async function runAnalysis({
             throw new Error(`analyze: ${folds.length} folds from ${world.closes.length} candles is too many for one run; pass --bars=<n> (e.g. ${(trainSize + testSize) * 20})`);
         }
         worlds.push({
-            label: f,
+            label: inputLabels[ii],
             file: f,
             candles: world.candles.length,
             returns: world.returns,
@@ -1549,7 +1996,7 @@ export async function runAnalysis({
             trainSize, testSize, maxBars,
             folds: foldsTotal,
             variants: variants.map((v) => v.id),
-            probe, auditProbesPerFold, requireReachable, reuseBase,
+            probe, auditProbesPerFold, requireReachable, reuseBase, minTrainingSteps,
             costBps, modelRetention, foldLog,
             saveInterval: Number.isFinite(saveInterval) ? saveInterval : 'inf',
             labelPolicy,
@@ -1614,7 +2061,7 @@ export async function runAnalysis({
     // One greppable stdout line for a human or agent watching a long run: always at
     // a variant boundary (`force`), otherwise at most once per `progressMs`. The
     // `last event` age is the frozen-run tell.
-    const reportProgress = (force = false, note = '') => {
+    const reportProgress = (force = false, note = '', extra = null) => {
         if (progressMs < 0) return;
         const now = Date.now();
         if (!force && progressMs > 0 && now - lastLineAt < progressMs) return;
@@ -1627,7 +2074,7 @@ export async function runAnalysis({
             ` | stream ${state.stream == null ? '-' : state.stream + 1}/${worlds.length}` +
             ` | ${state.phase} fold ${state.foldIndex == null ? '-' : state.foldIndex + 1}/${state.foldTotal || '-'}` +
             ` | events ${done}/${counters.eventsTotal} (${pct}%) | last event ${age}${note ? ' | ' + note : ''}`);
-        if (force && runDir) appendLog(runDir, 'info', 'progress', { ...counters, phase: state.phase, variantId: state.variantId });
+        if (force && runDir) appendLog(runDir, 'info', 'progress', { ...counters, phase: state.phase, variantId: state.variantId, ...(extra || {}) });
     };
     // Every scored fold and every audit pass lands here (from `evaluateAB`).
     const onEvent = (event) => {
@@ -1679,7 +2126,24 @@ export async function runAnalysis({
         files: inputs, file: inputs[0], streams: worlds.length, candles: totalCandles, folds: foldsTotal,
         trainSize, testSize, maxBars, costBps, seed, probe, auditProbesPerFold, alpha,
         requireReachable, modelRetention, reuseBase, foldLog,
-        gate: gateMode, gateAlpha: gateAlphaResolved, costLadder: ladderLevels.slice(),
+        // R27-5: the config echo is in the FIRST checkpoint, so a kill-and-recover
+        // reader never has to guess the run's design (gate, K, throttle, label,
+        // concurrency, resampling, CRN, selection, sweep toggles).
+        gate: gateMode, gateAlpha: gateAlphaResolved, gateOptions: { ...gateOptions },
+        costLadder: ladderLevels.slice(),
+        trials: variants.length,
+        saveInterval: Number.isFinite(saveInterval) ? saveInterval : 'inf',
+        labelPolicy,
+        labelHorizonBars: Number.isFinite(labelHorizonBars) ? labelHorizonBars : null,
+        concurrency: width,
+        intervalBars: intervalFactor,
+        commonRandomNumbers: crn,
+        streamSelection: streamSelection ? { keep: streamSelectKeep, kept: streamSelection.kept } : null,
+        turnoverSweep: turnoverEnabled,
+        forecast: forecastEnabled,
+        decision: decision !== false,
+        minTrainingSteps,
+        policyRoundTrip: null,
         positionPolicy: useController ? CONTROLLER_POSITION_POLICY : null,
         power: baselineBlock ? baselineBlock.power : null,
         variantsTotal: variants.length,
@@ -1731,7 +2195,16 @@ export async function runAnalysis({
             ? `baseline evaluated in ${fmtClock(entry.elapsedMs)}`
             : `${entry.variant.label} ${event.decision && event.decision.promote ? 'PROMOTE' : 'keep-off'}` +
               ` (${event.decision ? event.decision.reasons.length : 0} reasons)` +
-              `${Number.isFinite(entry.elapsedMs) ? ` in ${fmtClock(entry.elapsedMs)}` : ''}`);
+              `${Number.isFinite(entry.elapsedMs) ? ` in ${fmtClock(entry.elapsedMs)}` : ''}`,
+            // R27-5: the variant checkpoint in run.log names the variant's KIND and
+            // its wall time, so a long run's log is self-describing.
+            {
+                variantId: entry.variant.id,
+                kind: entry.variant.kind || 'mechanism',
+                role: event.role,
+                elapsedMs: Number.isFinite(entry.elapsedMs) ? entry.elapsedMs : null,
+                promote: event.decision ? !!event.decision.promote : null,
+            });
     };
 
     const positionPolicy = useController ? POSITION_POLICY : IDENTITY_POSITION_POLICY;
@@ -1739,7 +2212,7 @@ export async function runAnalysis({
     // in-process path feeds this from `makeSignalForVariant`'s `onStats`; the
     // parallel path feeds it from the worker's reported `stats` (R26-4).
     const accumulateStats = (variant, s) => {
-        const acc = modelStats.get(variant.id) || emptyModelAccumulator();
+        const acc = modelStats.get(variant.id) || emptyModelAccumulator(minTrainingSteps);
         mergeModelStats(acc, s);
         modelStats.set(variant.id, acc);
     };
@@ -1824,25 +2297,35 @@ export async function runAnalysis({
     }
 
     const familywise = result.search && Array.isArray(result.search.candidates)
-        ? { spaPValue: result.search.spaPValue, best: result.search.bestLabel, rejected: result.search.rejectedLabels, K: result.search.K, T: result.search.T }
+        ? {
+            spaPValue: result.search.spaPValue,
+            best: result.search.bestLabel,
+            rejected: result.search.rejectedLabels,
+            K: result.search.K,
+            T: result.search.T,
+            ...(result.search.skipped ? { skipped: true, reason: result.search.reason } : {}),
+        }
         : (result.search || null);
     // Round 25: cost ladder + family correlation diagnostic. Both are pure
     // post-processing of the finished reports (no model), so they cannot change
-    // the scored numbers — only the amount of the verdict that is stated.
-    const ladderCandidates = result.candidates.map((c) => ({ ...c.report, id: c.variant.id }));
+    // the scored numbers — only the amount of the verdict that is stated. R27-1:
+    // they cover the ACTIVE candidates only (inactive ones are outside K and the
+    // search, so restating a verdict over them would be meaningless).
+    const activeCandidates = result.candidates.filter((c) => c.active && c.report && c.report.pooledMetrics);
+    const ladderCandidates = activeCandidates.map((c) => ({ ...c.report, id: c.variant.id }));
     const ladder = ladderLevels.length
         ? costLadder({
             baseline: result.baseline,
             candidates: ladderCandidates,
             levels: ladderLevels,
             periodsPerYear: 252,
-            trials: variants.length,
+            trials: result.trials,
             decisionOptions: { requireCleanAudit: audit, ...gateOptions },
         })
         : null;
     const familyCorr = familyCorrelation({
         baseline: result.baseline,
-        candidates: result.candidates.map((c) => c.report),
+        candidates: activeCandidates.map((c) => c.report),
         periodsPerYear: 252,
     });
     // Round 26 (R26-3): the journaled raw confidence + the scored policy must
@@ -1859,9 +2342,11 @@ export async function runAnalysis({
     const forecastBlock = forecastEnabled
         ? forecastComparison({
             baseline: result.baseline.foldInputs,
+            baselineKind: forecastKindOf(result.baselineVariant),
+            baselineId: result.baselineVariant.id,
             candidates: result.candidates
-                .filter((c) => !c.skipped && c.report && Array.isArray(c.report.foldInputs))
-                .map((c) => ({ id: c.variant.id, foldInputs: c.report.foldInputs })),
+                .filter((c) => c.active && c.report && Array.isArray(c.report.foldInputs))
+                .map((c) => ({ id: c.variant.id, kind: forecastKindOf(c.variant), foldInputs: c.report.foldInputs })),
             seed,
         })
         : null;
@@ -1877,7 +2362,7 @@ export async function runAnalysis({
             candidates: ladderCandidates,
             costBps,
             periodsPerYear: 252,
-            trials: variants.length,
+            trials: result.trials,
             decisionOptions: { requireCleanAudit: audit, ...gateOptions },
             targetBps: turnoverTargetBps,
         })
@@ -1893,7 +2378,7 @@ export async function runAnalysis({
     if (decision) {
         const promotable = result.candidates
             .map((c, i) => ({ c, row: candidateReportRows[i] }))
-            .filter((x) => !x.c.skipped && x.c.report && x.c.report.pooledMetrics);
+            .filter((x) => x.c.active && x.c.report && x.c.report.pooledMetrics);
         const promoted = promotable.find((x) => x.row.promote);
         // Rank by pooled Sharpe, treating a non-finite one as the floor. Using
         // `x || -Infinity` here would misrank an exactly-zero Sharpe as -Infinity,
@@ -1916,8 +2401,18 @@ export async function runAnalysis({
             folds: foldsTotal,
             streams: worlds.length,
         });
+        // R27-5: the featured row can be a pure signal (no model of its own) while
+        // the baseline is a trained controller. Rather than degrade the training
+        // question to n/a, report the BASELINE's model diagnostics with an explicit
+        // referent, so the answer's owner is never ambiguous.
+        const featuredModel = featuredRow ? featuredRow.model : null;
+        const baselineModelBlock = summarizeModelStats(modelStats.get(result.baselineVariant.id));
+        const modelReferent = (!featuredModel && baselineModelBlock)
+            ? { kind: 'baseline', reason: 'the featured row is a pure signal; the referent is the baseline controller' }
+            : null;
         decisionBlock = decisionReport({
-            model: featuredRow ? featuredRow.model : null,
+            model: featuredModel || (modelReferent ? baselineModelBlock : null),
+            modelReferent,
             runMeta: {
                 gate: gateMode,
                 gateOptions,
@@ -1983,7 +2478,18 @@ export async function runAnalysis({
         gate: gateMode,
         gateAlpha: gateAlphaResolved,
         gateOptions: { ...gateOptions },
-        trials: variants.length,
+        // R27-1: `trials` is K, the ACTIVE roster every DSR was deflated by — not
+        // the requested roster. `trialsRoster` is what was asked for, so the two
+        // can never be confused.
+        trials: result.trials,
+        trialsRoster: result.trialsRoster,
+        trialsInactive: result.trialsInactive,
+        // R27-1: the liveness certificate per candidate (live/inert/duplicate/
+        // not-applicable/skipped) and the mechanism counters behind it.
+        liveness: result.liveness,
+        inactiveCounts: result.inactiveCounts,
+        // R27-5: the floor an `underTrainedFolds` count was measured against.
+        minTrainingSteps,
         positionPolicy: useController ? POSITION_POLICY : null,
         // Round 26 (R26-3): the byte-for-byte policy round-trip certificate. A
         // policy sweep is only valid if the journaled confidence reproduces the
@@ -2045,6 +2551,14 @@ export async function runAnalysis({
             durationMs,
             familywise: report.familywise,
             gate: report.gate,
+            // R27-1/R27-5: the trial accounting, the liveness certificate and the
+            // policy round-trip certificate ride along in the final checkpoint too.
+            trials: report.trials,
+            trialsRoster: report.trialsRoster,
+            trialsInactive: report.trialsInactive,
+            inactiveCounts: report.inactiveCounts,
+            liveness: report.liveness,
+            policyRoundTrip: report.policyRoundTrip,
             costLadder: report.costLadder,
             familyCorrelation: report.familyCorrelation,
             timings: report.timings,
@@ -2119,9 +2633,15 @@ export const ANALYZE_USAGE = [
     '  --bars=<n>               bars per stream, most recent (default 300)',
     '  --seed=<n>               seed (default 1)',
     '  --probe=<x>              audit shock size (default 0.05)',
-    '  --audit-probes=<n>       probe passes per fold (default 2; 1 halves the audit cost)',
+    '  --audit-probes=<n>       probe passes per fold (default 1; the audit is the',
+    '                           dominant per-fold cost, and one probe per fold is ample)',
     '  --audit=0                skip the look-ahead audit (no promotion is defensible then)',
-    '  --reachable              require the audit to be BEHAVIOURALLY non-vacuous',
+    '  --reachable=0            disable the behavioural non-vacuity requirement (default:',
+    '                           ON — an audit that cannot differ cannot certify a promotion)',
+    '  --min-training-steps=<n> floor below which a fold counts as under-trained',
+    '                           (default 1; a fold with 0 steps is not-trained, not under-trained)',
+    '  --list-variants          print the resolvable variant taxonomy (id/kind/applies-to/',
+    '                           default?/applicable-here) and exit',
     '  --cost-bps=<n>           transaction cost in bps per unit turnover (default 0;',
     '                           the report always states the break-even cost per candidate)',
     '  --reuse-base             reuse the scored pass as the audit base pass (one fewer',
@@ -2201,6 +2721,13 @@ if (isMain) {
             console.log(ANALYZE_USAGE);
             process.exit(0);
         }
+        // R27-2/R27-5: the taxonomy is printable before a run, so the operator can
+        // see which variants can reach the scored model (and why not) without
+        // starting a multi-minute evaluation.
+        if (has('list-variants')) {
+            console.log(formatVariantList(listVariants(argOf('model') || 'controller')));
+            process.exit(0);
+        }
         const foldLogRaw = argOf('fold-log') || 'all';
         const foldLog = ['all', 'score', 'off'].includes(foldLogRaw) ? foldLogRaw : 'all';
         const ladderRaw = argOf('cost-ladder');
@@ -2226,10 +2753,13 @@ if (isMain) {
             maxBars: num('bars', 300),
             seed: num('seed', 1),
             probe: num('probe', DEFAULT_SHOCK.probe),
-            auditProbesPerFold: num('audit-probes', 2),
+            auditProbesPerFold: num('audit-probes', 1),
             variantIds: list('variants'),
             audit: argOf('audit') !== '0',
-            requireReachable: has('reachable'),
+            // R27-9: reachability is ON by default; `--reachable=0` opts out. The
+            // historical `--reachable` flag still works (it is a no-op now).
+            requireReachable: !/^(0|false)$/i.test(String(argOf('reachable'))),
+            minTrainingSteps: num('min-training-steps', 1),
             costBps: num('cost-bps', 0),
             reuseBase: has('reuse-base'),
             gate: argOf('gate') || 'dependence',

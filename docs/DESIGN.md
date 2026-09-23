@@ -75,13 +75,13 @@ property pinned by a dedicated test; **needs-local-run** = native dependency
 | Candle data integrity + quality | `candles_audit.js`, `candle_quality.js`, `candle_fetcher.js` | **invariant** | `candles.test.js` (95), `fetcher.test.js` (101) |
 | Price precision | `price_precision.js` | **invariant** | `price_precision.test.js` (29), `multisymbol.test.js` (28) |
 | Consolidation algorithms | `consolidation_logic.js`, `consolidation_worker.js` | **invariant** | `consolidation.test.js` (48), `consolidation_worker.test.js` (18) |
-| Analysis supercharges | `analysis/*` (10 modules: including `world.js` — the audited candle view — and `features.js` — the causal signal family) | **invariant** | `analysis.test.js` (390), `walkforward.test.js` (48) |
+| Analysis supercharges | `analysis/*` (19 modules: including `world.js` — the audited candle view — `features.js` — the causal signal family — `dependence.js`/`decision.js` — the round-25/26 gate and report — and `forecast.js`/`race.js`) | **invariant** | `analysis.test.js` (566), `walkforward.test.js` (63) |
 | LSH support modules | `memory/multiprobe.js`, `memory/binarypc.js`, `memory/bitweight.js`, `memory/querymod.js` | **invariant** (default-off; golden no-op) | their own entries + `lsh.test.js` section J + `golden.test.js` |
 
 Registry totals: **60 entries — 17 bit-exact, 43 invariant, 0 needs-local-run,
 0 experimental.** The canonical check ledger is in [`RUNBOOK.md`](RUNBOOK.md).
-The native `npm test` gate is green at round 22 (**115/115 blocks across 39
-files**, `docs/BUGS.md` #20/#21), so the three controller DB bags that were the
+The native `npm test` gate is green (**127/127 blocks across 43 files** at round
+27, `docs/BUGS.md` #20/#21/#42/#52), so the three controller DB bags that were the
 only `needs-local-run` entries are promoted.
 
 ## 4. Default-off features (proven, opt-in — not part of the default trajectory)
@@ -93,11 +93,22 @@ harness promotes it (backlog P0).
 | Feature | Flag (default) | What it does | Grounded by |
 | --- | --- | --- | --- |
 | Surprise-gated memory writes | `_surpriseGateEnabled = false` | scale a semantic write by `floor + (1-floor)·surprise^sharpness` | Titans 2501.00663; `surprise.test.js` (32) |
-| Sample-uniqueness loss weighting | `_sampleWeightConfig = null` | weight each training sample by label uniqueness (AFML ch. 4) | López de Prado 2018; `sample_weights.test.js` (36) |
+| Sample-uniqueness loss weighting | `_sampleWeightConfig = null` | weight each training sample by label uniqueness (AFML ch. 4) | López de Prado 2018; `sample_weights.test.js` (45) |
 | Homeostatic learning rates | `_homeostasisEnabled = false` | error-driven multiplier toward an activity set-point | 2609.13771; `homeostasis.test.js` (30) |
 | Margin-ordered multi-probe | `_multiProbeConfig = null` | probe the lowest-margin hash bits first | Lv et al. 2007; `multiprobe.test.js` (77) |
 | Data-aware (PCA-aligned) hash | `_pcaHashConfig = null` | replace random hyperplanes with principal components | BinaryPC 2608.04405; `binarypc.test.js` (39), `lsh.test.js` §I |
 | Dynamic query modification | `_queryModConfig = null` | re-hash the centroid of found neighbours (query-side) | 2605.23807; `querymod.test.js` (51), `lsh.test.js` §J |
+
+> **How to read "not promoted" for this table (round-26 run, `BUGS.md` #43/#44).**
+> The A/B's *mechanism* candidates are how each of these features is tested, and the
+> `20260922T204248-seed1` run showed that **three of the seven are inert on the
+> shipped controller path**: `sample-weights` never sets `_sampleWeightConfig`
+> (#43), and `multi-probe`/`query-mod` set flags whose only reader
+> (`knowledge/transfer.js → _getGlobalLSHCandidates`) is not reached during a fold's
+> training (#44) — so those three candidates were byte-identical to the baseline in
+> every fold. Their keep-off verdicts are therefore **not evidence about the
+> feature**, and "off by default, not yet promoted" is, for them, still untested
+> rather than tested-and-rejected. See TODO #64.
 
 The low-rank ES layer (`legion/evolve.js`) is proven **invariant** but is an
 additive module **nothing imports yet** — it stays out of the hot path until it
@@ -223,8 +234,8 @@ answering the question the fold grid actually asks.
 The open, prioritized work is in [`TODO.md`](TODO.md); the consolidated plan and
 priority rationale is in [`ROADMAP.md`](ROADMAP.md).
 
-The design is still frozen; the native gate is **green (123/123 blocks,
-`BUGS.md` #20/#21/#42)**. Round 22 delivered the full ROADMAP P0-P3 programme (run
+The design is still frozen; the native gate is **green (127/127 blocks,
+`BUGS.md` #20/#21/#42/#52)**. Round 22 delivered the full ROADMAP P0-P3 programme (run
 integrity + determinism + the dry-run/preflight harness + the monitor dashboard +
 the legion observer + the walk-forward A/B driver); the only hot-path-adjacent
 golden change was the deliberate `hm:postReloadPrediction` re-freeze (`BUGS.md`
@@ -245,7 +256,13 @@ baseline pooled Sharpe +0.4387 / DSR 0.5179, with no golden re-frozen — record
 in [`OPTIMIZATION.md`](OPTIMIZATION.md) and analysed in
 [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §5. The three candidates with DSR ≈ 0.999
 (`query-mod`, `sig:momentum`, `sig:acceleration`) fail only the fold-consistency
-hurdles. Three caveats are now attached to the *evaluation* itself and are round
+hurdles. **⚠️ Superseded (round 26, `BUGS.md` #33):** attempt 3 predates the
+window-fidelity fix, so its baseline/mechanism rows are not the shipped model's.
+The current verdict is the same-design corrected re-run `20260922T204248-seed1`
+(all 14 keep-off, **SPA p = 0.4731**, nothing promotes at 0/2/5/10 bps, baseline
+**Sharpe -0.1147** with negative skill, `query-mod`/`multi-probe`/`sample-weights`
+byte-identical to the baseline, `sig:momentum` 1.0848 / `sig:acceleration` 1.0194
+failing only the dependence-adjusted DSR floor) — `RUN-ANALYSIS.md` §10. Three caveats are now attached to the *evaluation* itself and are round
 25's scope: the power readout ignores cross-stream correlation (honest MDE95
 ≈ ±0.98, not ±0.47 — `BUGS.md` #26), the verdict is not cost-robust (a 2 bps cost
 assumption promotes `sig:acceleration` — `BUGS.md` #27), and the fold-consistency
@@ -286,9 +303,12 @@ rule) and `--cost-ladder=`. The remaining step is not construction, it is the ne
 
 **Round-26 forensic finding — the A/B's controller input was not the production
 input (fixed by R26-0; `BUGS.md` #33-#37 all fixed).** The first run made *with* the round-25 blocks and the corrected
-power maths (`20260921T062511-seed1`) settled the economic question (nothing
-promotes; the signal family's break-even is 0.09-3.47 bps against a 5-10 bps
-taker), and a controller/A-B fidelity sweep then found a defect in the *driver*
+power maths (`20260921T062511-seed1`) settled the economic question on that window
+(nothing promotes; the signal family's break-even is 0.09-3.47 bps against a
+5-10 bps taker — but see the window-dependence caveat in `RUN-ANALYSIS.md` §10.5:
+on the 600-bar design the momentum/acceleration break-even is **14.6 / 11.6 bps**,
+so the cost verdict is a property of the sample, not of the strategy), and a
+controller/A-B fidelity sweep then found a defect in the *driver*
 that changes how its baseline row must be read (`BUGS.md` #33): `analyze.js`
 streams `candles.slice(0, i)` into `getSignal` where production streams
 `state.cache.slice(-cacheSize)` (`legion/workers.js`), so the controller's candle
