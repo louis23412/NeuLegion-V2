@@ -7,6 +7,26 @@ scope freeze that bounds it.
 
 ## Status snapshot (this revision)
 
+- **Round 29 is IMPLEMENTED (P1–P4 measured; P5 deferred; P6/P7 closed by G-A).** The
+  pre-registered branches resolved: **G-A negative** (no model class beats the base-rate
+  prior's Brier skill ⇒ features/labels are the constraint ⇒ P6/P7 closed), **G-B
+  negative** (the documented 15m reversal is real but taker-cost-inaccessible — break-even
+  0.32–0.56 bps vs 5–10 bps), **G-C not crossed** (the funding/carry sleeve is an
+  independence purchase by correlation/effective-streams — +0.0027 vs the 0.29–0.52 range,
+  1.25 → 1.54 effective streams of 9 — but the serial-dominated design effect moves only
+  5.226 → 5.228), **G-D open** (P5 not built), **G-E closed with P7**. Readouts:
+  [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §16.1–§16.6; tracker
+  [`round29-IMPLEMENTATION.md`](round29-IMPLEMENTATION.md); index/registry §8.
+  [`PLAN-round29.md`](PLAN-round29.md) re-ordered the programme around the round-28
+  readout's honest conclusion — the bot has no demonstrated *independent* edge — and a
+  fresh external sweep plus **two** new measured coherence checks (round 29 below). Its
+  thesis: change the *game* (15-minute reversal / funding-basis carry on new data,
+  forecast by a literature-recommended model class) rather than optimise the current
+  1h trend game, and make the verdict configuration-robust before any promotion. It also
+  ran one bounded probe of the core design's own question — does the controller's
+  ensemble **size** matter? (P7). Consolidated entry point:
+  [`research/round29-README.md`](research/round29-README.md) (decision table, conflict
+  register C1–C10, measured checks MC1–MC4) + [`research/round29-registry.json`](research/round29-registry.json).
 - **Round 26 was planned and started from a correctness finding, not from new
   features** (now implemented; its corrected re-run is the current verdict). The user asked for the round-26 draft to be re-checked for coherence
   and research grounding, and for a sweep + bug check of every controller before
@@ -46,7 +66,7 @@ scope freeze that bounds it.
   test hardened to report the real failing check.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
-- **Browser suite**: 2402 checks across the 30 pass/fail entries (31 entries
+- **Browser suite**: 2558 checks across the 30 pass/fail entries (31 entries
   including the non-pass/fail `bench`); 127 `test()` blocks across 43 node files
   (R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second
@@ -55,6 +75,10 @@ scope freeze that bounds it.
   `walkforward` 31→48, `analysis` 354→390, `analyze` 47→98, round 24 raised
   `analyze` 98→143, round 27 raised `sanity` 59→60, `core` 42→46, `analysis`
   562→566, `sample_weights` 36→45, `walkforward` 62→63, `analyze` 222→245,
+  round 28 raised `sample_weights` 45→57, `analysis` 566→586, `analyze` 245→255,
+  `controller_invariants` 16→23 and `lsh` 69→75, round 29 raised
+  `candles` 95→192, `fetcher` 101→111, `analysis` 586→621, `analyze` 255→258, and the
+  rounds 4–5 audit moved `analyze` 258→269 (the opt-in `--cadences` / `--exposure-match` wiring + a P4+P2 chaining check + two fold-dispatch-contract checks),
   and made every
   wrap-style mirror assert its count **exactly**). The blocks are green on the
   native driver — **confirmed locally at round 27** (**127/127 `test()` blocks
@@ -162,16 +186,27 @@ runs are done** (verdicts in `RUN-ANALYSIS.md` §13); **no golden was touched**,
 the three defects the runs exposed (#53/#54/#55) are reading-layer follow-ups, not
 model changes. The next round is scoped in [`PLAN-round28.md`](PLAN-round28.md).
 
-## Round 28 — reading coherence, the weighting confound, then the label-policy decision (IMPLEMENTED; `PLAN-round28.md`)
+## Round 28 — reading coherence, the weighting confound, then the label-policy decision (IMPLEMENTED + RUNS DONE; `PLAN-round28.md`)
 
 **Deliverable: [`PLAN-round28.md`](PLAN-round28.md).** Status: **implemented** — the reading/
 sizing/gate layer (P1a–P1f, P2) landed with the full browser suite green and **no golden moved**;
 the weighting mechanism (P1b/P1c) and its scale-control arm landed; the two decision records
-(P4/P5) and the P6 measurement's bound are written. The two operator runs (`PLAN-round28.md` §3
-Steps 1/2) remain, and the two offline restatements that need the round-27 journals are blocked
-because those journals are no longer in the tree (`RUN-ANALYSIS.md` §14.8) — though the P6
-overlay (0.5b) is reconstructible from either new run's `folds.jsonl`, and only the `sig-accel`
-sweep (0.5c) additionally needs a signal-family run. Round 27's runs left three reading defects (`BUGS.md` #53/#54/#55; `TODO.md` 74–78).
+(P4/P5) and the P6 measurement's bound are written. **The operator runs then landed (Steps 1–3;
+`RUN-ANALYSIS.md` §15):** all three ran clean with no promotions, the two offline restatements
+that needed a retained journal both ran (the P6 overlay from a Step-1/2 journal, the `sig-accel`
+sweep from the signal-family Step 3), and the readouts are as follows — the corrected weighting
+experiment shows the mechanism **live and mildly positive** (arm A +0.0521 vs baseline −0.1147,
+paired p 0.0759; at `deadZone 0` p 0.0051) but far below the DSR floor; the `--test=10`
+label-policy confirmation bought the affordable hurdle and **lost the effect** (Δ 0.2164 → 0.0289)
+while the whole book's level moved −0.1147 → +0.8978 on the **retrain cadence** (baseline-vs-baseline
+Δ 1.01244, p 0.02008; the `--label-horizon` flag provably inert); the signal family re-run
+(needed to unblock P5) shows the round-27 `sig-accel` promotion was a **roster-size/multiplicity
+artefact** (adjusted DSR 0.97420 at `K = 3` → **0.86080 at `K = 12`**, same journal) and the P5
+sweep's promoting row is real but earned against a baseline that abstains at that policy (16 of
+4 320 bars); and the P6 overlay is now **measured** — ~100 % of every positive-Sharpe arm's gross
+is net-exposure × market with an ≈0 cross-sectional residual, so the gated cross-sectional
+candidate has no measured residual edge to trade. The runs added **three reported-not-fixed**
+findings (`BUGS.md` #60/#61/#62) and no ledger change (no code changed). Round 27's runs left three reading defects (`BUGS.md` #53/#54/#55; `TODO.md` 74–78).
 Round 28's planning pass then re-read all four reports against the code and the recorded
 decisions (`RUN-ANALYSIS.md` **§14**) and added three more defects plus two
 recorded-decision-vs-code drifts:
@@ -215,6 +250,88 @@ the **one-sided** reference (`factor 1.058`, `neededForObserved 41`, `neededForO
 the referent policy / active-arm `maxPair` / hurdle margins are reported. Ledger **2402** browser
 checks (the four round-28 P1 entries plus `lsh` 69 → 75 for §K) / 127 node blocks; `golden`
 23/23 unchanged.
+
+## Round 29 — stop tuning the game, find the edge (IMPLEMENTED; P1–P4 measured, P5 deferred; `PLAN-round29.md`)
+
+**Outcome (round 30 implementation).** P1–P4 are implemented and measured; P5 is deferred with its
+gate **OPEN**; P6/P7 are closed by P1's branch. The pre-registered branches resolved as: **G-A
+negative** (no model class — linear, MLP or the controller — beats the base-rate prior's Brier
+skill on the shared causal features ⇒ features/labels, not architecture, are the constraint ⇒
+P6/P7 closed); **G-B negative** (the documented 15m reversal is *real* — lag-1 autocorrelation
+negative in 6/8 symbols — but its break-even cost is 0.32–0.56 bps against 5–10 bps taker fees, so
+the gate promotes 0/3 cadences); **G-C not crossed** (the funding/carry sleeve is a genuine
+*independence* purchase by correlation — **+0.0027** vs the 0.29–0.52 range; effective streams
+1.25 → 1.54 of 9 — but the serial-dominated design effect moves only 5.226 → 5.228, so the best
+arm's `dsrAdjusted` does **not** cross 0.95); **G-D open** (P5 not built); **G-E closed with P7**
+(capacity is not the constraint). P2's rule change was proved verdict-neutral on the retained runs
+and **killed the pipeline's only manufactured promotion** (the §15.5(c) `sig-accel` promotion was an
+exposure artefact: adjDSR 0.9584 → 0.7925 at matched exposure). Four code defects were found and
+fixed before any measurement was trusted (`BUGS.md` #63–#67). Full readouts:
+[`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §16.1–§16.6; tracker:
+[`round29-IMPLEMENTATION.md`](round29-IMPLEMENTATION.md); index + registry:
+[`research/round29-README.md`](research/round29-README.md) §8 /
+[`research/round29-registry.json`](research/round29-registry.json). The next levers are recorded in
+[`TODO.md`](TODO.md): a maker-fee/queue model for P3 (94), a basis/mark series + spot-leg cost for
+P4 (95), P5 (96, gate open, costed), and a true re-train cadence sweep for P2 (97).
+
+**Deliverable: [`PLAN-round29.md`](PLAN-round29.md)** (the plan; at planning time — the week before
+this implementation — **no code had been changed and no run was scheduled**). The round-28 runs
+closed the reading layer and
+the corrected experiments, and the honest summary is that the bot has **no demonstrated
+residual edge**: the controller has *negative* forecast skill (`brierSkill −0.0738`,
+`accuracySkill −0.1301`, `status 'base-rate'`), ~100 % of every positive-Sharpe arm's
+gross P&L is net-exposure × market with an ≈0 cross-sectional residual, the one signal
+promotion was a roster-size/multiplicity artefact (adjusted DSR 0.9742 at `K = 3` →
+0.8608 at `K = 12`), and the measured level is a function of the **evaluation cadence**
+(Sharpe −0.1147 at `testSize 15` → +0.8978 at `testSize 10`, Δ 1.01244, p 0.02008).
+Round 29 therefore stops adding mechanisms and changes the *questions*.
+
+Round 29's planning pass made two contributions. **First, a full external research sweep**
+(2026-09-24; notes [`research/round29-model-class.md`](research/round29-model-class.md),
+[`round29-crypto-edges.md`](research/round29-crypto-edges.md),
+[`round29-adaptation-and-regime.md`](research/round29-adaptation-and-regime.md),
+[`round29-evaluation-robustness.md`](research/round29-evaluation-robustness.md);
+bibliography in `CITATIONS.md`): from-scratch tiny transformers are dominated on time
+series by linear/MLP models (DLinear/TSMixer/TiDE/N-BEATS) and by small **pretrained**
+foundation models (TTM/Tiny-TSM/Chronos); deep+evolutionary "holy grail" trading has a
+2026 failure post-mortem; the documented crypto edge is **15-minute reversal** (90 % of
+183 Binance pairs, signs not magnitudes); the structural independence levers are
+**funding/basis carry** and a **wide** cross-section with **conditional** factors; and a
+configuration-robust verdict is the 2026 standard (**majority pass + catastrophic
+veto**).
+
+**Second, two new measured coherence checks.** (a) Over a retained journal
+(`src/20260923T211549-seed1/folds.jsonl`): one common factor explains **79.4 %** of the
+8-stream covariance; a **proper 1-factor** residual is **20.8 %** of variance
+(*less* than the naive demean's 25.9 %); pooled 1h lag-1 autocorrelation is **−0.013**
+and the cross-sectional next-bar rank IC is **−0.050**. So a cross-sectional sleeve on
+the existing 1h basket is **closed with a number** (the factor model removes more, not
+less), and the reversal edge must be tested at **shorter bars** — which is also why the
+shipped `sig:autocorr` failed. (b) A read of the three retained `report.json`s established
+that the **dependence-adjusted DSR hurdle is a *surface*, not a Sharpe band**
+(`PLAN-round29.md` §1.8 MC1): the two highest-Sharpe arms (`sig-accel` 1.0194,
+`sig-momentum` 1.0848) fail on **exactly one** hurdle — the design-effect-adjusted DSR —
+while the Step-2 baseline passes at Sharpe **0.8978** (K=2), and the previously stated
+"best labeller at 0.10" is unsupported (the retained labeller is at **0.9637**). This
+**corrected** §1.5 and sharpened the diagnosis: the bot has no **independent** edge
+(the dependence adjustment is what rejects the best arms, because ~79 % of the covariance
+is one factor) — so the lever is a measured **design-effect reduction**, which is what P4
+buys and P2 gates.
+
+**Priorities.** P1 the model-class benchmark (base rate / linear / MLP / zero-shot TSFM
+/ controller on the same harness — *is the forecaster or the target the problem?*),
+P2 the configuration-robust + exposure-matched gate (`TODO.md` 84/85), P3 **15-minute
+reversal** (new data), P4 **funding/basis carry** (new data, the independence lever),
+P5 continuous test-time adaptation (cadence invariance as its acceptance test), P6
+meta-labeling (**gated** on P1 finding a positive-skill primary), P7 the **ensemble-size
+capacity probe** (`es ∈ {2,4,8,16}`, pre-registered, ≥3 seeds, short — the core hivemind
+design's own question, `TODO.md` 92; **no default change**). The plan carries an
+explicit **anti-re-tread list** (no more mechanisms, no buying bars, no 1h
+cross-section, no cadence-as-a-fix, no bigger evolved hivemind, no `es` default increase)
+and a research bibliography. The consolidated entry point is
+[`research/round29-README.md`](research/round29-README.md) (decision table, conflict
+register C1–C10, measured checks MC1–MC4) with the mirror
+[`research/round29-registry.json`](research/round29-registry.json).
 
 ## Round 24 — make a verdict run survivable, then get it
 
@@ -354,7 +471,7 @@ the browser harness: **2289 checks, 0 failures** across all 29 pass/fail entries
 (`walkforward` 49 → 62, `analysis` 390 → 437, `analyze` 143 → 158; `locks` 41 and
 `modules` 50 unchanged). No golden fingerprint moved (nothing here is imported by
 the hot path). Full detail in `RUN-ANALYSIS.md` §6. *(Counts as at round 25; the
-current ledger is **2402** — see the status snapshot above.)*
+current ledger is **2558** — see the status snapshot above.)*
 
 - **R25-1 ✅** `analysis/dependence.js` (new, LOCKED-invariant) + `dependenceSummary`
   in `analysis/walkforward.js`. Shipped the delete-one-cluster jackknife over
@@ -1703,7 +1820,7 @@ and `analysis/features.js` are new additive modules proved **inside the existing
 `analysis.test.js` (§AC/§AC-causality) and `walkforward.test.js` (section K)**
 rather than as new entries — a deliberate choice: adding two entries would have
 required a third and fourth node mirror **and** re-syncing both ledger counts
-(`test/node/mirrors.test.js` asserts exactly 30 browser entries / 42 mirrors), for
+(`test/node/mirrors.test.js` pins both counts — currently 30 browser entries / 43 mirrors), for
 no extra coverage, since both are pure modules with no worker/DB dependency. Both
 got a `lock-registry.js` entry (status, `proves`, `citations`, note), which is the
 part that can silently drift; their citations reuse existing keys (`leakage2605`/`honesteval2608` for
@@ -2082,12 +2199,12 @@ query-adaptive budget). None are in scope unless the definition of done in
 | Check | Result |
 | --- | --- |
 | Registry total & status split (53 = 17 + 36 + 0 + 0) | ✅ verified programmatically against `lock-registry.js` **at that revision** (current: 60 = 17 + 43 + 0 + 0) |
-| Ledger sum (1995, the round-24b total) vs `RUNBOOK.md` §6 table | ✅ exact match **at that revision**; the current ledger is 2402 |
+| Ledger sum (1995, the round-24b total) vs `RUNBOOK.md` §6 table | ✅ exact match **at that revision**; the current ledger is 2558 |
 | Manifest ↔ registry coverage (22 hivemind + 5 controller bags) | ✅ via `locks.test.js` |
 | Browser entries ↔ node mirrors ↔ `KNOWN_TESTS` (30/39/29) | ✅ via `mirrors.test.js` |
 | Golden fingerprint count (11) across all docs | ✅ consistent |
 | Syntax + relative-import resolution (185 JS files, 437 relative imports) | ✅ 0 errors (re-measured this revision) |
-| Counts in prose (115 blocks, 39 mirrors, 1995 checks) | ✅ synced **at that revision** (current: 127 blocks, 43 mirrors, 2402 checks) |
+| Counts in prose (115 blocks, 39 mirrors, 1995 checks) | ✅ synced **at that revision** (current: 127 blocks, 43 mirrors, 2558 checks) |
 | Exact check count in every wrap-style mirror | ✅ 20 mirrors now `assert.equal(result.total, N)` (was `>=`) |
 | Runner/worker/HTTP path in tests | ✅ **P0-3** delivered (`runner_smoke`, `http_view`, `dryrun`) |
 | Controller fault-isolation / malformed-input coverage | ✅ **P0-1** delivered (`guards`, `worker_pool`) |
@@ -2146,7 +2263,7 @@ query-adaptive budget). None are in scope unless the definition of done in
 - **Hardening must not move a fingerprint.** The P0-1 guards are error-path only;
   if any guard turns out to run on the clean path, it is a deliberate re-freeze,
   not a "cleanup".
-- **Ledger churn.** Ledger counts are (31 browser entries / 43 mirrors / 2402
+- **Ledger churn.** Ledger counts are (31 browser entries / 43 mirrors / 2558
   checks) and `mirrors.test.js` asserts the two layout constants exactly; every
   count in the docs must be re-synced in the same commit. Round 23 avoided adding
   entries by proving the new `analysis/world.js` and `analysis/features.js` inside

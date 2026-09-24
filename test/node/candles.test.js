@@ -18,5 +18,5 @@ test('shipped candle data passes integrity audit', async () => {
         result.failed, 0,
         `${result.failed}/${result.total} candle-audit checks failed:\n${JSON.stringify(result.failures, null, 2)}`,
     );
-    assert.equal(result.total, 95, `expected exactly the 95 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
+    assert.equal(result.total, 192, `expected exactly the 192 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
 });

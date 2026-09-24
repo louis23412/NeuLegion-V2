@@ -11,12 +11,19 @@
 import {
     CANDLE_MANIFEST,
     CANDLE_FILES,
+    CANDLE_MANIFEST_15M,
+    CANDLE_FILES_15M,
+    FUNDING_MANIFEST,
+    FUNDING_FILES,
     MAX_MISSING_FRACTION,
     HOUR_MS,
+    QUARTER_HOUR_MS,
     auditSeries,
     auditProblems,
 } from '../../../src/candles_audit.js';
 import { parseCandlesJsonl } from '../../../src/candle_fetcher.js';
+import { parseFundingJsonl, auditFundingSeries, auditFundingProblems } from '../../../src/analysis/carry.js';
+import { serializeFundingRates } from '../../../src/funding_fetcher.js';
 import {
     DEFAULT_MAX_WICK_FRACTION,
     isImplausibleCandle,
@@ -205,6 +212,92 @@ export async function run(options = {}) {
         const newest = Math.max(...[...parsedBySymbol.values()].map((v) => v.report.last ?? 0));
         const staleDays = (now - newest) / 86_400_000;
         check('shipped files: newest bar is recent (informational)', staleDays < 30, `${staleDays.toFixed(2)} days old`);
+
+        // ------------------------------------------------------------------
+        // The 15-minute basket (round 29 -> 30, P3). Same venue and symbols as
+        // the 1h basket at a new bar interval, so it is audited on the 15m grid.
+        // This is the one place the interval is NOT the 1h constant — a 15m row
+        // passed through the interval-blind check above would read as misaligned.
+        // ------------------------------------------------------------------
+        check('15m manifest: file list is non-empty and unique',
+            CANDLE_FILES_15M.length === 8 && new Set(CANDLE_FILES_15M).size === CANDLE_FILES_15M.length, `${CANDLE_FILES_15M.length} files`);
+        const grid15 = [];
+        let rows15 = 0;
+        let bytes15 = 0;
+        for (const entry of CANDLE_MANIFEST_15M) {
+            const path = `${PROJECT_ROOT}/${entry.file}`;
+            let text;
+            try {
+                text = await reader(path);
+            } catch (error) {
+                check(`15m ${entry.symbol}: file readable`, false, `${path}: ${String((error && error.message) || error)}`);
+                continue;
+            }
+            const parsed = parseCandlesJsonl(text);
+            const report = auditSeries(parsed.candles, { intervalMs: QUARTER_HOUR_MS, now });
+            const problems = auditProblems(report, { intervalLabel: `${entry.symbol} 15m` });
+            check(`15m ${entry.symbol}: parses with zero invalid lines`, parsed.invalid === 0 && parsed.blank <= 1, `invalid=${parsed.invalid} blank=${parsed.blank}`);
+            check(`15m ${entry.symbol}: passes the 15m-grid integrity audit`, problems.length === 0, problems.join('; '));
+            check(`15m ${entry.symbol}: rows >= minRows`, report.count >= entry.minRows, `${report.count} >= ${entry.minRows}`);
+            check(`15m ${entry.symbol}: aligns to the 15m grid (0 off-grid rows)`, report.misaligned === 0, `${report.misaligned} misaligned`);
+            check(`15m ${entry.symbol}: zero implausible wicks`, findImplausibleWicks(parsed.candles).length === 0, `${findImplausibleWicks(parsed.candles).length} found`);
+            grid15.push({ symbol: entry.symbol, first: report.first, last: report.last, count: report.count });
+            rows15 += report.count;
+            bytes15 += text.length;
+        }
+        check('15m basket: aggregate row count', rows15 >= 500_000, `${rows15} rows`);
+        check('15m basket: size is reasonable (< 200MB)', bytes15 > 0 && bytes15 < 200 * 1024 * 1024, `${(bytes15 / 1024 / 1024).toFixed(1)}MB`);
+        check('15m basket: every symbol shares one timestamp grid',
+            grid15.length === 8 && grid15.every((g) => g.first === grid15[0].first && g.last === grid15[0].last && g.count === grid15[0].count),
+            JSON.stringify(grid15[0] || null));
+
+        // ------------------------------------------------------------------
+        // The funding/carry basket (round 29 -> 30, P4). A different DATA SOURCE
+        // (Binance perpetual funding rates), not a new bar interval, so it is audited
+        // on the 8h funding grid by `analysis/carry.js` rather than by `auditSeries`.
+        // The files are positionally matched to the candle basket by `analyze.js`.
+        // ------------------------------------------------------------------
+        check('funding manifest: file list is non-empty and unique',
+            FUNDING_FILES.length === 8 && new Set(FUNDING_FILES).size === FUNDING_FILES.length, `${FUNDING_FILES.length} files`);
+        const fundingGrid = [];
+        let fundingRows = 0;
+        let fundingBytes = 0;
+        for (const entry of FUNDING_MANIFEST) {
+            const path = `${PROJECT_ROOT}/${entry.file}`;
+            let text;
+            try {
+                text = await reader(path);
+            } catch (error) {
+                check(`funding ${entry.symbol}: file readable`, false, `${path}: ${String((error && error.message) || error)}`);
+                continue;
+            }
+            const parsed = parseFundingJsonl(text);
+            const report = auditFundingSeries(parsed.rows, { now });
+            const problems = auditFundingProblems(report, { label: `${entry.symbol} funding` });
+            check(`funding ${entry.symbol}: parses with zero invalid lines`, parsed.invalid === 0 && parsed.blank <= 1, `invalid=${parsed.invalid} blank=${parsed.blank}`);
+            check(`funding ${entry.symbol}: passes the funding-grid integrity audit`, problems.length === 0, problems.join('; '));
+            check(`funding ${entry.symbol}: rows >= minRows`, report.count >= entry.minRows, `${report.count} >= ${entry.minRows}`);
+            check(`funding ${entry.symbol}: timestamps strictly increase`, report.nonMonotonic === 0, `${report.nonMonotonic} non-increasing`);
+            check(`funding ${entry.symbol}: the series carries both signs (a real regime mix)`,
+                report.negativeFraction > 0.01 && report.negativeFraction < 0.99, `negativeFraction=${report.negativeFraction}`);
+            // The fetcher's serializer must reproduce the shipped encoding byte-for-byte,
+            // so a fetch-and-write refresh rewrites the file with no spurious diff.
+            check(`funding ${entry.symbol}: the fetcher serializer reproduces the shipped file byte-for-byte`,
+                serializeFundingRates(parsed.rows) === text.trimEnd(), 'round-trip mismatch');
+            fundingGrid.push({ symbol: entry.symbol, first: report.first, last: report.last, count: report.count });
+            fundingRows += report.count;
+            fundingBytes += text.length;
+        }
+        check('funding basket: aggregate row count', fundingRows >= 40_000, `${fundingRows} rows`);
+        check('funding basket: size is reasonable (< 30MB)', fundingBytes > 0 && fundingBytes < 30 * 1024 * 1024, `${(fundingBytes / 1024 / 1024).toFixed(1)}MB`);
+        check('funding basket: every series predates 2022 (long history)',
+            fundingGrid.length === 8 && fundingGrid.every((g) => g.first <= Date.parse('2022-01-01T00:00:00Z')),
+            JSON.stringify(fundingGrid.map((g) => g.symbol)));
+        // Freshness is informational (it depends on when the fetcher last ran), so it
+        // is reported but never used to fail the suite.
+        const fundingStaleDays = fundingGrid.length
+            ? Math.max(...fundingGrid.map((g) => (now - g.last) / 86_400_000)) : Infinity;
+        check('funding basket: newest period is recent (informational)', fundingStaleDays < 30, `${fundingStaleDays.toFixed(2)} days old`);
     }
 
     return { total: checks.length, failed: failures.length, failures, checks };

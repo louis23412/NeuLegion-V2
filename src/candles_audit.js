@@ -27,6 +27,7 @@
 //     consistency check available.
 
 export const HOUR_MS = 3_600_000;
+export const QUARTER_HOUR_MS = 900_000;
 
 // Canonical list of the candle files that ship with the project. `minRows` is a
 // floor, not an exact count: the incremental updater appends rows over time, so
@@ -43,7 +44,49 @@ export const CANDLE_MANIFEST = Object.freeze([
     { symbol: 'LINKUSDT', interval: '1h', file: 'src/data/candles_linkusdt_1h.jsonl', minRows: 65_000, group: 'binance-1h' },
 ]);
 
+// The 15-minute basket (round 29 -> 30, P3). The same venue and the same eight
+// symbols as the 1h basket, at a *genuinely different horizon* — `METHOD.md`
+// §5: a really independent stream needs a new data source or a new bar interval,
+// and 15m is the horizon where the documented crypto reversal (`2608.21888`)
+// lives. It is a SEPARATE manifest on purpose: every row is on a 15m grid, so an
+// audit of these files must pass `intervalMs: QUARTER_HOUR_MS` (the 1h basket's
+// interval-blind checks, e.g. the `CANDLE_FILES` sweep in `candles.test.js`,
+// would report every row misaligned). Keeping it separate also leaves the shipped
+// 1h basket and `--symbols=all` exactly as they were; a 15m run addresses these
+// files by path (`--files=` / `runAnalysis({files})`).
+export const CANDLE_MANIFEST_15M = Object.freeze([
+    { symbol: 'BTCUSDT', interval: '15m', file: 'src/data/candles_btcusdt_15m.jsonl', minRows: 70_000, group: 'binance-15m' },
+    { symbol: 'ETHUSDT', interval: '15m', file: 'src/data/candles_ethusdt_15m.jsonl', minRows: 70_000, group: 'binance-15m' },
+    { symbol: 'SOLUSDT', interval: '15m', file: 'src/data/candles_solusdt_15m.jsonl', minRows: 70_000, group: 'binance-15m' },
+    { symbol: 'BNBUSDT', interval: '15m', file: 'src/data/candles_bnbusdt_15m.jsonl', minRows: 70_000, group: 'binance-15m' },
+    { symbol: 'XRPUSDT', interval: '15m', file: 'src/data/candles_xrpusdt_15m.jsonl', minRows: 70_000, group: 'binance-15m' },
+    { symbol: 'ADAUSDT', interval: '15m', file: 'src/data/candles_adausdt_15m.jsonl', minRows: 70_000, group: 'binance-15m' },
+    { symbol: 'DOGEUSDT', interval: '15m', file: 'src/data/candles_dogeusdt_15m.jsonl', minRows: 70_000, group: 'binance-15m' },
+    { symbol: 'LINKUSDT', interval: '15m', file: 'src/data/candles_linkusdt_15m.jsonl', minRows: 70_000, group: 'binance-15m' },
+]);
+
 export const CANDLE_FILES = Object.freeze(CANDLE_MANIFEST.map((entry) => entry.file));
+
+export const CANDLE_FILES_15M = Object.freeze(CANDLE_MANIFEST_15M.map((entry) => entry.file));
+
+// The funding/carry baskets (round 29 -> 30, P4). Binance perpetual FUNDING RATES
+// (`fapi/v1/fundingRate`, the same venue the candle fetcher uses), one row per
+// funding period. This is a genuinely independent data source — the delta-neutral
+// short-perp/long-spot return is not the price return — which is why it is the one
+// lever the design effect responds to (`METHOD.md` §5). Parsed/audited/built by
+// `analysis/carry.js`; the files are POSITIONALLY matched to the candle basket.
+export const FUNDING_MANIFEST = Object.freeze([
+    { symbol: 'BTCUSDT', interval: '8h', file: 'src/data/funding_btcusdt_8h.jsonl', minRows: 5_000, group: 'binance-funding' },
+    { symbol: 'ETHUSDT', interval: '8h', file: 'src/data/funding_ethusdt_8h.jsonl', minRows: 5_000, group: 'binance-funding' },
+    { symbol: 'SOLUSDT', interval: '8h', file: 'src/data/funding_solusdt_8h.jsonl', minRows: 5_000, group: 'binance-funding' },
+    { symbol: 'BNBUSDT', interval: '8h', file: 'src/data/funding_bnbusdt_8h.jsonl', minRows: 5_000, group: 'binance-funding' },
+    { symbol: 'XRPUSDT', interval: '8h', file: 'src/data/funding_xrpusdt_8h.jsonl', minRows: 5_000, group: 'binance-funding' },
+    { symbol: 'ADAUSDT', interval: '8h', file: 'src/data/funding_adausdt_8h.jsonl', minRows: 5_000, group: 'binance-funding' },
+    { symbol: 'DOGEUSDT', interval: '8h', file: 'src/data/funding_dogeusdt_8h.jsonl', minRows: 5_000, group: 'binance-funding' },
+    { symbol: 'LINKUSDT', interval: '8h', file: 'src/data/funding_linkusdt_8h.jsonl', minRows: 5_000, group: 'binance-funding' },
+]);
+
+export const FUNDING_FILES = Object.freeze(FUNDING_MANIFEST.map((entry) => entry.file));
 
 // A gap budget: legitimate exchange downtime exists (Binance has had a handful
 // of multi-hour outages since 2017), but it must stay a rounding error. Expressed

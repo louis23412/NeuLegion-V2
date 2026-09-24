@@ -43,6 +43,8 @@ import * as replicationMod from '../../../src/analysis/replication.js';
 import * as forecastMod from '../../../src/analysis/forecast.js';
 import * as decisionMod from '../../../src/analysis/decision.js';
 import * as raceMod from '../../../src/analysis/race.js';
+import * as benchmarkMod from '../../../src/analysis/benchmark.js';
+import * as carryMod from '../../../src/analysis/carry.js';
 import * as pricePrecisionMod from '../../../src/price_precision.js';
 import * as surpriseMod from '../../../src/hivemind/memory/surprise.js';
 import * as sampleWeightsMod from '../../../src/hivemind/training/sample_weights.js';
@@ -78,6 +80,8 @@ const ANALYSIS_IMPORTS = {
     'forecast.js': forecastMod,
     'decision.js': decisionMod,
     'race.js': raceMod,
+    'benchmark.js': benchmarkMod,
+    'carry.js': carryMod,
 };
 
 const SUPPORT_IMPORTS = {
@@ -190,12 +194,25 @@ export async function run(options = {}) {
     });
     check('analysis registry valid + complete', analysisProblems.length === 0, analysisProblems.join(' | '));
     const missingExports = [];
+    const unregisteredExports = [];
     for (const [mod, names] of Object.entries(ANALYSIS_MODULES)) {
         const actual = ANALYSIS_IMPORTS[mod];
         if (!actual) { missingExports.push(`${mod}:not-imported`); continue; }
+        const listed = new Set(names);
         for (const name of names) if (actual[name] === undefined) missingExports.push(`${mod}:${name}`);
+        // The other direction: an export that is NOT in the registry is a silent hole in
+        // the contract (the module can grow an un-locked entry point without any check
+        // noticing). The pure-analysis lists are exhaustive by convention, so this is the
+        // completeness half of the same invariant.
+        for (const name of Object.keys(actual)) {
+            if (name === 'default' || name === 'then') continue;
+            if (!listed.has(name)) unregisteredExports.push(`${mod}:${name}`);
+        }
     }
-    check('every analysis export exists', missingExports.length === 0, missingExports.join(','));
+    // Both directions in one check: a listed export that is missing, or an export that
+    // is not listed (a silent un-locked entry point) are the same class of contract gap.
+    const exportProblems = [...missingExports, ...unregisteredExports.map((e) => `${e}:unregistered`)];
+    check('analysis exports are all registered and resolvable', exportProblems.length === 0, exportProblems.join(','));
     const analysisAll = Object.values(ANALYSIS_REGISTRY);
     check('analysis supercharges are LOCKED-invariant',
         analysisAll.every((e) => e.status === LOCK_LEVELS.INVARIANT),

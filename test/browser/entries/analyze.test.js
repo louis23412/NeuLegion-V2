@@ -33,10 +33,9 @@
 import fs from 'fs';
 import path from 'path';
 import {
-    VARIANTS, SIGNAL_VARIANTS, ALL_VARIANTS, LABEL_VARIANTS, OPT_IN_VARIANTS, RESOLVABLE_VARIANTS,
-    FEATURE_LEN, resolveVariant, applyVariant, notApplicableReason, listVariants, formatVariantList, forecastKindOf,
-    inertReasonFor,
-    featureVector, makeHiveMindModelFactory, makeControllerModelFactory, makeSignalForVariant,
+    VARIANTS, SIGNAL_VARIANTS, ALL_VARIANTS, LABEL_VARIANTS, OPT_IN_VARIANTS, RESOLVABLE_VARIANTS, BENCHMARK_VARIANTS, REVERSAL_VARIANTS,
+    FEATURE_LEN, resolveVariant, applyVariant, notApplicableReason, listVariants, formatVariantList, forecastKindOf, inertReasonFor,
+    featureVector, makeHiveMindModelFactory, makeControllerModelFactory, makeBenchmarkModelFactory, makeSignalForVariant,
     withSeed, evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, readCloses, readCandles, runAnalysis,
     replicateAnalysis,
     CONTROLLER_MODEL, CONTROLLER_POSITION_POLICY, probesPerFold, auditVerdict,
@@ -139,7 +138,7 @@ export async function run() {
     const taxonomy = listVariants('controller');
     check('R27-2: every resolvable variant declares a taxonomy (id, kind, appliesTo, applicable)',
         taxonomy.length === RESOLVABLE_VARIANTS.length &&
-        taxonomy.every((r) => typeof r.id === 'string' && ['mechanism', 'signal', 'label'].includes(r.kind) &&
+        taxonomy.every((r) => typeof r.id === 'string' && ['mechanism', 'signal', 'label', 'benchmark'].includes(r.kind) &&
             ['agnostic', 'model', 'controller', 'broadcast'].includes(r.appliesTo) && typeof r.applicable === 'boolean') &&
         taxonomy.every((r) => r.applicable || (typeof r.reason === 'string' && r.reason.length > 0)),
         JSON.stringify(taxonomy.map((r) => [r.id, r.appliesTo, r.applicable])));
@@ -165,6 +164,23 @@ export async function run() {
         forecastKindOf(resolveVariant('surprise')) === 'controller' &&
         forecastKindOf(resolveVariant('label-triple')) === 'controller' &&
         forecastKindOf(resolveVariant(SIGNAL_VARIANTS[0].id)) === 'signal');
+    // P1 (round 29 → 30): the model-class benchmark arms are opt-in candidates
+    // (never in the default roster) grouped with the probability-calibrated family.
+    check('P1: the benchmark variants resolve (opt-in) and are grouped as probability-calibrated',
+        BENCHMARK_VARIANTS.length === 3 && BENCHMARK_VARIANTS.every((v) => v.kind === 'benchmark' && !ALL_VARIANTS.includes(v)) &&
+        forecastKindOf(resolveVariant('bench-linear')) === 'benchmark' &&
+        listVariants('controller').find((r) => r.id === 'bench-linear').inDefaultRoster === false &&
+        listVariants('controller').find((r) => r.id === 'bench-base-rate').applicable === true &&
+        notApplicableReason(resolveVariant('bench-mlp'), 'bare') === null);
+    check('P1: the benchmark factory fits a fold and emits finite confidence on the shared feature vector', (() => {
+        const rets = Array.from({ length: 80 }, (_, i) => Math.sin(i * 0.4) * 0.01 + ((i % 3) - 1) * 0.001);
+        const m = makeBenchmarkModelFactory({ seed: 1 })(resolveVariant('bench-linear'));
+        const view = { returns: rets };
+        m.fit(Array.from({ length: 60 }, (_, i) => i), Array.from({ length: 15 }, (_, i) => 60 + i), view);
+        const conf = m.predict(Array.from({ length: 15 }, (_, i) => 60 + i), view);
+        return conf.length === 15 && conf.every(Number.isFinite) && m.rawConfidence().length === 15 &&
+            m.stats().benchmark === 'linear' && conf.every((c) => c >= -1 && c <= 1);
+    })());
 
     // ---- C. featureVector -------------------------------------------------
     const r = [0.01, -0.02, 0.03, 0.04, -0.05, 0.06];
@@ -814,6 +830,44 @@ export async function run() {
             JSON.stringify(tsRep.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])) ===
             JSON.stringify(tsOff.report.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])),
             JSON.stringify(tsRep.candidates.map((c) => [c.id, c.promote])));
+        // Round 29 -> 30 (P2): the configuration-robust restatement + exposure
+        // matching are OPT-IN, off by default (null blocks), and pure
+        // post-processing of the journaled confidence.
+        check('P2-wiring: the cadence sweep and exposure matching are off by default (null blocks)',
+            rep.configurationRobust === null && rep.exposureMatched === null &&
+            rep.turnoverSweep === null);
+        const p2Run = await runAnalysis({ ...tsCfg, cadences: [10, 15, 20], exposureMatch: true });
+        const p2Rep = p2Run.report;
+        const p2Cr = p2Rep.configurationRobust;
+        check('P2-wiring: --cadences restates every active candidate on each grid and records the grid',
+            p2Cr && JSON.stringify(p2Cr.cadences) === '[10,15,20]' && p2Cr.majorityFraction === 0.5 &&
+            Object.keys(p2Cr.candidates).length === tsOff.report.candidates.filter((c) => c.active).length &&
+            Object.values(p2Cr.candidates).every((e) => Array.isArray(e.evaluations) && e.evaluations.length === 3 &&
+                e.evaluations.every((x) => x.cadence != null && typeof x.available === 'boolean' && (x.available ? typeof x.promote === 'boolean' : true)) &&
+                e.promotion && typeof e.promotion.available === 'boolean'),
+            JSON.stringify({ cadences: p2Cr && p2Cr.cadences, ids: p2Cr && Object.keys(p2Cr.candidates), ev: p2Cr && Object.values(p2Cr.candidates).map((e) => e.evaluations.map((x) => [x.cadence, x.available, x.promote])) }));
+        const p2Id = tsOff.report.candidates.find((c) => c.active).id;
+        const p2Scored = tsOff.report.candidates.find((c) => c.id === p2Id).pooledMetrics.netSharpe;
+        const atScoredGrid = p2Cr.candidates[p2Id].evaluations.find((e) => e.cadence === 15);
+        check('P2-wiring: the cadence-15 restatement reproduces the scored grid exactly (the same partition is the identity)',
+            atScoredGrid.available === true && Math.abs(atScoredGrid.netSharpe - p2Scored) < 1e-9,
+            JSON.stringify({ restated: atScoredGrid.netSharpe, scored: p2Scored }));
+        check('P2-wiring: the promotion block is the majority-pass + catastrophic-veto rule (available with n and passes)',
+            p2Cr.candidates[p2Id].promotion.available === true &&
+            p2Cr.candidates[p2Id].promotion.n === 3 &&
+            Number.isFinite(p2Cr.candidates[p2Id].promotion.passes) &&
+            typeof p2Cr.candidates[p2Id].promotion.promote === 'boolean');
+        const p2Em = p2Rep.exposureMatched;
+        check('P2-wiring: --exposure-match quotes every active candidate at a matched in-market share',
+            p2Em && Object.keys(p2Em.candidates).length > 0 &&
+            Object.values(p2Em.candidates).every((m) => m.available === true && m.raw && m.baseline && m.candidate &&
+                Number.isFinite(m.baseline.achievedFraction) && Number.isFinite(m.candidate.achievedFraction) &&
+                Math.abs(m.baseline.achievedFraction - m.candidate.achievedFraction) < 0.05),
+            JSON.stringify(Object.entries(p2Em && p2Em.candidates).map(([id, m]) => [id, m.available, m.baseline && m.baseline.achievedFraction, m.candidate && m.candidate.achievedFraction])));
+        check('P2-wiring: the cadence sweep and exposure match change no scored number (pure post-processing)',
+            p2Rep.baseline.pooledMetrics.netSharpe === tsOff.report.baseline.pooledMetrics.netSharpe &&
+            JSON.stringify(p2Rep.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])) ===
+            JSON.stringify(tsOff.report.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])));
         // R26-6: the bar interval and the stream basket are opt-in, recorded, and
         // cannot change how an included stream is scored.
         check('R26-6: the stream interval and selection are off by default (raw bars, no selection block)',
@@ -847,6 +901,48 @@ export async function run() {
             keptRep.streamSelection.kept.length === 1 && keptRep.streamSelection.keptDesignEffect.designEffect === 1 &&
             keptRep.summary.includes('streams kept=1'),
             JSON.stringify({ streams: keptRep.streams, kept: keptRep.streamSelection && keptRep.streamSelection.kept }));
+
+        // P2 wiring on the MULTI-STREAM path: the cadence restatement must rebuild
+        // the per-stream fold grid (streamFoldLengths), not just a single stream.
+        {
+            const msCad = (await runAnalysis({ ...msCfg, cadences: [15, 20] })).report;
+            const msCr = msCad.configurationRobust;
+            const msId = msCad.candidates.find((c) => c.active).id;
+            const msScored = msCad.candidates.find((c) => c.id === msId).pooledMetrics.netSharpe;
+            const msAt15 = msCr && msCr.candidates[msId] && msCr.candidates[msId].evaluations.find((e) => e.cadence === 15);
+            check('P2-wiring: the cadence sweep rebuilds a MULTI-STREAM panel (each active candidate, both grids available)',
+                msCr && JSON.stringify(msCr.cadences) === '[15,20]' &&
+                Object.keys(msCr.candidates).length === msCad.candidates.filter((c) => c.active).length &&
+                Object.values(msCr.candidates).every((e) => e.evaluations.length === 2 && e.evaluations.every((x) => x.available === true)) &&
+                Object.values(msCr.candidates).every((e) => e.promotion && e.promotion.available === true && e.promotion.n === 2),
+                JSON.stringify(Object.entries((msCr && msCr.candidates) || {}).slice(0, 1).map(([id, e]) => [id, e.evaluations.map((x) => [x.cadence, x.available])])));
+            check('P2-wiring: a multi-stream cadence restatement on the scored grid reproduces the scored pooled Sharpe exactly',
+                msAt15 && msAt15.available === true && Math.abs(msAt15.netSharpe - msScored) < 1e-9,
+                JSON.stringify({ restated: msAt15 && msAt15.netSharpe, scored: msScored }));
+        }
+
+        // P2 + P4 chaining: a cadence restatement must CARRY the funding/carry
+        // sleeve (an extra panel stream) onto the new grid, not silently drop it
+        // (`restateReportAtCadence` re-projects `report.extraPanelStreams`). This is
+        // the last untested combination of the round-29 wiring.
+        {
+            const fundFile = path.join(dir, 'world.funding.jsonl');
+            const bigFundFile = path.join(dir, 'big.funding.jsonl');
+            const fundRows = (n) => {
+                const out = [];
+                for (let i = 0; i < n; i += 8) out.push(JSON.stringify({ timestamp: i, fundingRate: ((i / 8) % 2 === 0 ? 0.0003 : -0.0001), markPrice: 1 }));
+                return out.join('\n');
+            };
+            fs.writeFileSync(fundFile, fundRows(120));
+            fs.writeFileSync(bigFundFile, fundRows(300));
+            const carryCad = (await runAnalysis({ ...msCfg, carryFiles: [fundFile, bigFundFile], cadences: [15, 20] })).report;
+            const ccCr = carryCad.configurationRobust;
+            const ccId = carryCad.candidates.find((c) => c.active).id;
+            check('P4+P2: the carry sleeve tiles the panel and the cadence restatement CARRIES it onto the new grid',
+                carryCad.carry && carryCad.carry.panelStreams === 1 && !carryCad.carry.unavailable &&
+                ccCr && ccCr.candidates[ccId] && ccCr.candidates[ccId].evaluations.every((e) => e.available === true && e.panelStreams === 1),
+                JSON.stringify({ carry: carryCad.carry && { panelStreams: carryCad.carry.panelStreams, unavailable: carryCad.carry.unavailable }, ev: ccCr && ccCr.candidates[ccId] && ccCr.candidates[ccId].evaluations.map((e) => [e.cadence, e.available, e.panelStreams]) }));
+        }
 
         // R27-5: journal/report hygiene — a stream label is the SYMBOL (a manifest
         // match) or the uppercased file basename, never the operator's absolute
@@ -969,11 +1065,22 @@ export async function run() {
         check('R26-11/R28: the label variants resolve by id but stay out of the default family (opt-in only)',
             resolveVariant('label-conservative').id === 'label-conservative' &&
             resolveVariant('label-triple').id === 'label-triple' &&
-            LABEL_VARIANTS.length === 2 && RESOLVABLE_VARIANTS.length === ALL_VARIANTS.length + OPT_IN_VARIANTS.length + LABEL_VARIANTS.length &&
+            LABEL_VARIANTS.length === 2 && RESOLVABLE_VARIANTS.length === ALL_VARIANTS.length + OPT_IN_VARIANTS.length + LABEL_VARIANTS.length + BENCHMARK_VARIANTS.length + REVERSAL_VARIANTS.length &&
             ALL_VARIANTS.every((v) => v.kind !== 'label') &&
             LABEL_VARIANTS.every((v) => v.controllerScoped === true && v.kind === 'label' &&
                 typeof v.configure === 'function' && (v.labelPolicy === 'conservative' || v.labelPolicy === 'triple')),
             `all=${ALL_VARIANTS.length} resolvable=${RESOLVABLE_VARIANTS.length}`);
+        // P3 (round 29 -> 30): the short-horizon reversal family resolves by id but
+        // stays out of the default roster — so the default K, and therefore every
+        // deflated Sharpe, is unchanged — and exactly one arm is the panel reader.
+        check('P3: the reversal family resolves by id, stays opt-in, and only the cross-sectional arm reads the panel',
+            REVERSAL_VARIANTS.length === 4 &&
+            resolveVariant('sig-reversal').id === 'sig-reversal' && resolveVariant('sig-reversal-xs').id === 'sig-reversal-xs' &&
+            REVERSAL_VARIANTS.every((v) => v.kind === 'signal' && typeof v.signal === 'function' && !ALL_VARIANTS.includes(v)) &&
+            REVERSAL_VARIANTS.filter((v) => v.crossSectional === true).length === 1 &&
+            resolveVariant('sig-reversal-xs').crossSectional === true &&
+            forecastKindOf(resolveVariant('sig-reversal')) === 'signal',
+            `reversal=${REVERSAL_VARIANTS.length} resolvable=${RESOLVABLE_VARIANTS.length}`);
         check('R26-11: a label variant overrides the run-level policy on the controller (configure runs after the default), and the horizon is threaded',
             (() => {
                 const mk = (over) => makeControllerModelFactory({
@@ -1340,6 +1447,7 @@ export async function run() {
                 cacheSize: req.cacheSize, ensembleSize: req.ensembleSize, tier: req.tier, warmup: req.warmup,
                 positionPolicy: req.positionPolicy, saveInterval: req.saveInterval,
                 labelPolicy: req.labelPolicy, labelHorizonBars: req.labelHorizonBars,
+                sampleWeightHorizon: req.sampleWeightHorizon,
                 commonRandomNumbers: req.commonRandomNumbers,
             });
             const view = req.candles ? makeCandleViewFor(req.candles)(req.returns, null) : { returns: req.returns };
@@ -1352,8 +1460,9 @@ export async function run() {
             const confidence = typeof fold.confidenceForFold === 'function' ? fold.confidenceForFold() : null;
             return { positions, confidence, stats };
         };
+        const capturedReqs = [];
         const fakeSpawn = (url, workerData) => ({
-            on(evt, cb) { if (evt === 'message') { Promise.resolve().then(() => cb(inlineFold(workerData))); } return this; },
+            on(evt, cb) { if (evt === 'message') { capturedReqs.push(workerData); Promise.resolve().then(() => cb(inlineFold(workerData))); } return this; },
             terminate() { return Promise.resolve(0); },
         });
         const stripAB = (r) => JSON.stringify({
@@ -1374,6 +1483,41 @@ export async function run() {
             JSON.stringify(parRep.report.baseline.model));
         check('R26-4: a serial run records concurrency 1 (the default is byte-identical)',
             rep.concurrency === 1, `serial concurrency=${rep.concurrency}`);
+
+        // Round 5: the dispatch request is the whole contract between the driver and
+        // the worker — a field the driver forgets to send is a field the worker
+        // silently loses. `sampleWeightHorizon` was exactly that (the real worker's
+        // parallel run diverged from serial under `--sample-weight-horizon`), so pin
+        // it: every dispatch must carry it, and the model block must match serial.
+        capturedReqs.length = 0;
+        const parSW = await runAnalysis({
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state-par-sw'),
+            model: 'controller', writeFiles: false, audit: false, concurrency: 2, spawnWorker: fakeSpawn,
+            variantIds: ['sample-weights'], sampleWeightHorizon: 5,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        check('R26-4/round-5: every fold dispatch request carries `sampleWeightHorizon`',
+            capturedReqs.length > 0 && capturedReqs.every((r) => r.sampleWeightHorizon === 5),
+            JSON.stringify(capturedReqs.map((r) => r.sampleWeightHorizon)));
+        const serSW = await runAnalysis({
+            file: worldFile, maxBars: 120, trainSize: 60, testSize: 15, stateFolder: path.join(dir, 'state-ser-sw'),
+            model: 'controller', writeFiles: false, audit: false, concurrency: 1,
+            variantIds: ['sample-weights'], sampleWeightHorizon: 5,
+            HiveMind: FakeMind, HiveMindController: VaryCtl,
+        });
+        // The whole class of bug is "the driver forgot to send a field the worker
+        // needs", so don't just pin the one field — pin the full contract. Every key
+        // `fold_worker.js` reads must be on the request (a new factory option that is
+        // not threaded here fails this, instead of silently desyncing serial/parallel).
+        const workerContractKeys = [
+            'variantId', 'model', 'streamIndex', 'foldIndex', 'seed', 'stateDir', 'modelRetention',
+            'cacheSize', 'ensembleSize', 'tier', 'warmup', 'positionPolicy', 'saveInterval',
+            'labelPolicy', 'labelHorizonBars', 'sampleWeightHorizon', 'commonRandomNumbers',
+            'len', 'leaky', 'returns', 'train', 'test',
+        ];
+        check('R26-4/round-5: the fold dispatch request carries every field the worker factory reads',
+            capturedReqs.length > 0 && workerContractKeys.every((k) => k in capturedReqs[0]) && serSW.report.concurrency === 1,
+            JSON.stringify({ missing: capturedReqs[0] ? workerContractKeys.filter((k) => !(k in capturedReqs[0])) : null }));
 
         // The dispatcher contract: an injected spawn returns the fold reply, a
         // malformed reply rejects, and a worker `{error}` rejects with the reason.

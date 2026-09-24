@@ -805,5 +805,5 @@ extreme (never inventing a price level), is idempotent, preserves every OHLC
 invariant, and leaves genuine extremes (the ADA/LINK 2025-10-10 crash) untouched
 at the default 0.9 body-fraction threshold. It runs at read time behind
 `CONFIG.candleWickRepair`, so the raw JSONL stays the exact venue record.
-`candles.test.js` (95 checks) pins both layers; `candle_quality.js` is
+`candles.test.js` (192 checks) pins both layers; `candle_quality.js` is
 registered `LOCKED-invariant`.

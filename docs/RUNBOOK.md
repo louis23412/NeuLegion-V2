@@ -126,19 +126,20 @@ workflow source lives at `docs/ci/update-candles.yml` (copy it to
 npm test               # full Node suite (real better-sqlite3 + worker_threads)
 ```
 
-The glob expands to all 42 `test/node/*.test.js` mirrors (`helpers.js` is not a
+The glob expands to all 43 `test/node/*.test.js` files (`helpers.js` is not a
 test file and is excluded).
 
-The Node suite mirrors the browser entries in two styles: **23 mirrors** import
+The Node suite mirrors the browser entries in two styles: **22 mirrors** import
 the browser entry's `run()` and assert `failed === 0` **and**
 `result.total ===` that entry's count in the ledger below (analysis, analyze,
-binarypc, bitweight, candles, dimensions, evolve, golden, homeostasis, locks,
-lsh, modules, multiprobe, multisymbol, price_precision, querymod, sample_weights,
-surprise, walkforward, controller_invariants — the counts are **exact** as of round 23, not floors; every
-number was re-measured in the harness before pinning), and **19 mirrors**
+binarypc, bitweight, candles, dimensions, evolve, golden, guards, homeostasis,
+locks, lsh, modules, multiprobe, multisymbol, observer, price_precision, querymod,
+sample_weights, surprise, walkforward, controller_invariants — the counts are
+**exact** as of the round-29 ledger, not floors; every
+number was re-measured in the harness before pinning), and **21 of the remaining files**
 re-declare the same contracts directly with `node:test`
 against the real driver (sanity, core, features, indicators, fetcher,
-consolidation, consolidation_worker, legion) or check the mirror layout and
+consolidation, consolidation_worker, legion — 8) or check the mirror layout and
 invariants the browser harness cannot (the thirteen Node-only suites). The Node-only
 suites are `mirrors.test.js` (every browser entry has a mirror, no orphans, no
 stub mirror files, the ledger counts 31 entries / 43 mirrors, the `test` script
@@ -166,7 +167,7 @@ imports `runAnalysis` directly, so the argument-parsing block is otherwise
 untested). `bench` is the only
 browser entry
 without a mirror (it prints timings). So `npm test` reports **127 `test()`
-blocks across 43 files** (44 with `helpers.js`) rather than 2402 checks; a green
+blocks across 43 files** (44 with `helpers.js`) rather than 2558 checks; a green
 run — plus `failed === 0` and the ledger count from every wrap-style mirror — is
 the gate. Measured **~5.9 min** at round 22 (`BUGS.md` #21): the `dimensions`
 sweep of both `forceMin` branches dominates (~353 s), then `lsh` (~177 s) and
@@ -186,17 +187,17 @@ wrap-style mirrors assert against. **Expected totals (all must be 0 failures):**
 | `features` | 11 | | `homeostasis` | 30 |
 | `consolidation` | 48 | | `evolve` | 36 |
 | `consolidation_worker` | 18 | | `multiprobe` | 77 |
-| `fetcher` | 101 | | `binarypc` | 39 |
+| `fetcher` | 111 | | `binarypc` | 39 |
 | `golden` | 23 | | `bitweight` | 69 |
 | `modules` | 51 | | `querymod` | 51 |
 | `legion` | 57 | | `walkforward` | 63 |
-| `candles` | 95 | | `dimensions` | 185 |
-| `locks` | 41 | | `analysis` | 586 |
+| `candles` | 192 | | `dimensions` | 185 |
+| `locks` | 41 | | `analysis` | 621 |
 | `price_precision` | 29 | | `multisymbol` | 28 |
 | `guards` | 65 | | `observer` | 76 |
-| `analyze` | 255 | | `controller_invariants` | 23 |
+| `analyze` | 269 | | `controller_invariants` | 23 |
 
-**Total: 2402 checks.** Every one passed in the development sandbox's browser
+**Total: 2558 checks.** Every one passed in the development sandbox's browser
 harness (esbuild-wasm + sql.js shims) at the freeze; `npm test` is the local
 confirmation on the real native drivers. (Round 23 changed three counts:
 `walkforward` 31 → 48 from the `viewFor`/vacuity section K, `analysis` 354 → 390
@@ -335,6 +336,38 @@ production width with EQUAL RNG draw counts, the returned list's duplicate
 multiplicity *is* attributable to the basis at an 80-prototype pool, the
 600-prototype pool is unchanged, and the narrow 6-bit index desyncs — so the
 certificate uses the set + equal-draw-count test). No other entry changed.
+
+**The round-28 operator runs then landed** (`PLAN-round28.md` §3; readout in
+`RUN-ANALYSIS.md` §15). Three runs, all complete, all `seed: 1`, `concurrency: 4`,
+`costBps: 0`, `auditProbesPerFold: 1`, `--symbols=all --bars=600 --train=60`, no
+promotions:
+
+| run | id | verdict |
+| --- | --- | --- |
+| Step 1 — the corrected weighting experiment (8 × 600, `--test=15`) | `20260923T211549-seed1` | both confounds gone: arm A `sampleWeights {mean 1.0334, min 0.3212, max 5.0739, ess 46.34 < n 58.05, horizonBars 7, measureHorizon true}`; A moves the baseline −0.1147 → **+0.0521** (break-even +1.22 bps) but the paired test is not significant (Δ 0.1668, p 0.0759); scale-control C −0.0182; A − C unresolvable. The mechanism is **live and mildly positive**; at `deadZone 0` A's Δ is 0.2447 (**p 0.0051**) with break-even +3.98 bps. No promotion |
+| Step 2 — the label policy at the affordable power (8 × 600, `--test=10`) | `20260924T045601-seed1` | 54 clusters achieved and the paired SE fell as hoped (0.13554 → 0.11214) but Δ collapsed to **0.0289** (p 0.3987), so `neededForObserved` is **2197**; the level moved −0.1147 → **+0.8978** on the **retrain cadence** (baseline-vs-baseline Δ **1.01244**, p 0.02008) with `--label-horizon` provably inert (both arms `resolvedTimeBarrier 0`, `heldBars max 73`). The level-clearing model has **negative** forecast skill (`brierSkill −0.0738`) |
+| Step 3 — the signal family (8 × 600, `--test=15`, used to unblock P5) | `20260924T071546-seed1` | the round-27 `sig-accel` promotion does not survive the honest `K`: adjusted DSR **0.97420 at `K = 3`** (round 27's roster) → **0.86080 at `K = 12`** from the same journal; `sig-momentum` 0.94876 → 0.77356. All 11 differentiated arms live; `multiprobe`/`querymod` correctly `not-applicable` (gates `off`, no reasons). The P5 sweep now runs and `sig-accel` promotes at `{deadZone 0.02, enter 0.2, exit 0.05}` (Sharpe 1.19403, adjDSR 0.95844, break-even 21.89 bps) — but the restated baseline abstains there (16 of 4 320 bars), so it needs an exposure-matched A/B. No promotion |
+
+The runs added three **reported-not-fixed** findings (`BUGS.md` #60 the third fold-level gated
+hurdle; #61 the cross-family confidence-scale incomparability; #62 `--label-horizon` silently
+setting the sample-weight span). No code changed, so the ledger above (2402 browser checks /
+127/127 node blocks) still stands.
+
+**Round 29 (implementation of `PLAN-round29.md`) then changed four counts**, with no golden
+fingerprint moved (`golden` 23/23): `candles` 95 → **192** (the 15m basket manifest and the funding
+basket manifest, plus the funding JSONL byte-round-trip serializer), `fetcher` 101 → **111** (the
+funding fetch/normalise/serialize path), `analysis` 586 → **621** (the P4 carry-sleeve / extra-panel-
+stream / cadence-restatement checks), and `analyze` 255 → **258** (the P1 benchmark runner and the
+`--carry-files` / `extraPanelStreams` wiring). The three wrap-style node mirrors that assert an exact
+count were updated to match (`test/node/{candles,analysis,analyze}.test.js`), so the ledger is now
+**2558** browser checks / **127/127** node blocks. The three defects the measurements exposed
+(`BUGS.md` #64 the extra-stream length compare, #65 the double-appended sleeve, #66 the epoch-ms /
+ISO-string mismatch) are fixed and pinned in `analysis.test.js`. Readouts: `RUN-ANALYSIS.md` §16.
+
+**The rounds 4–5 post-implementation audit then moved `analyze` 258 → 269** (+11 checks: 8 P2-wiring + the P4+P2 sleeve-chaining check + the 2 fold-dispatch-contract checks, for
+the opt-in `--cadences` / `--exposure-match` driver passes), leaving every other entry unchanged, so
+the ledger is **2558** browser checks / **127/127** node blocks. The same pass repaired three stale
+counts in the `test/lock-registry.js` notes (`guards` 58→65, `observer` 75→76, `analyze` 245→269).
 
 ### What to attach from an `analyze` run
 

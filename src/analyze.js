@@ -30,16 +30,18 @@ import { CONFIG } from './legion/config.js';
 import { mulberry32, hashString } from './legion/rng.js';
 import { runWorkerThread } from './legion/workers.js';
 import { makeFoldExecutor, normaliseConcurrency } from './analysis/parallel.js';
-import { walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision, formatReport, walkForwardSearch, probToPosition, confidenceToPosition, confidenceFromProb, restateReportAtCost, restateReportAtPolicy, verifyPolicyRoundTrip, poolReports, costLadder, familyCorrelation, DEPENDENCE_GATE_READER } from './analysis/walkforward.js';
+import { walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision, formatReport, walkForwardSearch, probToPosition, confidenceToPosition, confidenceFromProb, restateReportAtCost, restateReportAtPolicy, verifyPolicyRoundTrip, restateReportAtCadence, exposureMatchedPair, poolReports, costLadder, familyCorrelation, DEPENDENCE_GATE_READER } from './analysis/walkforward.js';
 import { turnoverSweep as runTurnoverSweep, formatTurnoverSweep } from './analysis/holding.js';
 import { resampleCandles, designEffectOfStreams, selectStreams as runStreamSelection, formatStreamSelection } from './analysis/streams.js';
 import { seedDistribution, formatSeedReplication } from './analysis/replication.js';
 import { forecastComparison, formatForecast } from './analysis/forecast.js';
-import { foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision } from './analysis/decision.js';
+import { foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision, promotionAcrossCadences, defaultCatastrophic } from './analysis/decision.js';
 import { walkForwardSplit } from './analysis/splits.js';
 import { makeCandleViewFor, worldFromCandles, DEFAULT_SHOCK } from './analysis/world.js';
-import { SIGNAL_CANDIDATES, signalForCandidate } from './analysis/features.js';
+import { SIGNAL_CANDIDATES, REVERSAL_CANDIDATES, signalForCandidate } from './analysis/features.js';
+import { makeBenchmarkForecaster, BENCHMARK_KINDS } from './analysis/benchmark.js';
 import { CANDLE_MANIFEST } from './candles_audit.js';
+import { parseFundingJsonl, auditFundingSeries, auditFundingProblems, carryPanelStream, pooledCarry, correlation } from './analysis/carry.js';
 import { makeRunId, createRunDirectory, writeJson, writeJsonAtomic, writeReport, appendLog, appendJsonl } from './observer/report.js';
 import { configFingerprint } from './legion/sanitize.js';
 
@@ -256,11 +258,44 @@ export const SIGNAL_VARIANTS = Object.freeze(
     SIGNAL_CANDIDATES.map((c) => ({ ...c, signal: signalForCandidate(c), appliesTo: 'agnostic' })),
 );
 
+// P3 (round 29 -> 30): the short-horizon reversal family as opt-in A/B
+// candidates. Same contract as `SIGNAL_VARIANTS` (a pure `signal(view, test)` under
+// the one family-wise gate), but resolved only by id so a default run's roster and
+// `K` are unchanged. `sig:reversal-xs` reads the cross-section through
+// `view.panel`, which the driver attaches per stream.
+export const REVERSAL_VARIANTS = Object.freeze(
+    REVERSAL_CANDIDATES.map((c) => ({ ...c, signal: signalForCandidate(c), appliesTo: 'agnostic' })),
+);
+
 // Every candidate the A/B can resolve by id: the mechanism flags plus the signal
 // family. `kind` (default 'mechanism') distinguishes them in the report. The
 // opt-in variants are NOT here (so the default roster stays lean) but ARE in
 // `RESOLVABLE_VARIANTS`.
 export const ALL_VARIANTS = Object.freeze([...VARIANTS, ...SIGNAL_VARIANTS]);
+
+// P1 (round 29 → 30): the model-class benchmark forecasters. Each is an opt-in
+// A/B candidate whose `fit/predict` is a base-rate / ridge / MLP forecaster over
+// the SAME causal `featureVector` the bare path uses, run on the SAME walk-forward
+// folds — so a promotion (or a failure) here is a statement about the model class,
+// not about different inputs. They are deliberately NOT in the default roster: a
+// benchmark run changes K and the family, so it is opt-in
+// (`--variants=bench-base-rate,bench-linear,bench-mlp`). `kind:'benchmark'` marks
+// them; `forecastKindOf` puts them in the probability-calibrated group beside the
+// controller so the Model Confidence Set compares them.
+export const BENCHMARK_VARIANTS = Object.freeze(
+    BENCHMARK_KINDS.filter((k) => k !== 'tsfm').map((k) => ({
+        id: `bench-${k}`,
+        label: `bench:${k}`,
+        kind: 'benchmark',
+        benchmark: k,
+        appliesTo: 'agnostic',
+        note: k === 'base-rate'
+            ? 'the training fold\'s outcome frequency, for every bar (the reference a skilful forecaster must beat)'
+            : (k === 'linear'
+                ? 'ridge regression on the same causal feature vector (DLinear-class; the model-class literature\'s default winner on TS)'
+                : 'one-hidden-layer tanh MLP on the same causal feature vector (a generic nonlinear approximator, not a from-scratch transformer)'),
+    })),
+);
 
 // The trade-label policies as opt-in A/B candidates (round 26, R26-11 /
 // BUGS.md #36). They are CONTROLLER-scoped: each sets the controller's
@@ -296,10 +331,12 @@ export const LABEL_VARIANTS = Object.freeze([
 ]);
 
 // The full resolvable universe: the default A/B family plus the opt-in mechanism
-// variants (`sample-weights`) and the opt-in label variants. `resolveVariant`
-// searches this (so `--variants=label-triple` / `--variants=sample-weights` work),
-// while the default roster stays the lean family (varianRoster below).
-export const RESOLVABLE_VARIANTS = Object.freeze([...ALL_VARIANTS, ...OPT_IN_VARIANTS, ...LABEL_VARIANTS]);
+// variants (`sample-weights`), the opt-in label variants, the P1 benchmark
+// forecasters and the P3 short-horizon reversal family. `resolveVariant` searches
+// this (so `--variants=label-triple` / `--variants=sample-weights` /
+// `--variants=sig-reversal` work), while the default roster stays the lean family
+// (variantRoster below).
+export const RESOLVABLE_VARIANTS = Object.freeze([...ALL_VARIANTS, ...OPT_IN_VARIANTS, ...LABEL_VARIANTS, ...BENCHMARK_VARIANTS, ...REVERSAL_VARIANTS]);
 
 // R27-2: can this variant's mechanism reach the code path the A/B scores? Returns
 // a one-line reason when it cannot (so the report marks it `not-applicable`
@@ -340,13 +377,15 @@ export const inertReasonFor = (variant, ctx = {}) => {
 };
 
 
+// R27-5: the grouping key a variant's journaled confidence is scored within. Every
+// probability-calibrated arm (the controller,
 // the mechanism flags, the label policies) journals a confidence derived from a
 // probability — `confidenceFromProb(prob)` — so `(c+1)/2` recovers that
 // probability and a proper score is meaningful. A signal variant journals a
 // normalised z-score, which is NOT a probability, so it is scored only against
 // the other signals. Grouping by this key (rather than raw `kind`) keeps a
 // `label` candidate in the controller family where it belongs.
-export const forecastKindOf = (variant) => (variant && variant.signal ? 'signal' : 'controller');
+export const forecastKindOf = (variant) => (variant && variant.signal ? 'signal' : (variant && variant.benchmark ? 'benchmark' : 'controller'));
 
 // R27-2: a human-readable taxonomy table for `--list-variants`. Columns:
 // id | label | kind | appliesTo | applicable-here. `model` decides the last
@@ -526,6 +565,52 @@ export const makeHiveMindModelFactory = ({
             dispose: () => reclaim(),
             stats: () => ({ trained: hm ? 1 : 0, retention: modelRetention, reclaimed }),
         };
+    };
+};
+
+// P1 (round 29 → 30): the benchmark model factory. It returns the SAME per-fold
+// model interface the HiveMind factories do (`fit/predict/rawConfidence/stats/
+// dispose`), so it drops into `makeSignalForVariant` and `evaluateAB` unchanged —
+// which is what puts the benchmark on the same folds, labels, features, audit,
+// gate, cost ladder and forecast block as every other arm. The forecaster is a
+// pure `analysis/benchmark.js` model (base rate / ridge / MLP); the features are
+// the existing causal `featureVector`, and the labels are `sign(ret[t+1])`, i.e.
+// exactly what `forecastPairs` scores. The per-fold seed follows the same
+// `(seed + testStart*977)` common-random-numbers rule as the bare path, so a
+// benchmark run is deterministic and CRN-consistent.
+export const makeBenchmarkModelFactory = ({ seed = 1, len = FEATURE_LEN } = {}) => (variant) => {
+    const kind = variant && variant.benchmark;
+    const baseOptions = { ...(variant && variant.benchmarkOptions) };
+    let forecaster = null;
+    let model = null;
+    let lastConfidence = [];
+    return {
+        fit(train, test, view) {
+            const returns = view.returns;
+            const testStart = Math.min(...test);
+            const foldSeed = (seed + testStart * 977) >>> 0;
+            const bars = train.filter((t) => t + 1 < testStart);
+            const X = bars.map((t) => featureVector(returns, t, { len, leaky: false }));
+            const y = bars.map((t) => ((returns[t + 1] ?? 0) > 0 ? 1 : 0));
+            const opts = { ...baseOptions };
+            if (kind === 'mlp' && !Number.isFinite(opts.seed)) opts.seed = foldSeed;
+            forecaster = makeBenchmarkForecaster(kind, opts);
+            model = X.length ? forecaster.fit(X, y) : null;
+        },
+        predict(test, view) {
+            const returns = view.returns;
+            if (!model || !forecaster) { lastConfidence = test.map(() => 0); return lastConfidence; }
+            lastConfidence = test.map((t) => {
+                const p = forecaster.predictProb(model, featureVector(returns, t, { len, leaky: false }));
+                // `(p - 0.5) * 2` is a signed confidence in [-1, 1] (the bare path's
+                // convention), so `confidence === position` with the identity policy.
+                return (p - 0.5) * 2;
+            });
+            return lastConfidence;
+        },
+        rawConfidence: () => lastConfidence,
+        dispose: () => { model = null; },
+        stats: () => ({ trained: model ? 1 : 0, retention: 'none', benchmark: kind }),
     };
 };
 
@@ -990,6 +1075,10 @@ export function evaluateAB({
     costBps = 0, periodsPerYear = 252, audit = true, requireCausal = true, alpha = 0.05,
     probe = 1e3, requireReachable = false, auditProbesPerFold = 0, model = 'bare',
     auditReuseBase = false,
+    // Round 29 -> 30 (P4): independent panel streams (the funding/carry sleeve) to
+    // fold into every candidate's dependence/DSR panel. Each must tile the pooled
+    // price grid; a mismatch is reported, never silently dropped.
+    extraPanelStreams = null,
     // Round 25: extra `promoteDecision` options applied to every candidate (after
     // each variant's own `decision` overrides). The real driver passes the
     // dependence-aware hurdles here; the default `{}` keeps the round-23/24
@@ -1054,7 +1143,7 @@ export function evaluateAB({
                     : null,
             });
         });
-        const report = reports.length ? poolReports(reports, { periodsPerYear, trials: variants.length }) : null;
+        const report = reports.length ? poolReports(reports, { periodsPerYear, trials: variants.length, extraPanelStreams }) : null;
         // Per-variant wall time (round 25, observability): the cost law
         // (`~0.035 s x sum_f(testStart_f) x streams x passes x mechanismVariants`,
         // O(n^2) per stream — docs/RUN-ANALYSIS.md section 4) can only be checked,
@@ -1232,6 +1321,10 @@ const finalizeAB = ({
             power: r.power,
             aggregate: r.aggregate,
             dependence: r.dependence,
+            // P4: `dependenceWithoutExtras` is a restated block too, so it must come
+            // from the restatement (paired with `dependence` at the same cost) rather
+            // than from the scored report.
+            dependenceWithoutExtras: r.dependenceWithoutExtras,
             folds: r.folds,
             pooledBars: r.pooledBars,
         };
@@ -1378,6 +1471,9 @@ export async function evaluateABAsync({
     costBps = 0, periodsPerYear = 252, audit = true, requireCausal = true, alpha = 0.05,
     probe = 1e3, requireReachable = false, auditProbesPerFold = 0, model = 'bare',
     auditReuseBase = false, gateOptions = null,
+    // Round 29 -> 30 (P4): independent panel streams (the funding/carry sleeve) to
+    // fold into every candidate's dependence/DSR panel (see `evaluateAB`).
+    extraPanelStreams = null,
     onEvent = null, onVariant = null, onModelStats = null, concurrency = 1,
     // R28: the per-variant model accumulator (see `evaluateAB`).
     modelStats = null,
@@ -1443,7 +1539,7 @@ export async function evaluateABAsync({
                     : null,
             }));
         }
-        const report = reports.length ? poolReports(reports, { periodsPerYear, trials: variants.length }) : null;
+        const report = reports.length ? poolReports(reports, { periodsPerYear, trials: variants.length, extraPanelStreams }) : null;
         return { variant, report, skipped, notApplicable, streams: reports.length, elapsedMs: Date.now() - startedAt };
     };
 
@@ -1792,6 +1888,9 @@ const baselineRow = (result, modelStats = null) => {
         // Round 25: the dependence panel (cluster jackknife SE, design effect,
         // effective bars, equicorrelation reading) — null on a single stream.
         dependence: base.dependence || null,
+        // P4: the PRICE-ONLY dependence, when a funding/carry sleeve was appended to
+        // the panel — so the measured effect of adding it is explicit on every row.
+        dependenceWithoutExtras: base.dependenceWithoutExtras || null,
         pooledBars: base.pooledBars,
         foldLengths: base.foldLengths || null,
         // Round 26 (R26-13): the per-fold net Sharpe series, so a multi-seed run can
@@ -1844,6 +1943,10 @@ const candidateRow = (entry, decision, search, modelStats = null) => {
         // hurdles, and which hurdles were actually applied (vs skipped for lack of a
         // cross-stream panel) — so the report can never claim a gate it did not run.
         dependence: report ? (report.dependence || null) : null,
+        // P4: the PRICE-ONLY dependence, when a funding/carry sleeve was appended to
+        // the panel. `dependence` (with) vs this (without) is the measured effect of
+        // the extra stream; both are null when no sleeve was supplied.
+        dependenceWithoutExtras: report ? (report.dependenceWithoutExtras || null) : null,
         promotionTest: decision ? (decision.promotionTest || null) : null,
         gate: decision ? (decision.gate || null) : null,
         elapsedMs: entry.elapsedMs ?? null,
@@ -1972,6 +2075,21 @@ export async function runAnalysis({
     // choices; neither changes how an included stream is scored.
     intervalBars = 1,
     streamSelect = null,
+    // Round 29 -> 30 (P4): funding JSONL files (Binance `fapi/v1/fundingRate`),
+    // POSITIONALLY matched to `files`/`symbols`. Each funding series contributes a
+    // carry panel stream (the delta-neutral short-perp/long-spot return), appended
+    // to every candidate's dependence/DSR panel so the design effect counts a
+    // structurally independent return source. Null (the default) changes nothing.
+    carryFiles = null,
+    // Round 29 -> 30 (P2): the configuration-robust promotion sweep. `cadences` is
+    // a list of fold-grid `testSize` values; when supplied, every ACTIVE candidate
+    // is re-scored on each grid with `restateReportAtCadence` (the fixed-position
+    // restatement the P2 retrospective used — pure post-processing, no model) and
+    // `promotionAcrossCadences` applies the majority-pass + catastrophic-veto rule.
+    // Null (the default) changes nothing. `exposureMatch` additionally quotes each
+    // active candidate against the baseline at a MATCHED in-market share.
+    cadences = null,
+    exposureMatch = false,
     // Round 26 (R26-13): common random numbers. With CRN (the default) every
     // variant's fold seed depends only on the master seed and `testStart`, so the
     // variant comparison is PAIRED on the random draws and the variance of the
@@ -2088,6 +2206,105 @@ export async function runAnalysis({
             // count above, so this field is internal to the driver.
             candleData: world.candles,
         });
+    }
+
+    // P3 (round 29 -> 30): attach the cross-section to every stream's view, so the
+    // cross-sectional reversal candidate (`sig:reversal-xs`) can read the OTHER
+    // streams' aligned returns. The alignment is by bar index — the same convention
+    // the panel-aware dependence estimates and `streamFoldLengths` already use, and
+    // the reason every world is sliced to the same `maxBars`. `panel` also rides on
+    // the world so a worker-backed fold can rebuild its view with it.
+    {
+        const panelLabels = worlds.map((w) => w.label);
+        const panelReturns = worlds.map((w) => w.returns);
+        worlds = worlds.map((w, i) => {
+            const panel = { streamIndex: i, label: w.label, labels: panelLabels, returnsByStream: panelReturns };
+            return { ...w, panel, viewFor: makeCandleViewFor(w.candleData, { panel }) };
+        });
+    }
+
+    // P4 (round 29 -> 30): the funding/carry sleeve. `carryFiles[i]` is the funding
+    // series for `worlds[i]`; each contributes the carry earned over that world's
+    // fold TEST bars, and the POOLED sleeve (equal weight across symbols) is what the
+    // dependence/DSR panel receives — one extra, structurally independent return
+    // stream. The price-only dependence is retained beside it
+    // (`dependenceWithoutExtras`) so the measured effect of adding it is explicit.
+    let extraPanelStreams = null;
+    let carryBlock = null;
+    if (Array.isArray(carryFiles) && carryFiles.length) {
+        const project = (series, folds) => {
+            const out = [];
+            for (const fold of folds) for (let t = fold.testStart; t <= fold.testEnd; t++) out.push(series[t]);
+            return out;
+        };
+        const parsed = [];
+        for (const cf of carryFiles) {
+            const text = fs.readFileSync(cf, 'utf8');
+            const { rows, invalid, blank } = parseFundingJsonl(text);
+            const audit = auditFundingSeries(rows);
+            parsed.push({
+                file: cf, rows, invalid, blank, audit,
+                problems: auditFundingProblems(audit, { label: cf }),
+            });
+        }
+        const streams = [];
+        const priceProjected = [];
+        for (let i = 0; i < worlds.length; i++) {
+            const p = parsed[i % parsed.length];
+            if (!p || !p.rows.length) continue;
+            const timestamps = (worlds[i].candleData || []).map((c) => c.timestamp);
+            streams.push(carryPanelStream({ timestamps, folds: worlds[i].folds, rows: p.rows }));
+            priceProjected.push(project(worlds[i].returns, worlds[i].folds));
+        }
+        const sleeveHasVariance = (() => {
+            if (!streams.length) return false;
+            const first = streams[0][0];
+            for (const s of streams) for (const v of s) if (v !== first) return true;
+            return false;
+        })();
+        if (streams.length === worlds.length && streams[0].length === priceProjected[0].length && sleeveHasVariance) {
+            const sleeve = pooledCarry(streams);
+            const basket = priceProjected[0].map((_, j) => {
+                let acc = 0;
+                for (const p of priceProjected) acc += p[j];
+                return acc / priceProjected.length;
+            });
+            extraPanelStreams = [sleeve];
+            let sum = 0;
+            for (const v of sleeve) sum += v;
+            carryBlock = {
+                files: carryFiles,
+                symbols: parsed.map((p, i) => ({
+                    file: p.file, rows: p.rows.length, invalid: p.invalid, blank: p.blank,
+                    problems: p.problems,
+                    first: p.audit.first, last: p.audit.last, spanDays: p.audit.spanDays,
+                    intervalHistogram: p.audit.intervalHistogram,
+                    offGrid: p.audit.offGrid, missingPeriods: p.audit.missingPeriods,
+                    meanRate: p.audit.meanRate, meanAbsRate: p.audit.meanAbsRate,
+                    negativeFraction: p.audit.negativeFraction,
+                    symbol: (worlds[i] || {}).label || null,
+                })),
+                streams: streams.length,
+                panelStreams: extraPanelStreams.length,
+                pooledMeanRatePerBar: sleeve.length ? sum / sleeve.length : null,
+                correlationWithBasket: correlation(sleeve, basket),
+                reader: 'the funding/carry sleeve: the funding JSONL files are parsed and audited on the funding grid, each symbol\'s carry is projected over its fold test bars (so the sleeve tiles the same pooled grid the price streams use), and the equal-weight pooled sleeve is appended to every candidate\'s dependence panel. `correlationWithBasket` is the Pearson correlation of the sleeve with the equal-weight price basket over those bars; a candidate\'s `dependence` (with) vs `dependenceWithoutExtras` (price-only) is the measured effect.',
+            };
+        } else {
+            carryBlock = {
+                files: carryFiles,
+                symbols: parsed.map((p) => ({ file: p.file, rows: p.rows.length, problems: p.problems })),
+                streams: streams.length,
+                panelStreams: 0,
+                unavailable: true,
+                reason: !streams.length || streams.length !== worlds.length
+                    ? `the carry streams do not cover every price stream (streams=${streams.length}/${worlds.length})`
+                    : (streams[0].length !== (priceProjected.length ? priceProjected[0].length : -1)
+                        ? `the carry streams do not tile the pooled price grid (length ${streams[0].length} vs ${priceProjected.length ? priceProjected[0].length : 0})`
+                        : 'the pooled carry sleeve is constant (zero variance) over the fold test bars — a constant stream carries no information and would make every pairwise correlation undefined, so it is not appended to the dependence panel'),
+            };
+        }
+        for (const p of parsed) if (p.problems.length) log(`carry: ${p.problems.join('; ')}`);
     }
 
     // Round 26 (R26-6): measure the basket's effective independence (Kish 1965
@@ -2391,7 +2608,13 @@ export async function runAnalysis({
     const factory = useController
         ? makeControllerModelFactory({ HiveMind, HiveMindController, stateDir: modelRoot, seed, modelRetention, saveInterval, labelPolicy, labelHorizonBars, sampleWeightHorizon, commonRandomNumbers: crn })
         : makeHiveMindModelFactory({ HiveMind, stateDir: modelRoot, seed, modelRetention, commonRandomNumbers: crn });
-    const signalForVariant = makeSignalForVariant(factory, {
+    // P1: a benchmark variant is model-independent (it is a pure forecaster on the
+    // shared feature vector), so it is dispatched to its own factory regardless of
+    // `--model`. The default path is byte-identical (no benchmark variant in the
+    // default roster).
+    const benchmarkFactory = makeBenchmarkModelFactory({ seed });
+    const selectFactory = (variant) => (variant && variant.benchmark ? benchmarkFactory(variant) : factory(variant));
+    const signalForVariant = makeSignalForVariant(selectFactory, {
         // Round 26 (R26-3): ONE confidence->position policy for both families.
         positionPolicy,
         onStats: accumulateStats,
@@ -2414,9 +2637,11 @@ export async function runAnalysis({
                 cacheSize: CONTROLLER_MODEL.cacheSize, ensembleSize: CONTROLLER_MODEL.ensembleSize,
                 tier: CONTROLLER_MODEL.tier, warmup: CONTROLLER_MODEL.warmup,
                 positionPolicy, saveInterval, labelPolicy, labelHorizonBars,
+                sampleWeightHorizon,
                 commonRandomNumbers: crn,
                 len: FEATURE_LEN, leaky: false,
                 returns: s.returns, candles: s.candleData || null,
+                panel: s.panel || null,
                 train: ctx.train, test: ctx.test,
             }),
         });
@@ -2435,13 +2660,13 @@ export async function runAnalysis({
                 worlds, variants, signalForVariant, foldExecutorFor, onModelStats: accumulateStats, concurrency: width,
                 costBps, audit, alpha,
                 probe, auditProbesPerFold, model: modelPath, requireReachable, auditReuseBase: reuseBase,
-                gateOptions, modelStats,
+                gateOptions, modelStats, extraPanelStreams,
                 onEvent, onVariant,
             })
             : evaluateAB({
                 worlds, variants, signalForVariant, costBps, audit, alpha,
                 probe, auditProbesPerFold, model: modelPath, requireReachable, auditReuseBase: reuseBase,
-                gateOptions, modelStats,
+                gateOptions, modelStats, extraPanelStreams,
                 onEvent, onVariant,
             });
     } catch (err) {
@@ -2546,6 +2771,89 @@ export async function runAnalysis({
         })
         : null;
 
+    // Round 29 -> 30 (P2): the configuration-robust promotion sweep. The A/B's
+    // LEVEL is a function of the retrain cadence (`RUN-ANALYSIS.md` §15.3), so a
+    // single-cadence verdict is a verdict about the configuration as much as about
+    // the strategy. When `cadences` is supplied, each ACTIVE candidate is re-scored
+    // on every cadence grid with `restateReportAtCadence` (the fixed-position
+    // restatement the P2 retrospective used — the model trajectory is held constant
+    // and only the fold partition moves, so this is a LOWER bound on the cadence
+    // sensitivity), and `promotionAcrossCadences` applies the majority-pass +
+    // catastrophic-veto rule. Pure post-processing of the journaled confidence, so
+    // it cannot move a scored number. Null unless `--cadences` is given, so the
+    // default report is byte-identical.
+    let configurationRobust = null;
+    if (Array.isArray(cadences) && cadences.length) {
+        const cadenceGrid = [...new Set(cadences.map((c) => Number(c)).filter((c) => Number.isFinite(c) && c > 0))].sort((a, b) => a - b);
+        const byCandidate = {};
+        for (const c of result.candidates) {
+            if (!c.active || !c.report || !Array.isArray(c.report.foldInputs) || !c.report.foldInputs.length) continue;
+            const evaluations = [];
+            for (const ts of cadenceGrid) {
+                const bAt = restateReportAtCadence(result.baseline, { testSize: ts, policy: positionPolicy, costBps, periodsPerYear: 252, trials: result.trials });
+                const cAt = restateReportAtCadence(c.report, { testSize: ts, policy: positionPolicy, costBps, periodsPerYear: 252, trials: result.trials });
+                if (!bAt || !cAt) {
+                    evaluations.push({ cadence: ts, available: false, reason: 'the report carries no journaled fold inputs to restate at this cadence' });
+                    continue;
+                }
+                const dec = promoteDecision(bAt, cAt, { requireCleanAudit: audit, ...(c.variant.decision || {}), ...(gateOptions || {}) });
+                evaluations.push({
+                    cadence: ts,
+                    available: true,
+                    promote: dec.promote,
+                    reasons: dec.reasons,
+                    netSharpe: cAt.pooledMetrics.netSharpe,
+                    dsrAdjusted: cAt.pooledMetrics.dsrAdjusted,
+                    foldWinFraction: dec.foldWinFraction,
+                    folds: cAt.cadence ? cAt.cadence.folds : null,
+                    panelStreams: cAt.cadence ? cAt.cadence.panelStreams : null,
+                });
+            }
+            byCandidate[c.variant.id] = {
+                evaluations,
+                promotion: promotionAcrossCadences({
+                    evaluations: evaluations.filter((e) => e.available),
+                    majorityFraction: 0.5,
+                    catastrophic: defaultCatastrophic,
+                }),
+            };
+        }
+        configurationRobust = {
+            cadences: cadenceGrid,
+            majorityFraction: 0.5,
+            candidates: byCandidate,
+            reader: 'configuration-robust promotion (P2): every active candidate is re-scored on EACH cadence grid (the fixed-position restatement — the model trajectory is held constant and only the fold partition moves, so this is a LOWER bound on the cadence sensitivity) and `promotionAcrossCadences` applies the majority-pass + catastrophic-veto rule. A candidate is configuration-robust only when it promotes at MORE THAN HALF the cadences AND never fails catastrophically (default: a failed look-ahead audit or a negative pooled net Sharpe). Strictly stricter than the single-cadence gate. This is the fixed-position restatement, not a re-train sweep (a full per-cadence re-train is TODO.md 97).',
+        };
+    }
+
+    // Round 29 -> 30 (P2): exposure matching. The unified position policy is
+    // unified in DIMENSION but not in DISTRIBUTION (a controller's |confidence|
+    // maxes far below a signal's), so an absolute dead zone is a different filter
+    // for each family and a cross-family promotion can be an artefact of one arm
+    // abstaining (`BUGS.md` #61). When `exposureMatch` is set, every active
+    // candidate is compared with the baseline at a MATCHED in-market share. Null
+    // unless the flag is set, so the default report is byte-identical.
+    let exposureMatched = null;
+    if (exposureMatch) {
+        const byCandidate = {};
+        for (const c of result.candidates) {
+            if (!c.active || !c.report || !Array.isArray(c.report.foldInputs) || !c.report.foldInputs.length) continue;
+            byCandidate[c.variant.id] = exposureMatchedPair({
+                baseline: result.baseline,
+                candidate: c.report,
+                policy: positionPolicy,
+                costBps,
+                periodsPerYear: 252,
+                trials: result.trials,
+                decisionOptions: { requireCleanAudit: audit, ...(c.variant.decision || {}), ...(gateOptions || {}) },
+            });
+        }
+        exposureMatched = {
+            candidates: byCandidate,
+            reader: 'matched-exposure comparison (P2): each active candidate is restated against the baseline at a common in-market share (the minimum of the two families\' scored non-zero fractions by default), so the exposure confound is removed. The matched row uses a pointwise dead zone only — a holding band\'s enter/exit are another absolute confidence-space threshold, so a banded match is neither scale-free nor always reachable. A promotion at UNMATCHED exposure can be an artefact of one arm abstaining (BUGS.md #61); the matched row tests the same claim at equal exposure.',
+        };
+    }
+
     const candidateReportRows = result.candidates.map((c) => candidateRow(c, c.decision, c.search, modelStats));
     // Round 26 (R26-8): the decision-grade report. A pure composition of the blocks
     // above into the six questions the next cycle asks; it computes no new strategy
@@ -2578,6 +2886,7 @@ export async function runAnalysis({
             durationMs,
             folds: foldsTotal,
             streams: worlds.length,
+            cadence: { trainSize, testSize, folds: foldsTotal },
         });
         // R27-5: the featured row can be a pure signal (no model of its own) while
         // the baseline is a trained controller. Rather than degrade the training
@@ -2607,6 +2916,7 @@ export async function runAnalysis({
                 seed,
                 trials: variants.length,
                 saveInterval: Number.isFinite(saveInterval) ? saveInterval : 'inf',
+                cadence: { trainSize, testSize, folds: foldsTotal },
             },
             baseline: result.baseline,
             candidate: featuredRow,
@@ -2713,6 +3023,17 @@ export async function runAnalysis({
         // depends on it.
         intervalBars: intervalFactor,
         streamSelection,
+        // Round 29 -> 30 (P4): the funding/carry sleeve. Null unless `carryFiles`
+        // was supplied. `dependenceWithoutExtras`/`dependence` on each candidate are
+        // the measured before/after; this block records the data provenance, the
+        // sleeve's cost-free carry and its correlation with the price basket.
+        carry: carryBlock,
+        // Round 29 -> 30 (P2): the configuration-robust promotion sweep and the
+        // exposure-matched cross-family comparison. Both are pure post-processing
+        // of the journaled confidence (no model, no re-run). Null unless
+        // `--cadences` / `--exposure-match` was given.
+        configurationRobust,
+        exposureMatched,
         // Round 26 (R26-13): whether the variant comparison was paired on the
         // random draws (common random numbers). Default true; `false` restores the
         // historical per-variant seed.
@@ -2731,7 +3052,7 @@ export async function runAnalysis({
         artifacts: runDir
             ? { folds: 'folds.jsonl', log: 'run.log', progress: 'progress.json', partial: 'partial-report.json' }
             : null,
-        reader: `canonical verdict. Per candidate: \`promote\` + \`reasons\` + \`pooledMetrics\` (incl. \`grossPnl\` and \`breakEvenCostBps\` = the per-unit-turnover cost in bps at which the gross edge is exactly consumed, so a high-turnover signal can be compared to a low-turnover mechanism on one axis) + \`audit\` (clean/reachable/reachableFolds/probes/viewDiffers/baseReused) + \`search\` (family-wise) + round-25 blocks: \`dependence\` (delete-one-cluster jackknife SE over fold-window clusters, design effect, effective bars, equicorrelation reading; null on a single stream), \`promotionTest\` (paired cluster Sharpe-difference t(C-1) + exact sign test over fold windows) and \`gate\` (which hurdles were APPLIED vs SKIPPED-no-panel). The run-level \`power\` block carries the pooled Sharpe SE/MDE, an \`underpowered\` flag (MDE95 above 1.0: a null verdict that could not detect Sharpe 1 is uninformative) and \`barsToDetect1\`; \`power.seDependent\`/\`mdeSharpeDependent\` are the same numbers under the cluster jackknife. \`trials\` (top-level and per candidate) is K, the searched-roster size every DSR was deflated by. \`timings\` records each variant's wall time; the measured cost law is \`time ~= k * streams * passes * modelVariants * sum_f(testStart_f)\` with \`k ~= 0.036 s\` per history bar replayed (a model fit warms up by replaying all history up to the fold, so per-fold cost grows with the fold index - the run is O(n^2) per stream, not linear in bars). \`costLadder\` restates the entire verdict at each cost level in bps of turnover; \`familyCorrelation\` reports how correlated the candidates' excess returns were (a diagnostic only — the deflated Sharpe deliberately keeps trials=K); \`turnoverSweep\` (null unless \`--turnover-sweep\`) restates the journaled confidence under a dead-zone x entry/exit-hysteresis x minimum-holding grid and names the policy with the highest break-even cost, so the economic ceiling can be attacked offline (no model, no re-run); \`streamSelection\` (null unless \`--select-streams\`) measures the basket's Kish design effect over the streams' own returns and reports the greedy most-diversifying order — with \`keep\` set it also names the kept basket and its design effect — and \`intervalBars\` is the resampling factor every stream was built at (1 = the raw bars). \`commonRandomNumbers\` says whether the variant comparison was paired on the random draws (R26-13 common random numbers; default true). \`folds.jsonl\` holds one line per fold-pass (source: stage=score|base|probe, probeIndex for the probe bar, the pass's bar indices, emitted positions, realised returns and metrics), so the pooled metrics AND the audit can be recomputed offline; \`run.log\` is the event journal; \`progress.json\` is the liveness heartbeat.`,
+        reader: `canonical verdict. Per candidate: \`promote\` + \`reasons\` + \`pooledMetrics\` (incl. \`grossPnl\` and \`breakEvenCostBps\` = the per-unit-turnover cost in bps at which the gross edge is exactly consumed, so a high-turnover signal can be compared to a low-turnover mechanism on one axis) + \`audit\` (clean/reachable/reachableFolds/probes/viewDiffers/baseReused) + \`search\` (family-wise) + round-25 blocks: \`dependence\` (delete-one-cluster jackknife SE over fold-window clusters, design effect, effective bars, equicorrelation reading; null on a single stream), \`promotionTest\` (paired cluster Sharpe-difference t(C-1) + exact sign test over fold windows) and \`gate\` (which hurdles were APPLIED vs SKIPPED-no-panel). The run-level \`power\` block carries the pooled Sharpe SE/MDE, an \`underpowered\` flag (MDE95 above 1.0: a null verdict that could not detect Sharpe 1 is uninformative) and \`barsToDetect1\`; \`power.seDependent\`/\`mdeSharpeDependent\` are the same numbers under the cluster jackknife. \`trials\` (top-level and per candidate) is K, the searched-roster size every DSR was deflated by. \`timings\` records each variant's wall time; the measured cost law is \`time ~= k * streams * passes * modelVariants * sum_f(testStart_f)\` with \`k ~= 0.036 s\` per history bar replayed (a model fit warms up by replaying all history up to the fold, so per-fold cost grows with the fold index - the run is O(n^2) per stream, not linear in bars). \`costLadder\` restates the entire verdict at each cost level in bps of turnover; \`familyCorrelation\` reports how correlated the candidates' excess returns were (a diagnostic only — the deflated Sharpe deliberately keeps trials=K); \`turnoverSweep\` (null unless \`--turnover-sweep\`) restates the journaled confidence under a dead-zone x entry/exit-hysteresis x minimum-holding grid and names the policy with the highest break-even cost, so the economic ceiling can be attacked offline (no model, no re-run); \`streamSelection\` (null unless \`--select-streams\`) measures the basket's Kish design effect over the streams' own returns and reports the greedy most-diversifying order — with \`keep\` set it also names the kept basket and its design effect — and \`intervalBars\` is the resampling factor every stream was built at (1 = the raw bars). \`commonRandomNumbers\` says whether the variant comparison was paired on the random draws (R26-13 common random numbers; default true). \`folds.jsonl\` holds one line per fold-pass (source: stage=score|base|probe, probeIndex for the probe bar, the pass's bar indices, emitted positions, realised returns and metrics), so the pooled metrics AND the audit can be recomputed offline; \`run.log\` is the event journal; \`progress.json\` is the liveness heartbeat. \`configurationRobust\` (present only with \`--cadences\`) is the P2 configuration-robust promotion sweep: every active candidate re-scored on each cadence grid with \`restateReportAtCadence\` (fixed-position, no model) plus the majority-pass + catastrophic-veto verdict from \`promotionAcrossCadences\`. \`exposureMatched\` (present only with \`--exposure-match\`) is the P2 matched-in-market-share comparison of each active candidate against the baseline (\`exposureMatchedPair\`). Both are null unless their flag is set.`,
         summary: formatAnalysis(result, { gate: { mode: gateMode, alpha: gateAlphaResolved }, costLadder: ladder, familyCorrelation: familyCorr, turnoverSweep: turnover, streamSelection, intervalBars: intervalFactor, commonRandomNumbers: crn, forecast: forecastBlock, decision: decisionBlock, model: modelStats }),
     };
 
@@ -2819,6 +3140,12 @@ export const ANALYZE_USAGE = [
     '  --file=<path>            single candle JSONL stream (default CONFIG.file)',
     '  --files=<a,b>            explicit list of candle JSONL streams',
     '  --symbols=a,b|all        manifest symbols to pool (8 available)',
+    '  --carry-files=<a,b>      funding JSONL per stream (P4 carry sleeve; positional)',
+    '  --cadences=a,b,c         re-score every active candidate on each fold-grid cadence',
+    '                           (P2 fixed-position restatement, no model) and report the',
+    '                           majority-pass + catastrophic-veto verdict across the grid',
+    '  --exposure-match         also quote each active candidate against the baseline at a',
+    '                           MATCHED in-market share (P2 exposure matching; no model)',
     '  --model=controller|bare  shipped controller (default) or the round-22 proxy',
     '  --train=<n> --test=<n>   walk-forward sizes (default 60 / 15)',
     '  --bars=<n>               bars per stream, most recent (default 300)',
@@ -2933,6 +3260,13 @@ if (isMain) {
             ? undefined
             : (ladderRaw.trim() === '' ? [] : ladderRaw.split(',').map((x) => Number(x.trim())).filter((x) => Number.isFinite(x) && x >= 0));
         const symbols = list('symbols');
+        // P2: the cadence grid for the configuration-robust restatement. Absent =>
+        // the sweep is off (the report block is null and the write is unchanged).
+        const cadenceList = (() => {
+            const raw = list('cadences');
+            const vals = raw ? raw.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0) : [];
+            return vals.length ? vals : null;
+        })();
         const saveIntervalRaw = argOf('save-interval');
         // Default: no checkpointing during the run (the A/B never reads it back).
         // `--save-interval=1` restores the historical per-call full-state dump.
@@ -2943,6 +3277,10 @@ if (isMain) {
             file: argOf('file') || CONFIG.file,
             files: list('files'),
             symbols: symbols && symbols.length === 1 && symbols[0] === 'all' ? CANDLE_MANIFEST.map((e) => e.symbol) : symbols,
+            // P4: the funding/carry files, positionally matched to files/symbols.
+            carryFiles: list('carry-files'),
+            cadences: cadenceList,
+            exposureMatch: has('exposure-match'),
             model: argOf('model') || 'controller',
             trainSize: num('train', 60),
             testSize: num('test', 15),

@@ -23,6 +23,23 @@ premise in `METHOD.md` §4 and the shipped `inertReason`), and — most importan
 **corrected the round's own sizing arithmetic**, which changes what the label-policy decision
 (P4) actually is.
 
+> **UPDATE — the operator runs are done (Steps 1–3, `RUN-ANALYSIS.md` §15).** The three run
+> directories are retained (`20260923T211549-seed1` = Step 1, `20260924T045601-seed1` = Step 2,
+> `20260924T071546-seed1` = Step 3) and all three ran clean (no promotions). Headlines: the
+> corrected weighting experiment ran properly and the mechanism is **live and mildly positive**
+> (arm A +0.0521 vs baseline −0.1147, paired p 0.0759; at `deadZone 0` p 0.0051) but nowhere near
+> the DSR floor; the `--test=10` label-policy confirmation **bought the hurdle and lost the
+> effect** (Δ 0.2164 → 0.0289) while the whole book's level moved −0.1147 → +0.8978 on the
+> **retrain cadence** alone (baseline-vs-baseline Δ 1.01244, p 0.02008; `--label-horizon` inert);
+> Step 3 (the signal family, run to unblock P5) shows the round-27 `sig-accel` promotion was a
+> **roster-size/multiplicity artefact** (adjusted DSR 0.97420 at `K = 3` → **0.86080 at
+> `K = 12`**, from the same journal), and the P5 sweep now runs and produces a promoting row
+> (Sharpe 1.19403, adjDSR 0.95844) **only because the baseline abstains at that policy**
+> (16 of 4 320 bars). The market-neutral overlay (P6) was measured and ~100 % of every
+> positive-Sharpe arm's gross is net-exposure × market with an ≈0 cross-sectional residual. Three
+> new findings are filed as `BUGS.md` #60/#61/#62 (all reported, not fixed). See `RUN-ANALYSIS.md`
+> §15 for every number.
+
 Nothing in this round changes the default-path arithmetic of the frozen core, so **no golden
 fingerprint may move** (the round-24–27 acceptance criterion). Every priority states its
 evidence (a run id and a number, or a file + line), its change, its acceptance criterion, the
@@ -394,7 +411,12 @@ defect lands, move it to **Fixed** with the test that pins it.
 
 ---
 
-## 3. Runs (exact commands; the operator runs exactly these)
+## 3. Runs (exact commands; the operator runs exactly these) — **RAN**; every readout is in `RUN-ANALYSIS.md` §15
+
+**Result summary (added after the fact).** All three steps ran (the operator added a signal-family
+Step 3, which is what §0.5(c) needed) and no run promoted. The per-step readouts, the
+journal-reproduces-report certificate, and the three offline restatements are
+`RUN-ANALYSIS.md` §15; the short version is in the status box at the top of this file.
 
 Assumes P1*, P2 and the P3/P5 code have landed and `npm test` is green (the golden suite
 unmoved). All runs write their directory under `src/` like the round-26/27 runs.
@@ -434,7 +456,9 @@ npm run analyze -- --symbols=all --bars=600 --train=60 --test=10 --seed=1 \
 Expected: 54 clusters; `neededForObserved` (one-sided) ≈ 41 ≤ 54; the paired p is the
 headline; the DSR floor still binds (state why: Sharpe 0.10 vs the ~1.05 the floor needs).
 
-**Step 3 (optional) — the P2 retrieval probe.** Harness only; no full A/B.
+**Step 3 (optional) — the P2 retrieval probe.** Harness only; no full A/B. *(What the operator
+actually ran as "Step 3" was the signal family — see the result summary above and
+`RUN-ANALYSIS.md` §15.4/§15.5c.)*
 
 Nothing else is run. Specifically **not**: more bars for the DSR floor; a `multi-probe`/
 `query-mod` controller run (proved unreachable); a promotion of `sig-accel` at 0 bps; a
@@ -495,7 +519,8 @@ Nothing else is run. Specifically **not**: more bars for the DSR floor; a `multi
    verdict-neutrality proof recorded.
 4. `TODO.md` #5 is closed with the corrected evidence (span + scale fixed), and 74–83 are in.
 5. The three offline restatements and (if scheduled) Steps 1/2 are filed under `src/`, and
-   `RUN-ANALYSIS.md` §14 carries their readouts.
+   `RUN-ANALYSIS.md` §14 carries their readouts. **DONE — the three runs are filed under `src/`
+   and §15 carries the readouts (plus the certificate that the journals reproduce their reports).**
 6. `npm test` green (browser + native), ledger counts re-synced and recorded.
 7. No default path changed except through an explicit, documented decision.
 

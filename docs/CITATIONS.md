@@ -399,3 +399,173 @@ factor rather than by adding correlated streams (the design effect is the bindin
 - arXiv 1908.02164. *Statistical Arbitrage for Multiple Co-Integrated Stocks.* (market-neutral eigenportfolio construction with backtests)
 - arXiv 1901.09309. *High-dimensional statistical arbitrage with factor models and stochastic control.* (factor-neutral construction)
 - Grinold. *The Fundamental Law of Active Management.* Journal of Portfolio Management 15(3):30–37, 1989. (breadth counts *independent* forecasts — the reason a market-neutral sleeve is worth more per stream than a ninth correlated one)
+
+## Round 29 — the model class, new data sources, and configuration robustness
+
+Grounding for [`PLAN-round29.md`](PLAN-round29.md) and the five
+[`research/round29-*.md`](research/) notes plus the consolidated index
+[`research/round29-README.md`](research/round29-README.md). The round-28 readout
+established that the controller has **negative** forecast skill and that every
+positive-Sharpe arm is ~100 % market exposure with an ≈0 cross-sectional residual; these
+citations answer what the open-source record says about *why* and *where else to look*.
+
+**Model class — is a from-scratch tiny transformer the right forecaster?**
+- Zeng, Arik, Jenq, Huang, Steiner, Zohar. *Are Transformers Effective for Time Series
+  Forecasting?* arXiv **2205.13504** (AAAI 2023). (DLinear: a one-layer linear model
+  beats the LTSF transformer family; self-attention is permutation-invariant, so tokens
+  lose temporal order — the mechanism behind a tiny attention model's negative skill)
+- Elsayed, Thyssens, Rashed, Jomaa, Schmidt-Thieme. *Do We Really Need Deep Learning
+  Models for Time Series Forecasting?* arXiv **2101.02118** (2021). (a GBRT baseline
+  matches the deep models)
+- Chen, Li, Bao, Wang, et al. *TSMixer: An All-MLP Architecture for Time Series
+  Forecasting.* arXiv **2303.06053** (2023); Ekambaram et al. *TSMixer: Lightweight
+  MLP-Mixer Model.* arXiv **2306.09364** (2023). (time+feature MLP mixing matches SOTA)
+- Das, Kong, Leach, Mathur, Sen, Yu. *Long-term Forecasting with TiDE: Time-series
+  Dense Encoder.* arXiv **2304.08424** (2024). Oreshkin et al. *N-BEATS.* arXiv
+  **1905.10437** (2020). *A Temporal Linear Network for Time Series Forecasting.* arXiv
+  **2410.21448** (2024).
+- Ekambaram, Jati, Nguyen, Sinthong, Kalagnanam. *Tiny Time Mixers (TTMs).* arXiv
+  **2401.03955** (2024). *Tiny-TSM.* arXiv **2511.19272** (2025). (1M–23M-parameter
+  **pretrained** TSFMs beat training from scratch; the corpus, not the parameter count,
+  is the lever)
+- *Chronos.* arXiv **2403.07815** (2024); *Chronos-2.* arXiv **2510.15821** (2025);
+  *Moirai.* arXiv **2402.02592** (2024); *Moirai 2.0.* arXiv **2511.11698** (2026);
+  *TiRex.* arXiv **2505.23719** (2025); *In-Context Fine-Tuning for Time-Series
+  Foundation Models.* arXiv **2410.24087** (2024).
+- *Scaling Transformers for Time Series Forecasting: Do Pretrained Large Models
+  Outperform Small-Scale Alternatives?* arXiv **2507.02907** (2025). *Forecasting
+  Realized Volatility with Time Series Foundation Models: A Comparison with
+  Econometric Benchmarks.* arXiv **2607.05291** (2026). (domain-scoped reality checks)
+- Wood, Giegerich, Roberts, Zohren. *Trading with the Momentum Transformer.* arXiv
+  **2112.08534** (2022). (attention beats TS-momentum benchmarks **net of cost** — but
+  learned over a long history, not per 60-bar fold; the optimistic case, scoped)
+- **The Red Queen's Trap: Limits of Deep Evolution in High-Frequency Trading.** arXiv
+  **2512.15732** (2025). (a rigorous post-mortem of a genetic-survival + transformer
+  trading system — the external test of the evolutionary-hivemind bet; grounds the
+  decision *not* to wire `legion/evolve.js`)
+
+**Crypto edges — reversal, factors, carry.**
+- *Short-horizon mean reversion in cryptocurrency markets: a matched cross-market
+  measurement.* arXiv **2608.21888** (2026). (**90 % of 183 Binance pairs** carry
+  significant directional reversal at 15m vs 2.7 % of US equities; the signal lives in
+  **signs, not magnitudes** — the strongest external lead for round-29 P3)
+- *Cryptoasset Factor Models.* arXiv **1811.07860** (2019, with source code).
+  *A Time-Varying Network for Cryptocurrencies.* arXiv **1802.03708** (2022). (return
+  cross-predictability and technological similarity — a **conditional** cross-sectional
+  structure)
+- *Deep Learning Statistical Arbitrage.* arXiv **2106.04028** (2022). (arbitrage
+  portfolios as **residuals from conditional latent factors** — the construction a
+  cross-sectional sleeve must use, and the one that leaves *less* residual at 1h)
+- *Quantifying Cryptocurrency Unpredictability.* arXiv **2502.09079** (2025). *Review
+  of deep learning models for crypto price prediction.* arXiv **2405.11431** (2024).
+- *BitMEX Funding Correlation with Bitcoin Exchange Rate.* arXiv **1912.03270** (2019).
+  (funding is Granger-causal with the perp price and heteroskedastic) *Designing funding
+  rates for perpetual futures in cryptocurrency markets.* arXiv **2506.08573** (2025).
+  *Funding-Aware Optimal Market Making for Perpetual DEXs.* arXiv **2605.06405** (2026).
+  (funding/basis as a structurally independent **carry** stream)
+- *Optimal market-neutral currency trading on the cryptocurrency platform.* arXiv
+  **2405.15461** (2024). *Dynamic Multi-Pair Trading Strategy in Cryptocurrency Markets
+  with DRL.* arXiv **2606.04574** (2026).
+
+**Adaptation, regime, and the cadence nuisance.**
+- *Test-Time Adaptation for Non-stationary Time Series: From Synthetic Regime Shifts to
+  Financial Markets.* arXiv **2602.00073** (2026). (frozen backbone, only
+  **normalization affine** params updated on recent unlabeled windows — the antidote to
+  schedule-bound retraining) *PETSA.* arXiv **2506.23424** (2025). *Towards Principled
+  Test-Time Adaptation for TS Forecasting.* arXiv **2605.17250** (2026).
+- *DeePM: Regime-Robust Deep Learning for Systematic Macro Portfolio Management.* arXiv
+  **2601.05975** (2026). (the **"ragged filtration"** problem and a directed-delay
+  **causal sieve** — causal impulse-response over information freshness)
+- Adams & MacKay. *Bayesian Online Changepoint Detection.* arXiv **0710.3742** (2007);
+  *Robust and Scalable Bayesian Online Changepoint Detection.* arXiv **2302.04759**
+  (2023). *Exploring the Predictability of Cryptocurrencies via Bayesian Hidden Markov
+  Models.* arXiv **2011.03741** (2020). (a four-state crypto regime model beats a
+  single-regime random walk in forecast density)
+- *Adaptive Financial Transformer with Regime-Gated Attention.* arXiv **2606.29347**
+  (2026). *Adaptive and Regime-Aware RL for Portfolio Optimization.* arXiv **2509.14385**
+  (2025).
+- *Online Portfolio Selection: A Survey.* arXiv **1212.2129** (2013). *An Introduction
+  To Regret Minimization In Algorithmic Trading.* arXiv **2105.13126** (2021). *Efficient
+  and Near-Optimal Online Portfolio Selection.* arXiv **2209.13932** (2025). *Damped
+  Online Newton Step for Portfolio Selection.* arXiv **2202.07574** (2022). *High order
+  universal portfolios.* arXiv **2311.13564** (2023). *Noise-proofing Universal
+  Portfolio Shrinkage.* arXiv **2511.10478** (2025). *Meta-Learning the Optimal Mixture
+  of Strategies for Online Portfolio Selection.* arXiv **2505.03659** (2025). (a
+  no-assumption baseline with a regret guarantee)
+- *Model-free Online Learning for the Kalman Filter: Forgetting Factor and Logarithmic
+  Regret.* arXiv **2505.08982** (2025).
+
+**Configuration robustness and selection.**
+- Lo. *The Statistics of Sharpe Ratios.* Financial Analysts Journal 58(4):36–52, 2002.
+  (the Sharpe estimator depends on the **return measurement interval** under
+  autocorrelation — the theory behind the round-28 cadence effect)
+- *Connecting Sharpe ratio and Student t-statistic, and beyond.* arXiv **1808.04233**
+  (2019). *Asymptotic distribution of the Markowitz portfolio.* arXiv **1312.0557**
+  (2020).
+- *Publication Bias in Asset Pricing Research.* arXiv **2209.13623** (2023). *The
+  Corporate Bond Factor Replication Crisis.* arXiv **2604.07880** (2026). *Multi-Factor
+  Inception: What to Do with All of These Features?* arXiv **2307.13832** (2023).
+  *Avoiding Backtesting Overfitting by Covariance-Penalties.* arXiv **1905.05023**
+  (2019).
+- *AlgoXpert Alpha Research Framework: A Rigorous IS/WFA/OOS Protocol.* arXiv
+  **2603.09219** (2026). (**stable parameter regions**; **majority pass + catastrophic
+  veto**; parameters locked OOS — the template for round-29 P2) *Interpretable
+  Hypothesis-Driven Trading: A Rigorous Walk-Forward Validation Framework.* arXiv
+  **2512.12924** (2025). *A Novel Approach to Trading Strategy Parameter Optimization
+  Using Double Out-of-Sample Data and Walk-Forward Techniques.* arXiv **2602.10785**
+  (2026). *The GT-Score.* arXiv **2602.00080** (2026).
+- *Optimal Turnover, Liquidity, and Autocorrelation.* arXiv **2110.03810** (2022).
+  (steady-state turnover has a closed form in the alpha's **autocorrelation** and
+  liquidity — the right objective for the dead-zone/cost work)
+
+**Ensemble size — is a bigger per-controller ensemble worth testing? (round-29 P7/P7b;
+`research/round29-ensemble-size.md`)**
+- *Linear Ensemble Sampling with Smaller Ensembles.* arXiv **2609.13954** (2026). (the
+  regret framework needs `Θ(d log T)` members with an intrinsic `Ω(d)` barrier, and
+  **smaller** ensembles retain the guarantee — size follows the effective dimension)
+- *Time-uniform accuracy of ensemble Kalman filters with localization.* arXiv
+  **2609.23927** (2026). (the required ensemble size depends on the **effective rank** of
+  the covariance and the unstable-subspace dimension, not the ambient dimension — a
+  second, independent statement of the same principle)
+- *Decorrelation Is Not Complementarity: Skill, Not Lineage, Governs Trusted-Monitor
+  Ensembles.* arXiv **2608.16190** (2026). (**minimising pairwise correlation is not
+  complementarity; the members' skill governs** — the central counterweight to
+  "more members → more diversity → more skill")
+- Lakshminarayanan, Pritzel & Blundell. *Simple and Scalable Predictive Uncertainty
+  Estimation using Deep Ensembles.* arXiv **1612.01474** (2016). (the canonical
+  deep-ensembles result: calibrated uncertainty, **diminishing returns in `M`**; already
+  cited in `research/ensemble-evolution.md`)
+- *BatchEnsemble: An Alternative Approach to Efficient Ensemble and Lifelong Learning.*
+  arXiv **2002.06715** (2020). ("an ensemble's cost … increases **linearly** with the
+  number of networks, which quickly becomes untenable"; per-member rank-1 modulation of a
+  shared backbone — the many-cheap-members template)
+- *Model soups: averaging weights of multiple fine-tuned models improves accuracy without
+  increasing inference time.* arXiv **2203.05482** (2022). *Trainable Weight Averaging.*
+  arXiv **2205.13104** (2022). (the many-member benefit in **weight space**, at
+  single-model inference cost)
+- *Virtual neural networks: hundreds of souls in a body.* arXiv **2609.24782** (2026).
+  (constant trainable parameters, hundreds of members by **weight sharing** — member
+  count and parameter count are separable)
+- *FLAME: Condensing Ensemble Diversity into a Single Network.* arXiv **2604.04038**
+  (2026). *Diffusion Distillation for Efficient Weather Ensembles.* arXiv **2608.27728**
+  (2026). (the value of an `N`-member ensemble can be condensed/ distilled into one
+  network — the ensemble as a training signal, not a deployment cost)
+- *Ensemble Diversity Optimization for Subjective Supervision.* arXiv **2607.08493**
+  (2026). (learns ensemble composition **and size** end-to-end with a signed diversity
+  regularizer — the "learn the cardinality" route)
+- *Measuring consistency via ensemble margin and local prediction variability.* arXiv
+  **2609.01397** (2026). *Uncertainty quantification for trustworthy deep learning:
+  Methods and measures.* arXiv **2607.28248** (2026). (how to **measure** multiplicity /
+  diversity — the es-sweep's readout instruments)
+
+**Implementation verdicts (round 29 → 30).** The landed code — P1 the model-class benchmark, P2 the
+configuration-robust + exposure-matched gate, P3 the 15m reversal family, P4 the funding/basis carry
+sleeve — **reuses the external anchors already listed above and adds no new ones**. Mapping:
+the benchmark's forecaster comparison uses the proper-scoring / DM / MCS anchors already recorded in
+`research/financial-validation.md` (Gneiting & Raftery 2007; Diebold & Mariano 1995;
+Hansen–Lunde–Nason); P2's cadence gate is Lo 2002 + AlgoXpert (arXiv 2603.09219) + Cameron & Miller
+2015 + Ledoit & Wolf 2008; P4's independence reading is Kish 1965 + Grinold 1989 + Asness, Moskowitz
+& Pedersen 2013; P3's reversal lead is arXiv 2608.21888. The implementation *verdicts* (G-A/G-B/G-C
+branches, the measured numbers) are in
+[`../RUN-ANALYSIS.md`](../RUN-ANALYSIS.md) §16.1–§16.6 and
+[`round29-README.md`](round29-README.md) §8; the frontier they open is `../TODO.md` 94–97.

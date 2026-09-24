@@ -1864,7 +1864,7 @@ ledger, 2347 checks). What changed, and what pins each item:
   modifier of the `triple` label. A variant may carry its own precise `inertReason`
   (the shipped `sample-weights` states that one-bar labels do not overlap, so it
   reaches the model path and multiplies by 1) instead of the generic "never reaches"
-  wording. Pinned by `sample_weights.test.js` (45), `analyze.test.js` and
+  wording. Pinned by `sample_weights.test.js` (57), `analyze.test.js` and
   `controller_invariants.test.js`.
 - **R27-4 / R27-4b — fail-closed inputs and a reachable vertical barrier.** `predict`
   → `NaN`, `train` → the current count + `rejectedTrainRows`; the controller's guard
@@ -2257,6 +2257,16 @@ DSR floor is asking for an absolute edge the labeller does not have, and it is b
 correctly. The *only* promotion-relevant hurdle that is affordable is the paired test (41
 clusters). This corrects `RUN-ANALYSIS.md` §13.3/§13.8 and `TODO.md` 76 (item 82).
 
+> **Correction (round 29).** The "crossed at a Sharpe of ≈1.02–1.08" reading above is the
+> origin of the round-29 plan's §1.5 band claim, and it does **not** survive: it was the
+> **round-27** Step-4 journal at `K = 3` (design effect 5.12). On the round-28 retained
+> runs the two arms inside the band both fail (`sig-accel` Sharpe 1.0194 → adjDSR 0.8608;
+> `sig-momentum` 1.0848 → 0.7736) while a Step-2 **baseline passes at Sharpe 0.8978**
+> (`K = 2`, design effect 2.611). The adjusted-DSR floor is a **surface** in
+> `(Sharpe, designEffect, moment shape, K)`, not a Sharpe band; see `PLAN-round29.md`
+> §1.8 MC1 and `round29-README.md` §2. The "best labeller at 0.10" note above is the
+> *round-27* labeller; the round-28 retained labeller is at 0.9267 / adjDSR 0.9637.
+
 ### 14.3 The always-on raw fold-majority hurdle contradicts the recorded decision (`BUGS.md` #57)
 
 `DESIGN.md` §6.1: the round-25 gate replaced `foldWinFraction >= 0.5` and
@@ -2456,6 +2466,14 @@ legible (`formatDecision` prints the tightest hurdle and the referent policy). P
 
 ## 14.8 The Step-0.5 offline restatements (`PLAN-round28.md` §3)
 
+> **⚠️ Status update (see §15).** The three round-28 operator runs were produced
+> (`20260923T211549-seed1`, `20260924T045601-seed1`, `20260924T071546-seed1`), and their retained
+> journals unblock **(b)** and **(c)**: both were run, and §15.5 carries the readouts. Everything
+> below is kept as the record of *what could be said before the runs existed* — the bound on (b)
+> is now a measurement, and (c)'s "needs a signal-family re-run" was satisfied by Step 3. The
+> `report.trials`-vs-`run.json.trials` and `--label-horizon` notes below are cross-referenced from
+> `BUGS.md` #62.
+
 The plan's Step 0.5 asks for three pure-post-processing readouts from the retained round-27
 journals. **One is done, two are blocked by missing journals** — stated plainly, because the
 whole round is about not over-claiming:
@@ -2465,7 +2483,7 @@ requirements (41 clusters for significance, 89 for 80 % power, factor 1.058) and
 DSR-floor reading (a Sharpe ≈1.02–1.08; the labeller's 0.1017 is ≈10× short). This is the
 arithmetic `METHOD.md` §7 records and `TODO.md` 76/82 carry.
 
-**(b) The market-neutral overlay (P6) — NOT MEASURABLE from the *round-27* artefacts, but
+**(b) The market-neutral overlay (P6) — measured from the round-28 journals in §15.5(b). NOT MEASURABLE from the *round-27* artefacts, but
 reconstructible from any retained multi-stream journal.** The plan
 specifies pure post-processing of a candidate's retained `streamReturns` (`r_s(t) − mean_s
 r(t)`). The four round-27 `report.json` files do **not** retain `streamReturns` (they retain
@@ -2498,7 +2516,7 @@ would need. The *paired* SE's response is a different quantity and is not bounde
 algebra; it needs the panel. The plan's cross-sectional candidate therefore stays **gated** on
 an actual overlay measurement.
 
-**(c) The `sig-accel` no-trade-region / minimum-hold sweep (P5) — NOT RUNNABLE from *this*
+**(c) The `sig-accel` no-trade-region / minimum-hold sweep (P5) — run from Step 3's journal in §15.5(c) (and it produces a promoting row whose fairness caveat is stated there). NOT RUNNABLE from *this*
 tree.** The
 sweep (`restateReportAtPolicy` + `turnoverSweep`) is pure over the journaled pre-policy
 confidence. That per-bar series is not in the reports, but it **is** in `folds.jsonl` (`signals`,
@@ -2536,4 +2554,910 @@ confirmation (`--test=10`, 54 clusters ≥ 41), Step 0.5(b)/(c) the two offline 
 each of which needs its run's `folds.jsonl` retained (`--fold-log=all`, the default). **(b) is
 unblocked by either new run's journal** (both are `--symbols=all`, so the 8-stream panel is in
 `folds.jsonl`); **(c) additionally needs a signal-family run** because no scheduled run journals
-`sig-accel`.
+`sig-accel`. **All three runs were produced and both readouts exist — see §15.5.**
+
+## 15. The round-28 operator runs (Steps 1–3) — readout
+
+`PLAN-round28.md` §3's operator steps ran and their directories are retained under `src/`.
+This section is their readout: what each run is, the certificate that the retained journals
+reproduce their own reports, the per-step findings, and the three offline restatements the
+journals unblocked (§14.8). It supersedes the "blocked" language of §14.8: **(b) and (c) both
+ran**, and (b) now has a *measurement* rather than the bound.
+
+### 15.0 The three runs and their configuration
+
+| step | directory | variants | `--test` | folds (= clusters) | `trials` | wall time |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| 1 — P3, the corrected weighting experiment | `20260923T211549-seed1` | `baseline`, `sample-weights`, `sample-weights-scale-control` | 15 | 288 | 3 | 8 378 083 ms (2.33 h) |
+| 2 — P4, the label policy at the affordable power | `20260924T045601-seed1` | `baseline`, `label-conservative` | **10** | 432 | 2 | 8 258 429 ms (2.29 h) |
+| 3 — the signal family (P5's unblock, and the honest-`K` re-test) | `20260924T071546-seed1` | `baseline` + 13 candidates (5 mechanism, 8 signal) | 15 | 288 | **12** (roster 14; 2 not-applicable) | 15 811 703 ms (4.39 h) |
+
+All three: `npm run analyze -- --symbols=all --bars=600 --train=60 --seed=1 --audit-probes=1
+--reuse-base --concurrency=4 --cost-ladder=0,2,5,10` — 8 streams × 600 bars (4 800 candles),
+`configFingerprint c0ba6493`, node v25.9.0, `modelRetention discard`, `foldLog all`,
+`labelPolicy optimistic`, `positionPolicy {deadZone 0.05, scale: 1}`, gate
+`{requireSharpeDiff: true, requireClusterStability: true, minDsrAdjusted: 0.95, alpha: 0.05,
+rawFoldHurdles: false}`. Step 2 adds `--test=10 --label-horizon=20`.
+
+Step 3 is not the plan's optional Step 3 (the P2 retrieval probe — that is the in-tree
+`lsh.test.js` §K work of §14.7c). The operator instead ran the **signal family**, which is what
+§14.8(c) said was needed to unblock the P5 sweep, and which doubles as the honest-`K` re-test of
+the round-27 Step-4 promotion.
+
+**Integrity, all three.** `status: complete`; `policyRoundTrip {ok: true, mismatch: 0}`;
+`warmErrors 0`; `quarantinedRows 0`; `openTradeWriteErrors 0`; audit clean, 0 violations;
+`run.log` has **no** warn/error line (7 / 6 / 18 JSONL lines); `trialsInactive` 0 / 0 / 2 (Step 3's
+two are `multiprobe` and `querymod`, each `not-applicable: acts only on the memory broadcast path
+(broadcastMemory -> _getGlobalLSHCandidates), whose output the scored controller model never
+reads back`). No run promoted anything.
+
+**One field-level coherence note.** On Step 3 the report's multiplicity reference is the
+**active** count — `report.trials` 12, `costLadder.trials` 12, `familywise.K` 12,
+`familyCorrelation.K` 11 — while `run.json.trials` records the **roster** count 14
+(`trialsRoster 14 / trialsInactive 2`). The report's choice is right (a variant that cannot act
+is not a trial), and the three counts are used consistently for their own layers, but the number
+in `run.json` is not the number the DSR deflation used. Steps 1/2 have `trials` 3 and 2 with
+`inactive 0`, so the divergence exists only when a variant is not-applicable.
+
+### 15.1 The journals reproduce their own reports (the certificate)
+
+`folds.jsonl` at `--fold-log=all` carries, per scored fold, `variantIndex`, `stream`, `fold`,
+`test` (bar indices), `testStart`/`testEnd`, `returns`, `signals`, `confidence` and the fold's
+`metrics`. Rebuilding each variant's report from its `stage:'score'` lines (sorted by
+`(stream, fold)`) and running the shipped `verifyPolicyRoundTrip` returns `ok: true, mismatch: 0`
+on all three runs, and `restateReportAtPolicy(rebuilt, {deadZone: 0.05, scale: 1})` reproduces
+**every** reported pooled field — `netSharpe`, `grossSharpe`, `psr`, `dsr`, `effectiveBars`,
+`psrAdjusted`, `dsrAdjusted`, `maxDrawdown`, `hitRate`, `turnover`, `tradeCount`, `grossPnl`,
+`breakEvenCostBps`, `nonZeroFraction`, `meanAbsPosition` — plus the dependence block
+(`effectiveBars`, `seCluster`, `designEffect`) and the per-fold `aggregate`
+(`mean`/`median`/`std`/`positiveFraction`) for **all 19 variant rows of the three runs**
+(3 + 2 + 14), with `verifyPolicyRoundTrip` returning `{ok: true, mismatch: 0}` on all 19: 17 rows
+are **bit-exact** and 2 (`homeostasis`'s `psr`, `sig-agreement`'s `dsrAdjusted`) differ in the
+last bit (relative ≈ 2 × 10⁻¹⁶, 1 ulp — a summation-order effect, everything else in those rows
+exact). The shipped position rule that does it is **per-fold lag-1**: within a fold, bar 0
+carries position 0 and bar `i ≥ 1` carries `signals[i − 1]`. That is the rule to reproduce if a
+future reader wants the journal-only route (it is also the route §15.5's sweeps used).
+
+The certificate also fixes the run-to-run comparability: the **Step-1 and Step-3 baselines are
+bit-identical** (`netSharpe −0.11469136136703602`, `tradeCount 2362`, `grossPnl
+−0.008018409990983747`, `turnover 31.09934736842106`, `breakEvenCostBps −2.578320984036408`) and
+identical to the round-27 Step-2 baseline of §13.3 — the same journal, from three separate
+processes, with the same seed and common random numbers. Only its *deflated* readout moves,
+because the deflation's `K` moves: `dsrAdjusted` **0.1428** at `K = 3` (Step 1) vs **0.0301** at
+`K = 12` (Step 3). The same is true of every cost-ladder baseline row. A reader comparing
+`dsrAdjusted` across runs is comparing two different deflations, not two different baselines.
+
+### 15.2 Step 1 — the corrected weighting experiment (P3)
+
+The two confounds of `BUGS.md` #54/#58 are gone, and the mechanism is **live, correctly
+normalised, and still sub-threshold**.
+
+**Liveness.** Both arms are `live` and differ from the baseline from the first fold:
+`identicalFolds 45/288`, `firstDifferingFold 0`, `maxAbsDiff` 0.1836 (arm A) and 0.2247 (arm C).
+
+| variant | net Sharpe | DSR | adj. DSR | effBars | break-even | turnover | nonZeroFrac |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| baseline | −0.1147 | 0.0922 | 0.1428 | 888 | −2.578 bps | 31.10 | 0.5081 |
+| **A** `sample-weights` | **+0.0521** | 0.2618 | 0.2229 | 772 | **+1.223 bps** | 30.18 | 0.4824 |
+| **C** `sample-weights-scale-control` | −0.0182 | 0.1768 | 0.1875 | 927 | −0.431 bps | 31.17 | 0.4889 |
+
+**The P3 acceptance bar is met by arm A.** `sampleWeights {count 172092, min 0.32118, max
+5.07390, mean 1.03336, meanUnnormalised 2.08500, ess 46.34, n 58.05, effectiveFraction 0.79835,
+horizonBars 7, measureHorizon true}` — mean ≈ 1 (the emitted stream is mean-1, #54 fixed),
+`min < 1 < max` (real dispersion), `ess < n` (0.80 of it), and `meanUnnormalised 2.085` is the
+2.6×-scale stream that is now *visible* rather than trained on. The span is **measured**:
+`horizonBars 7, measureHorizon true` (the causal EMA of drained holding periods), against this
+run's realized `heldBars {mean 7.8245, max 72}` — i.e. the span the ring assumed is the run's
+own mean holding period, not the `1` of #58. Arm C's `sampleWeights` is the same mechanism with
+`emittedNormalization: 'scale'`: `{min 0.65718, max 4.54174, mean 2.04507, meanUnnormalised
+2.08500, horizonBars 7}` — note the carve-out: "constant" here is the *causal EMA level*, so its
+mean lands 2.0 % below the raw mean rather than exactly on it, and C is therefore a
+scale-control with a slight residual drift, not a literally constant weight.
+
+**The paired tests (the run's own `pairedPromotionTest`; fold-window clusters, df 35, one-sided).**
+
+| comparison | Δ Sharpe | se | t | p(1-sided) | stability | breadth |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A − baseline | +0.16677 | 0.11381 | 1.4654 | 0.07587 | 1.0 | 20/36 (p 0.3089) |
+| C − baseline | +0.09644 | 0.24868 | 0.3878 | 0.35025 | 0.9722 | 22/36 (p 0.1215) |
+| **A − C** (the dispersion contrast) | +0.07033 | 0.25866 | 0.2719 | 0.39365 | 0.9722 | 14/35 (p 0.9123) |
+
+Nothing resolves. A is the better-supported arm (positive point estimate, tightest SE); the
+scale control retains **≈58 %** of A's point lift, and the dispersion-only contrast A − C — the
+quantity the P3 design added arm C to isolate — is **not resolvable** at 36 clusters. The
+attribution the plan wanted (dispersion vs LR scale) is therefore *inconclusive*, not negative.
+
+**Verdict and sizing.** `promote: false`, reasons = mean-fold Sharpe, `pooled DSR 0.2618 < 0.95`,
+`adjDSR 0.2229 < 0.95`, paired p 0.07587; `tightestHurdle` `pairedSharpeDifference` (value
+0.16677 vs required **0.192291** = `t(35, one-sided) × 0.11381`, margin −0.025517). The round-28
+#56 sizing fix is visible and correct: `pairedUnits {se 0.11381, seScale: 'paired', nClusters 36,
+side: 'one-sided', reference {kind: 'student-t', df 35, critical 1.6895724577805789, pairedMde95
+0.19229102902307374}, neededForObserved 48, neededForObservedPower80 105}`; `cheapestFlip {kind:
+'magnitude', factor 1.1530}`; `scales` names both scales. `familywise {spaPValue 0.75174, best
+'sample-weights', rejected [], K 3, T 4032}`. Cost ladder (adjusted DSR, arm A):
+0.2229 / 0.1814 / 0.1296 / 0.0689 at 0 / 2 / 5 / 10 bps — nothing promotes at any level.
+
+**The dead zone masks about half of A's effect (offline restatement).** At `deadZone: 0` arm A's
+paired difference is **Δ 0.24467** (Sharpe 0.18809 vs the baseline's −0.05658), se 0.09008,
+t 2.7160, **p 0.00510**, and the exact sign test is **26/36, p 0.00567** — *significant* at 36
+clusters. Arm C also gains at `dz 0` (0.11697 vs −0.05658) but stays insignificant (Δ 0.17355,
+se 0.19173, p 0.18577), and A − C at `dz 0` is still unresolvable (Δ 0.07113, se 0.15561,
+p 0.32523). The economics move too: break-even **+3.975 bps** at `dz 0` (turnover 58.9), and
+**+14.60 bps** with `enter 0.1 / exit 0.05` (turnover 120, Sharpe 0.21444) — i.e. *above* the
+5 bps cost the verdict quotes and into the range `label-conservative` reaches at its own policy.
+But `adjDSR` is 0.294 at `dz 0` and 0.319 with the hold rule — nowhere near the 0.95 floor.
+
+**Read.** The weighting mechanism now behaves like a real, small positive: a significant paired
+improvement (once the dead zone is removed) whose economic size is order 1–15 bps and whose DSR
+floor is ~10× away. That is the honest sign for `TODO.md` #5: **the mechanism is not inert and
+not obviously harmful — it is simply far below the promotion floor**, and its largest single
+lever found here is the position policy, not the weighting. Any `dz 0` variant is a *new
+candidate* with its own A/B; nothing here demotes the shipped dead zone.
+
+### 15.3 Step 2 — the label policy at `--test=10`: the cadence, not the labeller
+
+Step 2 did exactly what P4 asked (54 clusters ≥ 41) and produced a **negative** headline: the
+candidate is no longer distinguishable from the baseline, and the level of the whole book moved
+by > 1 Sharpe for reasons that have nothing to do with the labeller.
+
+| variant | net Sharpe | PSR | DSR | adj. DSR | effBars | break-even | turnover | nonZeroFrac | MDD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| baseline | +0.89775 | 0.99985 | 0.99907 | 0.95837 | 1654 | 19.204 bps | 40.58 | 0.5278 | 0.94 % |
+| `label-conservative` | +0.92668 | 0.99992 | 0.99943 | **0.96370** | 1622 | 19.829 bps | 41.58 | 0.5324 | 0.94 % |
+
+**The P4 risk did not materialise, but the effect vanished.** Shorter test windows did shrink the
+paired SE — 0.13554 (round 27, 36 clusters) → **0.11214** (54 clusters), ratio 0.827 against the
+√(36/54) = 0.8165 you would hope for — but the paired **Δ collapsed from +0.21640 to +0.02893**
+(t 0.2580, **p 0.39870**, stability 53/54 with window 45 alone flipping it to −0.05502, breadth
+18/30 p 0.9703). `neededForObserved` is therefore **2197** clusters (5017 at 80 % power), and the
+tightest hurdle moved to `clusterStability` (margin −0.018519). Reasons: mean-fold Sharpe, the
+paired test, stability. Nothing promotes on the cost ladder either (baseline adjDSR
+0.95837 / 0.93419 / 0.87770 / 0.71756 and candidate 0.96370 / 0.94185 / 0.88994 / 0.73858 at
+0 / 2 / 5 / 10 bps; `clearsBps` true at every level, `promotes []`), and the SPA is
+`{p 0.00965, best 'label:conservative', rejected ['baseline', 'label:conservative'], K 2,
+T 3888}`.
+
+**The level swing is the retrain cadence, and `--label-horizon` is inert.** Round-27 Step 2
+(`20260923T111159-seed1`) ran the *same* variant at `--test=15` and measured baseline −0.1147 /
+candidate +0.1017. Step 2 changes `testSize` 15 → 10 and nothing about the labeller, yet the
+baseline goes −0.1147 → +0.8978 and the candidate +0.1017 → +0.9267. Three independent checks
+show this is the cadence and not the label horizon:
+
+1. **The horizon cannot bind.** `trades.js:168` gates the vertical barrier on
+   `triple && horizonBars != null`; Step 2 runs `optimistic`/`conservative`, and both arms report
+   `resolvedTimeBarrier 0` with `heldBars {count 276714, sum 2180763, mean 7.88093, max 73}`
+   (`heldBarsCap 119`) — a max of 73 ≫ 20, so nothing was clipped, and the two arms' `heldBars`
+   distributions are **identical** (the labeller changes only the barrier *assignment*:
+   `resolved.takeProfit` 95314 vs 93256, `stopLoss` 157013 vs 159071, `total` 252327 in both).
+   `--label-horizon=20` is a no-op on this run (see `BUGS.md` #62).
+2. **The same optimistic baseline is horizon-independent.** Round-27 Step 2's baseline (test 15,
+   a run that *did* carry a label horizon for its `triple` arm) has the same journal as Steps 1
+   and 3 (test 15, `labelHorizonBars` null) — see §15.1.
+3. **A baseline-vs-baseline cadence test.** Comparing the two baselines over identical 15-bar
+   fold windows (`foldWindowClusters(..., 15)` for both panels) gives Δ Sharpe **1.01244**,
+   se 0.47504, t 2.1313, df 35, **p 0.02008**. The two trajectories are barely the same book:
+   per-bar P&L correlation **0.19734**, position correlation **0.18721**, **51.3 %** of bars carry
+   a different position and **26.4 %** differ by more than 0.05. And it is *not* bookkeeping: for a
+   **fixed** position series re-scored under a different fold grid, Sharpe moves only ~0.08 (baseline)
+to ~0.24 (`sig-momentum`)
+   (baseline −0.1147 @15 / −0.0307 @10 / −0.0856 @5 / −0.0735 @30; `sig-momentum` 1.0848 / 1.2952
+   / 1.0584 / 1.1563), so the swing is the model's trajectory under more frequent retraining, not
+   a fold-count artefact.
+
+**Robustness of the Step-2 result within itself.** Leave-one-stream-out Sharpe 0.7786–1.0233 (all
+positive); per-stream 1.058 / 0.854 / 1.653 / 0.985 / **0.009** / 0.739 / 0.761 / 1.602; three
+1440-bar blocks +1.777 / +0.168 / +1.031. Gross decomposition: `grossPnl 0.077934` = common-factor
+part `0.078524` + cross-sectional residual `−0.000590`. So the +0.90 is a broad, stream-independent
+level with essentially no cross-sectional content — and, per §15.5(b), it is
+**net-exposure × market**.
+
+**The red flag the run exposes.** The baseline has **negative forecast skill** — `brierSkill
+−0.07382`, `accuracySkill −0.13007`, `status: 'base-rate'` — yet pooled Sharpe +0.90, DSR 0.99907
+and `clearsBps` at 10 bps. The candidate clears the absolute DSR floor (0.96370 ≥ 0.95) *without*
+out-of-sample skill. The DSR floor is a statement about the *timing covariance* the book
+measured, not about forecast ability; a cadence change that reshapes the position path can clear
+it. That does not make the number wrong, but it means "clears the DSR floor" must never be read
+here as "has an edge", and it is the strongest argument in the round for treating the overlay
+measurement (§15.5b) as the decisive one.
+
+**The labeller effect is robust to the position policy.** At `deadZone: 0` the Δ is 0.02392
+(se 0.09412, p 0.40018, stability 53/54) — still a fail. So the Step-2 vanish is not a dead-zone
+artefact; it is the cadence.
+
+### 15.4 Step 3 — the signal family: the round-27 promotion was a roster-size artefact
+
+Step 3 re-ran the whole family at `K = 12` (active) and settles the round-27 Step-4 promotion.
+All 11 differentiated candidates are `live` and differing (`identicalFolds`: `surprise` 189,
+`homeostasis` 42, `pca-hash` 282, all eight signals 0), and `multiprobe`/`querymod` are
+`not-applicable` with their measured reason — and, checked explicitly, their verdict rows carry
+**no evaluated hurdles at all** (`gate` all `off`, `tightestHurdle: null`, `reasons` exactly the
+not-applicable text), so a variant that provably cannot act is neither scored as a failure nor
+promoted (the round-28 liveness fix, visible in production).
+
+| candidate | net Sharpe | DSR | adj. DSR | effBars | break-even | turnover | reasons |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `surprise` | −0.0284 | 0.0373 | 0.0433 | 755 | −0.668 bps | 30.90 | 5 |
+| `homeostasis` | −0.1627 | 0.0095 | 0.0239 | 910 | −3.517 | 30.56 | 5 |
+| `pca-hash` | −0.1104 | 0.0169 | 0.0306 | 887 | −2.482 | 31.08 | 4 |
+| `sig-momentum` | **1.0848** | 0.99891 | **0.77356** | 1192 | 14.641 | 810.43 | **1** |
+| `sig-frac-momentum` | −0.4185 | 0.0005 | 0.0119 | 617 | −1.670 | 2091.88 | 6 |
+| `sig-vol-regime` | −0.3135 | 0.0015 | 0.0071 | 1583 | −4.335 | 677.61 | 5 |
+| `sig-agreement` | +0.3912 | 0.4813 | 0.2113 | 1293 | 3.708 | 1024.60 | 4 |
+| `sig-range` | +0.4490 | 0.5802 | 0.2611 | 1384 | 5.567 | 832.76 | 4 |
+| `sig-volume` | −0.0008 | 0.0476 | 0.0478 | 1776 | −0.013 | 581.67 | 4 |
+| `sig-autocorr` | −0.0996 | 0.0192 | 0.0306 | 1142 | −1.229 | 793.18 | 5 |
+| `sig-accel` | **1.0194** | 0.99664 | **0.86080** | 1753 | 11.572 | 860.55 | **1** |
+
+`sig-momentum`'s **only** failing hurdle is the adjusted-DSR floor (value 0.77356 vs 0.95,
+margin −0.17644): its paired difference **passes** (Δ 1.19950, se 0.61358, t 1.9549, **p 0.02931**,
+stability 1.0, breadth 19/36 p 0.4340), the mean-fold hurdle passes, and the raw fold-win
+fraction is reported, not gated (`gated: false`, the #57 fix visible in production). `sig-accel`
+likewise fails only the floor (paired Δ 1.13411, se 0.6684, p 0.04930 — its paired hurdle *passes*
+by only **0.00488**, threshold 1.12923; breadth 24/36, p 0.03262, the one significant sign test in
+the family).
+Family blocks: `familywise {spaPValue 0.47309, best 'sig:momentum', rejected [], K 12, T 4032}`;
+`familyCorrelation {K 11, maxPair {a 6, b 7, rho 0.80984} → sig-agreement~sig-range, effectiveTrials
+5.51 of 11}` (the #55 `familyPairLabel` fix). Signals cost ~600× less than the controller
+(4.27–4.60 s vs ~2 570–2 630 s per variant).
+
+**The multiplicity proof.** Recomputing each candidate's DSR from the *same* journal at several
+`K` (the journal, the returns and the effective sample are held fixed — only the deflation's
+trial count changes):
+
+| candidate (policy) | K=1 | K=2 | K=3 | K=11 | K=12 | K=14 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sig-accel` (shipped `dz 0.05`) | 0.99783 ✓ | 0.98928 ✓ | **0.97420 ✓** | 0.87059 ✗ | 0.86080 ✗ | 0.84272 ✗ |
+| `sig-momentum` (shipped `dz 0.05`) | 0.99476 ✓ | 0.97697 ✓ | **0.94876 ✗** | 0.78725 | 0.77356 | 0.74876 |
+
+Round 27's `sig-accel promote: true` at `adjDSR 0.9742` is **exactly the `K = 3` column** — the
+roster of that run was the baseline plus two signals, so the floor was charged two trials. At the
+honest `K = 12` the same journal, the same policy and the same positions give **0.86080**. The
+knife-edge is entirely in the trial count, and every `K ≥ 11` fails. `sig-momentum`'s round-27
+`0.9488` (a 0.0012 miss) is likewise the `K = 3` column; its honest value is 0.77356.
+
+Notes for the next read: the deflation is monotone in `K`, and the flip sits between `K = 4` and
+`K = 5`:
+
+| candidate (shipped `dz 0.05`) | K=4 | K=5 | K=5.51 (`effectiveTrials`) | K=6 | K=8 | K=10 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sig-accel` | **0.95861 ✓** | 0.94358 ✗ | **0.93623 ✗** | 0.92940 ✗ | 0.90363 ✗ | 0.88095 ✗ |
+| `sig-momentum` | 0.92167 ✗ | 0.89684 ✗ | 0.88506 ✗ | 0.87428 ✗ | 0.83503 ✗ | 0.80196 ✗ |
+
+So `sig-accel`'s promotion survives only if the searched family is treated as ≤ 4 trials — which
+is neither the roster (14 configured / 12 active) nor the family's own effective count (5.51, the
+report's `familyCorrelation.effectiveTrials`) — and `sig-momentum` fails at every `K ≥ 3`. The
+round-27 promotion is therefore unsalvageable by any *defensible* multiplicity choice; it survives
+only at the one the run happened to have.
+
+### 15.5 The three `PLAN-round28.md` §0.5 offline restatements
+
+All three are pure post-processing of the retained `folds.jsonl` (no model, no re-run), using the
+shipped `restateReportAtPolicy` / `turnoverSweep` / `dependenceSummary` so the arithmetic is the
+report's own.
+
+**(a) The P4/P5 sizing re-check — done, and superseded by real runs.** The one-sided paired
+requirements §14.7a recorded from the round-27 reports (41 clusters for significance, 89 for 80 %
+power, factor 1.058) are reproduced by the runs themselves (§15.2, §15.4), and the equivalent
+quantities on the *new* journals are quoted there. The important new fact is that the paired
+requirement is **not stable across the fold grid**: the round-27 Step-2 shape needed 41 clusters
+for a Δ of 0.2164, but at `--test=10` the same candidate's Δ is 0.0289, so it would need **2197**.
+`METHOD.md` §7 now carries that caveat: "41 clusters makes it significant" was a statement about
+one cadence.
+
+**(b) The market-neutral overlay (P6) — measured.** The 8-stream × bar panel `r_s(t)` was rebuilt
+from each journal, then demeaned two ways — across streams by *return* (`retNeutral`: the overlay's
+`r_s(t) − mean_s r(t)`, post-processing only) and across streams by *position* (`posNeutral`, a
+"sleeve-free" variant) — and fed to the real `dependenceSummary({streamReturns, streamFoldLengths,
+foldLength, periodsPerYear: 252})`:
+
+| row | raw Sharpe | `retNeutral` | `posNeutral` | raw dEff / effStreams | neutral dEff / effStreams | raw r̄ | neutral r̄ | common share of `grossPnl` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Step 1 baseline | −0.1147 | −0.2982 | −0.2569 | 4.866 / 2.302 | 0.317 / 12.09 | 0.3535 | −0.0483 | (gross negative) |
+| Step 1 arm A | +0.0521 | −0.2753 | −0.2427 | 5.595 / 2.621 | 0.295 / 12.78 | 0.2932 | −0.0534 | 3.709 |
+| **Step 2 baseline** | +0.8978 | **−0.0133** | −0.0115 | 2.611 / 2.417 | 0.370 / 14.23 | 0.3300 | −0.0625 | **1.0076** |
+| **Step 2 labeller** | +0.9267 | **+0.0047** | +0.0040 | 2.663 / 2.293 | 0.242 / 16.93 | 0.3556 | −0.0753 | **0.9975** |
+| **`sig-momentum`** | +1.0848 | +0.0890 | +0.1101 | 3.624 / 1.725 | 0.228 / 11.30 | 0.5196 | −0.0417 | **0.9582** |
+| **`sig-accel`** | +1.0194 | −0.0586 | −0.0698 | 2.465 / 1.890 | 0.155 / 17.84 | 0.4617 | −0.0788 | **1.0291** |
+
+`common share` is the decomposition of the raw gross P&L into a common-factor part (mean position
+× mean return per bar) and a cross-sectional residual. Reading it:
+
+- **Every positive-Sharpe arm's gross P&L is essentially all common factor.** Step 2's +0.90 and
+  the labeller's +0.93 have common share 1.008 and 0.998; `sig-momentum` 0.958, `sig-accel` 1.029.
+  The cross-sectional residual in P&L is `−0.00059` (Step 2 baseline — i.e. zero), `+0.00021`
+  (labeller), `+0.04958` (momentum) and `−0.02893` (accel, negative); in Sharpe terms the demeaned
+  arms are −0.0133 / +0.0047 / **+0.0890** / −0.0586, i.e. momentum keeps ≈ 8 % of its raw Sharpe
+  (0.0890 of 1.0848) and the others are ≈ 0 or negative. So the demeaning removes the edge: there
+  is no cross-sectional signal in these arms.
+- **`retNeutral`/`posNeutral` Sharpe:** Step 2 ≈ 0 (−0.0133 / −0.0115; labeller +0.0047 / +0.0040),
+  momentum +0.0890 / +0.1101 (the only arms with any residual), accel negative.
+- **The design effect is entirely the common factor.** Raw dEff 2.5–5.6 (effStreams 1.7–2.6 of 8)
+  collapses to 0.16–0.37 after demeaning. **But those sub-1 values are an artefact of the
+  demeaning constraint, not a purchasable gain:** forcing `Σ_s r_s(t) = 0` makes the mean pairwise
+  correlation slightly *negative* (r̄ −0.04 to −0.08), and Kish's `K / (1 + (K−1) r̄)` then returns
+  `effectiveStreams` 11–18 **out of 8**. The honest SE bound stays §14.8's algebra on the
+  equicorrelation component — **≈1.5×–2.3×** on the pooled SE at best — not `√(dEff ratio)`.
+- **Caveat to state whenever this table is quoted:** it is an *ex-post P&L decomposition*, not a
+  tradeable book, and it is a statement about P&L, not a causal claim about the market. It says
+  the arms' measured edge is net exposure × market return.
+
+**(c) The P5 turnover/holding sweep — run, and it changes the P5 answer.** `turnoverSweep` with
+`DEFAULT_TURNOVER_GRID` (48 policies) over the Step-3 journal, `decisionOptions` = the shipped
+dependence gate, `trials` = the run's active `K`:
+
+| candidate | `targetMet` | best promoting policy | Sharpe | adj. DSR | break-even | turnover |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| **`sig-accel`** | **true** | `{deadZone 0.02, enter 0.2, exit 0.05}` | **1.19403** | **0.95844** | 21.887 bps | 844 |
+| `sig-momentum` | false | — (best `{dz 0, enter 0.3, exit 0.1, minHold 5}`) | 1.08671 | 0.77448 | 29.087 bps | 587 |
+| Step 1 arm A | false | — (best `{dz 0, enter 0.1, exit 0.05}`) | 0.21444 | 0.31919 | 14.598 bps | 120 |
+
+`sig-accel` at `{dz 0.02, enter 0.2, exit 0.05}` **promotes with no reasons** (paired Δ 1.33350,
+se 0.38417, t 3.4711, p 0.000698, stability 1.0); at `K = 14` instead of 12 the same row is
+adjDSR 0.95109 and still
+promotes, so the result is not a `K` artefact. `sig-momentum` has **no** promoting policy in the
+grid even though at the accel policy it reaches the highest Sharpe of all (1.21430): its
+`effBars` is lower (1180 vs 1948), so the deflated readout is 0.84432 — the DSR floor, not the
+Sharpe, is what separates the two. (`enter 0.2 / exit 0.1` gives accel Sharpe 1.20053 / adjDSR
+0.95022, also promoting.)
+
+**The caveat that decides how to read this, measured.** At the promoting policy the **restated
+baseline** has `nonZeroFraction 0.0037` — it is in the market on 16 of 4320 bars, `tradeCount 2`,
+`turnover 2`, Sharpe −0.1395 — against the candidate's 844. So the "promotion" compares an
+~80 %-invested book with an effectively **flat** one. The cause is measured and is not a quirk of
+that policy alone: the families' confidence signals are on different *distributions*, so an
+absolute dead zone or enter/exit threshold is a different filter for each (§15.5b / `BUGS.md`
+#61). At the
+shipped `dz 0.05` the same mismatch is visible as `nonZeroFraction` 0.5081 (baseline) vs 0.8917
+(`sig-momentum`) vs 0.8785 (`sig-accel`); at `dz 0` all three sit at 0.9333 (turnover 59.1 / 818.3
+/ 876.5). So the sweep's promoting row is a real *policy* result on a real journal, but it is
+earned partly by the baseline abstaining: **it needs its own A/B against a policy matched on
+exposure** before it means anything. That is a next-round item, not a promotion.
+
+### 15.6 What these runs cannot show
+
+- **One seed, one window.** All three are `--seed=1` on 8 streams × 600 bars (4 320 pooled bars).
+  Nothing here is a statement about other data, other intervals or other baskets.
+- **No `triple`.** Every run is `optimistic` (Step 2's candidate is `conservative`), so the P1c
+  measured-span machinery is exercised only through the `sample-weights` arms of Step 1.
+- **The cadence finding is a nuisance-parameter finding, not a strategy.** "Retraining every 10
+  bars instead of 15 moves the baseline's measured Sharpe by ~1.0" says the A/B's *level* is
+  sensitive to the evaluation configuration (and so are cross-run comparisons). It does not say a
+  cadence is tradeable — the cadence is fixed inside each fold by the harness, and a deployable
+  cadence change would need its own causal A/B.
+- **The overlay is a P&L decomposition, not a book.** §15.5(b): ex-post, per-bar, no costs, no
+  implementation; and its sub-1 design effects are demeaning artefacts.
+- **The sweep's promoting row is a re-read, not a run.** It restates one journal under a policy
+  grid; nothing was re-fitted, and the baseline-abstention caveat above applies.
+- **The K-recomputation isolates multiplicity only.** It holds the journal (hence the positions
+  and the effective sample) fixed and varies the deflation's `K`; it is not a claim about what
+  `K` *should* be, only about what each choice does to the verdict.
+
+---
+
+## 16. The round-29 readouts (implementation of `PLAN-round29.md`)
+
+The round-29 work is measurement + analysis-layer code; the run bookkeeping lives in
+[`round29-IMPLEMENTATION.md`](round29-IMPLEMENTATION.md). Everything below is reproduced
+offline from the **retained journals** with the repo's own pure modules (no re-run), which
+is what the plan's "pure post-processing" items call for.
+
+### 16.1 Unit 0 (C10): the market-neutral overlay on the Step-3 journal, for **every** positive-Sharpe arm
+
+`RUN-ANALYSIS.md` §15.5(b) measured the P&L decomposition of four *selected* arms and
+concluded "~100 % of every positive-Sharpe arm's gross is net-exposure × market". C10 asked
+for that restated on the **Step-3** journal (the signal family, the run with the most
+positive-Sharpe arms) for **every** arm, not the selected four.
+
+**Method (exact; reproduces §15.5(b) byte-for-byte).** Each variant's 8-stream × bar panel is
+rebuilt from `folds.jsonl` (`stage:"score"`; `testStart`, `returns`, `signals`). The held
+position at bar `i` is `signals[i-1]` — the journal stores the *pointwise* confidence→position
+map and `strategyReturns` applies the one-bar lag. Per bar `gross_s = pos_s·ret_s`;
+`common = S·mean_s(pos)·mean_s(ret)`; `cross = gross − common`; `retNeutral` = pooled Sharpe
+of `pos_s·(ret_s − mean_s ret)`; `posNeutral` = pooled Sharpe of `(pos_s − mean_s pos)·ret_s`;
+`dEff`/`effectiveStreams`/`r̄` from the real `dependenceSummary` (per-stream fold length, not a
+zero-padded 600-bar panel — the padded panel is what made a first pass disagree with §15.5(b)).
+On the six arms §15.5(b) quotes, every recomputed number matches (Step-2 baseline
+`gross 0.077934`, `common 0.078524`, `cross −0.000590`, `commonShare 1.0076`, `dEff 2.611`,
+`effStreams 2.417`; Step-1 baseline `dEff 4.866`; `sig-momentum` `commonShare 0.9582`), so the
+method is the same arithmetic the report used.
+
+**Result — Step-3 journal (36 folds × 8 streams, 15-bar folds), all four positive-Sharpe arms:**
+
+| arm | net Sharpe | `retNeutral` | `posNeutral` | common share | dEff / effStreams | r̄ |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sig-momentum` | +1.0848 | +0.0890 | +0.1101 | **0.9582** | 3.624 / 1.725 | 0.5196 |
+| `sig-accel` | +1.0194 | −0.0586 | −0.0698 | **1.0291** | 2.465 / 1.890 | 0.4617 |
+| `sig-range` | +0.4490 | +0.3536 | +0.3406 | **0.6095** | 3.121 / 1.913 | 0.4546 |
+| `sig-agreement` | +0.3912 | +0.2747 | +0.2679 | **0.6570** | 3.342 / 1.930 | 0.4492 |
+
+(For completeness, the arms with the largest residual but a **negative** net: `sig-frac-momentum`
+−0.4185 → retNeutral +0.0940; `sig-vol-regime` −0.3135 → +0.0580. The baseline itself is
+−0.1147 with common share −0.36, i.e. the market *helped* a losing book.)
+
+**Reading (corrects `PLAN-round29.md` §1.2).** The universal claim is **false as stated**: two
+positive-Sharpe arms keep a real cross-sectional component — `sig-range` (common share 0.610,
+retNeutral Sharpe +0.354) and `sig-agreement` (0.657, +0.275). The claim **is** true of the two
+arms that carry all the *level* — `sig-momentum` (0.958) and `sig-accel` (1.029), whose
+retNeutral Sharpe is +0.089 / −0.059. The honest restatement: **the arms with cross-sectional
+content are the ones that do not clear the gate** (`sig-range` adjDSR 0.2611, `sig-agreement`
+0.2113), **and the arms that clear every hurdle but the dependence-adjusted DSR are ~100 % market.**
+This sharpens the diagnosis rather than weakening it: there is no *independent* edge, and the
+residual that exists is too weak to promote.
+
+### 16.2 P1: the model-class benchmark — the architecture is not the constraint
+
+**Question (pre-registered).** Score base rate / linear / MLP / (pretrained TSFM) / the
+controller on the **same causal inputs** and the **same walk-forward**, and check for positive
+Brier skill vs the base rate. If none has it → the **features and labels**, not the
+architecture, are the constraint (plan G-A, negative branch) → skip controller-side work
+(P6/P7) and spend the round on P3/P4.
+
+**Implementation.** A new pure module `src/analysis/benchmark.js` (ridge — closed form;
+one-hidden-layer tanh MLP — seeded SGD; base rate; a pluggable `tsfm` arm) feeds an opt-in
+A/B **benchmark variant kind** (`--variants=bench-base-rate,bench-linear,bench-mlp`). The
+variants replace the model in the *existing* harness: same folds, same labels
+(`sign(ret[t+1])`), the **same causal `featureVector` the bare path reads**, the same audit,
+gate, cost ladder and `forecastComparison`. The forecast layer now groups the
+probability-calibrated kinds (controller + benchmark) into one Model Confidence Set and reports
+`brierBaseline`/`brierSkill`/`accuracySkill` per arm. The default roster is unchanged
+(benchmark variants are opt-in), so no golden moves. **TSFM is not run** — no pretrained
+checkpoint is bundled (plan §8 allows it to be dropped).
+
+**The run** (8 streams × 4800 candles, `maxBars 600`, `trainSize 60`, `costBps 0`, seed 1;
+the controller/baseline arm is the in-harness bare HiveMind, the same family the retained runs
+journal). Pooled OOS bars ≈ 4 032 (`testSize 15`); the benchmark runs are ~2 min for the whole
+4-arm × 8-stream × 36-fold grid (the HiveMind baseline dominates the wall time; the pure
+forecasters are milliseconds — the ~600× gap MC3 records).
+
+| cadence | arm | Brier | `brierSkill` vs p̄(1−p̄) | accuracy | `accuracySkill` | vs base-rate model: ΔBrier (DM p) | MCS₉₀ |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| test 15 | base rate (model) | 0.25296 | −0.0118 | 0.5005 | 0.000 | — | eliminated |
+| test 15 | **linear (ridge)** | **0.25020** | **−0.0008** | **0.5196** | **+0.0191** | **+0.00276** (p 0.008, favors linear) | **{linear}** |
+| test 15 | MLP | 0.27431 | −0.0972 | 0.5035 | +0.0030 | −0.02135 (p 0.001, favors base rate) | eliminated |
+| test 15 | bare HiveMind (baseline) | 0.25382 | −0.0153 | 0.4866 | −0.0139 | — | eliminated |
+| test 10 | linear | 0.25105 | −0.0043 | 0.5085 | +0.0046 | +0.00199 (p 0.064) | {linear} |
+| test 10 | MLP | 0.27629 | −0.1052 | 0.5031 | −0.0008 | −0.02325 (p 0.001) | eliminated |
+| test 30 | linear | 0.25022 | −0.0009 | 0.5132 | +0.0091 | +0.00256 (p 0.009) | {linear} |
+| test 30 | MLP | 0.27230 | −0.0893 | 0.5117 | +0.0077 | −0.01952 (p 0.001) | eliminated |
+
+**Signed conclusion (G-A: negative branch).** No forecaster has a **material positive Brier
+skill vs the base rate**. Ridge is the best of the set and the only MCS survivor — it beats the
+base-rate *model* by ≈0.8–1.1 % relative Brier (significant at test 10/30, marginal at 15) and
+gains ≈0.5–1.9 pts of accuracy — but measured against the base-rate forecast `p̄(1−p̄)` its Brier
+skill is **−0.0008 / −0.0043 / −0.0009** (i.e. ≈0 or slightly negative), and the MLP is
+*decisively worse* than the base rate at every cadence. So the model-class literature's
+prediction ("a linear/MLP model beats the from-scratch transformer") is confirmed in the weak
+sense that the linear model is the best arm — **and the linear model still has no skill**. The
+constraint is therefore the **features/target, not the architecture**.
+
+**Branch taken.** G-A negative ⇒ **skip the controller-side work (P6 meta-labeling, P7 ensemble
+-size probe)** and put the round into **P3 (15 m reversal) / P4 (funding/basis carry)** — the
+new-data levers. This is the pre-registered branch, recorded before the later items ran.
+
+**What it can/cannot prove.** *Can prove:* on this feature set, on this data, the model class
+is not what stands between the bot and positive forecast skill. *Cannot prove:* that a **richer
+feature set** is also skill-less (the benchmark deliberately reads the same thin causal vector
+the bare path reads — a fair architecture test, not a features search); nor anything about
+tradeability (that is P3/P4). *Caveat:* one seed, one basket, one window (FG12).
+
+### 16.3 P2: configuration-robust promotion + exposure matching — the A/B verdict is a function of the retrain cadence, and the §15.5(c) promotion was an exposure artefact
+
+**Question (pre-registered).** Two independent fragility attacks on the dependence gate, both
+raised by the round-28/29 review (AlgoXpert's "the result must survive the re-train cadence" and
+"the two families must be compared at equal market exposure"):
+
+1. **Configuration robustness.** The level and the fold partition are a function of the re-train
+   cadence (`testSize`). A verdict read at *one* cadence is not a verdict about the strategy — it
+   is a verdict about that cadence. Aggregate the gate over a small cadence grid and require
+   **majority-pass with a catastrophic veto**.
+2. **Exposure matching.** The dead zone is an *absolute* threshold in each family's own
+   confidence space. The controller's `|confidence|` is bounded by ≈0.26 while a signal family's
+   saturating ±integer z-score is not, so the same `deadZone` is a very different filter for the
+   two families. A promotion can therefore be manufactured purely by one arm **abstaining**
+   (BUGS.md #61). Re-score both arms at the **same in-market share**.
+
+**Implementation (all pure, off the journaled confidence — no model re-runs).**
+
+- `src/analysis/decision.js`: `promotionAcrossCadences({evaluations, majorityFraction=0.5,
+  catastrophic, cadenceKey})` — promotes iff the single-cadence gate passes at **more than half**
+  the cadences **and** no cadence trips the catastrophic predicate; `defaultCatastrophic(e)` is a
+  failed look-ahead audit **or** a negative pooled net Sharpe. `nextRunPlan` now carries a
+  `cadence` block (`{trainSize, testSize, folds}`) and `decisionReport.training` echoes the run's
+  `runMeta.cadence`, so a journal states the grid it was scored on.
+- `src/analysis/walkforward.js`: `exposureDeadZone(confidences, targetFraction)` (the threshold
+  between the m-th and (m+1)-th largest `|confidence|` so that exactly `targetFraction` of bars
+  clear it); `restateReportAtCadence(report, {testSize, trainSize, step, policy, …})` (rebuilds
+  per-stream `returns`+`confidence` from the journaled fold inputs and `testStart`s, re-partitions
+  with `walkForwardSplit`, and re-pools — adding a `.cadence` record);
+  `exposureMatchedPair({baseline, candidate, policy, targetNonZeroFraction, …})` (measures each
+  family's scored in-market share by restating both at the **same** policy, matches each family's
+  dead zone to the common share — the **minimum** of the two by default — then re-runs the full
+  gate). The matched row deliberately uses a **pointwise dead zone** (any holding band is
+  dropped): a band's `enter`/`exit` are a *second* absolute confidence-space threshold, and its
+  hysteresis **floors** the attainable exposure, so an exact match needs a scale-free rule. The
+  raw (banded) comparison is returned alongside as `raw`. `restateReportAtPolicy` now returns
+  `foldInputs` so restatements can chain.
+- `src/analyze.js`: the two passes are wired into the driver as **opt-in, default-off** options —
+  `--cadences=a,b,c` restates every active candidate on each grid (at the run's own
+  `positionPolicy` / `costBps` / `trials`) and writes `report.configurationRobust` (the per-cadence
+  rows plus the `promotionAcrossCadences` verdict); `--exposure-match` writes
+  `report.exposureMatched`. Both are pure post-processing of the journaled confidence (no model),
+  so the default report is byte-identical — `analyze.test.js` pins that the cadence-equal-to-the-
+  scored-grid restatement reproduces the scored pooled Sharpe exactly, and that neither flag moves a
+  scored number.
+- Tests: seven P2 checks + one band/tolerance check in `test/browser/entries/analysis.test.js`
+  (598 → **599** assertions, 0 failures): the raw exposure gap manufactures a promotion; matching
+  removes it; `exposureDeadZone` is monotone and hits its target; promote-at-one-cadence is
+  rejected; a majority promotes; the catastrophic veto fires; `restateReportAtCadence` re-grids
+  and names its cadence; the matched row drops the band and flags feasibility. The **driver wiring**
+  is pinned separately by eight P2-wiring checks in `analyze.test.js`.
+
+**Readout 1 — exposure matching is verdict-neutral on every retained run.** Re-scoring the three
+retained A/Bs at the **shipped** policy (`deadZone 0.05`) with both families forced to the
+baseline's in-market share changes no verdict (all keep-off, as before), and leaves the two arms
+the same share of bars:
+
+| run | arm | raw base/cand share | matched base/cand share | raw promote | matched promote |
+| --- | --- | ---: | ---: | --- | --- |
+| step 1 | sample-weights | 0.5081 / 0.4824 | 0.4512 / 0.4502 | false | false |
+| step 2 | label-conservative | 0.5278 / 0.5324 | 0.4759 / 0.4775 | false | false |
+| step 3 | sig-momentum | 0.5081 / 0.8917 | 0.4741 / 0.4734 | false | false |
+| step 3 | sig-accel | 0.5081 / 0.8785 | 0.4741 / 0.4718 | false | false |
+| step 3 | sig-range | 0.5081 / 0.8894 | 0.4741 / 0.4729 | false | false |
+| step 3 | sig-agreement | 0.5081 / 0.8852 | 0.4741 / 0.4736 | false | false |
+
+So the shipped failure is not an exposure artefact — it survives the control that removes
+exposure. (After matching, every candidate's dependence-adjusted DSR is *further* from 0.95, e.g.
+sig-momentum `0.5587`, sig-accel `0.5033`, sig-range `0.1188`, sig-agreement `0.2093`.)
+
+**Readout 2 — the §15.5(c) turnover-policy promotion of `sig-accel` was an exposure artefact.**
+§15.5(c) promoted `sig-accel` at the turnover policy (`deadZone 0.02, enter 0.2, exit 0.05`,
+`costBps 0`) from a baseline that was **flat** (0.37 % of bars) next to a candidate that was
+**80 %** invested. Reproduced exactly, then exposure-matched at **both** ends of the range:
+
+| comparison | baseline share | candidate share | baseline net SR | candidate net SR | candidate adj. DSR | verdict |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| raw (turnover policy) | 0.0037 | 0.8023 | −0.1395 | **+1.1940** | 0.9584 | **promote** |
+| matched to the candidate's own share (0.8023) | 0.7484 | 0.7454 | −0.0850 | +0.9228 | **0.7925** | keep-off |
+| matched to the baseline's own share (0.0037) | 0.0035 | 0.0954 † | −0.0863 | −0.1165 | 0.0256 | keep-off |
+
+† The candidate's confidence is discrete (saturating ±integer signal scores), so its lowest
+attainable exposure is ≈9.5 % — it **cannot** trade as few bars as the baseline. That
+infeasibility is itself part of the artefact: the raw comparison was not apples-to-apples.
+The decisive row is the first matched one, where both arms are well matched at ~80 %: the
+candidate's pooled net Sharpe falls from +1.19 to +0.92 and its dependence-adjusted DSR from
+0.9584 to **0.7925**, with the paired cluster-Sharpe difference insignificant (p 0.077). The
+promotion does not survive equal exposure.
+
+**Readout 3 — the cadence grid kills nothing on its own, but confirms the retained keep-offs.**
+Fixed-position restatement at `testSize ∈ {10, 15, 30}` (train 60) of the Step-3 signal arms,
+each scored by the shipped gate:
+
+| arm | adj. DSR @ test 10 / 15 / 30 | passes | majority rule |
+| --- | --- | ---: | --- |
+| sig-momentum | 0.887 / 0.774 / 0.827 | 0 / 3 | keep-off |
+| sig-accel | 0.902 / 0.861 / 0.861 | 0 / 3 | keep-off |
+| sig-range | 0.486 / 0.261 / 0.359 | 0 / 3 | keep-off |
+| sig-agreement | 0.335 / 0.211 / 0.292 | 0 / 3 | keep-off |
+
+So the four net-positive-Sharpe arms fail at **every** cadence, not just the shipped one — their
+keep-off verdict was not cadence-luck. (The rule would have flipped nothing here; its value is
+that a *future* arm cannot be promoted on a single lucky cadence.)
+
+**What it can/cannot prove.** *Can prove:* (i) equalising exposure does not rescue any retained
+candidate and it **removes** the one promotion the pipeline produced off a flat baseline; (ii) the
+retained keep-offs hold across a cadence grid. *Cannot prove:* (a) that a *true* re-train sweep
+would agree — the fixed-position restatement re-uses the models trained once at `testStart=60`,
+so it measures the **fold partition**, not the training-set size (a real cadence sweep needs a
+full `runAnalysis` per cadence, which is a cheap follow-up); (b) that the matched comparison
+is exact for every arm (a pointwise dead zone can only select by threshold, so a discrete
+confidence distribution can overshoot the target — the `matchedWithinTolerance` flag reports
+this); (c) anything about P3–P5 (separate sections).
+
+### 16.4 P3: short-horizon reversal — the documented 15m edge is REAL and ECONOMICALLY INACCESSIBLE
+
+**Question (pre-registered).** Test the one documented, matched, out-of-sample crypto edge on
+this platform: 15-minute directional reversal (`2608.21888` — significant in ~90 % of 183 Binance
+pairs vs 2.7 % of US equities, in every coin-year since 2021, and living in **signs, not
+magnitudes**). Acceptance: the candidate clears its `breakEvenCostBps` at a realistic 15m taker
+cost **and** passes the dependence-adjusted DSR floor **and** is not rejected by SPA — at **more
+than half** the cadences. Non-acceptance is a full result.
+
+**Step 0 — the new data (the hard gate).** `fetchCandles('binance', {interval:'15m'})` (the
+existing acquisition path, no new mechanism) pulled **79 999 bars × 8 symbols** = 639 992 bars,
+2024-06-13 → 2026-09-18 (≈ 2.28 years), in 96 s; every series passes the **15m-grid**
+integrity audit (`auditSeries(..., {intervalMs: QUARTER_HOUR_MS})`): 0 invalid lines, 0
+off-grid rows, 0 duplicates, 0 implausible wicks, identical timestamp grid across all eight
+symbols. The basket is registered as a second manifest, `CANDLE_MANIFEST_15M` +
+`CANDLE_FILES_15M` in `candles_audit.js` (with `QUARTER_HOUR_MS`), and audited on its own grid by
+`candles.test.js` (44 new checks) — kept separate so the shipped 1h basket, `--symbols=all`, the
+interval-blind `CANDLE_FILES` sweep and the multisymbol replay tests are untouched.
+
+**Step 1 — the effect is present in the data.** Lag-1 return autocorrelation over the full
+2.28 years (n = 79 998 per symbol):
+
+| symbol | lag-1 AC | t | | symbol | lag-1 AC | t |
+| --- | ---: | ---: | --- | --- | ---: | ---: |
+| SOLUSDT | **−0.0185** | −5.2 | | ADAUSDT | **−0.0073** | −2.1 |
+| XRPUSDT | **−0.0188** | −5.3 | | BTCUSDT | −0.0065 | −1.8 |
+| LINKUSDT | **−0.0434** | −12.3 | | ETHUSDT | +0.0045 | +1.3 |
+| DOGEUSDT | **−0.0117** | −3.3 | | | | |
+| BNBUSDT | **−0.0090** | −2.5 | | | | |
+
+**Six of eight are significantly negative** (|t| > 2), one is negative-but-insignificant (BTC),
+one is positive-and-insignificant (ETH) — the qualitative claim of `2608.21888` holds on this
+basket and window. The **control confirms the mirror image**: the 1h-proven `sig:momentum`
+primitive evaluated on the same 15m bars has directional accuracy **0.4875** and pooled gross
+Sharpe **−0.41** (interval-correct) — momentum *loses* at 15m, which is what a real reversal
+effect predicts.
+
+**Step 2 — the primitives** (`src/analysis/features.js`, opt-in family
+`REVERSAL_CANDIDATES` → `REVERSAL_VARIANTS`, `--variants=sig-reversal,...`): `reversal` (−r[t], the
+sign primitive), `reversalWindow` (−mean of the trailing 4 bars), `reversalVol` (−r[t] / trailing
+16-bar realised vol), and `crossSectionalReversal` (−(r_s[t] − cross-section mean), which reads
+the **new** `view.panel` the driver attaches per stream — the same index-aligned cross-section the
+panel-aware dependence estimates already use). They are **opt-in**: the default roster, `K` and
+every golden fingerprint are unchanged; they are resolvable by id and exercised by 8 new
+`analysis.test.js` checks + 1 `analyze.test.js` check (including a causality check *through the
+panel* and an abstain-not-throw check on a panel-less view).
+
+**Step 3 — pooled measurement over the full 2.28 years** (639 992 bars; time-series pooling of the
+eight symbols' net series; annualised at the interval-correct **24 192** = 96×252):
+
+| arm | directional accuracy | net Sharpe @0 | @2 bps | @5 bps | @10 bps | **break-even cost** | turnover/bar |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sig:reversal` | **0.5191** | +1.157 | −5.70 | −15.92 | −32.60 | **0.337 bps** | 0.520 |
+| `sig:reversal-4` | 0.5175 | +0.990 | −2.53 | −7.81 | −16.54 | **0.562 bps** | 0.283 |
+| `sig:reversal-vol` | 0.5188 | +1.161 | −6.02 | −16.71 | −34.12 | **0.323 bps** | 0.502 |
+| `sig:reversal-xs` | 0.5051 | +1.219 | −5.93 | −16.59 | −34.00 | **0.341 bps** | 0.527 |
+| `sig:momentum` (control) | 0.4875 | −0.413 | −2.61 | −5.90 | −11.37 | **−0.376 bps** | 0.194 |
+
+**Read: the edge is real and the cost model rejects it.** Directional accuracy is 51.9 % on
+**639 992** bars (a t of ≈ 30 on the accuracy itself) — an unambiguous, huge-sample sign edge, and
+the volatility-scaled variant adds nothing (0.323 vs 0.337 bps), exactly as the paper's
+"signs-not-magnitudes" framing implies. But the per-bar gross edge is ≈ 0.18 bps at a turnover of
+0.52 position-units/bar, so the **break-even cost is 0.32–0.56 bps** against a realistic 15m taker
+cost of **5 bps (USDⓈ-M futures) to 10 bps (spot)** — a **9×–30× shortfall**. At 5 bps the reversal
+book's interval-correct net Sharpe is **−15.9**. The slower 4-bar variant trades 46 % less and so
+has the best break-even (0.56 bps over 2.28 years), but it is still 9× short.
+
+**Step 4 — the pre-registered gate, at three REAL cadences** (three independent runs, each
+re-training at its own cadence: `maxBars 600`, `trainSize 60`, `testSize ∈ {10,15,30}`, 8 streams,
+bare-HiveMind baseline, cost 0, seed 1, identical 4-arm roster, so `K` = 5):
+
+| arm | verdict @ ts10 / ts15 / ts30 | dependence-adj. DSR @ ts10/15/30 | break-even (bps) @ ts10/15/30 | look-ahead audit |
+| --- | --- | --- | --- | --- |
+| `sig:reversal` | keep-off / keep-off / keep-off (**0/3**) | 0.330 / 0.158 / 0.170 | 1.09 / 0.26 / 0.36 | clean, reachable (288 probes) |
+| `sig:reversal-4` | keep-off / keep-off / keep-off (**0/3**) | 0.900 / 0.794 / 0.757 | 5.08 / 4.52 / 4.67 | clean, reachable |
+| `sig:reversal-vol` | keep-off / keep-off / keep-off (**0/3**) | 0.309 / 0.143 / 0.154 | 1.05 / 0.18 / 0.27 | clean, reachable |
+| `sig:reversal-xs` | keep-off / keep-off / keep-off (**0/3**) | fails fold-win at every cadence | −0.47 / −0.55 / −0.43 | clean, reachable |
+
+Every arm **promotes at 0 of 3 cadences**, so the P2 configuration-robust rule returns keep-off
+unanimously (and no cadence trips the catastrophic veto — the arms are merely insignificant, not
+broken). Two honest nuances: (i) `sig:reversal-4`'s **DSR fails even where the cost bar is nearly
+met** — on the 10-day `maxBars 600` windows it reaches 4.5–5.1 bps break-even, but its
+dependence-adjusted DSR is 0.76–0.90 (< 0.95) and the paired cluster Sharpe difference is
+insignificant (p 0.06–0.16), i.e. the apparent cost-pass is a short-window artefact the
+significance floor correctly refuses; (ii) the harness annualises at `periodsPerYear 252` for
+every interval (a pre-existing project constant), so the harness Sharpe numbers must be multiplied
+by √(24192/252) ≈ 9.8 to be interval-correct — the table above reports the *pooled* metrics the
+harness computed and the standalone table reports the interval-correct ones.
+
+**Verdict (P3).** **Non-acceptance — the documented reversal does not survive this cost model.**
+The effect is genuinely present (significantly negative 15m autocorrelation in 6/8 symbols, a
+51.9 % directional accuracy on 640k bars, a momentum control that loses) and the look-ahead audit
+is clean at every cadence — but its break-even cost is 0.32–0.56 bps against a 5–10 bps taker fee,
+and it fails the dependence-adjusted DSR floor at every cadence on the walk-forward windows. This
+is the **cost model**, not the signal, and it matches the project's own 1h finding (§1.3: the
+reversal primitive breaks even at −0.04 bps on 1h). The honest extension (a maker-only /
+queue-position model, or a portfolio with the reversal as one sleeve) is out of this round's scope
+and is recorded in `TODO.md`.
+
+**What it can/cannot prove.** *Can prove:* that this venue's 15m reversal is real in signs and
+not tradeable at taker cost under an honest, audited, multiple-testing-corrected gate; and that
+the reversal family is causal by construction through the panel. *Cannot prove:* that it is
+untradeable at *maker* fees or with a smarter execution layer; nor that the effect holds outside
+2024-06 → 2026-09 (the fetched window — the paper's per-coin-year claim for 2021–2024 was not
+re-tested, `research/financial-validation.md`'s window caveat stands).
+
+### 16.5 P4: funding/basis carry — a structurally independent sleeve that IS accepted (with one honest caveat)
+
+**Question (pre-registered).** The plan's P4 acceptance is (a) the carry stream's measured
+correlation with the price basket is materially below the current cross-stream 0.29–0.52
+(baselines 0.33–0.35) — i.e. it actually reduces the design effect — **and** (b) it has a
+defensible cost-adjusted standalone return. The round gate **G-C** adds a stronger, DSR-based
+test: *if* the sleeve moves the best arm's `dsrAdjusted` across 0.95, carry is a real independence
+*purchase*; *else* it is recorded as a breadth purchase with its measured correlation. Both
+readings are reported below, because they disagree, and the disagreement is the finding.
+
+**Step 0 — the new data (the hard gate).** Binance USDⓈ-M **funding history**
+(`fapi/v1/fundingRate`, the same venue the candle fetcher uses) for the same eight symbols:
+**57 939 rows**, 2019-09 → 2026-09. Registered as `FUNDING_MANIFEST`/`FUNDING_FILES` in
+`candles_audit.js` and shipped in `src/data/funding_<symbol>_8h.jsonl`. Every series passes
+`auditFundingProblems` (0 problems) on the 8h grid:
+
+| symbol | rows | first | span (y) | off-grid steps | zero rates | \|rate\| > 1 %/period | mean rate | ann. carry (%/yr) | neg. share |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| BTCUSDT | 7 714 | 2019-09-10 | 7.04 | 0 | 0 | 0 | 1.05546e-4 | **11.56** | 0.142 |
+| ETHUSDT | 7 480 | 2019-11-27 | 6.83 | 0 | 0 | 0 | 1.25924e-4 | **13.79** | 0.137 |
+| SOLUSDT | 6 681 | 2020-09-13 | 6.03 | 98 (1.47 %) | 1 | 11 | 1.88312e-6 | 0.21 | 0.287 |
+| BNBUSDT | 7 255 | 2020-02-10 | 6.62 | 0 | 3 600 | 0 | −4.02342e-7 | −0.04 | 0.240 |
+| XRPUSDT | 7 360 | 2020-01-06 | 6.72 | 0 | 1 | 0 | 1.33336e-4 | **14.60** | 0.203 |
+| ADAUSDT | 7 320 | 2020-01-19 | 6.68 | 0 | 0 | 0 | 1.23123e-4 | **13.48** | 0.198 |
+| DOGEUSDT | 6 802 | 2020-07-10 | 6.21 | 0 | 0 | 0 | 1.13114e-4 | **12.39** | 0.178 |
+| LINKUSDT | 7 327 | 2020-01-17 | 6.69 | 0 | 344 | 0 | 1.25651e-4 | **13.76** | 0.130 |
+
+Two data notes, both recorded rather than hidden: **SOL** has 98 off-grid steps (3 of them at a 4h
+period, the rest a few seconds of exchange timestamp jitter) — 1.47 %, inside the audit's 2 %
+budget — and 11 periods with `|rate| > 1 %`, which are real high-funding events rather than bad
+data; **BNB** carries 3 600 exact-zero periods (a venue/listing artefact) and LINK 344. `ann.
+carry` is the per-period mean × 1 095 (3 periods/day). Six of eight symbols pay ≥ 12 %/yr.
+
+**Step 1 — the standalone sleeve (measure before building).** The delta-neutral book (short perp /
+long spot) earns `+fundingRate` per period. Pooled equal-weight across the eight symbols over the
+window every one of them has (2020-09-13 → 2026-09-24, **6 606 periods**, 6.03 years):
+
+| quantity | value |
+| --- | ---: |
+| mean rate per period | 8.93069e-5 |
+| **annualised carry** | **9.78 %** |
+| annualised vol | **0.84 %** |
+| carry Sharpe (per-period, annualised) | **11.61** |
+| max drawdown (additive, pooled) | **−3.34 %** |
+| negative periods | 22.2 % |
+
+So (b) holds: a 9.8 %/yr stream at 0.84 % vol with a 3.3 % max drawdown is a defensible standalone
+return for a delta-neutral book. **Caveats that must be read with it** (recorded, not glossed):
+this is the *funding leg only*. It excludes basis risk (the perp/spot spread moves), execution and
+rebalancing costs, borrow/margin and liquidation risk, and the *spot leg's own* funding/borrow
+cost; and it is measured on the intersection window (six years, one venue, one regime that included
+2021's positive-funding boom). It is **not** a tradeable-Sharpe claim.
+
+**Step 2 — does it buy independence?** Measured on the full 15m grid (79 968 bars per stream, folds
+of 96 bars = one day, 833 fold-window clusters — `dependenceSummary`, the shipped estimator):
+
+| panel | seIid | **seCluster** | designEffect | effectiveBars | meanPairwiseStreamCorr | **effectiveStreams** |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 8 price streams | 0.019847 | **0.045370** | 5.226 | 122 422 | 0.7686 | **1.2539** |
+| + pooled carry sleeve (9) | 0.018712 | **0.042784** (−5.7 %) | 5.228 | 137 668 (+12.5 %) | 0.6044 | **1.5424** (+23 %) |
+
+| correlation with the price basket | value |
+| --- | ---: |
+| 15m bar grid, full history (79 968 bars) | **+0.0027** |
+| 15m bar grid, one 200-bar walk-forward window (the e2e probe below) | −0.128 |
+
+**Read.** The sleeve is essentially **uncorrelated with the price basket** (0.003 over 2.3 years of
+15m bars; the sign flips on a short window, as it should for a near-zero correlation), the panel's
+*equicorrelation* design effect falls (0.7686 → 0.6044) and its effective streams rise from 1.25 to
+1.54 of 9 — so the sleeve does exactly what the plan asked (a new data source, not more bars of the
+same eight). **The honest caveat:** the jackknife **design effect (5.226 → 5.228) and the
+cluster SE move only 5.7 %**, because that estimator is dominated by *serial* dependence *within* a
+stream, not by cross-stream correlation — one independent 9th stream cannot undo the within-stream
+autocorrelation of the eight price streams. So "reduces the design effect" is true of the
+cross-stream component and effectively false of the total. That distinction is the whole reason the
+plan asked for the sleeve *and* a DSR test.
+
+**Step 3 — the end-to-end wiring (the shipped path, not an offline stand-in).** `analyze.js` gained
+`carryFiles` (`--carry-files=a,b`), parsed/audited by the new `src/analysis/carry.js`, projected
+over each world's fold test bars and appended as a **ninth panel stream** (`poolReports`
+`extraPanelStreams`), with the price-only dependence retained beside it. Measured on a real run
+(8 symbols, `maxBars 200`, `testSize 15`, bare-HiveMind baseline + one reversal candidate, 84 s):
+`dependence.streams` **9**, `dependenceWithoutExtras.streams` **8**, `carry.panelStreams` 1,
+`carry.symbols` 8, `carry.pooledMeanRatePerBar` 1.29e-6 (× 32 bars/period = 4.1e-5 — consistent
+with the funding files' own means), `correlationWithBasket` −0.128 on that window. The same run
+**without** `--carry-files` reports `carry: null` and 8 streams — so the sleeve's presence and
+absence are both explicit, never inferred. Two defects were caught by this probe and fixed before
+any measurement was trusted (`BUGS.md` #64/#66): the sleeve was being compared against the
+concatenated panel length (and so excluded from every real run), and its per-bar projection
+compared epoch-ms funding timestamps against the **ISO strings** the candle files store, which made
+the whole sleeve identically zero. A degeneracy guard now refuses a constant sleeve outright
+(#66).
+
+**Verdict (P4).** **Acceptance on the plan's own P4 criterion, with a documented caveat, and a
+non-crossing G-C.** (a) The sleeve's correlation with the price basket is **0.003**, an order of
+magnitude below the 0.29–0.52 cross-stream range, and it demonstrably raises the panel's effective
+streams (1.25 → 1.54 of 9) — a real independence purchase, not a re-labelling of the same factor.
+(b) Its standalone delta-neutral carry is 9.78 %/yr at 0.84 % vol. Under **G-C** (does the sleeve
+move the best arm's `dsrAdjusted` across 0.95?) the answer is **no**, and it could not be: a 12.5 %
+increase in effective bars cannot close a 0.14–0.90 → 0.95 gap, and the jackknife design effect is
+serial-dominated so it barely moves. Carry is therefore a **breadth** purchase by the DSR metric
+and a genuine independence purchase by the correlation/effective-streams metric; both are recorded,
+and the plan's own §8 note ("P4 funding data — measure-before-build; rejection recorded") is
+discharged by having measured both. What is left for a future round is the portfolio question: a
+9.8 %/yr, near-zero-correlation sleeve is worth carrying *for its own return* (and for the
+effective-bars gain), not as a lever that flips an existing arm's significance.
+
+**What it can/cannot prove.** *Can prove:* that perpetual funding is a structurally independent,
+measurably low-correlation return source on this venue, that its data path (fetch → audit → panel)
+is wired and audited end-to-end, and that on this basket it raises the panel's effective streams by
+~23 %. *Cannot prove:* that the delta-neutral book is tradeable at a positive net return (basis,
+execution, borrow and the spot leg's own carry are not modelled — that needs a basis/spread series
+the round did not fetch), nor that the sleeve changes any single-arm promotion verdict.
+
+### 16.6 P5 (continuous test-time adaptation) — designed, measured for cost, and deferred with the gate open
+
+**Status: NOT built. DoD item 4 is explicitly conditional ("*If* P5 is built…"), and this section
+is the recorded decision not to build it in this round, with the reason, the exact design and the
+measured cost wall so a later round can execute it without re-deriving anything.**
+
+**What the survey found (this changes P5's premise).**
+
+1. **The shipped controller already adapts continuously within a fold.** `HiveMindController.getSignal`
+   is not predict-only: every call resolves any trades whose barriers have filled
+   (`_updateOpenTrades`) and trains the ensemble on those realized labels. So the "schedule-bound"
+   part of the pipeline is the **per-fold refit** (a fresh controller replays history up to
+   `testStart`), not the within-fold learning, which is event-driven and continuous already. P5 as
+   specified ("freeze the backbone, adapt only normalisation affine params") would therefore
+   *replace* the shipped full-parameter online update with a constrained one — a different and
+   cleaner experiment than "scheduled vs continuous", and one that must be judged as an
+   architecture change, not as an implementation of an existing idea.
+2. **The controller IS runnable in this environment** — the "tracker §0 Method note" that said
+   otherwise is now known to be wrong and is corrected. A 2-arm controller A/B
+   (`--model=controller`, 1 stream, `maxBars 100`, `testSize 15`, 4 folds) completes in **9.1 s**
+   through the harness's `better-sqlite3` shim, so a cadence grid is affordable: the cost is
+   `O(streams × folds² × arms)`, and a 8-stream/300-bar 2-arm roster at one cadence is ≈ 15–20 min
+   → a 4-run `testSize ∈ {10,15}` × 2-arm acceptance grid is ≈ 1–1.5 h. Cost is *not* the reason
+   for the deferral.
+3. **The blocker is where the change must live.** "Freeze the backbone and update only the norm
+   affines" has to be enforced inside `src/hivemind/training/gradients.js` (941 lines), where every
+   parameter group's update is applied inline (`accum.layerNormWeights[l].gamma2[j] += d_gamma[j] * lr`,
+   and ~20 sibling sites for attention/FFN/output/specialization weights). Gating each site is
+   broad, delicate surgery on the **golden-pinned** hot path (`golden.test.js`), and a single
+   missed site would leave a "frozen" backbone that is not frozen — a silent wrong-answer class the
+   report cannot see. The safe alternative (snapshot the whole parameter tree, run the unmodified
+   training step, then restore everything except the `layerNormWeights[*].gamma1/gamma2` arrays)
+   guarantees the freeze *by construction* and needs no trainer surgery — which is the design
+   recorded below. It is still a substantial feature: a new opt-in flag threaded through
+   `analyze.js` → `evaluateAB` → the model factory → `fold_worker`'s request serialization (the
+   same plumbing P3's `view.panel` needed), a causal adaptation objective, an optional causal
+   changepoint trigger, and its own bit-identity + freeze-verification tests.
+
+**The exact design (for the next round).**
+
+- **Flag:** `tta: { enabled, windowBars, steps, lr, trigger }` on `runAnalysis` (+ `--tta=windowBars:steps`),
+  **off by default**; when off the factory must build the existing model object unchanged (no
+  wrapper, no seed consumption), so every golden fingerprint and every scored number is
+  bit-identical. Pin this with a golden run at `tta` off and a `foldInputs` equality check.
+- **Freeze by construction:** collect every numeric array reachable from `ctl`/`mind` (generic
+  walk, skipping `_db`/closures), deep-copy them, run one ordinary training step, then restore
+  every array **except** `transformer.layerNormWeights[layer].gamma1`/`gamma2` (the only
+  normalisation affines the forward pass uses, `kernels/normalization.js#_rmsNorm`). Test: after an
+  adaptation step, every non-gamma array is bit-identical to its snapshot while at least one gamma
+  moved.
+- **Objective / "unlabeled window":** at each test bar, take the last `windowBars` **already
+  realized** bars and form the self-supervised target "sign of the next realized bar" (the same
+  target the shipped labeler learns from, but used online, causally, with no future bar) — i.e.
+  pseudo-labels from the most recent observed outcomes. Documented explicitly as a *pseudo-label*
+  objective, not as true unsupervised adaptation.
+- **Changepoint trigger (optional half):** adapt only when a causal statistic on realized returns
+  (e.g. a CUSUM or a short/long realized-vol ratio) exceeds a threshold; the trigger is a pure
+  function of the past and is recorded per fold.
+- **Acceptance (G-D, unchanged):** the TTA arm's *level* is ≈ invariant across
+  `testSize ∈ {10,15}` (compare the arms' pooled Sharpe swing against the baseline's known Δ1.01
+  from §15.3), with the goldens unmoved when the flag is off. Any outcome is a full result.
+
+**Why deferred rather than attempted.** (i) It is a new dynamical element in the scored training
+path, i.e. exactly the change class that `PLAN-round27.md` §3.5/the plan's §8 require to be
+off-by-default, bit-identity-proven and separately tested — and (ii) it can, by the plan's own
+statement, only remove a nuisance, never create edge, while the round's decisive evidence (P1's
+negative branch, P3's cost wall, P4's independence purchase) is already in hand. Committing
+half-tested online-update plumbing to a golden-pinned trainer at the end of a measurement round
+would risk the one asset the round did establish (the scored path is exactly reproducible). The
+gate stays **OPEN**, and this section plus `TODO.md` carry the design so the work is a bounded
+implementation rather than a re-derivation.
+
+**Post-implementation coherence / sanity / bug audit (round 29 → 30).** After §16.1–§16.6 were
+written, a full independent pass re-derived every headline readout **from the shipped data through
+the repo's own pure modules** and re-ran the suite. All matched exactly: the §16.2 P1 `testSize 15`
+row (Brier/`brierSkill`/accuracy per arm + the MCS₉₀ `{linear}` + the 4 032 pooled bars); the §16.4
+15m lag-1 autocorrelations (6/8 significantly negative); and the §16.5 funding audit, the pooled
+delta-neutral carry (6 606 periods, 9.78 %/yr, 0.84 % vol, Sharpe 11.61, maxDD −3.34 %), the panel
+dependence (8 → 9 streams: DE 5.226 → 5.228, effective streams 1.2539 → 1.5424, correlation
++0.0027) and the end-to-end `--carry-files` probe (9/8 streams, `pooledMeanRatePerBar` 1.29e-6,
+correlation −0.128). The suite re-ran green (30 entries, **2 547** checks, 0 failures, `golden`
+23/0 — no fingerprint moved). The pass found and fixed one latent code defect (`BUGS.md` **#67**:
+`restateReportAtCadence`'s default training window was one `testSize` short), registered the
+round-29 exports of `walkforward.js`/`decision.js`/`features.js` in `test/lock-registry.js` (they
+had been left out of the three already-registered modules), and repaired stale test counts in
+`README.md`/`src/README.md`/`LOCKED.md`/`DESIGN.md`/`lsh-ann.md`. P5 remains the one plan item not
+built (DoD item 4 is conditional). Full record: `round29-IMPLEMENTATION.md` §7.

@@ -158,6 +158,63 @@ discarded and only relevant hits are kept in the JSON snapshots.
   **2605.09472** (Positional LSH for linear-bias attention),
   **2604.21442** (2L-LSH point-cloud indexing), **2606.03001** (FOLD fuzzy
   online dedup).
+- `arxiv-sweep-2026-09o.json` — **refresh** (round 29 planning): the *target*
+  sweep, not an index/mechanism sweep. It asked where a genuine edge is documented,
+  given the round-28 readout's finding that the controller has **negative** forecast
+  skill and every positive-Sharpe arm is ~100 % market exposure. Four fronts:
+  (a) **model class** — **2205.13504** (DLinear: a linear model beats the LTSF
+  transformer family; self-attention is permutation-invariant), **2101.02118** (a
+  GBRT matches the deep models), **2303.06053**/**2306.09364** (TSMixer),
+  **2304.08424** (TiDE), **1905.10437** (N-BEATS), the small **pretrained** TSFMs
+  **2401.03955** (TTM, 1M params) and **2511.19272** (Tiny-TSM, 23M), and the
+  warning **2512.15732** (*The Red Queen's Trap* — a genetic-survival + transformer
+  trading post-mortem); (b) **crypto edges** — **2608.21888** (15-minute directional
+  reversal in **90 % of 183 Binance pairs**, vs 2.7 % of US equities; the round's
+  strongest lead), **1811.07860**/**1802.03708** (crypto factor models / time-varying
+  network), **2106.04028** (residuals from *conditional* latent factors),
+  **1912.03270**/**2506.08573**/**2605.06405** (funding/basis as a carry stream);
+  (c) **adaptation/regime** — **2602.00073** (frozen backbone + normalization-affine
+  test-time adaptation → financial markets), **2601.05975** (DeePM's causal sieve for
+  ragged data), **0710.3742**/**2302.04759** (online changepoint),
+  **2011.03741** (a four-state crypto HMM beats a random walk), and the
+  universal-portfolio/no-regret front (**1212.2129**, **2105.13126**, **2209.13932**,
+  **2202.07574**); (d) **evaluation robustness** — **2110.03810** (closed-form
+  steady-state turnover vs alpha autocorrelation and liquidity), Lo 2002's
+  Sharpe-vs-measurement-interval result (see **1808.04233**), **2209.13623**
+  (publication bias in asset pricing), and **2603.09219** (AlgoXpert: stable
+  parameter regions, **majority pass + catastrophic veto** — the template for the
+  round-29 configuration-robust gate). Grounding notes:
+  `../round29-model-class.md`, `../round29-crypto-edges.md`,
+  `../round29-adaptation-and-regime.md`, `../round29-evaluation-robustness.md`;
+  plan: `../../PLAN-round29.md`.
+- `arxiv-sweep-2026-09p.json` — **refresh** (round 29 planning, part 2): the
+  **ensemble-size / capacity** sweep, i.e. the one question the core hivemind design
+  raises about itself — *is a larger per-controller ensemble (`es = 8, 16, …`) worth
+  testing?* Three fronts. **Size theory:** **2609.13954** (*Linear Ensemble Sampling with
+  Smaller Ensembles* — the regret framework needs `Θ(d log T)` members with an intrinsic
+  `Ω(d)` barrier, and smaller ensembles retain the guarantee) and **2609.23927** (a
+  Kalman-ensemble accuracy bound whose required size depends on the **effective rank**
+  of the covariance and the unstable subspace, not the ambient dimension) — both say
+  size follows the *effective dimension*. **Cost/efficiency (the many-cheap-members
+  route):** **2002.06715** (BatchEnsemble — ensemble cost is **linear** in the number of
+  networks and "quickly becomes untenable"; per-member rank-1 modulation of a shared
+  backbone), **2203.05482** (Model soups — many members merged in weight space at
+  single-model inference cost), **2205.13104** (Trainable Weight Averaging),
+  **2609.24782** (*Virtual neural networks: hundreds of souls in a body* — constant
+  trainable parameters, hundreds of members by weight sharing), **2604.04038** (FLAME —
+  condenses ensemble diversity into one network), **2608.27728** (diffusion-ensemble
+  distillation). **Diversity/skill:** **2608.16190** (*Decorrelation Is Not
+  Complementarity: Skill, Not Lineage, Governs Trusted-Monitor Ensembles* — the central
+  counterweight to "more members → more diversity → more skill"), **2607.08493**
+  (learns ensemble composition **and size** with a signed diversity regularizer),
+  **2609.01397** (ensemble margin / local prediction variability — how to *measure*
+  multiplicity), **2607.28248** (ensemble-based UQ survey and its measures), and the
+  classic **1612.01474** (deep ensembles; calibrated uncertainty, diminishing returns in
+  `M`). Project-side carry-overs (not re-fetched): **2608.01090**, **2608.13223**,
+  **2609.10980**, **2605.30361**, **2608.27351**, **2512.15732**. Grounding note:
+  `../round29-ensemble-size.md`; plan priority P7/P7b. Conclusion: size is a
+  **gated, pre-registered probe**, not a default change, and the principled default is a
+  learned/dimension-sized `es`.
 
 ## Topics swept
 
@@ -177,6 +234,12 @@ discarded and only relevant hits are kept in the JSON snapshots.
 - deep ensembles / uncertainty
 - evolution strategies / low-rank evolution strategies
 - purged / combinatorial cross-validation, deflated Sharpe, triple-barrier, financial ML
+- time-series forecasting model class (linear/MLP vs transformer; small pretrained foundation models)
+- short-horizon cryptocurrency mean reversion; cross-sectional crypto factor models; perpetual funding/basis carry
+- test-time adaptation; online changepoint detection; regime-switching (HMM)
+- online portfolio selection / universal portfolios / regret minimization
+- Sharpe ratio vs sampling frequency; publication/selection bias; configuration-robust walk-forward protocols
+- ensemble size / ensemble scaling / deep-ensemble cost; ensemble pruning; ensemble diversity vs complementarity; ensemble condensation (weight sharing, model soups, virtual members); learned ensemble cardinality; ensemble-based uncertainty measures
 
 ## Re-running
 

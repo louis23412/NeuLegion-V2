@@ -22,7 +22,7 @@ import path from 'node:path';
 
 import HiveMind from '../hivemind/hiveMind.js';
 import HiveMindController from '../hivemind/hiveMindController.js';
-import { resolveVariant, makeSignalForVariant, makeControllerModelFactory, makeHiveMindModelFactory } from '../analyze.js';
+import { resolveVariant, makeSignalForVariant, makeControllerModelFactory, makeHiveMindModelFactory, makeBenchmarkModelFactory } from '../analyze.js';
 import { makeCandleViewFor } from './world.js';
 
 const req = workerData;
@@ -35,7 +35,7 @@ try {
         ? path.join(req.stateDir, `${variant.id}-s${req.streamIndex}-f${req.foldIndex}`)
         : fs.mkdtempSync(path.join(os.tmpdir(), 'nl-fold-'));
     fs.mkdirSync(stateDir, { recursive: true });
-    const view = req.candles ? makeCandleViewFor(req.candles)(req.returns, null) : { returns: req.returns };
+    const view = req.candles ? makeCandleViewFor(req.candles, { panel: req.panel || null })(req.returns, null) : { returns: req.returns };
     const factoryOptions = { HiveMind, stateDir, seed: req.seed, modelRetention: req.modelRetention || 'discard', commonRandomNumbers: req.commonRandomNumbers !== false };
     const factory = req.model === 'controller'
         ? makeControllerModelFactory({
@@ -43,10 +43,19 @@ try {
             cacheSize: req.cacheSize, ensembleSize: req.ensembleSize, tier: req.tier, warmup: req.warmup,
             positionPolicy: req.positionPolicy, saveInterval: req.saveInterval,
             labelPolicy: req.labelPolicy, labelHorizonBars: req.labelHorizonBars,
+            sampleWeightHorizon: req.sampleWeightHorizon,
         })
         : makeHiveMindModelFactory({ ...factoryOptions, len: req.len, leaky: req.leaky });
+    // P1: a benchmark variant is model-independent; dispatch it to its own factory.
+    // `selectFactory` must be a FUNCTION of the variant — the same shape the serial
+    // driver passes to `makeSignalForVariant` (which invokes it once per fold). It is
+    // NOT the pre-built model: calling `factory(variant)` here and handing the model
+    // to `makeSignalForVariant` makes it invoke the model object as a factory and
+    // throws "factory is not a function".
+    const benchmarkFactory = makeBenchmarkModelFactory({ seed: req.seed, len: req.len });
+    const selectFactory = (v) => (v && v.benchmark ? benchmarkFactory(v) : factory(v));
     let captured = null;
-    const fold = makeSignalForVariant(factory, {
+    const fold = makeSignalForVariant(selectFactory, {
         positionPolicy: req.positionPolicy,
         onStats: (_variant, stats) => { captured = stats; },
     })(variant);

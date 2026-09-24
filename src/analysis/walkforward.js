@@ -53,6 +53,7 @@
 
 import { strategyReturns, backtestMetrics, purgedCVBacktest, purgedCVBacktestAsync, poolFolds } from './backtest.js';
 import { normaliseConcurrency } from './parallel.js';
+import { walkForwardSplit } from './splits.js';
 import { subsamplingSpa, subsamplingStepM, subsamplingFdp, subsamplingKfwer } from './reality_check.js';
 import { sharpeRatio } from './performance.js';
 import {
@@ -671,7 +672,7 @@ export function clustersOf(report, { periodsPerYear = 252 } = {}) {
 // stream uses — so a merged report and a single-stream report are directly
 // comparable. A single report is returned untouched (no re-pooling), so the
 // one-stream path stays byte-identical.
-export function poolReports(reports, { periodsPerYear = 252, trials = 1 } = {}) {
+export function poolReports(reports, { periodsPerYear = 252, trials = 1, extraPanelStreams = null } = {}) {
     if (!Array.isArray(reports) || reports.length === 0) {
         throw new Error('poolReports: at least one report is required');
     }
@@ -682,10 +683,40 @@ export function poolReports(reports, { periodsPerYear = 252, trials = 1 } = {}) 
     // The per-stream panel, retained by reference: `streamReturns` is what the
     // dependence machinery groups into fold-window clusters, and `foldInputs` is
     // what lets the report be restated at another cost level (round 25).
-    const streamReturns = reports.map((r) => r.pooledReturns || []);
-    const streamFoldLengths = reports.map((r) => r.foldLengths || []);
+    const priceStreamReturns = reports.map((r) => r.pooledReturns || []);
+    const priceFoldLengths = reports.map((r) => r.foldLengths || []);
+    // Round 29 -> 30 (P4): a funding/carry sleeve is a genuinely independent RETURN
+    // source, so the DSR's design-effect adjustment should count it. Extra streams
+    // are appended to the panel (never to the scored price returns), and each extra
+    // stream is declared as one fold of its own length. A stream in this panel is a
+    // PER-STREAM series (the test bars of one world, folds concatenated) — so an
+    // extra stream must match `priceStreamReturns[0].length`, NOT the concatenated
+    // `pooled.length` (which is every stream's bars). A mismatch is reported as
+    // unavailable rather than silently dropped (a silent drop would leave the
+    // design effect looking better than it is).
+    const extra = (Array.isArray(extraPanelStreams) ? extraPanelStreams : [])
+        .filter((s) => Array.isArray(s) && s.length);
+    const panelLength = priceStreamReturns.length ? (priceStreamReturns[0] || []).length : 0;
+    const hasVariance = (s) => {
+        const first = s[0];
+        for (let i = 1; i < s.length; i++) if (s[i] !== first) return true;
+        return false;
+    };
+    const lengthMismatch = extra.some((s) => s.length !== panelLength);
+    // A CONSTANT stream carries no information and makes every pairwise correlation
+    // undefined, so it must not enter the panel either — that is the same class of
+    // silent degradation the length check guards (and is exactly what a mis-wired
+    // sleeve, e.g. an all-zero carry series, looks like).
+    const degenerate = extra.some((s) => !hasVariance(s));
+    const panelMismatch = lengthMismatch || degenerate;
+    const panelMismatchReason = lengthMismatch ? 'length' : (degenerate ? 'degenerate' : null);
+    const streamReturns = panelMismatch ? priceStreamReturns : [...priceStreamReturns, ...extra];
+    const streamFoldLengths = panelMismatch ? priceFoldLengths : [...priceFoldLengths, ...extra.map((s) => [s.length])];
     const foldInputs = reports.flatMap((r) => r.foldInputs || []);
-    const dependence = dependenceSummary({ streamReturns, streamFoldLengths, periodsPerYear });
+    const priceDependence = dependenceSummary({ streamReturns: priceStreamReturns, streamFoldLengths: priceFoldLengths, periodsPerYear });
+    const dependence = panelMismatch
+        ? priceDependence
+        : dependenceSummary({ streamReturns, streamFoldLengths, periodsPerYear });
     const effectiveBars = dependence && dependence.available ? dependence.effectiveBars : null;
     const { pooledMetrics, meanFoldSharpe } = poolFolds(perFold, pooled, pooledGross, { periodsPerYear, trials, effectiveBars });
     const audits = reports.map((r) => r.audit).filter(Boolean);
@@ -716,6 +747,16 @@ export function poolReports(reports, { periodsPerYear = 252, trials = 1 } = {}) 
         foldLengths: reports.flatMap((r) => r.foldLengths || []),
         aggregate: aggregateFolds(perFold),
         dependence,
+        // Round 29 -> 30 (P4): the extra (carry/funding) panel streams that were
+        // folded into `dependence`, plus the PRICE-ONLY dependence so a reader can
+        // see exactly what adding the sleeve did. `panelMismatch` is true when a
+        // supplied stream did not tile the pooled price grid, in which case the
+        // extra streams were excluded from `dependence` (never silently averaged).
+        panelStreams: extra.length,
+        panelMismatch,
+        panelMismatchReason,
+        dependenceWithoutExtras: extra.length ? priceDependence : null,
+        extraPanelStreams: extra.length && !panelMismatch ? extra : null,
         audit,
         power: powerSummary(pooledMetrics.netSharpe, pooled.length, periodsPerYear, dependence),
         probed: reports.some((r) => r.probed === true),
@@ -1090,6 +1131,29 @@ export function pairedPromotionTest(baseline, candidate, { alpha = 0.05, periods
 // the pooled metrics, the aggregate, the per-stream panel (rebuilt on the
 // restated net returns, so the dependence block and the paired test are also
 // cost-aware) and the fold lengths.
+// Round 29 -> 30 (P4): extra panel streams (the funding/carry sleeve) ride along
+// on a pooled report. A restatement MUST re-append them, otherwise the restated
+// dependence block would silently lose an independent stream the scored block
+// counted — a cost-ladder row would then disagree with the scored row for a
+// reason that has nothing to do with cost.
+//
+// `priceStreamReturns` / `priceStreamFoldLengths` are the PRICE-ONLY panel (the
+// caller rebuilds it from the journal); the extras are appended HERE, once. If the
+// lengths handed in do not line up with the returns (a caller that passed the
+// already-extended list, which would double-count the sleeve), they are derived
+// from the returns so the panel stays rectangular.
+const withExtraPanelStreams = (report, priceStreamReturns, priceStreamFoldLengths) => {
+    const extras = report && Array.isArray(report.extraPanelStreams) ? report.extraPanelStreams : [];
+    if (!extras.length) return { streamReturns: priceStreamReturns, streamFoldLengths: priceStreamFoldLengths };
+    const lens = Array.isArray(priceStreamFoldLengths) && priceStreamFoldLengths.length === priceStreamReturns.length
+        ? priceStreamFoldLengths
+        : priceStreamReturns.map((s) => [s.length]);
+    return {
+        streamReturns: [...priceStreamReturns, ...extras],
+        streamFoldLengths: [...lens, ...extras.map((s) => [s.length])],
+    };
+};
+
 export function restateReportAtCost(report, costBps, { periodsPerYear = 252, trials = null } = {}) {
     if (!report || !Array.isArray(report.foldInputs) || !report.foldInputs.length) return null;
     // The deflated Sharpe depends on the number of trials the search ran, so a
@@ -1107,6 +1171,7 @@ export function restateReportAtCost(report, costBps, { periodsPerYear = 252, tri
     const pooled = [];
     const pooledGross = [];
     const streamReturns = [];
+    const priceFoldLengths = [];
     let streamIndex = -1;
     let streamRemaining = 0;
     for (let fi = 0; fi < report.foldInputs.length; fi++) {
@@ -1127,18 +1192,27 @@ export function restateReportAtCost(report, costBps, { periodsPerYear = 252, tri
                 // Rebuild the per-stream panel greedily from the flat fold list: the
                 // report's `streamFoldLengths` says how many folds each stream owns.
                 streamReturns.push([]);
+                priceFoldLengths.push([]);
                 streamIndex++;
                 const lens = report.streamFoldLengths[streamIndex];
                 streamRemaining = Array.isArray(lens) ? lens.length : 0;
             }
             streamReturns[streamIndex].push(...bt.returns);
+            priceFoldLengths[streamIndex].push(bt.returns.length);
             streamRemaining--;
         }
     }
-    const streamFoldLengths = hasPanel ? report.streamFoldLengths : null;
+    const rebuilt = withExtraPanelStreams(report, streamReturns, hasPanel ? priceFoldLengths : null);
+    const extras = Array.isArray(report.extraPanelStreams) ? report.extraPanelStreams : [];
     const dependence = hasPanel
-        ? dependenceSummary({ streamReturns, streamFoldLengths, periodsPerYear })
+        ? dependenceSummary({ streamReturns: rebuilt.streamReturns, streamFoldLengths: rebuilt.streamFoldLengths, periodsPerYear })
         : (report.dependence || null);
+    // The PRICE-ONLY dependence at THIS cost, so `dependence` (with the sleeve) and
+    // `dependenceWithoutExtras` are a like-for-like pair at one cost level rather
+    // than a restated block beside a scored one.
+    const dependenceWithoutExtras = hasPanel && extras.length
+        ? dependenceSummary({ streamReturns, streamFoldLengths: priceFoldLengths, periodsPerYear })
+        : null;
     const effectiveBars = dependence && dependence.available ? dependence.effectiveBars : null;
     const { pooledMetrics } = poolFolds(perFold, pooled, pooledGross, { periodsPerYear, trials: effectiveTrials, effectiveBars });
     return {
@@ -1149,8 +1223,17 @@ export function restateReportAtCost(report, costBps, { periodsPerYear = 252, tri
         pooledBars: pooled.length,
         pooledReturns: pooled,
         pooledGross,
-        streamReturns: hasPanel ? streamReturns : report.streamReturns,
-        streamFoldLengths,
+        streamReturns: hasPanel ? rebuilt.streamReturns : report.streamReturns,
+        streamFoldLengths: hasPanel ? rebuilt.streamFoldLengths : report.streamFoldLengths,
+        // Carry the sleeve forward so a restatement can itself be restated (the
+        // cost ladder re-scores the SAME report at each level, but a chained
+        // restatement must not silently lose the independent stream), plus the
+        // panel bookkeeping `poolReports` attached.
+        extraPanelStreams: report.extraPanelStreams || null,
+        panelStreams: extras.length,
+        panelMismatch: report.panelMismatch === true,
+        panelMismatchReason: report.panelMismatchReason || null,
+        dependenceWithoutExtras,
         foldInputs: report.foldInputs,
         foldLengths: report.foldLengths,
         aggregate: aggregateFolds(perFold),
@@ -1182,6 +1265,7 @@ export function restateReportAtPolicy(report, policy = {}, { costBps = 0, period
     const pooled = [];
     const pooledGross = [];
     const streamReturns = [];
+    const priceFoldLengths = [];
     let streamIndex = -1;
     let streamRemaining = 0;
     for (let fi = 0; fi < report.foldInputs.length; fi++) {
@@ -1203,15 +1287,22 @@ export function restateReportAtPolicy(report, policy = {}, { costBps = 0, period
         for (const r of bt.gross) pooledGross.push(r);
         if (streamRemaining <= 0) {
             streamReturns.push([]);
+            priceFoldLengths.push([]);
             streamIndex++;
             const lens = report.streamFoldLengths && report.streamFoldLengths[streamIndex];
             streamRemaining = Array.isArray(lens) ? lens.length : 0;
         }
         streamReturns[streamIndex].push(...bt.returns);
+        priceFoldLengths[streamIndex].push(bt.returns.length);
         streamRemaining--;
     }
-    const streamFoldLengths = report.streamFoldLengths || null;
-    const dependence = dependenceSummary({ streamReturns, streamFoldLengths, periodsPerYear });
+    const rebuilt = withExtraPanelStreams(report, streamReturns, report.streamFoldLengths ? priceFoldLengths : null);
+    const extras = Array.isArray(report.extraPanelStreams) ? report.extraPanelStreams : [];
+    const dependence = dependenceSummary({ streamReturns: rebuilt.streamReturns, streamFoldLengths: rebuilt.streamFoldLengths, periodsPerYear });
+    // The PRICE-ONLY dependence at this same policy/cost (see `restateReportAtCost`).
+    const dependenceWithoutExtras = extras.length
+        ? dependenceSummary({ streamReturns, streamFoldLengths: priceFoldLengths, periodsPerYear })
+        : null;
     const effectiveBars = dependence && dependence.available ? dependence.effectiveBars : null;
     const { pooledMetrics } = poolFolds(perFold, pooled, pooledGross, { periodsPerYear, trials: effectiveTrials, effectiveBars });
     return {
@@ -1230,10 +1321,18 @@ export function restateReportAtPolicy(report, policy = {}, { costBps = 0, period
         pooledBars: pooled.length,
         pooledReturns: pooled,
         pooledGross,
-        streamReturns,
-        streamFoldLengths,
+        streamReturns: rebuilt.streamReturns,
+        streamFoldLengths: rebuilt.streamFoldLengths,
+        // P2: carry the journal forward so a restated report can itself be restated
+        // (chained cadence/policy/exposure sweeps) without re-reading the run.
+        foldInputs: report.foldInputs,
         aggregate: aggregateFolds(perFold),
         dependence,
+        extraPanelStreams: report.extraPanelStreams || null,
+        panelStreams: extras.length,
+        panelMismatch: report.panelMismatch === true,
+        panelMismatchReason: report.panelMismatchReason || null,
+        dependenceWithoutExtras,
         power: powerSummary(pooledMetrics.netSharpe, pooled.length, periodsPerYear, dependence),
     };
 }
@@ -1257,6 +1356,257 @@ export function verifyPolicyRoundTrip(report, policy = {}) {
         }
     }
     return { ok: mismatch === 0, mismatch, folds: checked };
+}
+
+// ---------------------------------------------------------------------------
+// P2 (round 29 → 30): configuration-robust evaluation + exposure matching
+// ---------------------------------------------------------------------------
+// The A/B's LEVEL is a function of the retrain cadence (`RUN-ANALYSIS.md` §15.3):
+// the same model, seed, data and CRN moved the baseline's pooled Sharpe by Δ1.01
+// when `testSize` went 15 → 10, and the best candidate's paired Δ collapsed
+// +0.2164 → +0.0289. So a single-cadence verdict is a verdict about the
+// configuration as much as about the strategy. Two tools make that explicit:
+//
+//   1. `restateReportAtCadence` re-scores a journal on a DIFFERENT fold grid — the
+//      fixed-position version of the cadence change (the "fixed position series
+//      re-scored under a different fold grid" of §1.4, which moves Sharpe only
+//      ~0.08-0.24). Pure post-processing (no model), used for the cadence-robustness
+//      retrospective and as a cheap sensitivity check.
+//   2. `exposureMatchedPair` quotes a cross-family comparison at MATCHED exposure:
+//      the two families' confidences live on different scales (controller |conf| max
+//      0.2555 vs signals saturating at 1.0 — `BUGS.md` #61), so an absolute dead
+//      zone is a different filter for each. The dead zone is set per family from the
+//      empirical quantile of |confidence| that matches a common in-market share.
+
+// The dead zone that leaves ~`targetFraction` of bars in the market, from the
+// empirical distribution of |confidence|. `confidenceToPosition` treats `|c| <= dz`
+// as flat, so the in-market subset is `|c| > dz`; the threshold is placed just below
+// the `m`-th largest |confidence| with `m = round(targetFraction * n)`.
+export function exposureDeadZone(confidences, targetFraction) {
+    const a = (Array.isArray(confidences) ? confidences : [])
+        .map((c) => Math.abs(Number(c)))
+        .filter((c) => Number.isFinite(c));
+    const n = a.length;
+    const target = Number.isFinite(targetFraction) ? Math.min(1, Math.max(0, targetFraction)) : 0;
+    if (!n) return { deadZone: 0, achievedFraction: null, n: 0 };
+    const s = a.slice().sort((x, y) => x - y);
+    const m = Math.round(target * n);
+    let dz;
+    if (m <= 0) dz = 0.999;             // nothing in the market
+    else if (m >= n) dz = 0;            // everything in the market
+    else {
+        // Place the threshold midway between the m-th and (m+1)-th largest |c| so
+        // EXACTLY m values satisfy `|c| > dz` when the distribution is continuous,
+        // and degrade gracefully to `s[n-m]` when those two are tied.
+        const hi = s[n - m];
+        const lo = s[n - m - 1];
+        dz = lo === hi ? hi : (lo + hi) / 2;
+        dz = Math.min(0.999, Math.max(0, dz));
+    }
+    // `achievedFraction` uses the exact rule `|c| > dz` (not `>=`), so a reader sees
+    // how close the match really is when the |confidence| distribution has ties.
+    let inMarket = 0;
+    for (const c of a) if (c > dz) inMarket++;
+    return { deadZone: dz, achievedFraction: inMarket / n, n };
+}
+
+// Re-score a journal on a different walk-forward cadence. The per-stream bar series
+// (returns + raw confidence) are rebuilt from the report's `foldInputs` (placed at
+// each fold's `testStart`), then re-partitioned with `walkForwardSplit({n, trainSize,
+// testSize, step})` and re-scored through the same `restateReportAtPolicy` arithmetic.
+// A fixed-position restatement: it holds the model's trajectory constant and varies
+// only the grid, so it is a LOWER bound on the cadence sensitivity (the real swing is
+// the model retraining more often — §1.4).
+export function restateReportAtCadence(report, {
+    testSize, trainSize = null, step = null, policy = {}, costBps = 0, periodsPerYear = 252, trials = null,
+} = {}) {
+    if (!report || !Array.isArray(report.foldInputs) || !report.foldInputs.length || !Number.isFinite(testSize) || testSize <= 0) return null;
+    const keepPolicy = policy && Object.keys(policy).length ? policy : (report.policy || {});
+    // P4: a report's panel may carry EXTRA streams (the funding/carry sleeve). Those
+    // are not price streams: they have no `foldInputs` and must not be rebuilt from
+    // the journal. Only the price streams participate in the fold rebuild; the sleeve
+    // is re-projected onto the NEW grid separately (below), so a cadence restatement
+    // keeps the same panel rather than silently dropping an independent stream (which
+    // would make the design effect look better than it is).
+    const extras = Array.isArray(report.extraPanelStreams) ? report.extraPanelStreams : [];
+    const nStreams = Array.isArray(report.streamFoldLengths) && report.streamFoldLengths.length
+        ? Math.max(1, report.streamFoldLengths.length - extras.length) : 1;
+    const foldsPer = (s) => (Array.isArray(report.streamFoldLengths) && report.streamFoldLengths[s]
+        ? report.streamFoldLengths[s].length : report.folds.length / nStreams);
+    let N = 0;
+    for (const f of report.folds) if (Number.isFinite(f.testEnd)) N = Math.max(N, f.testEnd + 1);
+    if (!(N > 0)) return null;
+    // Default the training length from the first fold's grid position. `walkForwardSplit`
+    // builds non-expanding folds whose first training window is `[0, testStart)`, so
+    // fold 0's `testStart` IS the training-window LENGTH (an expanding split's first
+    // fold also starts at 0, so the same reading holds). The earlier
+    // `testStart - foldLen` expression subtracted the test window and under-sized the
+    // train set by one `testSize` whenever the caller omitted `trainSize`.
+    const firstStart = report.folds[0] && Number.isFinite(report.folds[0].testStart) ? report.folds[0].testStart : NaN;
+    const tr = trainSize == null ? (firstStart > 0 ? firstStart : testSize) : trainSize;
+    const streams = [];
+    let fi = 0;
+    for (let s = 0; s < nStreams; s++) {
+        const returns = new Array(N).fill(0);
+        const confidence = new Array(N).fill(0);
+        const count = foldsPer(s);
+        for (let k = 0; k < count; k++, fi++) {
+            const f = report.folds[fi];
+            const input = report.foldInputs[fi];
+            if (!f || !input) continue;
+            const src = Array.isArray(input.returns) ? input.returns : [];
+            const conf = Array.isArray(input.confidence) ? input.confidence : [];
+            const len = Math.min(src.length, f.testEnd - f.testStart + 1);
+            for (let i = 0; i < len; i++) {
+                returns[f.testStart + i] = src[i];
+                confidence[f.testStart + i] = conf[i];
+            }
+        }
+        streams.push({ returns, confidence });
+    }
+    const newFoldInputs = [];
+    const newFolds = [];
+    const newStreamFoldLengths = [];
+    const newGrid = walkForwardSplit({ n: N, trainSize: tr, testSize, step });
+    for (let s = 0; s < nStreams; s++) {
+        const lens = [];
+        for (const fold of newGrid) {
+            const ret = fold.test.map((t) => streams[s].returns[t]);
+            const conf = fold.test.map((t) => streams[s].confidence[t]);
+            newFoldInputs.push({ returns: ret, confidence: conf });
+            newFolds.push({ testStart: fold.testStart, testEnd: fold.testEnd, test: fold.test.slice(), metrics: {} });
+            lens.push(fold.test.length);
+        }
+        newStreamFoldLengths.push(lens);
+    }
+    // P4: re-project the extra (carry) streams onto the new grid. The sleeve is a flat
+    // per-BAR return series over the original fold test bars, so — exactly like the
+    // price streams — it is placed on the length-N bar axis at each original fold's
+    // `testStart` and the new grid is read back off it.
+    let extrasForGrid = null;
+    if (extras.length) {
+        const priceFolds = report.folds.slice(0, foldsPer(0));
+        extrasForGrid = extras.map((sleeve) => {
+            const placed = new Array(N).fill(0);
+            let cursor = 0;
+            for (const f of priceFolds) {
+                const len = f.testEnd - f.testStart + 1;
+                for (let i = 0; i < len && cursor + i < sleeve.length; i++) placed[f.testStart + i] = sleeve[cursor + i];
+                cursor += len;
+            }
+            const out = [];
+            for (const fold of newGrid) for (const t of fold.test) out.push(placed[t]);
+            return out;
+        });
+    }
+    const synthetic = {
+        foldInputs: newFoldInputs,
+        folds: newFolds,
+        streamFoldLengths: newStreamFoldLengths,
+        extraPanelStreams: extrasForGrid,
+        trials: report.trials,
+        policy: keepPolicy,
+    };
+    const out = restateReportAtPolicy(synthetic, keepPolicy, { costBps, periodsPerYear, trials });
+    if (out) out.cadence = { testSize, trainSize: tr, step: step == null ? testSize : step, folds: newFolds.length, panelStreams: extrasForGrid ? extrasForGrid.length : 0 };
+    return out;
+}
+
+// Quote a cross-family (or cross-configuration) comparison at MATCHED exposure. The
+// common target is the LESS-invested family's `nonZeroFraction` by default, so
+// neither arm wins by being invested more; the dead zone of each arm is set to the
+// empirical quantile of its own |confidence| that achieves that share. Returns both
+// restated reports, their dead zones and the full promotion decision — the honest
+// replacement for the §15.5(c) promoting row that compared an ~80 %-invested book
+// with one holding 16 of 4320 bars.
+export function exposureMatchedPair({
+    baseline, candidate, targetNonZeroFraction = null, policy = null,
+    costBps = 0, periodsPerYear = 252, trials = null, decisionOptions = {},
+    keepBandInMatch = false,
+} = {}) {
+    if (!baseline || !candidate || !Array.isArray(baseline.foldInputs) || !Array.isArray(candidate.foldInputs)) {
+        return { available: false, reason: 'both reports must carry foldInputs (a journaled confidence) for exposure matching' };
+    }
+    // Resolve the policy we are matching AT: the caller may pass one, otherwise fall
+    // back to whatever the baseline report was scored at. The raw in-market share is
+    // measured by RESTATING both reports at that policy — never read off
+    // `report.pooledMetrics`, because a report built from a journal (the retired-run
+    // retrospective) does not carry it, which would silently yield a zero target and
+    // a degenerate "match" where both arms sit flat.
+    const basePolicy = policy && Object.keys(policy).length ? policy
+        : (baseline.policy && Object.keys(baseline.policy).length ? baseline.policy : {});
+    const flatConf = (r) => r.foldInputs.flatMap((f) => (Array.isArray(f.confidence) ? f.confidence : []));
+    const bRaw = restateReportAtPolicy(baseline, basePolicy, { costBps, periodsPerYear, trials });
+    const cRaw = restateReportAtPolicy(candidate, basePolicy, { costBps, periodsPerYear, trials });
+    if (!bRaw || !cRaw) return { available: false, reason: 'a report could not be restated at the base policy (no foldInputs)' };
+    const baseFrac = bRaw.pooledMetrics.nonZeroFraction;
+    const candFrac = cRaw.pooledMetrics.nonZeroFraction;
+    let target = targetNonZeroFraction;
+    if (!Number.isFinite(target)) {
+        const vals = [baseFrac, candFrac].filter((x) => Number.isFinite(x));
+        target = vals.length ? Math.min(...vals) : 0;
+    }
+    const bDead = exposureDeadZone(flatConf(baseline), target);
+    const cDead = exposureDeadZone(flatConf(candidate), target);
+    // The matched row deliberately drops any HOLDING BAND and compares with a
+    // pointwise dead zone. Two reasons. (1) The band's `enter`/`exit` are a second
+    // absolute threshold in confidence space, so it suffers the same scale
+    // mismatch as the dead zone (§15.5(c): `enter 0.2` is ~80 %-invested for a
+    // saturated signal but ~flat for a controller whose |confidence| maxes at
+    // 0.2555). (2) A band's hysteresis cannot even be pushed to an arbitrarily
+    // small exposure — with `exit = enter/4` the position dwells until |c| decays,
+    // which floors the in-market share — so a "matching" that keeps the band often
+    // cannot reach the target at all. Equalising exposure exactly therefore needs a
+    // scale-free rule: both families trade the top-X % of bars by |confidence|.
+    // The banded comparison stays available as the RAW row.
+    const matchedPolicyFor = (quantileDead) => {
+        const p = { ...basePolicy, deadZone: quantileDead };
+        if (keepBandInMatch !== true) { delete p.enter; delete p.exit; }
+        return p;
+    };
+    const bPolicy = matchedPolicyFor(bDead.deadZone);
+    const cPolicy = matchedPolicyFor(cDead.deadZone);
+    const b = restateReportAtPolicy(baseline, bPolicy, { costBps, periodsPerYear, trials });
+    const c = restateReportAtPolicy(candidate, cPolicy, { costBps, periodsPerYear, trials });
+    if (!b || !c) return { available: false, reason: 'a report could not be restated at the matched policy (no foldInputs)' };
+    const decision = promoteDecision(b, c, decisionOptions);
+    // A dead zone can only select bars by a |confidence| threshold, so when a
+    // family's confidence is discrete (saturated ±integer signal scores) the
+    // achieved share can overshoot the target — the candidate may simply be unable
+    // to trade as FEW bars as the baseline. Flag it rather than hiding it.
+    const totalBars = b.foldInputs.reduce((s, f) => s + (Array.isArray(f.confidence) ? f.confidence.length : 0), 0) || 1;
+    const tolerance = Math.max(0.02, 2 / totalBars);
+    const matchedWithinTolerance = Math.abs(b.pooledMetrics.nonZeroFraction - target) <= tolerance
+        && Math.abs(c.pooledMetrics.nonZeroFraction - target) <= tolerance;
+    return {
+        available: true,
+        targetNonZeroFraction: target,
+        matchedWithinTolerance,
+        tolerance,
+        policy: basePolicy,
+        matchedPolicy: { baseline: bPolicy, candidate: cPolicy },
+        baseline: {
+            deadZone: bPolicy.deadZone, enter: Number.isFinite(bPolicy.enter) ? bPolicy.enter : null,
+            achievedFraction: b.pooledMetrics.nonZeroFraction,
+            nonZeroFraction: b.pooledMetrics.nonZeroFraction,
+            netSharpe: b.pooledMetrics.netSharpe, dsrAdjusted: b.pooledMetrics.dsrAdjusted,
+        },
+        candidate: {
+            deadZone: cPolicy.deadZone, enter: Number.isFinite(cPolicy.enter) ? cPolicy.enter : null,
+            achievedFraction: c.pooledMetrics.nonZeroFraction,
+            nonZeroFraction: c.pooledMetrics.nonZeroFraction,
+            netSharpe: c.pooledMetrics.netSharpe, dsrAdjusted: c.pooledMetrics.dsrAdjusted,
+        },
+        raw: {
+            baselineNonZeroFraction: baseFrac, candidateNonZeroFraction: candFrac,
+            baselineNetSharpe: bRaw.pooledMetrics.netSharpe,
+            candidateNetSharpe: cRaw.pooledMetrics.netSharpe,
+            baselineDsrAdjusted: bRaw.pooledMetrics.dsrAdjusted,
+            candidateDsrAdjusted: cRaw.pooledMetrics.dsrAdjusted,
+        },
+        decision,
+        reader: 'matched exposure: both families trade the top-X % of bars by |confidence| (the minimum of the two families\' scored in-market shares, by default), so the exposure confound is removed. The matched row uses a pointwise dead zone only — a holding band\'s `enter`/`exit` are another absolute confidence-space threshold, so a banded "match" is neither scale-free nor always reachable. A promotion at UNMATCHED exposure can be an artefact of one arm abstaining (BUGS.md #61); the matched row tests the same claim at equal exposure.',
+    };
 }
 
 // The cost ladder: the whole decision recomputed at a handful of cost levels.

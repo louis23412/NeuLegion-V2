@@ -1,0 +1,818 @@
+{
+  "round": 29,
+  "status": "implemented (round 29 -> 30: P1-P4 measured, P5 designed+deferred, P6/P7 closed by G-A; code shipped and pinned)",
+  "generated": "2026-09-24",
+  "plan": "../PLAN-round29.md",
+  "index": "round29-README.md",
+  "schema": {
+    "id": "stable id (P# priority/direction, R# rejected, G# not-scheduled/deferred, C# conflict, MC# measured check, B# bottleneck number, FG# focus-point; the plan's decisions are D1-D11 in PLAN-round29.md §6)",
+    "verdict": "KEEP | GATED | REJECT | NOT_SCHEDULED | DEFERRED | OPEN | RESOLVED | NEEDS_TEST",
+    "priority": "P1..P7b or null",
+    "cost": "hours | short-run | full-run | data-fetch | reading"
+  },
+  "priorities_in_order": [
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P7",
+    "P6",
+    "P7b"
+  ],
+  "directions": [
+    {
+      "id": "P1",
+      "title": "Model-class benchmark (base rate / linear / MLP / zero-shot TSFM / controller)",
+      "priority": "P1",
+      "verdict": "KEEP",
+      "cost": "hours",
+      "evidence": [
+        "controller brierSkill -0.07382 / status 'base-rate' (20260924T045601-seed1)",
+        "2205.13504",
+        "2101.02118",
+        "2303.06053",
+        "2401.03955",
+        "2511.19272"
+      ],
+      "test": "pre-registered: no forecaster beats the base rate => features/labels are the constraint; linear/TSFM beats the controller => architecture is",
+      "conflicts": [
+        "C3"
+      ],
+      "outcome": "NEGATIVE BRANCH (G-A): no positive Brier skill in any class; P6/P7 closed",
+      "artifact": "RUN-ANALYSIS.md §16.2"
+    },
+    {
+      "id": "P2",
+      "title": "Configuration-robust + exposure-matched gate (majority pass + catastrophic veto over a cadence grid)",
+      "priority": "P2",
+      "verdict": "KEEP",
+      "cost": "reading",
+      "evidence": [
+        "Delta Sharpe 1.01244 p 0.02008 across testSize",
+        "BUGS.md #61 (0.51 vs 0.89 vs 0.004 nonzero fraction)",
+        "2603.09219"
+      ],
+      "test": "verdict-neutral on the 3 retained runs AND kills sig-accel's 0-bps promotion; fixture: cadence-only promotion rejected; fixture: manufactured exposure gap removed",
+      "conflicts": [
+        "C6",
+        "C7"
+      ],
+      "outcome": "KEEP and shipped: verdict-neutral on the retained runs, kills the §15.5(c) promotion",
+      "artifact": "RUN-ANALYSIS.md §16.3"
+    },
+    {
+      "id": "P3",
+      "title": "15-minute reversal family (sign / cross-sectional / vol-scaled) on new bars",
+      "priority": "P3",
+      "verdict": "KEEP",
+      "cost": "data-fetch",
+      "evidence": [
+        "2608.21888 (90% of 183 Binance pairs at 15m, signs not magnitudes)",
+        "1h empty: AC -0.013, rank IC -0.050, rank-book break-even -0.042 bps"
+      ],
+      "test": "step-0 data audit is a hard gate; then breakEvenCostBps >= 15m taker cost AND adjDSR >= 0.95 AND SPA not rejecting, at > half the cadences",
+      "conflicts": [
+        "C2"
+      ],
+      "outcome": "NON-ACCEPTANCE: the effect is real, the cost model rejects it (break-even 0.32-0.56 bps)",
+      "artifact": "RUN-ANALYSIS.md §16.4"
+    },
+    {
+      "id": "P4",
+      "title": "Funding/basis carry as an independent stream",
+      "priority": "P4",
+      "verdict": "KEEP",
+      "cost": "data-fetch",
+      "evidence": [
+        "effectiveStreams 2.30-2.42 / 8",
+        "top-eig 0.794 (1-factor residual 20.8%)",
+        "1912.03270",
+        "2506.08573",
+        "2605.06405"
+      ],
+      "test": "measure-before-build: the new stream must move the best arm's dsrAdjusted across 0.95 (MC1); else rejected as a breadth purchase",
+      "conflicts": [
+        "C1",
+        "C9"
+      ],
+      "outcome": "ACCEPTANCE on its own criterion (+0.003 correlation, 1.25 -> 1.54 effective streams of 9), G-C does not cross (serial-dominated design effect)",
+      "artifact": "RUN-ANALYSIS.md §16.5"
+    },
+    {
+      "id": "P5",
+      "title": "Continuous test-time adaptation (frozen backbone; normalisation/low-rank params on recent windows)",
+      "priority": "P5",
+      "verdict": "KEEP",
+      "cost": "full-run",
+      "evidence": [
+        "level moves 1.01244 across testSize",
+        "2602.00073",
+        "2506.23424",
+        "2601.05975"
+      ],
+      "test": "TTA arm's level approx invariant across testSize {10,15}; goldens unmoved with the flag off",
+      "conflicts": [
+        "C5"
+      ],
+      "outcome": "DEFERRED with design + cost wall; gate G-D open",
+      "artifact": "RUN-ANALYSIS.md §16.6"
+    },
+    {
+      "id": "P6",
+      "title": "Meta-labeling (size/filter a positive-skill primary)",
+      "priority": "P6",
+      "verdict": "GATED",
+      "cost": "full-run",
+      "evidence": [
+        "AFML ch.3",
+        "2107.11972",
+        "2306.09862"
+      ],
+      "test": "only if P1 finds positive primary skill; meta-filter improves net Sharpe at unchanged DSR floor",
+      "conflicts": [],
+      "outcome": "CLOSED by G-A (the primary has no positive skill, so meta-labeling cannot add to it); not run (RUN-ANALYSIS.md §16.2)"
+    },
+    {
+      "id": "P7",
+      "title": "es capacity probe: pre-registered sweep es in {2,4,8,16} at forceMin",
+      "priority": "P7",
+      "verdict": "GATED",
+      "cost": "short-run",
+      "evidence": [
+        "2608.16190",
+        "2002.06715",
+        "2609.13954",
+        "2609.23927",
+        "live retrieval scales with es; broadcast budgets divide by es"
+      ],
+      "test": ">=3 seeds; if no es improves Brier skill vs the base rate beyond the seed spread, capacity/member count is not the constraint (closed with a number); report skill at matched exposure",
+      "conflicts": [
+        "C4"
+      ],
+      "note": "gated on P1; RNG-confounded, so >=3 seeds; default es unchanged",
+      "outcome": "CLOSED by G-A (features/labels are the constraint, not member count); G-E not run, default es stays 4 (RUN-ANALYSIS.md §16.2)"
+    },
+    {
+      "id": "P7b",
+      "title": "Size es by learning/dimension, or buy members cheaply by weight sharing (shared-weight virtual members; learned cardinality)",
+      "priority": "P7b",
+      "verdict": "KEEP",
+      "cost": "reading",
+      "evidence": [
+        "2607.08493",
+        "2609.24782",
+        "2002.06715",
+        "2203.05482"
+      ],
+      "test": "design rule: do NOT hard-code a bigger default es",
+      "conflicts": [],
+      "outcome": "not run — gated behind P7/G-A (RUN-ANALYSIS.md §16.2)"
+    },
+    {
+      "id": "R1",
+      "title": "More mechanism variants",
+      "verdict": "REJECT",
+      "evidence": [
+        "6 mechanisms / 3 rounds, zero promotions"
+      ]
+    },
+    {
+      "id": "R2",
+      "title": "Buy bars/power for the DSR floor",
+      "verdict": "REJECT",
+      "evidence": [
+        "93576 i.i.d. bars (single-series, Sharpe 0.1017); independence buys approx 2.3x"
+      ]
+    },
+    {
+      "id": "R3",
+      "title": "Cross-sectional sleeve on the existing 1h basket",
+      "verdict": "REJECT",
+      "evidence": [
+        "1-factor residual 20.8% (not ~1%) but rank IC -0.050",
+        "top-eig 0.794",
+        "rank-book break-even -0.042 bps at turnover 6.10/bar (1-vs-1 variant -0.29: sign unstable)"
+      ],
+      "reopen": "C1"
+    },
+    {
+      "id": "R4",
+      "title": "1h reversal signal family",
+      "verdict": "REJECT",
+      "evidence": [
+        "AC -0.013",
+        "sig:autocorr net Sharpe -0.0996",
+        "1h rank book Sharpe -0.05"
+      ]
+    },
+    {
+      "id": "R5",
+      "title": "Change testSize as a fix",
+      "verdict": "REJECT",
+      "evidence": [
+        "nuisance not alpha; paired Delta collapsed +0.2164 -> +0.0289; a fixed position series re-scored moves Sharpe only ~0.08-0.24 across grids"
+      ],
+      "reopen": "C8"
+    },
+    {
+      "id": "R6",
+      "title": "Tune the dead zone as a fix",
+      "verdict": "REJECT",
+      "evidence": [
+        "item 5 closed; the issue is exposure matching (#61 / P2)"
+      ]
+    },
+    {
+      "id": "R7",
+      "title": "Bigger / more-evolved hivemind (ES population, legion/evolve.js)",
+      "verdict": "REJECT",
+      "evidence": [
+        "2512.15732 Red Queen's Trap",
+        "TODO.md 13"
+      ],
+      "note": "distinct from D7/D8 (member count inside a controller), not the ES layer"
+    },
+    {
+      "id": "R8",
+      "title": "Relax K or the DSR floor",
+      "verdict": "REJECT",
+      "evidence": [
+        "1612.04535",
+        "Harvey-Liu-Zhu 2016",
+        "gate size approx 3.5%"
+      ]
+    },
+    {
+      "id": "R9",
+      "title": "Cross-family Sharpe claims at the shipped dead zone",
+      "verdict": "REJECT",
+      "evidence": [
+        "BUGS.md #61"
+      ]
+    },
+    {
+      "id": "R10",
+      "title": "es as a default increase",
+      "verdict": "REJECT",
+      "evidence": [
+        "no ensemble-size->skill evidence",
+        "cost linear in es"
+      ],
+      "note": "P7 may still test it"
+    },
+    {
+      "id": "R11",
+      "title": "es as a memory play",
+      "verdict": "REJECT",
+      "evidence": [
+        "broadcast/injection budgets divide by es (lsh.js:200, transfer.js:43,245)"
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Cross-sectional sleeve on a wide universe with conditional/time-varying factors",
+      "verdict": "NOT_SCHEDULED",
+      "evidence": [
+        "1811.07860",
+        "1802.03708",
+        "2106.04028"
+      ],
+      "reopen": "C1"
+    },
+    {
+      "id": "G2",
+      "title": "Shared-weight virtual members (many members at fixed parameters)",
+      "verdict": "DEFERRED",
+      "evidence": [
+        "2609.24782",
+        "2002.06715"
+      ],
+      "reopen": "P7"
+    }
+  ],
+  "conflicts": [
+    {
+      "id": "C1",
+      "claim": "A cross-section needs conditional/time-varying factors on a wide universe (2106.04028, 1811.07860, 1802.03708)",
+      "counter": "the measured residual is a STATIC 1-factor residual of 20.8% of variance (not ~1%), but its next-bar rank IC is only -0.050 and a rank book breaks even at -0.042 bps; top-eig 0.794",
+      "status": "OPEN",
+      "priority": null,
+      "test": "cheap reopen: rolling/conditional-factor residual on the same 8x540; reopen only if a rolling/conditional factor model's residual rank IC (or the rank-book break-even at its own 6.10/bar turnover) clears a realistic taker cost"
+    },
+    {
+      "id": "C2",
+      "claim": "15m reversal is pervasive (2608.21888)",
+      "counter": "at 1h it is not tradeable (AC -0.013; rank IC -0.050; rank-book break-even -0.042 bps)",
+      "status": "GATED",
+      "priority": "P3",
+      "test": "P3 step-0 audit, then the reversal family; bar: break-even >= 15m cost AND adjDSR >= 0.95 AND SPA not rejecting, at > half the cadences"
+    },
+    {
+      "id": "C3",
+      "claim": "linear/MLP/pretrained beat from-scratch transformers",
+      "counter": "the controller is negative-skill and untested against them HERE",
+      "status": "NEEDS_TEST",
+      "priority": "P1",
+      "test": "the pre-registered P1 rule (both outcomes decisive)"
+    },
+    {
+      "id": "C4",
+      "claim": "a bigger member pool -> more capacity/diversity -> more skill",
+      "counter": "live retrieval scales with es but broadcast budgets divide by es; 2608.16190 (skill, not decorrelation, governs); cost linear in es",
+      "status": "GATED",
+      "priority": "P7",
+      "test": "the P7 sweep table (es x {Brier skill vs base rate, net Sharpe at matched exposure, meanPairwiseKappa, effectiveVoters/entropy, bank occupancy, aggregate retrieved/injected, wall ms}); bar: if no es beats the base-rate Brier skill beyond the seed spread, close capacity"
+    },
+    {
+      "id": "C5",
+      "claim": "continuous TTA removes the schedule dependence (2602.00073)",
+      "counter": "the level is currently a cadence function (Delta 1.01244, p 0.02008)",
+      "status": "NEEDS_TEST",
+      "priority": "P5",
+      "test": "A/B fold-replay vs TTA; bar: level approx invariant across testSize {10,15}, goldens unmoved when off"
+    },
+    {
+      "id": "C6",
+      "claim": "a verdict must be configuration-robust (2603.09219)",
+      "counter": "every verdict this programme has made is single-cadence",
+      "status": "NEEDS_TEST",
+      "priority": "P2",
+      "test": "retrospective on the 3 retained runs (verdict-neutral) AND kills sig-accel's 0-bps promotion; two fixtures"
+    },
+    {
+      "id": "C7",
+      "claim": "exposure matching is required for cross-family claims",
+      "counter": "BUGS.md #61: 0.51 vs 0.89 vs 0.004 nonzero fraction",
+      "status": "NEEDS_TEST",
+      "priority": "P2",
+      "test": "fixture: raw dead zone manufactures a spurious exposure gap, matched rule removes it, verdict-neutral on retained data"
+    },
+    {
+      "id": "C8",
+      "claim": "the cadence level-shift is a nuisance, not signal",
+      "counter": "measured at ONE seed; pooled-vs-fold-mean disagree (MC2)",
+      "status": "NEEDS_TEST",
+      "priority": "P2",
+      "test": "re-run testSize 10 at >=3 seeds; bar: the level and the sign of Delta reproduce; if not, cadence is noise and the 'nuisance' reading is wrong"
+    },
+    {
+      "id": "C9",
+      "claim": "the DSR hurdle is a Sharpe level",
+      "counter": "MC1: it is a surface; the two highest-Sharpe arms fail while a 0.8978 baseline passes; 'best labeller at 0.10' was the round-27 labeller (cadence-specific)",
+      "status": "RESOLVED",
+      "priority": "P2",
+      "test": "PLAN-round29.md §1.5 rewritten to state the surface, its provenance (RUN-ANALYSIS §14.2) and the per-arm anchors; no run needed"
+    },
+    {
+      "id": "C10",
+      "claim": "~100% of positive-Sharpe arms is the market",
+      "counter": "the P6 overlay ran on SELECTED arms, not all",
+      "status": "NEEDS_TEST",
+      "priority": null,
+      "test": "restate the overlay on the Step-3 journal for every positive-Sharpe arm; bar: common-share >= 0.95 for each, else §1.2 is scoped"
+    }
+  ],
+  "measured": [
+    {
+      "id": "MC1",
+      "title": "the adjusted-DSR hurdle is a surface in (Sharpe, designEffect, moments, K)",
+      "source": "report.json x3 retained runs",
+      "rows": [
+        {
+          "run": "20260923T211549",
+          "arm": "baseline",
+          "K": 3,
+          "netSharpe": -0.1147,
+          "designEffect": 4.866,
+          "effBars": 888,
+          "dsr": 0.0922,
+          "dsrAdjusted": 0.1428
+        },
+        {
+          "run": "20260923T211549",
+          "arm": "sample-weights",
+          "K": 3,
+          "netSharpe": 0.0521,
+          "designEffect": 5.595,
+          "effBars": 772,
+          "dsr": 0.2618,
+          "dsrAdjusted": 0.2229
+        },
+        {
+          "run": "20260924T045601",
+          "arm": "baseline",
+          "K": 2,
+          "netSharpe": 0.8978,
+          "designEffect": 2.611,
+          "effBars": 1654,
+          "dsr": 0.9991,
+          "dsrAdjusted": 0.9584
+        },
+        {
+          "run": "20260924T045601",
+          "arm": "label-conservative",
+          "K": 2,
+          "netSharpe": 0.9267,
+          "designEffect": 2.663,
+          "effBars": 1622,
+          "dsr": 0.9994,
+          "dsrAdjusted": 0.9637
+        },
+        {
+          "run": "20260924T071546",
+          "arm": "sig-momentum",
+          "K": 12,
+          "netSharpe": 1.0848,
+          "designEffect": 3.624,
+          "effBars": 1192,
+          "dsr": 0.9989,
+          "dsrAdjusted": 0.7736
+        },
+        {
+          "run": "20260924T071546",
+          "arm": "sig-accel",
+          "K": 12,
+          "netSharpe": 1.0194,
+          "designEffect": 2.465,
+          "effBars": 1753,
+          "dsr": 0.9966,
+          "dsrAdjusted": 0.8608
+        }
+      ],
+      "note": "sig-momentum and sig-accel each fail on EXACTLY ONE reason: the dependence-adjusted DSR. The Step-2 baseline crosses 0.95 at Sharpe 0.8978 (K=2). The band claim's origin is RUN-ANALYSIS.md §14.2 (round-27 Step 4, K=3, design effect 5.12) — §1.5 generalised one run too far. The required design effect for a Sharpe ~1.0 arm lies in (1.0, 2.5) (bracketed, NOT interpolated: the deflation hurdle is n-dependent)."
+    },
+    {
+      "id": "MC2",
+      "title": "pooled Sharpe vs mean fold Sharpe disagree on the same arm (BUGS.md #60 made decision-relevant)",
+      "source": "20260924T045601-seed1",
+      "note": "label-conservative: pooled 0.9267 > baseline 0.8978 and dsrAdjusted 0.9637 (clears the floor), but mean fold Sharpe 0.5146 < baseline 0.7005 and paired Delta 0.0289 (p 0.399). Report all three aggregations."
+    },
+    {
+      "id": "MC3",
+      "title": "cost: controller vs signal family",
+      "source": "report.json.candidates[*].elapsedMs",
+      "note": "controller arms 2.57M-4.13M ms (43-69 min) vs signal arms 4.27k-4.60k ms (~4.5 s) => ~560-970x (median ~600x). measuredPerFoldMs 19117-54902 ms/fold at es=4."
+    },
+    {
+      "id": "MC4",
+      "title": "structural facts about es",
+      "source": "code",
+      "note": "es=4 operating point (analyze.js:454, useController :2118) [the plan cites the pre-implementation :415/:2009]; per-member dims constant under forceMin (dimensions.js:10-181); per-member retrieval scales with es (transformer/attention.js:190-192); broadcast/injection budgets divide by es (lsh.js:200, transfer.js:43,245); an es change is RNG-confounded (bucket-content-dependent draws, BUGS.md #44)."
+    }
+  ],
+  "bottleneck_card": [
+    {
+      "id": "B1",
+      "quantity": "controller forecast skill vs base rate",
+      "value": "brierSkill -0.07382, accuracySkill -0.13007, status 'base-rate'",
+      "source": "20260924T045601-seed1"
+    },
+    {
+      "id": "B2",
+      "quantity": "share of positive-Sharpe gross that is net-exposure x market",
+      "value": "~100% (common-share 0.958-1.030; cross-section ~0)",
+      "source": "P6 overlay, RUN-ANALYSIS.md §15.5b"
+    },
+    {
+      "id": "B3",
+      "quantity": "top-eig / 1-factor residual / 1h AC / CS rank IC",
+      "value": "0.794 / 20.8% / -0.013 / -0.050",
+      "source": "round-29 check, round29-crypto-edges.md §2"
+    },
+    {
+      "id": "B4",
+      "quantity": "effective streams / design effect",
+      "value": "2.30-2.42 of 8 / 2.43-7.00",
+      "source": "report.json.dependence"
+    },
+    {
+      "id": "B5",
+      "quantity": "level sensitivity to the retrain cadence",
+      "value": "-0.1147 -> +0.8978 (Delta 1.01244, se 0.47504, p 0.02008), one seed",
+      "source": "20260923T211549 vs 20260924T045601"
+    },
+    {
+      "id": "B6",
+      "quantity": "the project's power anchor (single-series vs paired)",
+      "value": "93576 single-series i.i.d. bars (Sharpe 0.1017) - NOT the decision's paired lever; required paired clusters 2197",
+      "source": "report power / decision.nextRun"
+    },
+    {
+      "id": "B7",
+      "quantity": "the binding hurdle for the best arms",
+      "value": "the design-effect-adjusted DSR only",
+      "source": "MC1, this round"
+    },
+    {
+      "id": "B8",
+      "quantity": "cost ratio controller : signal family",
+      "value": "~560-970x",
+      "source": "report.json.candidates[*].elapsedMs"
+    }
+  ],
+  "notes": [
+    {
+      "id": "model-class",
+      "file": "round29-model-class.md",
+      "grounds": [
+        "P1"
+      ],
+      "conflicts": [
+        "C3"
+      ]
+    },
+    {
+      "id": "crypto-edges",
+      "file": "round29-crypto-edges.md",
+      "grounds": [
+        "P3",
+        "P4"
+      ],
+      "conflicts": [
+        "C1",
+        "C2"
+      ]
+    },
+    {
+      "id": "adaptation",
+      "file": "round29-adaptation-and-regime.md",
+      "grounds": [
+        "P5"
+      ],
+      "conflicts": [
+        "C5"
+      ]
+    },
+    {
+      "id": "evaluation-robustness",
+      "file": "round29-evaluation-robustness.md",
+      "grounds": [
+        "P2",
+        "C9"
+      ],
+      "conflicts": [
+        "C6",
+        "C7",
+        "C9"
+      ]
+    },
+    {
+      "id": "ensemble-size",
+      "file": "round29-ensemble-size.md",
+      "grounds": [
+        "P7",
+        "P7b"
+      ],
+      "conflicts": [
+        "C4"
+      ]
+    }
+  ],
+  "raw": [
+    "raw/arxiv-sweep-2026-09o.json",
+    "raw/arxiv-sweep-2026-09p.json"
+  ],
+  "decisions": [
+    {
+      "id": "D1",
+      "decision": "The bottleneck is the absence of a residual edge, not the gate/power/mechanisms; stop adding mechanisms and change the target.",
+      "evidence": "PLAN §1.7"
+    },
+    {
+      "id": "D2",
+      "decision": "The forecaster must be benchmarked against linear/MLP/pretrained before any further controller work.",
+      "evidence": "PLAN §1.1; round29-model-class.md"
+    },
+    {
+      "id": "D3",
+      "decision": "1h cross-sectional/reversal is closed (AC -0.013; residual 20.8% but rank IC -0.050 and rank-book break-even -0.042 bps, sign-unstable). Reversal must be tested at 15m; a cross-section needs a wide universe + conditional factors.",
+      "evidence": "PLAN §1.3; round29-crypto-edges.md"
+    },
+    {
+      "id": "D4",
+      "decision": "Buy independence from a new data source (15m bars and/or funding/basis), not from more bars of the same eight.",
+      "evidence": "PLAN §1.3; METHOD §5"
+    },
+    {
+      "id": "D5",
+      "decision": "A verdict must be configuration-robust and exposure-matched before any cross-family claim.",
+      "evidence": "PLAN §1.4/§1.6; TODO 84/85"
+    },
+    {
+      "id": "D6",
+      "decision": "Replace schedule-bound retraining with continuous small-footprint adaptation, with cadence-invariance as its acceptance test.",
+      "evidence": "PLAN §1.4; round29-adaptation-and-regime.md"
+    },
+    {
+      "id": "D7",
+      "decision": "Meta-labeling is gated on P1 (it cannot rescue a negative-skill primary).",
+      "evidence": "P6"
+    },
+    {
+      "id": "D8",
+      "decision": "The adjusted-DSR hurdle is a surface in (Sharpe, designEffect, moments, K); the binding term for the best arms is the design effect, so the lever is an independent return series.",
+      "evidence": "MC1; PLAN §1.8"
+    },
+    {
+      "id": "D9",
+      "decision": "Ensemble size is a gated pre-registered probe (P7), not a default change; the principled default is a learned/dimension-sized es (P7b).",
+      "evidence": "round29-ensemble-size.md §3/§5"
+    },
+    {
+      "id": "D10",
+      "decision": "The 1h cross-sectional close rests on unpredictability and sign-instability, not on a small residual (residual 20.8%, rank IC -0.035, reversal sign flips across constructions -0.05 vs -0.29).",
+      "evidence": "PLAN §1.3 (re-verified this round)"
+    },
+    {
+      "id": "D11",
+      "decision": "Id namespace: the plan's decisions are D1-D11 (PLAN §6); directions are identified by P#/R#/G#/C#/MC#/B#/FG#. No D# id labels a direction.",
+      "evidence": "coherence fix, round 29"
+    }
+  ],
+  "focus_points": [
+    {
+      "id": "FG1",
+      "gotcha": "forceMin=true is the production branch; per-member dimensions are constants (dimensions.js:20-97)",
+      "rule": "any es result is about the compact branch"
+    },
+    {
+      "id": "FG2",
+      "gotcha": "two controller constructors: controller factory analyze.js:846 (constructions :927/:945) uses CONTROLLER_MODEL.ensembleSize=4 (:454); legacy bare path makeHiveMindModelFactory analyze.js:506 hard-codes 3 (:547) [the plan cites the pre-implementation :761/:842 and :508]",
+      "rule": "know which path produced a journal"
+    },
+    {
+      "id": "FG3",
+      "gotcha": "an es change is RNG-confounded (bucket-content-dependent draws, BUGS.md #44)",
+      "rule": ">=3 seeds, paired within-seed"
+    },
+    {
+      "id": "FG4",
+      "gotcha": "costBps=0 everywhere and the dead zone is family-relative (BUGS.md #61)",
+      "rule": "cross-family numbers only at matched exposure; quote bps"
+    },
+    {
+      "id": "FG5",
+      "gotcha": "the DSR hurdle is a surface and n-dependent",
+      "rule": "use MC1 anchors; state (Sharpe, designEffect, K) together"
+    },
+    {
+      "id": "FG6",
+      "gotcha": "pooled vs mean-fold vs paired disagree on one arm (#60/MC2)",
+      "rule": "report all three; meanSharpeDelta is fold-level"
+    },
+    {
+      "id": "FG7",
+      "gotcha": "absolute (minDsr, minDsrAdjusted) vs relative (dsrDelta, meanSharpeDelta, pairedSharpeDifference) hurdles",
+      "rule": "name which"
+    },
+    {
+      "id": "FG8",
+      "gotcha": "foldWinFraction/positiveFoldFraction are reported but gated:false",
+      "rule": "do not resurrect them as gate inputs"
+    },
+    {
+      "id": "FG9",
+      "gotcha": "--label-horizon sets the sample-weight span on non-triple runs (#62)",
+      "rule": "set the span explicitly"
+    },
+    {
+      "id": "FG10",
+      "gotcha": "goldens pin a bare HiveMind at es=3 (golden.test.js:214), H_ES=2 (controller_invariants.test.js:113)",
+      "rule": "an analysis-level es change moves no golden, but the goldens do not cover the analysis path"
+    },
+    {
+      "id": "FG11",
+      "gotcha": "modelRetention 'discard', reuseBase true, CRN on",
+      "rule": "read timings/measuredPerFoldMs, not an arm's total"
+    },
+    {
+      "id": "FG12",
+      "gotcha": "one seed everywhere (--seed=1)",
+      "rule": "no cross-seed claim until >=3 seeds"
+    },
+    {
+      "id": "FG13",
+      "gotcha": "the P6 overlay ran on selected arms (C10)",
+      "rule": "restate on the Step-3 journal before quoting '~100% market' as universal"
+    },
+    {
+      "id": "FG14",
+      "gotcha": "barsToDetectObserved 93576 is single-series; the decision uses paired clusters (BUGS.md #56)",
+      "rule": "never compare the two scales"
+    }
+  ],
+  "gates": [
+    {
+      "id": "G-A",
+      "after": "P1",
+      "if": "a linear/MLP/TSFM forecaster has positive Brier skill vs the base rate",
+      "then": "architecture is the constraint: run P6 and P7 with the new primary",
+      "else": "features/labels are the constraint: skip P6/P7, put the round into P3/P4",
+      "outcome": "MEASURED -> ELSE branch: no forecaster beats the base rate, so features/labels are the constraint; P6/P7 closed (RUN-ANALYSIS.md §16.2)."
+    },
+    {
+      "id": "G-B",
+      "after": "P3",
+      "if": "the 15m reversal clears break-even, adjDSR and SPA at a majority of cadences",
+      "then": "new candidate sleeve; re-scope P4's independence test around it",
+      "else": "record the rejection; shift the round's weight to P4",
+      "outcome": "MEASURED -> ELSE branch: the 15m reversal does not clear break-even at taker cost (0.32-0.56 bps) and fails adjDSR at every cadence; recorded as a full non-acceptance (RUN-ANALYSIS.md §16.4)."
+    },
+    {
+      "id": "G-C",
+      "after": "P4",
+      "if": "the carry stream moves the best arm's dsrAdjusted across 0.95",
+      "then": "carry is a real independence purchase",
+      "else": "rejected as a breadth purchase, recorded with the measured correlation",
+      "outcome": "MEASURED -> ELSE branch: the sleeve is a breadth purchase by the DSR metric (no arm crosses 0.95) and an independence purchase by the correlation/effective-streams metric (+0.003 vs 0.29-0.52; 1.25 -> 1.54 effective streams of 9) (RUN-ANALYSIS.md §16.5)."
+    },
+    {
+      "id": "G-D",
+      "after": "P5",
+      "if": "the TTA arm's level is approx invariant across testSize {10,15}, goldens unmoved when off",
+      "then": "the cadence step is retired as a free parameter",
+      "else": "record that TTA does not remove the configuration dependence",
+      "outcome": "OPEN - NOT MEASURED: P5 deferred, so no cadence-invariance claim exists either way (RUN-ANALYSIS.md §16.6)."
+    },
+    {
+      "id": "G-E",
+      "after": "P7",
+      "if": "some es improves Brier skill vs the base rate beyond the seed spread",
+      "then": "record the es-skill curve and re-open the architecture question (couples to G-A)",
+      "else": "capacity is not the constraint; close es with a number, default stays 4",
+      "outcome": "NOT RUN -> closed by G-A (capacity is not the constraint because the features/labels are)."
+    }
+  ],
+  "coherence_corrections": [
+    "PLAN §1.3: residual variance share 1.3%/1.04% -> 25.9%/20.8%; CS rank IC -0.033/-0.013 -> -0.050/-0.035; rank book Sharpe -0.291 -> -0.05 (turnover 6.10, break-even -0.042 bps) with the 1-vs-1 variant at -0.29 noted.",
+    "PLAN §1.4: the fixed-position re-score spread is ~0.08-0.24, not ~0.03-0.1.",
+    "PLAN §1.5: the Sharpe band and the 'best labeller at 0.10' are traced to RUN-ANALYSIS §14.2's round-27 journal (K=3, design effect 5.12).",
+    "PLAN §1.8 MC3: 2.59-4.13M -> 2.57-4.13M; ratio 560-890x -> 560-970x. MC4: attention.js:192 -> 190-192; #44 wording made precise.",
+    "Index/registry: direction ids renamed D# -> P# to remove the collision with the plan's decisions D1-D11; index §2 bars parenthetical corrected for Step 2's 54x10.",
+    "These corrections are recorded in PLAN §1.3/§1.4/§1.5/§1.8/§6-D10, round29-crypto-edges.md §2/§5, round29-ensemble-size.md §2.3/§2.4/§4, the index §2/§3/§4 and this registry.",
+    "Round 29 -> 30 implementation: the registry's `status` moved from planning to implemented, every gate carries its measured `outcome`, and each P1-P7b direction carries its measured `outcome` + readout artifact, in lockstep with round29-README.md §8 (implementation verdicts) and RUN-ANALYSIS.md §16.",
+    "Docs-sync numbering fix (round 29 -> 30): the plan's §5.4 target `METHOD.md §10 (configuration)` is realized as METHOD.md §10 (the doc's §8/§9 are the round-28 entries), and the P4 independence reading is the new METHOD.md §11; the index §8 doc-numbering note and `implementation.methodDocNote` were corrected to match.",
+    "Docs-sync ledger repair (round 29 -> 30): the round-29 test-count changes were propagated to the authority files — RUNBOOK.md §6 (`candles` 95 -> 192, `fetcher` 101 -> 111, `analysis` 586 -> 621, `analyze` 255 -> 258; total 2402 -> 2547), the three exact-count node mirrors (test/node/{analysis,analyze,candles}.test.js) and LOCKED.md; the two new pure analysis modules (`analysis/benchmark.js`, `analysis/carry.js`) are registered LOCKED-invariant in test/lock-registry.js and documented in LOCKED.md (funding_fetcher.js is a driver, like candle_fetcher.js, and is not registered). Verified: locks 41/0, golden 23/0 (no fingerprint moved).",
+    "Round 29 -> 30 (post-implementation audit): PLAN-round29.md §1.8 MC4 / §1.9 FG2 quote analyze.js line numbers from before the round-29 code landed, so they no longer resolve. Current-code mapping applied to the living mirrors (round29-README.md MC4/§1.9, round29-ensemble-size.md §2.1, this registry): es=4 operating point :415 -> :454; useController :2009 -> :2118; controller factory :761/:842 -> :846 (constructions :927/:945); legacy bare path :508 -> :506 (its hard-coded 3 at :547). The frozen PLAN keeps its plan-time refs as the historical spec; the unmoved refs (dimensions.js, attention.js, lsh.js, transfer.js) still resolve.",
+    "Round 29 -> 30 (rounds 4–5 plan-integration audit): the P2 decision primitives are now wired into the driver — runAnalysis gains opt-in `--cadences=a,b,c` (writes report.configurationRobust: the per-cadence restatement + the majority-pass/catastrophic-veto verdict) and `--exposure-match` (writes report.exposureMatched); both are default-off and pure post-processing, so the default report is byte-identical. This delivers PLAN §7's src/analyze.js rows (the P2 cadence-grid restatement and the exposure-matched dead zone) and makes METHOD.md §10's 'shipped decision procedure' wording literally true; the fixed-position sweep is now CLI-runnable and the true re-train sweep stays TODO 97. Also fixed three stale counts in the test/lock-registry.js notes (guards 58->65, observer 75->76, analyze 245->269) and propagated the ledger total 2547->2558 (analyze 258->269) across RUNBOOK/BUGS/README/ROADMAP/the index + this registry and the test/node/analyze.test.js mirror. Verified: all 30 entries 2558/0, golden 23/0. The same pass also fixed a real defect the native node-only suite caught (BUGS.md #68): the fold worker invoked the pre-built model as a factory (so every --concurrency > 1 run threw factory is not a function) and the dispatch request dropped sampleWeightHorizon. Both are fixed and pinned by two new analyze.test.js dispatch-contract checks."
+  ],
+  "implemented": "2026-09-24",
+  "implementation": {
+    "tracker": "../round29-IMPLEMENTATION.md",
+    "readouts": "../RUN-ANALYSIS.md §16.1-§16.6",
+    "bugs": "../BUGS.md #63-#68 (all fixed)",
+    "methodDocNote": "the plan's `METHOD.md §10 (configuration)` is realized as `METHOD.md` §10 (the doc's §8/§9 were the round-28 entries; §11 carries the P4 independence reading)",
+    "verdicts": [
+      {
+        "id": "U0",
+        "priority": "C10",
+        "verdict": "DONE",
+        "measurement": "overlay on the Step-3 journal: sig-momentum common-share 0.9582, sig-accel 1.0291 (the plan's universal claim is false for sig-range 0.6095 / sig-agreement 0.6570, which do not clear the gate)",
+        "artifact": "RUN-ANALYSIS.md §16.1"
+      },
+      {
+        "id": "P1",
+        "priority": "P1",
+        "verdict": "NEGATIVE BRANCH (G-A)",
+        "measurement": "no forecaster has material positive Brier skill vs the base rate; ridge best and skill ~0/-0.0008; MLP worse; TSFM not run (I3) => P6/P7 CLOSED",
+        "artifact": "RUN-ANALYSIS.md §16.2"
+      },
+      {
+        "id": "P2",
+        "priority": "P2",
+        "verdict": "KEEP (verdict-neutral on retained runs)",
+        "measurement": "exposure matching neutral on all retained runs; kills the §15.5(c) sig-accel promotion (adjDSR 0.9584 -> 0.7925 at matched exposure); 4 arms fail 0/3 on the {10,15,30} cadence grid; wired into the driver as opt-in --cadences / --exposure-match passes (report.configurationRobust / report.exposureMatched), default-off",
+        "artifact": "RUN-ANALYSIS.md §16.3"
+      },
+      {
+        "id": "P3",
+        "priority": "P3",
+        "verdict": "NON-ACCEPTANCE",
+        "measurement": "15m reversal real (lag-1 AC negative 6/8; dir. accuracy 0.5191 on 639 992 bars) but break-even 0.32-0.56 bps vs 5-10 bps taker; gate 0/3 at every cadence; net Sharpe @5bps -15.9",
+        "artifact": "RUN-ANALYSIS.md §16.4"
+      },
+      {
+        "id": "P4",
+        "priority": "P4",
+        "verdict": "ACCEPTANCE (P4 criterion) / G-C does not cross",
+        "measurement": "57 939 funding rows, 0 audit problems; pooled delta-neutral carry 9.78%/yr at 0.84% vol (Sharpe 11.6); correlation with the price basket +0.003 vs the 0.29-0.52 bar; effective streams 1.25 -> 1.54 of 9; jackknife designEffect 5.226 -> 5.228 (serial-dominated) so no arm's adjDSR crosses 0.95",
+        "artifact": "RUN-ANALYSIS.md §16.5"
+      },
+      {
+        "id": "P5",
+        "priority": "P5",
+        "verdict": "DEFERRED (gate G-D OPEN)",
+        "measurement": "no measurement; the shipped controller already adapts continuously within a fold; freeze-by-construction design + acceptance test recorded; controller A/B cost measured at 9.1 s (1 stream / 100 bars / 4 folds / 2 arms)",
+        "artifact": "RUN-ANALYSIS.md §16.6"
+      },
+      {
+        "id": "tests",
+        "priority": null,
+        "verdict": "GREEN",
+        "measurement": "all 31 browser entries, 0 failures, ~2 558 assertions; golden.test.js 23/0 (no fingerprint moved); analysis 621, analyze 269, candles 192, fetcher 111",
+        "artifact": "round29-IMPLEMENTATION.md §3"
+      }
+    ]
+  }
+}

@@ -72,10 +72,10 @@ property pinned by a dedicated test; **needs-local-run** = native dependency
 | HiveMindController | `hivemind/controller/*` (5 bags) | 5 **invariant** (candle, feature, database, accuracy, trade) | `core.test.js`, `features.test.js`, `multisymbol.test.js`, `golden.test.js` — all now on the native driver (`BUGS.md` #18) |
 | Legion (mainController split) | `legion/*` (16 files) | structural (pinned by `legion.test.js` / `core.test.js`) | `legion.test.js` (57) |
 | Indicator processor | `hivemind/indicatorProcessor.js` | **invariant** | `indicators.test.js` (75) |
-| Candle data integrity + quality | `candles_audit.js`, `candle_quality.js`, `candle_fetcher.js` | **invariant** | `candles.test.js` (95), `fetcher.test.js` (101) |
+| Candle data integrity + quality | `candles_audit.js`, `candle_quality.js`, `candle_fetcher.js`, `funding_fetcher.js` | **invariant** | `candles.test.js` (192), `fetcher.test.js` (111) |
 | Price precision | `price_precision.js` | **invariant** | `price_precision.test.js` (29), `multisymbol.test.js` (28) |
 | Consolidation algorithms | `consolidation_logic.js`, `consolidation_worker.js` | **invariant** | `consolidation.test.js` (48), `consolidation_worker.test.js` (18) |
-| Analysis supercharges | `analysis/*` (19 modules: including `world.js` — the audited candle view — `features.js` — the causal signal family — `dependence.js`/`decision.js` — the round-25/26 gate and report — and `forecast.js`/`race.js`) | **invariant** | `analysis.test.js` (566), `walkforward.test.js` (63) |
+| Analysis supercharges | `analysis/*` (21 modules: including `world.js` — the audited candle view — `features.js` — the causal signal family — `dependence.js`/`decision.js` — the round-25/26 gate and report — `forecast.js`/`race.js`, and the round-29 `benchmark.js`/`carry.js`) | **invariant** | `analysis.test.js` (621), `walkforward.test.js` (63) |
 | LSH support modules | `memory/multiprobe.js`, `memory/binarypc.js`, `memory/bitweight.js`, `memory/querymod.js` | **invariant** (default-off; golden no-op) | their own entries + `lsh.test.js` section J + `golden.test.js` |
 
 Registry totals: **60 entries — 17 bit-exact, 43 invariant, 0 needs-local-run,
@@ -93,7 +93,7 @@ harness promotes it (backlog P0).
 | Feature | Flag (default) | What it does | Grounded by |
 | --- | --- | --- | --- |
 | Surprise-gated memory writes | `_surpriseGateEnabled = false` | scale a semantic write by `floor + (1-floor)·surprise^sharpness` | Titans 2501.00663; `surprise.test.js` (32) |
-| Sample-uniqueness loss weighting | `_sampleWeightConfig = null` | weight each training sample by label uniqueness (AFML ch. 4) | López de Prado 2018; `sample_weights.test.js` (45) |
+| Sample-uniqueness loss weighting | `_sampleWeightConfig = null` | weight each training sample by label uniqueness (AFML ch. 4) | López de Prado 2018; `sample_weights.test.js` (57) |
 | Homeostatic learning rates | `_homeostasisEnabled = false` | error-driven multiplier toward an activity set-point | 2609.13771; `homeostasis.test.js` (30) |
 | Margin-ordered multi-probe | `_multiProbeConfig = null` | probe the lowest-margin hash bits first | Lv et al. 2007; `multiprobe.test.js` (77) |
 | Data-aware (PCA-aligned) hash | `_pcaHashConfig = null` | replace random hyperplanes with principal components | BinaryPC 2608.04405; `binarypc.test.js` (39), `lsh.test.js` §I |
@@ -232,6 +232,63 @@ breadth statement is the error-controlled cluster tests (magnitude + stability, 
 test reported) — after proving verdict-neutrality on the four round-27 reports (every failing
 candidate also fails the DSR floor and/or the paired test, so no verdict moves). The size
 rationale and the new paired-vs-single-series sizing rule are recorded in `METHOD.md` §7/§8.
+
+**Addendum 2 (round 28 operator runs, `BUGS.md` #60/#61; `RUN-ANALYSIS.md` §15).** Two
+decision-procedure questions the three runs opened, both recorded and neither fixed:
+
+1. **A third fold-level statistic is still gated.** The #57 fix made the two raw fold *fractions*
+   reported statistics; `meanSharpeDelta` (the candidate's mean per-fold Sharpe against the
+   baseline's) remains an always-on `gated: true` hurdle over the same 288 correlated folds and is
+   the first line of every failing verdict in the three runs. It is verdict-neutral on all 21
+   candidate rows, so nothing moves — but whether §6.1's decision intended a mean-fold reason is
+   this section's question, not an arithmetic one (`BUGS.md` #60).
+2. **A cross-family comparison must name its exposure.** The position policy is unified in
+   *dimension* (every family emits a confidence on [−1, 1]) but not in *distribution*: the
+   controller's `|confidence|` never exceeds 0.27 while a signal's saturates at 1 (fraction above
+   0.2: 0.93 % vs 83 %), so the shipped `deadZone 0.05` leaves the baseline in the market on
+   0.508 of bars and `sig-momentum` on 0.892, and the P5 sweep's promoting row compares an
+   ~80 %-invested book with one that holds a position on 16 of 4 320 bars (`BUGS.md` #61). The
+   choice — family-normalised thresholds, or cross-family statements quoted only at matched
+   exposure — is a change to this section and is left to the next round.
+
+**Addendum 3 (round 29, P2/P4; `PLAN-round29.md` D5/D8).** The two questions Addendum 2 left open
+were both decided by the round-29 implementation, so this section now carries the round-29
+decision-procedure changes (rationale in `METHOD.md` §10/§11):
+
+- **Configuration-robust promotion.** `promotionAcrossCadences` replaces the single-cadence gate:
+  a candidate passes at **more than half** a grid of `testSize` cadences and is **vetoed** if any
+  cadence is outright broken (failed look-ahead audit or negative pooled net Sharpe) —
+  `majorityFraction = 0.5`, `defaultCatastrophic` (`analysis/decision.js`). Every level field
+  carries its cadence. The rule is *stricter* than the old gate and was proved **verdict-neutral on
+  every retained run** before it landed; it also kills the §15.5(c) `sig-accel` promotion at matched
+  exposure (adjDSR 0.9584 → 0.7925). The driver exposes it as an opt-in `--cadences=a,b,c` pass
+  (fixed-position restatement, default off → `report.configurationRobust`, `analyze.js`).
+- **Exposure matching is the answer to Addendum 2's item 2.** Cross-family comparisons are quoted
+  only at a common **in-market share**: `exposureDeadZone` finds the scale-free threshold that
+  realises a target share, `exposureMatchedPair` restates both families and drops any holding band,
+  and `matchedWithinTolerance` reports an unreachable target. The target share is read from the
+  restatement, never from the report (`BUGS.md` #63). Opt-in `--exposure-match` writes the matched
+  comparison to `report.exposureMatched` (`analyze.js`); both passes are pure post-processing.
+- **An independence purchase is dated by correlation + effective streams, and the DSR surface
+  separately.** The DSR hurdle stays a **surface** in `(Sharpe, designEffect, moments, K)`, not a
+  Sharpe band (`RUN-ANALYSIS.md` §1.8 MC1; §16.1 anchors). A new return series (the P4 carry sleeve)
+  is evaluated on the bar-level correlation, the panel's effective streams, *and* its effect on the
+  best arm's `dsrAdjusted` — all three, because the design effect is serial-dominated and can fail to
+  move while the correlation purchase is real (`METHOD.md` §11).
+- **Extra panel streams are shape-guarded, not trusted.** A cross-sectional panel may carry extra
+  streams (the carry sleeve) beside the price streams: `analyze.js --carry-files` /
+  `extraPanelStreams` attach them, and `poolReports` compares each extra stream against a
+  **per-stream** length (not the concatenated `pooled.length` — `BUGS.md` #64) and excludes a
+  **constant** stream (`panelMismatchReason: 'length' | 'degenerate'`, `BUGS.md` #66), with the
+  price-only dependence retained beside the extended one (`dependenceWithoutExtras`) so the
+  increment is visible.
+- **New manifest, same discipline.** The funding series is a third data manifest
+  (`FUNDING_MANIFEST` / `FUNDING_FILES` in `candles_audit.js`) alongside the 1h `CANDLE_MANIFEST`
+  and the 15m `CANDLE_MANIFEST_15M`, audited by the same pure auditor (`analysis/carry.js`) before
+  any run (`PLAN-round29.md` §8 step-0 hard gate).
+- **P5 (continuous TTA) is deferred, not dropped** — its gate G-D stays **OPEN** (nothing
+  measured); the design + cost wall are in `RUN-ANALYSIS.md` §16.6 and `TODO.md` 96, and the
+  DoD item 4 is explicitly conditional on P5 being built.
 
 ## 7. Integration invariants (what keeps the pieces coherent)
 

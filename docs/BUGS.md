@@ -70,7 +70,19 @@ probe** (round 28, `lsh.test.js` §K) then added one more finding, **#59** — t
 reader can return the same prototype several times (its fallback fillers guard with
 `semCandidates.has` but never add to that Set) — recorded as **reported, not fixed**,
 because it is on the scored default path and de-duplicating it would move every golden
-fingerprint (see the entry below).
+fingerprint (see the entry below). The **three round-28 operator runs** (`RUN-ANALYSIS.md` §15) then
+added three more, all **reported, not fixed** because each is a reading-layer or
+comparison-fairness finding that wants its own decision/proof rather than a rushed edit:
+**#60** (the always-on `meanSharpeDelta` hurdle is a *third* fold-level point comparison over the
+same correlated folds — the class #57 addressed for the two raw fractions only; verdict-neutral on
+all 21 candidate rows of the three runs), **#61** (the unified confidence space is dimensionally
+shared but not *distributionally* comparable across families, so the shipped absolute `deadZone`
+and every `--turnover-sweep` threshold are family-relative — measured: the controller's
+`|confidence|` never exceeds 0.27 while a signal's saturates at 1, and at the sweep's promoting
+policy the restated baseline holds a position on 16 of 4 320 bars), and **#62**
+(`--label-horizon` silently sets the *sample-weight span* on a non-`triple` run — the #58
+configuration confound reachable through a flag documented as the triple barrier's horizon — and
+is otherwise a silent no-op). None of the three changes a verdict this round; nothing promoted.
 And #33 in
 particular changes the *reading* of every `npm run analyze` number ever
 produced: the driver fed the controller the whole growing candle prefix where
@@ -78,17 +90,17 @@ production feeds it a fixed window, so the controller's trade bookkeeping saw
 ancient candles and trained on mislabelled trades. Do not size or interpret a run
 until #33 is fixed. If you change anything
 under `src/`, run the full browser suite before and after
-(**2402 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
-`consolidation` 48, `consolidation_worker` 18, `fetcher` 101,
+(**2558 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
+`consolidation` 48, `consolidation_worker` 18, `fetcher` 111,
 `golden` 23 (bit-exactness), `modules` 51 (assembly), `legion` 57,
-`candles` 95, `locks` 41, `analysis` 586, `price_precision` 29,
+`candles` 192, `locks` 41, `analysis` 621, `price_precision` 29,
 `multisymbol` 28, `lsh` 75 (the round-28 section K retrieval-liveness checks), `surprise` 32, `sample_weights` 57,
 `homeostasis` 30, `evolve` 36, `multiprobe` 77, `binarypc` 39,
 `bitweight` 69, `querymod` 51, `walkforward` 63,
 `dimensions` 185, `guards` 65 (run integrity), `observer` 76 (legion health),
 `controller_invariants` 23 (R27-4b controller contracts, plus the R28 measured-span /
 emitted-stream checks in §D),
-`analyze` 255 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26, and R27-1 liveness / R27-2 broadcast-liveness / R27-5 forecast-kind grouping / variant taxonomy after round 27, and the round-28 weighting-configuration / measured-gate / inert-reason / active-pair checks)) — plus `golden` on
+`analyze` 269 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26, R27-1 liveness / R27-2 broadcast-liveness / R27-5 forecast-kind grouping / variant taxonomy after round 27, the round-28 weighting-configuration / measured-gate / inert-reason / active-pair checks, and the round-29 P1 benchmark runner / `--carry-files` / `extraPanelStreams` wiring, plus the round-4 P2 driver wiring and the round-5 fold-dispatch contract checks)) — plus `golden` on
 its own after any `hivemind/` edit, `multisymbol` after any change to the
 controller's trade/target arithmetic, `lsh` after any change to the memory index,
 `surprise` after any change to the memory write path, `sample_weights` after
@@ -2290,6 +2302,261 @@ golden fingerprint — a deliberate re-freeze the round's evidence does not just
 by `lsh.test.js` §K, whose paired assertions (set invariant, list differs) will make a future
 de-duplication show up as a test change rather than a silent numeric drift.
 
+## Found by the round-28 operator runs (`RUN-ANALYSIS.md` §15) — #60/#61/#62, all REPORTED, not fixed
+
+The three Steps of `PLAN-round28.md` §3 ran (`20260923T211549-seed1`, `20260924T045601-seed1`,
+`20260924T071546-seed1`) and their readout is `RUN-ANALYSIS.md` §15. All three ran clean
+(`policyRoundTrip` ok/0 mismatch, `warmErrors 0`, `quarantinedRows 0`, zero warn/error log lines,
+audits clean) and **nothing promoted**. Reading them added the three entries below. Each is
+reported rather than fixed because each needs a decision or proof of its own, and none of them
+changes a verdict: #60 and #62 are latent/reading-layer, and #61's effect is on the fairness of
+cross-family comparisons (nothing promoted this round in any case).
+
+### 60. `meanSharpeDelta` — a third fold-level point comparison that the #57 fix missed
+
+**REPORTED, NOT FIXED in round 28.**
+
+Found by reading the three round-28 run reports (`RUN-ANALYSIS.md` §15.2/§15.3). The #57 fix
+removed the two raw fold **fractions** (`foldWinFraction`, `positiveFoldFraction`) from the
+always-on reasons, per `DESIGN.md` §6.1's recorded round-25 decision ("the raw fraction is still
+reported, as a statistic"). `promoteDecision` carries a **third** fold-level statistic as an
+always-on, `gated: true` hurdle the fix did not touch: `meanSharpeDelta`, which compares the
+candidate's mean per-fold Sharpe (`aggregate.mean`) against the baseline's with
+`minSharpeDelta = 0`. Its reference is the baseline's mean over all 288 folds, computed over the
+same ~0.29–0.52 cross-stream-correlated folds the dependence panel exists to account for.
+
+Measured in the shipped reports (`hurdles` entries, `gated: true`):
+
+| run | candidate | value (candidate mean fold Sharpe) | threshold (baseline mean fold Sharpe) | other gated hurdles also failed |
+| --- | --- | ---: | ---: | --- |
+| Step 1 | `sample-weights` | −0.10646 | −0.04413 | minDsr, minDsrAdjusted, pairedSharpeDifference |
+| Step 1 | `sample-weights-scale-control` | −0.11588 | −0.04413 | minDsr, minDsrAdjusted, paired, stability |
+| Step 2 | `label-conservative` | +0.51465 | +0.70051 | paired, stability |
+| Step 3 | `surprise` / `sig-frac-momentum` / `sig-agreement` / `sig-range` / `sig-autocorr` | +0.58 … −0.51 | −0.04413 | minDsr, minDsrAdjusted, paired, … |
+
+Note the threshold is the **mean of fold Sharpes** (Step 1: −0.04413) while the panel's pooled
+Sharpe is −0.11469 — the two are different statistics, and the reason string prints only the
+mean-fold pair, so a reader cannot see that the hurdle is fold-level.
+
+**Verdict-neutrality, proved on all three runs (21 candidate rows).** No candidate anywhere fails
+*only* this hurdle: every row that fails `meanSharpeDelta` also fails at least one error-controlled
+gated hurdle (`minDsr`, `minDsrAdjusted`, `pairedSharpeDifference` or `clusterStability`) — and
+five candidates (`homeostasis`, `pca-hash`, `sig-momentum`, `sig-vol-regime`, `sig-volume`,
+`sig-accel`) pass it while still failing the floor. So reporting it as `gated: false` (as #57 did
+for the two fractions) would move no verdict. Filed rather than fixed because `DESIGN.md` §6.1's
+recorded decision names only the raw fractions, so whether a mean-fold reason was *intended* to
+survive is a decision-procedure question (`DESIGN.md` §6) that this round's evidence cannot
+settle, and a fix must carry its own neutrality proof.
+
+### 61. The "one confidence space" is dimensionally shared but not distributionally comparable across families
+
+**REPORTED, NOT FIXED in round 28.**
+
+Found by the P5 sweep's fairness audit (`RUN-ANALYSIS.md` §15.4/§15.5c). R26-3 unified the
+position policy so every candidate's `confidence` is thresholded by the same absolute
+`deadZone`/`enter`/`exit`. That is dimensionally consistent — every family emits a number on
+[−1, 1] — but the *distributions* are not comparable, so the same absolute threshold is a
+different economic filter for each family. Measured from the Step-3 journal (all 4 320 bars,
+`|confidence|`):
+
+| arm | p50 | p75 | p90 | p95 | max | fraction > 0.2 | fraction > 0.3 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| baseline (controller) | 0.0557 | 0.0960 | 0.1514 | 0.1680 | **0.2555** | **0.93 %** | **0 %** |
+| Step-2 baseline | 0.0634 | 0.1075 | 0.1524 | 0.1754 | 0.2670 | 2.29 % | 0 % |
+| `sig-momentum` | 0.5259 | 0.7785 | 1.0000 | 1.0000 | **1.0000** | **83.08 %** | 72.71 % |
+| `sig-accel` | 0.4849 | 0.7501 | 1.0000 | 1.0000 | 1.0000 | 77.85 % | 67.41 % |
+| `sig-range` | 0.4900 | 0.7803 | 1.0000 | 1.0000 | 1.0000 | 82.06 % | 71.97 % |
+
+The controller's confidence never exceeds 0.27 (so `enter 0.2` is a ~4σ event for it, and `0.3`
+is impossible), while a signal's is saturated at 1 for its top decile.
+
+**Consequences, both measured.**
+
+1. **The shipped dead zone is family-relative.** At `deadZone 0.05` the baseline is in the market
+   on `nonZeroFraction` 0.5081 of bars, `sig-momentum` on 0.8917 and `sig-accel` on 0.8785; at
+   `deadZone 0` all three sit at 0.9333. So a `netSharpe` comparison across families at one
+   policy mixes an exposure difference into a performance difference (turnover 31.1 vs 810 vs 861
+   at the shipped policy).
+2. **The sweep can promote against an abstaining baseline.** At Step 3's promoting policy
+   `{deadZone 0.02, enter 0.2, exit 0.05}` the *restated baseline* holds a position on **16 of
+   4 320 bars** (`nonZeroFraction 0.0037`, `tradeCount 2`, `turnover 2`, Sharpe −0.1395) while the
+   candidate trades 844 — the verdict compares an ~80 %-invested book with a flat one. Only the
+   *absolute* DSR floor stops the analogous `sig-momentum` row: at the same policy it reaches the
+   highest Sharpe of all arms (1.21430) but `effBars` 1180 (vs accel's 1948) gives adjDSR 0.84432,
+   a fail.
+
+No arithmetic is wrong — the reported numbers are what the code computed. The defect is
+*comparison fairness*, and it is on the report/decision layer, not the scored path. A fix needs a
+`DESIGN.md` §6 decision (family-normalised thresholds, e.g. quantile- or scale-matched, or
+cross-family statements quoted only at matched exposure) with its own re-run/proof, so it is
+reported, not fixed. It does not affect any promotion this round: nothing promoted.
+
+### 62. `--label-horizon` silently sets the sample-weight span — and is otherwise a no-op on a non-`triple` run
+
+**REPORTED, NOT FIXED in round 28.**
+
+Found by reading `analyze.js` against `PLAN-round28.md` §3's Step-2 command
+(`RUN-ANALYSIS.md` §15.3). Both opt-in weighting arms' `configure()` set the causal ring's span as
+
+```
+horizonBars: explicit != null ? explicit : labelHorizon
+```
+
+where `explicit` is `--sample-weight-horizon` and `labelHorizon = _labelHorizonBars > 1 ?
+floor(_labelHorizonBars) : null`. The comment directly above states the intent — the fallback is
+*"the run's label horizon when the labeller has a real vertical barrier (`triple` + label-horizon
+> 1) — there the label span IS that horizon"* — but **the code does not test the label policy**:
+`_labelHorizonBars > 1` is the entire condition.
+
+Two consequences, both measured on the retained runs:
+
+- **It can silently re-introduce the #58 confound.** A run that is *not* `triple`
+  (`optimistic`/`conservative`) but passes `--label-horizon=<n>` *and* includes a weighting arm
+  runs arm A with a **FIXED** span of `n` bars and `measureHorizon: false` — precisely the
+  "assumed horizon" configuration artefact the round set out to remove, reached through a flag
+  documented as the triple barrier's horizon. Step 1 escaped it (no `--label-horizon`); Step 2
+  escaped it only because it carried no weighting arm.
+- **Otherwise it is a silent no-op.** On Step 2 (`--test=10 --label-horizon=20`) nothing read it:
+  `trades.js:168` gates the vertical barrier on `triple && horizonBars != null`, and the report
+  shows `resolvedTimeBarrier 0` with `heldBars {max 73, mean 7.88093}` in **both** arms (a max of
+  73 ≫ 20, and the two arms' `heldBars` are identical). So the flag appears in `run.json` and in
+  the report's `labelHorizonBars` while having had no effect — and the only clue is the
+  `sampleWeightHorizon: null` echoed beside it.
+
+The class is flag-semantics/latent-confusion, not arithmetic. Reported, not fixed: no retained run
+is affected, and the repair (test `_labelPolicy === 'triple'` in the fallback, or drop the
+`labelHorizon` fallback now that the measured span is the default) is a one-line change in the
+scored training path that wants its own `analyze.test.js`/`sample_weights.test.js` pin.
+
+## Found by the round-29 implementation (`RUN-ANALYSIS.md` §16) — #63–#67, all FIXED
+
+The round's new machinery is mostly decision/post-processing code, but four wiring defects were
+caught by writing the correctness tests *before* trusting the runs. Three of them are the same
+class as #31/#51: a producer computes the right number and the consumer silently reads a different
+quantity (or nothing at all), so the report stays green while claiming something untrue. The fourth
+is a units/encoding mismatch that produced an all-zero input rather than an error.
+
+### 63. `exposureMatchedPair` read the base policy's exposure off a `pooledMetrics` field a journaled report does not carry
+
+**FIXED in round 29 (P2).** Found by the P2 implementation while checking the matched comparison
+against the retained runs. Exposure matching has to know each arm's *scored* in-market share to
+pick the common target (the less-invested arm's share). The first version read it from
+`baseline.pooledMetrics.nonZeroFraction` — a field a report built from a journal (the retired-run
+retrospective path, and every report `restateReportAtCost`/`restateReportAtPolicy` produces) may
+not carry. A missing field made `targetNonZeroFraction` resolve to **0**, i.e. a "match" where both
+arms sit flat: `exposureDeadZone(confidences, 0)` returns `deadZone: 0.999` for every family, so
+both arms trade nothing, the paired difference is 0 and the matched row silently reports a null
+comparison instead of an error.
+
+The fix measures the raw share from the restatement itself
+(`restateReportAtPolicy(base, basePolicy).pooledMetrics.nonZeroFraction`), which is definitionally
+the share the scored policy emits, and the matched row's reachability is now reported explicitly
+(`matchedWithinTolerance`, `tolerance`) so an unreachable target can never look like a clean match.
+Requirement: a matched pair's `raw.baselineNonZeroFraction`/`candidateNonZeroFraction` must equal
+the restated shares — `analysis.test.js` pins it.
+
+### 64. A funding/carry sleeve was compared against the *concatenated* panel length, so it was excluded from every real run
+
+**FIXED in round 29 (P4).** `poolReports` appends independent return streams (the funding/carry
+sleeve) to the dependence panel so the deflated Sharpe's design-effect adjustment can count them. A
+stream in that panel is a **per-stream** series — the test bars of one symbol, folds concatenated —
+so an extra stream must match *one stream's* length. The first version compared it against
+`pooled.length`, which is the concatenation of **every** stream's bars (8× bigger on the shipped
+8-symbol basket). The check therefore failed on every real run and the sleeve was dropped with
+`panelMismatch: true` — i.e. the P4 acceptance measurement would have reported "no effect" for a
+sleeve that never entered the panel. The unit tests had been written against the corrected
+semantics (a per-stream-length sleeve), which is what exposed the mismatch. Fixed by comparing
+against `priceStreamReturns[0].length`; a genuine mismatch is still reported
+(`panelMismatch`/`panelMismatchReason`), never silently averaged in.
+
+### 65. The restatements double-appended the sleeve (and dropped its panel bookkeeping), so a cost- or policy-restated panel disagreed with the scored one
+
+**FIXED in round 29 (P4).** `restateReportAtCost`/`restateReportAtPolicy` rebuild a report's panel
+from the journal and then re-append the extra streams, because a restatement must not lose an
+independent stream the scored block counted. Both passed the report's *already-extended*
+`streamFoldLengths` into the re-append helper, which appended the extras a second time: the
+restated report carried `streamReturns` of length K+1 beside `streamFoldLengths` of length K+2, so
+the sleeve was counted twice in the design effect (and the ladder's dependence block disagreed with
+the scored row for a reason unrelated to cost). Both call sites now pass the **price-only** fold
+lengths (rebuilt during the restatement, which is also where the extras' own lengths come from),
+and the restated report carries the panel bookkeeping forward (`extraPanelStreams`,
+`panelStreams`, `panelMismatch`, `panelMismatchReason`) plus a `dependenceWithoutExtras`
+recomputed **at the same cost/policy** — otherwise `analyze.js`'s restatement wrapper would pair a
+restated `dependence` with a scored `dependenceWithoutExtras`. `analysis.test.js` pins the chained
+restatement and the cost-ladder agreement.
+
+### 66. `carryOnBarGrid` compared epoch-ms funding timestamps against the ISO strings the candle files store, producing an all-zero sleeve
+
+**FIXED in round 29 (P4).** The shipped candle JSONL stores ISO timestamp strings
+(`"2026-09-24T08:00:00.000Z"`), and `analyze.js#readCandles` passes that field through unchanged
+(only `candle_fetcher.js#parseCandlesJsonl` normalizes it to epoch ms, which the *tests* use).
+`carryOnBarGrid` therefore evaluated `fundingRow.timestamp <= "ISO"` — a number/string comparison
+that is `false` for every bar — so the whole sleeve was `0`. The pipeline's guard rails did not
+catch it either: the length check passed (a zero array of the right length is still the right
+length), the correlation came back `NaN` (→ `null` in JSON), and the dependence block simply
+reported "with sleeve" numbers for a constant stream. Found by the end-to-end wiring probe (the
+sleeve's pooled mean rate was exactly 0 where the funding files' own mean was 1.06e-4/period).
+Fixed by normalizing **both** sides to epoch ms at the comparison site (`toMs`), and — because the
+source of the bug is a silent-degradation class, not a crash — by adding a **degeneracy guard**:
+`poolReports` excludes a constant extra stream (`panelMismatchReason: 'degenerate'`) and
+`analyze.js` declines to append a zero-variance sleeve (recording the reason in `carry.unavailable`)
+rather than diluting the panel with a stream that carries no information. `analysis.test.js` pins
+both the ISO/number coercion and the degeneracy exclusion; `candles.test.js` pins that the funding
+files' own serialization round-trips byte-for-byte.
+
+**Related convention fix in the same edit:** `auditFundingSeries` initially reused the *candle*
+"still-forming bar" rule (`timestamp + interval > now`) and so flagged the newest funding period of
+all eight symbols as `unclosed`. A funding row is realized **at** its own timestamp (the exchange
+charges the rate then) — there is no `[t, t+interval)` bar — so a still-forming period is a row
+dated in the *future*. Fixed to `timestamp > now`; this is why the funding-basket audit reports 0
+problems rather than 8.
+
+### 67. `restateReportAtCadence` under-sized the default training window by one `testSize` (latent — every shipped caller passed `trainSize`)
+
+**FIXED in round 29 (P2 coherence audit).** Found by the full coherence/sanity pass over the
+round-29 additions. `walkForwardSplit({n, trainSize, testSize})` builds non-expanding folds whose
+first training window is `[0, testStart)`, so fold 0's `testStart` **is** the training length. The
+first version of the cadence restatement defaulted `trainSize` to
+`testStart − (testEnd − testStart + 1)` — i.e. `trainSize − testSize` — so a caller that omitted
+`trainSize` silently re-partitioned with a training window one test size too short (on the
+`trainSize = testSize = 10` fixture the default was **0**). No *measured* number was affected: the
+P2 cadence readout and every test pass `trainSize` explicitly, so the defect was latent. Fixed to
+derive the length from fold 0's grid position (`folds[0].testStart`, falling back to `testSize`
+when a report carries no folds), and `analysis.test.js`'s P2 restatement check now pins the default
+against `folds[0].testStart` (a discriminating assertion, since the old expression failed it).
+Restatements are pure post-processing and the shipped `analyze.js` driver does not call this
+function, so no golden fingerprint or scored number moves.
+
+## Found by the round-5 final cleanup — #68, FIXED
+
+### 68. The parallel fold worker invoked the pre-built model as a factory (and the driver dropped `sampleWeightHorizon`)
+
+**FIXED in round 5 (final cleanup).** Caught by `npm test` on a real native Node driver — invisible
+to the browser harness, whose concurrency checks inject their own inline fold fake instead of loading
+the real worker. `makeSignalForVariant(factory, …)` takes a **function of the variant** and calls it
+once per fold (`const model = factory(variant)`). The serial driver passes the right shape
+(`selectFactory = (variant) => (variant.benchmark ? benchmarkFactory(variant) : factory(variant))`),
+but `analysis/fold_worker.js` evaluated it early —
+`const selectFactory = variant && variant.benchmark ? benchmarkFactory(variant) : factory(variant)` —
+and handed the resulting **model object** to `makeSignalForVariant`, which then invoked that object as
+a function. Every fold dispatch rejected with
+`WORKER_ERROR: [fold:<variant>#<stream>.<fold>] factory is not a function`, so the node-only
+`parallel_folds.test.js` (real `worker_threads`, the R26-4 acceptance criterion) failed and no
+`--concurrency > 1` run could complete. Fixed by making the worker's `selectFactory` a function of
+the variant, exactly like the serial driver's.
+
+The same probe found a **second, quieter divergence**: the driver's fold-dispatch request omitted
+`sampleWeightHorizon`, so with `--sample-weight-horizon=<n>` the worker configured the causal span
+to `null` (MEASURED) while the serial folds used `n` — a serial/parallel disagreement that would not
+have thrown (`folds.jsonl` byte-identity would have broken silently). The field is now threaded
+through both the request (`analyze.js`) and the worker factory (`fold_worker.js`).
+
+Because the bug class is "the driver forgot to send a field the worker reads", the fix ships with a
+**contract check**, not just the one instance: two new `analyze.test.js` checks (runnable in the
+browser harness) assert that every fold-dispatch request carries the full set of keys the worker
+reads — so a future factory option that is not threaded here fails loudly. `analyze` 267 → 269,
+ledger 2556 → 2558.
+
 ## Hand-rolled indicators — audit findings
 
 `indicatorProcessor.js` is ten independent hand-rolled indicator
@@ -2622,7 +2889,7 @@ threshold only catches the ~100%-of-range pathological wick.
 **Why not edit the file instead?** Rewriting the JSONL would destroy the raw
 venue record and make the fix invisible; repairing at read time keeps the
 source-of-truth exact, is testable in isolation, and is reversible by flipping
-one config flag. The audit suite (`candles.test.js`, 95 checks) pins both the
+one config flag. The audit suite (`candles.test.js`, 192 checks) pins both the
 raw invariants and the repair behaviour.
 
 **Freshness.** `update_candles_basket.js` (`npm run fetch:all`) updates every

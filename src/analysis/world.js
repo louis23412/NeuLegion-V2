@@ -81,23 +81,42 @@ export function shockCandles(candles, perturb = null) {
 //
 // The base pass returns the *real* candles (so the reported metrics are measured
 // on the shipped data, not on a synthesis), and only the probe pass is shocked.
-export function makeCandleViewFor(candles, { frequency } = {}) {
+//
+// `panel` (round 29 -> 30, P3) attaches the cross-section the cross-sectional
+// reversal candidate reads: `{ streamIndex, label, labels, returnsByStream }`.
+// The array held for THIS stream is always replaced by the view's own `returns`
+// (so on a probe pass the panel carries the perturbed series — which is what makes
+// the structural `viewsDiffer` check and the look-ahead audit meaningful for a
+// cross-sectional feature). It is optional: without it the view is exactly what it
+// always was, and a cross-sectional candidate abstains.
+export function makeCandleViewFor(candles, { frequency, panel = null } = {}) {
     const baseCloses = candles.map((c) => c.close);
     const baseVolumes = candles.map((c) => (Number.isFinite(c.volume) ? c.volume : 1));
     const baseReturns = barReturns(baseCloses);
+    const panelFor = (own) => (panel
+        ? {
+            streamIndex: panel.streamIndex,
+            label: panel.label,
+            labels: panel.labels,
+            returnsByStream: panel.returnsByStream.map((rs, i) => (i === panel.streamIndex ? own : rs)),
+        }
+        : null);
     return (returns, perturb) => {
         if (!perturb) {
-            return { returns: returns || baseReturns, closes: baseCloses, volumes: baseVolumes, candles, perturb: null };
+            const own = returns || baseReturns;
+            return { returns: own, closes: baseCloses, volumes: baseVolumes, candles, perturb: null, panel: panelFor(own) };
         }
         const shocked = shockCandles(candles, { after: perturb.after, probe: perturb.probe, frequency });
         const closes = shocked.map((c) => c.close);
         const volumes = shocked.map((c) => (Number.isFinite(c.volume) ? c.volume : 1));
+        const own = barReturns(closes);
         return {
-            returns: barReturns(closes),
+            returns: own,
             closes,
             volumes,
             candles: shocked,
             perturb: { after: perturb.after, probe: perturb.probe },
+            panel: panelFor(own),
         };
     };
 }

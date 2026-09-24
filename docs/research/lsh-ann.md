@@ -98,7 +98,7 @@ bit-overlap rather than an exhaustive scan.
 
 ## Test evidence
 
-- `lsh.test.js` (69 checks) — the recall-preservation suite. Proves, in tiers:
+- `lsh.test.js` (75 checks) — the recall-preservation suite. Proves, in tiers:
   - *theory*: projections are unit norm so `_projSimilarity` is a true average
     cosine (self-score exactly 1; the historical `1/sqrt(lowDim)` rescale — which
     compressed every score into `[-1/lowDim, 1/lowDim]` and made the 0.35 filter

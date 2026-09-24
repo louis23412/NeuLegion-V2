@@ -34,7 +34,7 @@ import {
     dependenceSummary, clustersOf, pairedPromotionTest, restateReportAtCost, costLadder,
     familyCorrelation, DEPENDENCE_GATE_READER,
     confidenceToPosition, confidenceFromProb, verifyPolicyRoundTrip, restateReportAtPolicy,
-    positionSeriesFromConfidence,
+    positionSeriesFromConfidence, restateReportAtCadence, exposureDeadZone, exposureMatchedPair,
 } from '../../../src/analysis/walkforward.js';
 import {
     DEFAULT_TURNOVER_GRID, turnoverSweep, bestTurnoverPolicy, formatTurnoverSweep,
@@ -52,7 +52,12 @@ import {
 } from '../../../src/analysis/forecast.js';
 import {
     foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision,
+    promotionAcrossCadences, defaultCatastrophic,
 } from '../../../src/analysis/decision.js';
+import {
+    fitStandardiser, applyStandardiser, fitRidge, predictRidge, fitMLP, predictMLP,
+    fitBaseRate, predictBaseRate, makeBenchmarkForecaster, BENCHMARK_KINDS,
+} from '../../../src/analysis/benchmark.js';
 import {
     halvingRounds, halvingSchedule, successiveHalving, formatRace,
 } from '../../../src/analysis/race.js';
@@ -69,7 +74,12 @@ import {
     DEFAULT_POSITION, clampPosition, momentum, fracDiffAt, fracMomentum,
     volRegime, momentumAgreement, rangeLocation, volumeImbalance, autocorr1,
     acceleration, causalZScore, positionAt, signalForCandidate, SIGNAL_CANDIDATES,
+    reversal, reversalWindow, reversalVol, crossSectionalReversal, REVERSAL_CANDIDATES,
 } from '../../../src/analysis/features.js';
+import {
+    parseFundingJsonl, auditFundingSeries, auditFundingProblems, carryReturns,
+    carryOnBarGrid, carryPanelStream, pooledCarry, correlation,
+} from '../../../src/analysis/carry.js';
 import {
     cscvBlocks, cscvSplit, relativeRank, oosOnIsRegression, probabilityOfBacktestOverfitting,
 } from '../../../src/analysis/overfitting.js';
@@ -1924,6 +1934,51 @@ export async function run() {
             rangeSig.every((p) => p === 0) && momSig.some((p) => p !== 0), `range=${rangeSig} mom=${momSig}`);
         check('AC: a signal on an empty view never throws', SIGNAL_CANDIDATES.every((c) => signalForCandidate(c)({}, [0, 1]).every((p) => p === 0)));
 
+        // --- P3: the short-horizon reversal family ---------------------------
+        // `2608.21888`: 15m directional reversal lives in SIGNS. These fixtures pin
+        // the primitives' arithmetic, and — the part that matters for an arm that
+        // reads the OTHER streams — the panel contract (including abstaining rather
+        // than throwing when there is no cross-section).
+        const revSeries = { returns: [0.01, -0.02, 0.03, 0.04, -0.05] };
+        check('P3: reversal is exactly minus the last bar return (the sign-reversal primitive)',
+            reversal(revSeries, 4) === 0.05 && reversal(revSeries, 2) === -0.03 && Number.isNaN(reversal(revSeries, 0)));
+        check('P3: reversalWindow is minus the trailing mean return',
+            close(reversalWindow({ returns: [1, 2, 3, 4] }, 3, { window: 4 }), -2.5, 1e-12));
+        const volRet = [0.01, -0.02, 0.03, -0.01, 0.02, 0.01, -0.03, 0.02, 0.01, -0.02, 0.03, -0.01, 0.02, 0.01, -0.03, 0.02, 0.05];
+        const volWindow = volRet.slice(0, 16);
+        const volMean = volWindow.reduce((a, b) => a + b, 0) / 16;
+        const volStd = Math.sqrt(volWindow.reduce((a, b) => a + (b - volMean) ** 2, 0) / 15);
+        check('P3: reversalVol divides the last return by the trailing realised vol (excluding t)',
+            close(reversalVol({ returns: volRet }, 16, { window: 16 }), -0.05 / volStd, 1e-12) &&
+            Number.isNaN(reversalVol({ returns: [0.01, 0.01, 0.01] }, 2, { window: 2 })));
+        check('P3: crossSectionalReversal is minus the return net of the cross-section mean, and abstains without a panel',
+            close(crossSectionalReversal({ returns: [0, 0, 0.03], panel: { returnsByStream: [[0, 0, 0.01], [0, 0, -0.02], [0, 0, 0.03]] } }, 2), -(0.03 - 0.02 / 3), 1e-12) &&
+            Number.isNaN(crossSectionalReversal({ returns: [0, 0, 0.03] }, 2)) &&
+            Number.isNaN(crossSectionalReversal({ returns: [0, 0, 0.03], panel: { returnsByStream: [[0, 0, 0.03]] } }, 2)));
+        const panelView = {
+            returns: baseReturns, closes: baseCloses, volumes: baseVolumes,
+            panel: { streamIndex: 0, labels: ['A', 'B'], returnsByStream: [baseReturns, baseReturns.map((r) => -r)] },
+        };
+        const xsCand = REVERSAL_CANDIDATES.find((c) => c.id === 'sig-reversal-xs');
+        const xsWithPanel = signalForCandidate(xsCand)(panelView, [60, 65, 70]);
+        const xsNoPanel = signalForCandidate(xsCand)({ returns: baseReturns, closes: baseCloses, volumes: baseVolumes }, [60, 65, 70]);
+        check('P3: the cross-sectional arm trades with a panel and abstains without one (never throws)',
+            xsWithPanel.some((p) => p !== 0) && xsNoPanel.every((p) => p === 0), `with=${xsWithPanel} without=${xsNoPanel}`);
+        const pv1 = { ...series1, panel: { streamIndex: 0, returnsByStream: [series1.returns, series1.returns.map((r) => -r)] } };
+        const pv2 = { ...series2, panel: { streamIndex: 0, returnsByStream: [series2.returns, series2.returns.map((r) => -r)] } };
+        const xs1 = signalForCandidate(xsCand)(pv1, [t0])[0];
+        const xs2 = signalForCandidate(xsCand)(pv2, [t0])[0];
+        check('P3: the cross-sectional arm is causal THROUGH the panel too (bars after t cannot move the position at t)',
+            xs1 === xs2 && xs1 !== 0, `xs1=${xs1} xs2=${xs2}`);
+        check('P3: the reversal family is well-formed and every arm is causal (position at t invariant to values after t)',
+            REVERSAL_CANDIDATES.length === 4 && Object.isFrozen(REVERSAL_CANDIDATES) &&
+            new Set(REVERSAL_CANDIDATES.map((c) => c.id)).size === 4 &&
+            REVERSAL_CANDIDATES.every((c) => c.kind === 'signal' && typeof c.fn === 'function' && typeof c.window === 'number') &&
+            REVERSAL_CANDIDATES.every((c) => positionAt(c, series1, t0) === positionAt(c, series2, t0)));
+        check('P3: every reversal signal returns one finite position per test bar inside [-1, 1] (and abstains on an empty view)',
+            REVERSAL_CANDIDATES.every((c) => signalForCandidate(c)(panelView, [60, 65, 70]).every((p) => Number.isFinite(p) && p >= -1 && p <= 1)) &&
+            REVERSAL_CANDIDATES.every((c) => signalForCandidate(c)({}, [0, 1]).every((p) => p === 0)));
+
         // --- report pooling (N2) --------------------------------------------
         check('AC: sharpeStandardError is the exact Lo (2002) closed form (annualised)',
             close(wfSharpeStandardError(0, 252, 252), 1, 1e-12) &&
@@ -1964,6 +2019,110 @@ export async function run() {
         try { poolReports([]); } catch { poolThrew++; }
         try { poolReports(null); } catch { poolThrew++; }
         check('AC: poolReports rejects an empty / non-array report list', poolThrew === 2);
+
+        // --- P4: the funding/carry sleeve ------------------------------------
+        const fundText = [
+            '{"timestamp":"2024-01-01T00:00:00.000Z","fundingRate":0.0001,"markPrice":42000}',
+            '{"timestamp":"2024-01-01T08:00:00.004Z","fundingRate":-0.0002,"markPrice":42100}',
+            '{"timestamp":"2024-01-01T16:00:00.000Z","fundingRate":0.0003}',
+            'not json',
+            '',
+        ].join('\n');
+        const parsedFund = parseFundingJsonl(fundText);
+        check('P4: parseFundingJsonl keeps well-formed rows, tolerates a missing markPrice, and counts the rest',
+            parsedFund.rows.length === 3 && parsedFund.invalid === 1 && parsedFund.blank === 1 &&
+            parsedFund.rows[1].timestamp === Date.parse('2024-01-01T08:00:00.004Z') &&
+            parsedFund.rows[2].markPrice === null && parsedFund.rows[0].fundingRate === 0.0001);
+        const fundAudit = auditFundingSeries(parsedFund.rows, { now: Date.parse('2025-01-01T00:00:00Z') });
+        check('P4: auditFundingSeries reads the funding grid, the sign split and the extremes',
+            fundAudit.count === 3 && fundAudit.intervalHistogram['8h'] === 2 && fundAudit.offGrid === 0 &&
+            fundAudit.missingPeriods === 0 && fundAudit.negativeFraction === 1 / 3 &&
+            close(fundAudit.meanRate, 0.0002 / 3, 1e-15) && auditFundingProblems(fundAudit, { label: 't' }).length === 0);
+        check('P4: carryReturns is the short-perp/long-spot receipt and the sign flip inverts it',
+            carryReturns(parsedFund.rows).join(',') === '0.0001,-0.0002,0.0003' &&
+            carryReturns(parsedFund.rows, { signFlip: true }).join(',') === '-0.0001,0.0002,-0.0003');
+        const p4BarTs = [Date.parse('2023-12-31T23:00:00Z')];
+        for (let i = 0; i < 8; i++) p4BarTs.push(Date.parse('2024-01-01T00:00:00Z') + i * 3_600_000);
+        const gridCarry = carryOnBarGrid(p4BarTs, parsedFund.rows, { gridMs: 8 * 3_600_000 });
+        check('P4: carryOnBarGrid is causal (nothing before the first closed period) and the period receipt sums to the rate',
+            gridCarry[0] === 0 && close(gridCarry.slice(1).reduce((a, b) => a + b, 0), 0.0001, 1e-15) &&
+            close(gridCarry[4], 0.0001 / 8, 1e-15));
+        // The shipped candle JSONL stores ISO-string timestamps and `readCandles`
+        // passes them through, so a `number <= "ISO"` comparison would be silently
+        // all-zero. Both sides must be normalised to epoch ms.
+        check('P4: carryOnBarGrid normalises ISO-string bar timestamps (a string/number compare would be silently zero)',
+            carryOnBarGrid(['2023-12-31T23:00:00Z', '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z'], parsedFund.rows, { gridMs: 8 * 3_600_000 })
+                .join(',') === `0,${0.0001 / 8},${0.0001 / 8}`);
+        check('P4: carryOnBarGrid normalises ISO-string funding rows the same way',
+            carryOnBarGrid([Date.parse('2024-01-01T00:00:00Z'), Date.parse('2024-01-01T01:00:00Z')],
+                [{ timestamp: '2024-01-01T00:00:00.000Z', fundingRate: 0.0002 }], { gridMs: 8 * 3_600_000 })
+                .join(',') === `${0.0002 / 8},${0.0002 / 8}`);
+        check('P4: carryPanelStream tiles the fold test bars in the pooled price index space',
+            (() => {
+                const ts = Array.from({ length: 200 }, (_, i) => Date.parse('2024-01-01T00:00:00Z') + i * 3_600_000);
+                const folds = walkForwardSplit({ n: 200, trainSize: 60, testSize: 10 });
+                const s = carryPanelStream({ timestamps: ts, folds, rows: parsedFund.rows });
+                return s.length === folds.length * 10 && s.every((v) => Number.isFinite(v));
+            })());
+        check('P4: correlation and pooledCarry are the exact equal-weight statistics',
+            close(correlation([1, 2, 3, 4], [1, 2, 3, 4]), 1, 1e-12) &&
+            close(correlation([1, 2, 3, 4], [4, 3, 2, 1]), -1, 1e-12) &&
+            Number.isNaN(correlation([1, 1, 1], [1, 2, 3])) &&
+            JSON.stringify(pooledCarry([[1, 2], [3, 4]])) === '[2,3]' && pooledCarry([]).length === 0);
+        const p4Ret = (k) => Array.from({ length: 40 }, (_, i) => Math.sin(i * 0.6 + k) * 0.01);
+        const p4FoldMetrics = (ret) => ({
+            turnover: 1, tradeCount: ret.length, totalCost: 0, nonZeroFraction: 1,
+            meanAbsPosition: 1, bars: ret.length, netSharpe: 0.5, grossPnl: 0,
+        });
+        const p4Fold = (ret, label) => ({
+            label, pooledReturns: ret, pooledGross: ret,
+            folds: [
+                { testStart: 0, testEnd: 19, metrics: p4FoldMetrics(ret.slice(0, 20)) },
+                { testStart: 20, testEnd: 39, metrics: p4FoldMetrics(ret.slice(20)) },
+            ],
+            foldLengths: [20, 20],
+            foldInputs: [
+                { returns: ret.slice(0, 20), signals: ret.slice(0, 20).map(() => 1), confidence: ret.slice(0, 20).map(() => 1) },
+                { returns: ret.slice(20), signals: ret.slice(20).map(() => 1), confidence: ret.slice(20).map(() => 1) },
+            ],
+            audit: null, trials: 2,
+        });
+        const p4Sleeve = Array.from({ length: 40 }, (_, i) => (i % 5 === 0 ? 0.002 : 0));
+        const p4merged = poolReports([p4Fold(p4Ret(0), 'a'), p4Fold(p4Ret(1), 'b')], { trials: 2, extraPanelStreams: [p4Sleeve] });
+        check('P4: poolReports folds the carry sleeve into the dependence panel and keeps the price-only block beside it',
+            p4merged.panelStreams === 1 && p4merged.panelMismatch === false && p4merged.panelMismatchReason === null &&
+            p4merged.dependence.available === true && p4merged.dependence.streams === 3 &&
+            p4merged.dependenceWithoutExtras.available === true && p4merged.dependenceWithoutExtras.streams === 2 &&
+            p4merged.extraPanelStreams.length === 1);
+        const p4mismatch = poolReports([p4Fold(p4Ret(0), 'a'), p4Fold(p4Ret(1), 'b')], { trials: 2, extraPanelStreams: [[0.001, 0.002]] });
+        check('P4: a sleeve that does not tile the pooled grid is EXCLUDED and reported, never silently averaged in',
+            p4mismatch.panelMismatch === true && p4mismatch.panelMismatchReason === 'length' &&
+            p4mismatch.dependence.streams === 2 &&
+            p4mismatch.dependenceWithoutExtras.streams === 2 && p4mismatch.extraPanelStreams === null);
+        // A CONSTANT stream makes every pairwise correlation undefined, so it must be
+        // excluded too — that is exactly what a mis-wired (all-zero) sleeve looks like.
+        const p4zero = poolReports([p4Fold(p4Ret(0), 'a'), p4Fold(p4Ret(1), 'b')], { trials: 2, extraPanelStreams: [new Array(40).fill(0)] });
+        check('P4: a constant (degenerate) sleeve is EXCLUDED and reported by reason',
+            p4zero.panelMismatch === true && p4zero.panelMismatchReason === 'degenerate' &&
+            p4zero.dependence.streams === 2 && p4zero.extraPanelStreams === null);
+        const p4restated = restateReportAtCost(p4merged, 5, { trials: 2 });
+        check('P4: a cost restatement re-appends the sleeve, so the restated dependence matches the scored one',
+            p4restated.dependence.streams === p4merged.dependence.streams &&
+            p4restated.streamReturns.length === 3 && p4restated.streamFoldLengths.length === 3 &&
+            p4restated.dependence.foldLength === p4merged.dependence.foldLength);
+        // A CHAINED restatement must keep the sleeve too (it rides on the report), and
+        // a cadence restatement must re-project it onto the NEW grid rather than
+        // silently dropping it (a drop would make the design effect look better).
+        const p4again = restateReportAtCost(p4restated, 10, { trials: 2 });
+        check('P4: a chained restatement keeps the sleeve (the extras ride on the report, not on the call)',
+            p4again.dependence.streams === 3 && p4again.dependence.foldLength === p4merged.dependence.foldLength &&
+            JSON.stringify(p4again.extraPanelStreams) === JSON.stringify(p4merged.extraPanelStreams));
+        const p4cadence = restateReportAtCadence(p4merged, { testSize: 20, trainSize: 20 });
+        check('P4: a cadence restatement re-projects the sleeve onto the new grid (1 price stream\'s worth, not dropped)',
+            p4cadence.dependence.streams === 3 && p4cadence.cadence.panelStreams === 1 &&
+            p4cadence.extraPanelStreams.length === 1 && p4cadence.extraPanelStreams[0].length === 20 &&
+            p4cadence.extraPanelStreams[0].join(',') === p4Sleeve.slice(20).join(','),
+            JSON.stringify({ s: p4cadence.dependence.streams, lens: p4cadence.extraPanelStreams.map((s) => s.length) }));
 
         // --- the audited candle view (N0) -----------------------------------
         const kCandles = Array.from({ length: 30 }, (_, i) => ({ timestamp: i, open: 100 + i, high: 101 + i, low: 99 + i, close: 100.5 + i, volume: 10 + i }));
@@ -2812,8 +2971,146 @@ export async function run() {
             JSON.stringify({ kinds: grp.kinds, ctl: grp.byId.ctl.dm.available, sig: grp.byId.sig.dm.available }));
         check('R27-5: the forecast summary names the grouped roster',
             (() => { const s = formatForecast(grp); return s.includes('groups: controller(') && s.includes('signal('); })());
+
+        // P1 (round 29 → 30): the model-class benchmark forecasters. Pure +
+        // deterministic, on the same `(c+1)/2` probability convention, so a
+        // benchmark arm sits beside the controller in the forecast block.
+        const bx = Array.from({ length: 200 }, (_, i) => [Math.sin(i * 0.3), ((i % 7) - 3) / 3, i % 2 ? 1 : -1]);
+        const byLinear = bx.map((x) => (0.9 * x[0] - 0.4 * x[1] > 0.1 ? 1 : 0));
+        const ridge = fitRidge(bx, byLinear, { lambda: 1e-3 });
+        let ridgeHits = 0;
+        for (let i = 0; i < bx.length; i++) if ((predictRidge(ridge, bx[i]) >= 0.5 ? 1 : 0) === byLinear[i]) ridgeHits++;
+        const mlp = fitMLP(bx, byLinear, { hidden: 6, epochs: 150, lr: 0.2, seed: 3 });
+        let mlpHits = 0;
+        for (let i = 0; i < bx.length; i++) if ((predictMLP(mlp, bx[i]) >= 0.5 ? 1 : 0) === byLinear[i]) mlpHits++;
+        const base = fitBaseRate(bx, byLinear);
+        check('P1: ridge and a small MLP both learn a separable causal rule the base rate cannot (referenced proper-skill arms)',
+            ridgeHits / bx.length > 0.8 && mlpHits / bx.length > 0.8 && base.p === byLinear.reduce((a, v) => a + v, 0) / byLinear.length &&
+            predictBaseRate(base) === base.p,
+            JSON.stringify({ ridge: ridgeHits / bx.length, mlp: mlpHits / bx.length, base: base.p }));
+        const mlpKey = (m) => JSON.stringify([m.W2, m.b2, m.W1]);
+        check('P1: the benchmark forecasters are deterministic (same seed ⇒ identical fits)',
+            mlpKey(fitMLP(bx, byLinear, { hidden: 6, epochs: 40, lr: 0.2, seed: 9 })) ===
+            mlpKey(fitMLP(bx, byLinear, { hidden: 6, epochs: 40, lr: 0.2, seed: 9 })) &&
+            mlpKey(fitMLP(bx, byLinear, { hidden: 6, epochs: 40, lr: 0.2, seed: 9 })) !==
+            mlpKey(fitMLP(bx, byLinear, { hidden: 6, epochs: 40, lr: 0.2, seed: 10 })));
+        check('P1: the standardiser is fit-cause and round-trips to zero mean/unit variance',
+            (() => {
+                const s = fitStandardiser(bx);
+                const z = bx.map((x) => applyStandardiser(s, x));
+                const m = z.reduce((a, v) => a.map((c, j) => c + v[j]), [0, 0, 0]).map((v) => v / z.length);
+                return m.every((v) => Math.abs(v) < 1e-9) && s.d === 3;
+            })());
+        check('P1: the factory exposes base-rate/linear/mlp and refuses tsfm without a checkpoint',
+            BENCHMARK_KINDS.join(',') === 'base-rate,linear,mlp,tsfm' &&
+            makeBenchmarkForecaster('linear').kind === 'linear' &&
+            makeBenchmarkForecaster('mlp').kind === 'mlp' &&
+            (() => { try { makeBenchmarkForecaster('tsfm'); return false; } catch { return true; } })());
+
+        // P1: a benchmark arm shares the controller's calibration group, so its DM
+        // test against the baseline is defined (unlike a signal's z-score).
+        const grpBench = forecastComparison({
+            baseline: gFI(0.4), baselineKind: 'controller',
+            candidates: [
+                { id: 'ctl', kind: 'controller', foldInputs: gFI(0.5) },
+                { id: 'bench-linear', kind: 'benchmark', foldInputs: gFI(0.6) },
+                { id: 'sig', kind: 'signal', foldInputs: gFI(0.2) },
+            ],
+            nBoot: 200, seed: 21,
+        });
+        check('P1: a benchmark arm joins the probability group (MCS + DM) while a signal keeps its own group',
+            grpBench.byId['bench-linear'].group === 'controller' && grpBench.byId['bench-linear'].dm.available === true &&
+            grpBench.byId.ctl.group === 'controller' && grpBench.byId.sig.group === 'signal' &&
+            grpBench.byKind.controller.members.join(',') === 'baseline,ctl,bench-linear' &&
+            grpBench.kinds.map((g) => g.kind).join(',') === 'controller,signal',
+            JSON.stringify(grpBench.kinds));
     } catch (e) {
         check('R26-14 forecast checks completed', false, e.stack);
+    }
+
+    // ---- A2. P2 (round 29 → 30): configuration-robust promotion + exposure matching
+    // The A/B's level is a function of the retrain cadence, so a single-cadence
+    // verdict is not citable; and the two families' confidences live on different
+    // scales, so an absolute dead zone is a different filter for each (BUGS.md #61).
+    try {
+        const mkRep = (conf, ret, { trainSize = 10, testSize = 10 } = {}) => {
+            const folds = []; const foldInputs = [];
+            for (let s = trainSize; s + testSize <= conf.length; s += testSize) {
+                folds.push({ testStart: s, testEnd: s + testSize - 1 });
+                foldInputs.push({ returns: ret.slice(s, s + testSize), confidence: conf.slice(s, s + testSize) });
+            }
+            return { foldInputs, folds, streamFoldLengths: [folds.map(() => testSize)], trials: 1, policy: { deadZone: 0, scale: 1 } };
+        };
+        const N2 = 120;
+        const amp = (t) => 0.3 + 0.2 * (((t * 7) % 97) / 96);
+        let peak = 0;
+        for (let t = 0; t < N2; t++) if (amp(t) > amp(peak)) peak = t;
+        const candConf = []; const baseConf = [];
+        for (let t = 0; t < N2; t++) { candConf.push(amp(t)); baseConf.push(t === 13 ? 0.9 : 0.02); }
+        const rP2 = new Array(N2).fill(0.01);
+        rP2[peak + 1] = -0.05;           // the candidate's top-confidence bar is the loser
+        rP2[14] = 0.01;
+        const candRep = mkRep(candConf, rP2);
+        const baseRep = mkRep(baseConf, rP2);
+        const p2opts = { minDsr: 0, minDsrDelta: -1e9, minSharpeDelta: 0, rawFoldHurdles: false, requireCleanAudit: false, requireSharpeDiff: false };
+        const rawB = restateReportAtPolicy(baseRep, { deadZone: 0.05 }, {});
+        const rawC = restateReportAtPolicy(candRep, { deadZone: 0.05 }, {});
+        const raw = promoteDecision(rawB, rawC, p2opts);
+        const matched = exposureMatchedPair({ baseline: rawB, candidate: rawC, decisionOptions: p2opts });
+        check('P2: the raw dead zone manufactures a spurious exposure gap (candidate trades ~90% of bars vs the baseline\'s ~1%) and the raw rule promotes',
+            raw.promote === true && rawB.pooledMetrics.nonZeroFraction < 0.02 && rawC.pooledMetrics.nonZeroFraction > 0.8,
+            JSON.stringify({ rawPromote: raw.promote, baseNZ: rawB.pooledMetrics.nonZeroFraction, candNZ: rawC.pooledMetrics.nonZeroFraction }));
+        check('P2: exposure matching sets both families to the same in-market share and removes the gap — the promotion is not supported',
+            matched.available && Math.abs(matched.baseline.nonZeroFraction - matched.candidate.nonZeroFraction) < 1e-6 &&
+            Math.abs(matched.candidate.nonZeroFraction - matched.targetNonZeroFraction) <= 0.02 &&
+            matched.decision.promote === false,
+            JSON.stringify({ target: matched.targetNonZeroFraction, baseNZ: matched.baseline.nonZeroFraction, candNZ: matched.candidate.nonZeroFraction, promote: matched.decision.promote, reasons: matched.decision.reasons }));
+        check('P2: exposureDeadZone is monotone and achieves its target on a continuous distribution',
+            (() => {
+                const cont = Array.from({ length: 200 }, (_, i) => 0.001 + 0.999 * ((i * 37) % 199) / 198);
+                const a = exposureDeadZone(cont, 0.25);
+                const b = exposureDeadZone(cont, 0.75);
+                return b.deadZone < a.deadZone && Math.abs(a.achievedFraction - 0.25) <= 0.02 && Math.abs(b.achievedFraction - 0.75) <= 0.02;
+            })());
+        const oneOfThree = [
+            { cadence: 10, promote: true, netSharpe: 0.9, reasons: [] },
+            { cadence: 20, promote: false, netSharpe: 0.1, reasons: ['meanSharpeDelta'] },
+            { cadence: 40, promote: false, netSharpe: 0.05, reasons: ['meanSharpeDelta'] },
+        ];
+        check('P2: a candidate that promotes at only one cadence is rejected by the configuration-robust rule',
+            promotionAcrossCadences({ evaluations: oneOfThree }).promote === false &&
+            promotionAcrossCadences({ evaluations: oneOfThree }).passes === 1);
+        check('P2: a candidate that promotes at a majority of cadences (no catastrophe) promotes',
+            promotionAcrossCadences({ evaluations: oneOfThree.map((e) => ({ ...e, promote: e.cadence <= 20 })) }).promote === true);
+        check('P2: the catastrophic veto rejects a majority-pass candidate that is outright losing at one cadence',
+            promotionAcrossCadences({ evaluations: [{ cadence: 10, promote: true, netSharpe: 0.9 }, { cadence: 20, promote: true, netSharpe: -0.2 }] }).promote === false &&
+            defaultCatastrophic({ netSharpe: -0.2 }) === true && defaultCatastrophic({ netSharpe: 0.2 }) === false);
+        check('P2: restateReportAtCadence re-scores a journal on a different grid and names its cadence',
+            (() => {
+                const at10 = restateReportAtCadence(candRep, { testSize: 10, trainSize: 10, policy: { deadZone: 0.05 } });
+                const at20 = restateReportAtCadence(candRep, { testSize: 20, trainSize: 10, policy: { deadZone: 0.05 } });
+                // Omitting `trainSize` must derive the training length from fold 0's
+                // grid position (`testStart`), not under-size it by one test window.
+                const atDefault = restateReportAtCadence(candRep, { testSize: 10, policy: { deadZone: 0.05 } });
+                return at10 && at20 && atDefault && at10.cadence.testSize === 10 && at20.cadence.testSize === 20 &&
+                    atDefault.cadence.trainSize === candRep.folds[0].testStart &&
+                    at10.cadence.trainSize === 10 && at10.cadence.folds === 11 && at20.cadence.folds === 5 &&
+                    Number.isFinite(at10.pooledMetrics.netSharpe) && Number.isFinite(at20.pooledMetrics.netSharpe) &&
+                    Array.isArray(at10.foldInputs);
+            })());
+        check('P2: exposure matching drops the holding band in the matched row (scale-free) and reports feasibility flags',
+            (() => {
+                const bandPol = { deadZone: 0.02, enter: 0.2, exit: 0.05 };
+                const m = exposureMatchedPair({ baseline: baseRep, candidate: candRep, policy: bandPol, decisionOptions: p2opts });
+                const mKept = exposureMatchedPair({ baseline: baseRep, candidate: candRep, policy: bandPol, decisionOptions: p2opts, keepBandInMatch: true });
+                return m.available && mKept.available &&
+                    m.matchedPolicy.baseline.enter === undefined && m.matchedPolicy.candidate.enter === undefined &&
+                    mKept.matchedPolicy.baseline.enter === 0.2 && Number.isFinite(mKept.matchedPolicy.baseline.deadZone) &&
+                    typeof m.matchedWithinTolerance === 'boolean' && Number.isFinite(m.tolerance) &&
+                    Number.isFinite(m.raw.candidateNetSharpe) && Number.isFinite(m.raw.baselineNonZeroFraction);
+            })());
+    } catch (e) {
+        check('P2 configuration-robust checks completed', false, e.stack);
     }
 
     // ---- AJ. R26-7: give the gate discriminating power -------------------------

@@ -813,13 +813,26 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    `model`-scoped variant never carries the structural fallback wording. Then run the
    designed experiment that decides whether the basis *can* matter (vary the probe
    budget and the prototype pool; `PLAN-round28.md` P2).
-75. [ ] **Re-run the weighting test with emitted weights renormalised to the trained
+75. [x] **Re-run the weighting test with emitted weights renormalised to the trained
    stream's mean 1 (`BUGS.md` #54), then close TODO #5.** **Code landed (round 28, P1b/P1c/P3):** the emitted stream is mean-1 by `emittedWeightNormalizer`, the span is a causal EMA of drained holding periods (or `--sample-weight-horizon`), and the `sample-weights-scale-control` arm isolates the LR effect. **The run itself is the operator's Step 1** (`PLAN-round28.md` §3; ~2–3 h). Step 3 showed causal-window
    uniqueness weighting is live under `triple` and hurts (paired −0.2276, 0/36
    windows), but the arm ran at ≈2.6× the effective learning rate, so the verdict is
    confounded by an objective-scale change. Renormalise the *emitted* (trained) weight
    sequence, re-run `--label-policy=triple --label-horizon=20
    --variants=sample-weights`, and only then strike item 5.
+   **RUN (round 28, Step 1 = `20260923T211549-seed1`; `RUN-ANALYSIS.md` §15.2):** both confounds
+   are gone — arm A reports `sampleWeights {mean 1.0334, min 0.3212, max 5.0739,
+   meanUnnormalised 2.0850, ess 58.05 → 46.34, horizonBars 7, measureHorizon true}` against a
+   realized `heldBars {mean 7.82, max 72}`, and both arms are `live` (`identicalFolds 45/288`,
+   `maxAbsDiff 0.1836`). Arm A moves the baseline from −0.1147 to **+0.0521** (break-even −2.58 →
+   **+1.22 bps**) but the paired test is not significant (Δ 0.1668, se 0.1138, p 0.0759); the
+   scale control C gains less (−0.0182) and the dispersion contrast A − C is unresolvable
+   (Δ 0.0700, p 0.3936). So item 5's `optimistic` closure is re-opened as a *small positive*,
+   not an inert result — and it is a *dead-zone* away from significance: at `deadZone 0` arm A's
+   Δ is 0.2447 (p 0.0051, sign test 26/36 p 0.0057) with break-even +3.98 bps (turnover 58.9), and
+   +14.60 bps with `enter 0.1/exit 0.05`. It still never approaches the 0.95 DSR floor (adjDSR
+   0.294 / 0.319), so **no promotion**; the position-policy variant is a new candidate with its
+   own A/B.
 76. [x] **`label-conservative` is the programme's best arm — decide the power
    purchase or the noise reduction.** **DECIDED (round 28, P4; `METHOD.md` §7):** do
    **not** buy power for the DSR floor — record `label:conservative` as the
@@ -840,6 +853,19 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    floor needs a Sharpe of ≈1.02–1.08, i.e. ≈10× the labeller's 0.1017, so it is a
    *magnitude* gate, not a power purchase. The decision is therefore "ship the labeller
    as an opt-in labeller + buy the affordable paired hurdle", not "buy bars".
+   **RUN (round 28, Step 2 = `20260924T045601-seed1`; `RUN-ANALYSIS.md` §15.3):** the affordable
+   hurdle was bought (54 clusters) and the effect **vanished** — the paired SE did fall
+   (0.13554 → 0.11214, ratio 0.827 ≈ √(36/54)) but Δ collapsed 0.21640 → **0.02893** (t 0.2580,
+   p 0.39870, stability 53/54, breadth 18/30), so `neededForObserved` is **2197**. Meanwhile the
+   whole book's *level* moved −0.1147 → **+0.8978** (candidate +0.9267, adjDSR 0.96370) purely
+   because `testSize` went 15 → 10. A baseline-vs-baseline cadence test over identical 15-bar
+   windows gives ΔSharpe **1.01244** (p 0.02008), and for a fixed position series the fold grid
+   itself moves Sharpe only ~0.08–0.24 — so the level swing is the retrain cadence, not the
+   labeller, and `--label-horizon=20` was inert on it (`resolvedTimeBarrier 0`, `heldBars max 73`,
+   identical in both arms). Also a red flag: the level-clearing model has **negative** forecast
+   skill (`brierSkill −0.0738`, `accuracySkill −0.1301`, `status 'base-rate'`) and ~100 % of its
+   gross is net-exposure × market (§15.5b). `label:conservative` therefore stays only as the
+   *opt-in* labeller — the P4 decision (D2) stands, but the "best arm" reading does not.
 77. [x] **Handle the `sig-accel` promotion as arm-level, not deployable.** **DONE (round 28, P5 record):** recorded arm-level in `METHOD.md`/`RUN-ANALYSIS.md` §14.8, with its lever identified as **cost/turnover**. The offline no-trade-region sweep itself is **not runnable from the round-27 artefacts** — the per-bar journaled confidence is not in the reports (though it *is* in `folds.jsonl`'s `signals`, aligned to `test`) and those journals are gone — so it needs a **signal-family** re-run with `--fold-log=all` (neither scheduled round-28 run journals a `sig:*` candidate; recipe and the surviving cost ladder in §14.8). It is the
    only `promote: true` (0 bps, adjusted DSR 0.9742, paired p 0.0493, stability 1.0,
    audit 288/288) but **fails at 2 bps** (adjusted DSR 0.9223, paired p 0.0628) and is
@@ -847,6 +873,20 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    "the strongest arm is model-free and cost-fragile"; do not ship it as a default
    without a cost-robust restatement, and note that its near-miss twin fails two
    knife-edge floors.
+   **RUN (round 28, Step 3 = `20260924T071546-seed1`; `RUN-ANALYSIS.md` §15.4/§15.5c):** the
+   promotion **does not survive the honest `K`**. From the *same* journal, `sig-accel`'s adjusted
+   DSR is 0.97420 at `K = 3` (round 27's roster: it charged two trials) and **0.86080 at
+   `K = 12`** — so round 27's `promote:true` was a roster-size artefact, and every `K ≥ 11` fails
+   (`sig-momentum`'s 0.9488 is likewise the `K = 3` column; its honest value is 0.77356). The P5
+   sweep now *can* be run (Step 3's journal was written exactly to unblock it) and it does produce
+   a promoting row — `sig-accel` at `{deadZone 0.02, enter 0.2, exit 0.05}`: Sharpe 1.19403,
+   adjDSR **0.95844**, break-even 21.89 bps, turnover 844, promote true, no reasons (still true at
+   `K = 14`, 0.95109) — **but only because the restated baseline abstains there**: at that policy
+   the baseline holds a position on **16 of 4 320 bars** (`nonZeroFraction 0.0037`, `tradeCount 2`,
+   `turnover 2`) — the two families' confidences are not on a comparable scale (`BUGS.md` #61), so
+   the row compares an ~80 %-invested book to a flat one. `sig-momentum` has no promoting policy
+   (best adjDSR 0.77448), so the lever remains cost/policy — and the sweep's promoting row is a
+   *new candidate* needing an exposure-matched A/B, not a promotion.
 78. [x] **Reading polish from the round-27 runs (`BUGS.md` #55).** **DONE (round 28, P1f):** `decision.training` now names the **referent** model's policy with the run flag beside it as `runLabelPolicy`; the `familyCorrelation` summary's `maxPair` resolves against the **active** arms the matrix was built from (`familyPairLabel`); and every hurdle carries `{value, threshold, margin, direction, failed, gated}` with `formatDecision` printing the tightest hurdle. Original text: `decision.training`
    should name the *referent's* label policy (or rename to `runLabelPolicy`); the
    `familyCorrelation` summary's `maxPair` label should resolve against the same
@@ -887,13 +927,169 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    sample-size purchase. Record the corrected ladder in `METHOD.md` §7 and `RUN-ANALYSIS.md`
    §14, and qualify `METHOD.md` §5's blanket "more bars is the worst-value lever" (more bars
    *does* buy fold-window clusters; it is the wrong lever for the DSR floor).
-83. [ ] **Measure the market-neutral overlay before building a cross-sectional candidate
+   **RUN (round 28; `RUN-ANALYSIS.md` §15.5a):** the sizing block was exercised by real runs —
+   Step 1's `pairedUnits` reads `{se 0.11381, one-sided, reference t(35) = 1.6895725, pairedMde95
+   0.192291, neededForObserved 48, neededForObservedPower80 105}` and Step 4's shape reproduces
+   the `41/89` of §14.7a. One new caveat is now recorded in `METHOD.md` §7: the paired requirement
+   is **not stable across the fold grid** — the round-27 Step-2 shape needed 41 clusters for a Δ of
+   0.2164, but at `--test=10` the same candidate's Δ is 0.0289 and it would need **2197** — so
+   "41 clusters closes it" was a statement about *one cadence*.
+83. [x] **Measure the market-neutral overlay before building a cross-sectional candidate
    (R28-P6).** **BLOCKED in round 28 from the *round-27* artefacts — and unblocked by the round-28 runs' journals.** The four round-27 `report.json` files do not retain `streamReturns` and their `folds.jsonl` journals are gone (the `20260923T*` run directories are absent; the only surviving journal is a 1-stream smoke run), so the round-27 overlay has no cross-section to demean. But `folds.jsonl` **does** carry the panel the overlay needs — per line: `stream`, `fold`, `test` (bar indices) and `returns` — so *any* retained multi-stream journal recomputes it; Steps 1/2 are `--symbols=all` runs with `--fold-log=all` (the default), so either one's journal yields the measurement (align streams by `test` within each fold, demean each bar across streams, recompute `dependenceSummary`). `RUN-ANALYSIS.md` §14.8 derives both the bound that *can* be stated from the retained `dependence` block (the equicorrelation component alone implies a **1.52×–2.26×** SE gain — real but bounded, and nowhere near a DSR-floor promotion) and this recipe. Offline post-processing of a candidate's retained `streamReturns`
    (`r_s(t) − mean_s r(t)`) recomputes the dependence panel — how much of the 5.12× design
    effect is the common market factor? Only if it pays, spec the cross-sectional candidate
    (which needs a cross-stream causal interface, a `DESIGN.md` §6 decision and its own A/B).
    Grounding: Moskowitz & Grinblatt 1999; Asness et al. 2013; arXiv 2302.10175 / 2012.07149 /
    1908.02164.
+   **RUN (round 28; `RUN-ANALYSIS.md` §15.5b):** the overlay is now **measured**, not bound. On all
+   six candidate rows the demeaned panel's cross-sectional residual is ≈0 (Step 2: −0.0133
+   `retNeutral` / −0.0115 `posNeutral`; labeller +0.0047 / +0.0040), ≤ +0.11 for `sig-momentum`
+   (≈8–10 % of its raw Sharpe) and negative for `sig-accel`; the raw design effect (2.5–5.6,
+   `effectiveStreams` 1.7–2.6 of 8) is *entirely* the common factor, so ~100 % of every
+   positive-Sharpe arm's gross P&L is net-exposure × market. Two records matter: the demeaned
+   `designEffect < 1` / `effectiveStreams > 8` are **demeaning artefacts** (forcing `Σ_s r_s(t) = 0`
+   makes r̄ slightly negative), so the honest SE ceiling stays §14.8's **1.5×–2.3×**; and it is an
+   ex-post P&L decomposition, not a tradeable book. **Consequence for the gated cross-sectional
+   build: the residual it would trade is ≈0 in these arms, so the P6 candidate starts from "no
+   measured residual edge" and its interface/causality work is not justified by this evidence.**
+84. [ ] **Scope the evaluation-configuration nuisance dimension the round-28 runs exposed.** Not a
+   plan, a *record* of what the three runs opened. Step 2's baseline-vs-baseline cadence test says
+   the A/B's measured *level* is a function of the evaluation configuration: the same model, seed,
+   data and CRN move from Sharpe −0.1147 to +0.8978 when `testSize` goes 15 → 10 (Δ 1.01244,
+   p 0.02008, position correlation 0.187), and the same candidate's paired Δ moves +0.2164 → +0.0289
+   with it. For a fixed position series the fold grid moves Sharpe only ~0.08–0.24, so this is the
+   model's trajectory under more frequent retraining, not bookkeeping. Consequences that need
+   scoping: (a) cross-run `netSharpe` comparisons at different cadences are not comparable (a
+   level statement must name its `testSize`); (b) the paired requirement is grid-dependent (§15.5a);
+   (c) the round-27 "labeller improves a negative baseline" reading does not replicate at the
+   second cadence; (d) `--test=10` also buys more clusters at the same bars, so a cadence change
+   is simultaneously a power purchase and a nuisance change. `RUN-ANALYSIS.md` §15.3/§15.6;
+   `METHOD.md` §7's caveat.
+85. [ ] **Make a cross-family comparison name its exposure, and decide the confidence-scale
+   policy (`BUGS.md` #61).** The three runs measured that the unified confidence space is
+   dimensionally shared but not distributionally comparable: the controller's `|confidence|` never
+   exceeds 0.27 while a signal's saturates at 1 (fractions above 0.2: 0.93 % vs 83 %), so the
+   shipped `deadZone 0.05` leaves the baseline in the market on 0.508 of bars and `sig-momentum`
+   on 0.892, and the P5 sweep's promoting row compares an ~80 %-invested book with one that holds
+   a position on 16 of 4 320 bars. Recorded as `BUGS.md` #61 (reported, not fixed). The scoping
+   question — family-normalised thresholds, or cross-family statements quoted only at matched
+   exposure — is a `DESIGN.md` §6 decision-procedure change and belongs to the next round.
+
+86. [ ] **Model-class benchmark: is the forecaster the problem or the target? (round-29 P1).**
+   The round-28 Step-2 baseline has **negative** forecast skill (`brierSkill −0.07382`,
+   `accuracySkill −0.13007`, `status 'base-rate'`), and the research sweep
+   (`docs/research/round29-model-class.md`) says a from-scratch tiny transformer is the
+   weakest model class for noisy TS (DLinear `2205.13504`, TSMixer `2303.06053`, TiDE
+   `2304.08424`, TTM `2401.03955`, Tiny-TSM `2511.19272`). Score a pre-registered set —
+   base rate, linear, MLP-mixer, zero-shot TSFM, controller — on the **same** walk-forward
+   with the existing proper-score/DM/MCS layer. Decision rule: if none beats the base rate,
+   the **features/labels** are the constraint; if a linear/pretrained model beats the
+   controller, the **architecture** is. Full detail: `PLAN-round29.md` P1.
+87. [ ] **Configuration-robust, exposure-matched verdict (round-29 P2; `TODO.md` 84/85).** Every
+   level statement names its cadence; the gate is restated across a cadence grid and promotes
+   only on **majority pass + catastrophic veto** (`2603.09219`); cross-family comparisons are
+   quoted at matched exposure (per-family `|confidence|` quantiles or matched `nonZeroFraction`;
+   `BUGS.md` #61). Acceptance: verdict-neutral on the retained runs with `sig-accel`'s 0-bps
+   promotion killed. `PLAN-round29.md` P2.
+88. [ ] **Short-horizon reversal on new bars (round-29 P3).** The documented crypto edge is
+   **15-minute reversal** (`2608.21888`: 90 % of 183 Binance pairs, signs not magnitudes) and
+   this round's measurement shows 1h has none (AC −0.013; `sig:autocorr` net Sharpe −0.0996).
+   Fetch/audit 15m bars, test a reversal family (sign / cross-sectional / vol-scaled) under the
+   existing gate + cost ladder, reporting directional hit rate. `PLAN-round29.md` P3.
+89. [ ] **Funding/basis carry as an independent stream (round-29 P4).** The binding constraint is
+   `effectiveStreams ≈ 2.3/8` and one factor = 79.4 % of the covariance; funding is a documented
+   structurally independent **carry** return on the same venue (`1912.03270`, `2506.08573`,
+   `2605.06405`). Fetch funding/mark history, **measure correlation with the price basket first**,
+   and add as a stream only if it reduces the design effect. `PLAN-round29.md` P4.
+90. [ ] **Continuous test-time adaptation (round-29 P5).** Replace schedule-bound retraining with
+   a frozen backbone + normalisation/low-rank adaptation on recent windows (`2602.00073`,
+   `2506.23424`, `2601.05975`), optionally triggered by an online changepoint (`0710.3742`,
+   `2302.04759`). Acceptance: the measured level becomes invariant across `testSize ∈ {10,15}`.
+   Off by default; goldens unmoved. `PLAN-round29.md` P5.
+91. [ ] **Meta-labeling (round-29 P6 — GATED on item 86).** A secondary model that sizes/filters
+   a primary signal (AFML ch. 3; `2107.11972`, `2306.09862`). It **cannot** rescue a negative-skill
+   primary, so it is not started unless item 86 finds a positive-skill forecaster.
+   `PLAN-round29.md` P6.
+
+92. [ ] **Ensemble-size capacity probe (round-29 P7 — GATED on item 86; short run).** The
+   core hivemind design's own question: does more members per controller (`es = 4 → 8, 16`)
+   buy capacity/diversity/skill? A pre-registered sweep `es ∈ {2,4,8,16}` at `forceMin`,
+   ≥3 seeds, short window, one table {Brier skill vs the base rate, net Sharpe **at
+   matched exposure**, `meanPairwiseKappa`, `effectiveVoters`/entropy, bank occupancy,
+   aggregate retrieved/injected, wall ms}. **Decision rule:** if no `es` improves Brier
+   skill beyond the seed spread, capacity/member count is not the constraint (closed with
+   a number). **No default change** — `CONTROLLER_MODEL.ensembleSize` stays 4; the
+   principled default is a *learned/dimension-sized* `es` (P7b). Why gated: the evidence
+   says *skill, not decorrelation, governs* (`2608.16190`), cost is **linear** in `es`
+   (`2002.06715`; controller ≈560–970× the signal family) and an `es` change is
+   RNG-confounded (`BUGS.md` #44). Detail: `PLAN-round29.md` P7 +
+   `docs/research/round29-ensemble-size.md`.
+93. [x] **State the DSR hurdle as a surface, not a Sharpe band (round-29 §1.8 MC1).** The
+   retained reports refute the "floor is crossed at Sharpe ≈1.02–1.08" claim: the two
+   highest-Sharpe arms (`sig-accel` 1.0194, `sig-momentum` 1.0848) fail on **exactly one**
+   hurdle — the design-effect-adjusted DSR — while the Step-2 baseline passes at 0.8978
+   (K=2), and the "best labeller at 0.10" is unsupported (the retained labeller is at
+   0.9637). Fix the reading layer (`RUN-ANALYSIS.md`, any summary) to quote the surface and
+   per-arm anchors, and use "move the best arm's `dsrAdjusted` across 0.95" (not a
+   correlation target) as P4's acceptance bar. Detail:
+   `docs/research/round29-evaluation-robustness.md` §6. **Delivered round 29:** the P4
+   acceptance bar is exactly "move the best arm's `dsrAdjusted` across 0.95" (`RUN-ANALYSIS.md`
+   §16.5, G-C does **not** cross at 5.226 → 5.228), §16.1 quotes the per-arm `adjDSR` anchors
+   (`sig-range` 0.2611, `sig-agreement` 0.2113), and the surface statement remains the single
+   authority in `round29-evaluation-robustness.md` §6 / the index / registry.
+
+94. [ ] **P3 follow-up — a maker-fee / queue-position cost model (before the reversal route is
+   called closed on economics).** The 15m reversal is **real but economically inaccessible under
+   a *taker* fee**: the per-bar edge is ≈0.18 bps at 0.52 turnover/bar and the break-even cost is
+   **0.32–0.56 bps** (the `sig-reversal-4` variant gets to 4.5–5.1 bps on short harness windows),
+   against a 5–10 bps taker fee — so at 5 bps the reversal book's interval-correct net Sharpe is
+   **−15.9** and the gate promotes **0/3** cadences. The rejection is therefore a *taker-cost*
+   rejection: model a resting limit order (maker fee/rebate + queue-position fill probability) and
+   re-run the cost ladder before declaring the route closed on economics rather than on the DSR
+   floor. Detail: `RUN-ANALYSIS.md` §16.4.
+
+95. [ ] **P4 follow-up — price the carry sleeve's spot leg (basis / mark-spread series).** The
+   measured **9.78 %/yr** is the **funding leg only** (delta-neutral: long spot / short perp), on
+   six years of one venue, with 0.84 % vol and maxDD −3.34 %. It excludes basis risk, execution,
+   borrow/margin, liquidation, and the spot leg's own carry. Fetch the mark/index **basis** series
+   and cost the spot leg before any *tradeable-carry* claim. Detail: `RUN-ANALYSIS.md` §16.5.
+
+96. [ ] **P5 — continuous test-time adaptation (deferred; gate G-D OPEN, nothing measured).** The
+   shipped controller **already adapts continuously within a fold** (`getSignal` trains on
+   resolved labels; only the per-fold refit is schedule-bound), so P5 as specified would *replace*
+   the full-parameter online update with a norm-affine-only one — an architecture experiment, not
+   a missing mechanism. The safe design is **freeze-by-construction**: snapshot the parameter tree
+   in the golden-pinned `hivemind/training/gradients.js`, run the ordinary training step, then
+   restore everything except the `layerNormWeights[*].gamma1/gamma2` arrays — plus a causal
+   pseudo-label objective, an optional changepoint trigger, a `tta` flag **off by default**, and a
+   bit-identity + freeze-verification test. Acceptance (G-D): the arm's level is ≈invariant across
+   `testSize ∈ {10, 15}` with the goldens unmoved when off. Cost is **not** the blocker (measured
+   **9.1 s** per small controller A/B ⇒ ~1–1.5 h for the 4-run grid). Full design:
+   `RUN-ANALYSIS.md` §16.6.
+
+97. [ ] **P2 follow-up — a true re-train cadence sweep.** P2's cadence grid is a **fixed-position
+   restatement** (the models are trained once at `testStart=60`; only the fold partition is
+   re-cut), so it measures the *partition*, not the *training-set size*. P3's gate **is** a real
+   re-train sweep at `testSize ∈ {10, 15, 30}`; run the same for the P2 arms (a full `runAnalysis`
+   per cadence) to test whether the cadence dependence survives retraining, not just re-cutting.
+   The **fixed-position** half is now runnable from the CLI (`analyze.js --cadences=a,b,c` writes
+   `report.configurationRobust`, default off); this item is the stronger re-train half.
+   Detail: `METHOD.md` §10, `RUN-ANALYSIS.md` §16.3.
+
+**Round-29 research sweep (2026-09-24):** five grounding notes —
+`docs/research/round29-model-class.md`, `round29-crypto-edges.md`,
+`round29-adaptation-and-regime.md`, `round29-evaluation-robustness.md`,
+`round29-ensemble-size.md` — plus the consolidated index
+[`docs/research/round29-README.md`](research/round29-README.md) (note registry, decision
+table, conflict register C1–C10, measured checks MC1–MC4) and its machine-readable mirror
+`docs/research/round29-registry.json`. **Two new measured coherence checks:** the 1h
+coherence check (top-eig 0.794, 1-factor residual 20.8 %, AC −0.013, CS rank IC −0.050,
+rank-book break-even −0.042 bps) in
+`round29-crypto-edges.md` §2, and the **adjusted-DSR surface** (MC1) in
+`round29-evaluation-robustness.md` §6, which **corrected** `PLAN-round29.md` §1.5. Raw
+snapshots: `raw/arxiv-sweep-2026-09o.json` (the target sweep) and
+`raw/arxiv-sweep-2026-09p.json` (the ensemble-size sweep). The consolidated plan is
+[`PLAN-round29.md`](PLAN-round29.md).
 
 **Round-27 status: items 64–73 are ALL DONE** (item 70's four runs landed —
 `RUN-ANALYSIS.md` §13). The code and tests landed: the `liveness` certificate + active-K
@@ -1614,6 +1810,24 @@ pinned on a bare `HiveMind` (identical predictions **and** identical
    What *survives* unchanged is the round-27 conclusion that it is inert on
    `optimistic` *as previously configured* — that was a configuration artefact, and
    the corrected run is the only thing that can settle it.
+   **Round-28 run verdict (Step 1, `20260923T211549-seed1`; `RUN-ANALYSIS.md` §15.2).**
+   The corrected run settles it: on the shipped `optimistic` labeller the mechanism is
+   **live and mildly positive** — arm A (`sample-weights`) reports `sampleWeights {mean
+   1.0334, min 0.3212, max 5.0739, meanUnnormalised 2.0850, ess 46.34 < n 58.05,
+   horizonBars 7, measureHorizon true}` against a realized `heldBars {mean 7.82, max
+   72}`, and moves the baseline from −0.1147 to **+0.0521** (break-even −2.58 → **+1.22
+   bps**). It is not significant as shipped (paired Δ 0.1668, se 0.1138, **p 0.0759**),
+   the scale control C retains ~58 % of A's point lift (−0.0182), and the dispersion
+   contrast A − C is unresolvable (Δ 0.0700, p 0.3936) — so the A/C attribution is
+   *inconclusive*, and arm **B** (the optional raw-scale arm, which would have completed
+   the A/B/C design and separated dispersion from scale directly) was **not run**; the
+   plan's own Step-1 command carried only A and C. What is decisive: the mechanism is
+   **not inert and not harmful**, and it is a *dead zone* away from significance — at
+   `deadZone 0` A's Δ is 0.2447 (**p 0.0051**, sign test 26/36 p 0.0057) with break-even
+   +3.98 bps (turnover 58.9) and +14.60 bps with `enter 0.1/exit 0.05`. The DSR floor is
+   untouched (adjDSR 0.294 / 0.319 ≪ 0.95), so **item 5 is closed as a small positive
+   below the promotion floor**, not as a "no", and the `deadZone 0` variant is a new
+   candidate with its own A/B rather than a demotion of the shipped position policy.
 6. ~~**Homeostatic plasticity controller** (arXiv 2609.13771).~~ **DONE**
    (Round 2) — see the in-progress list above.
    `src/hivemind/ensemble/homeostasis.js` + `homeostasis.test.js` (30 checks)

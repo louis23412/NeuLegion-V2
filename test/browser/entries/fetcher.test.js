@@ -38,6 +38,11 @@ import {
     planUpdate,
     planBackfill,
 } from '../../../src/candle_fetcher.js';
+import { parseFundingJsonl } from '../../../src/analysis/carry.js';
+import {
+    normalizeFundingRow, serializeFundingRates, fetchFundingRates, getFundingSource,
+    DEFAULT_FUNDING_BACKFILL_START, FUNDING_PERIOD_MS,
+} from '../../../src/funding_fetcher.js';
 
 const MIN = 60_000;
 const T0 = Date.parse('2024-01-01T00:00:00Z');
@@ -475,6 +480,85 @@ export async function run() {
     check('planBackfill computes the interval and window',
         planBackfill({ interval: '1h', startTime: T0, endTime: T0 + 10 * 3_600_000 }).maxCandles === 11);
     check('planBackfill honors the maxCandles cap', planBackfill({ interval: '1h', maxCandles: 5 }).maxCandles === 5);
+
+    // -------------------------------------------------- P4: perpetual funding
+    // `src/funding_fetcher.js` (round 29 -> 30, P4): the USDⓈ-M funding series is a
+    // different endpoint/host/row-shape from klines, so it has its own fetcher that
+    // hands rows to the shipped consumer (`analysis/carry.js`). Same discipline as
+    // above: every network call goes through an injected `fetchFn`.
+    const goodFunding = normalizeFundingRow({ timestamp: T0, fundingRate: '0.00010000', markPrice: '42000.5' });
+    check('funding: normalizeFundingRow coerces the wire shape (string rate, epoch-ms time, optional mark)',
+        goodFunding.timestamp === T0 && goodFunding.fundingRate === 0.0001 && goodFunding.markPrice === 42000.5);
+    check('funding: normalizeFundingRow needs a finite rate (a missing mark is fine; a bad row is null)',
+        normalizeFundingRow({ timestamp: 1, fundingRate: 0 }).markPrice === null &&
+        normalizeFundingRow({ timestamp: 2, fundingRate: 'x' }) === null &&
+        normalizeFundingRow({ timestamp: 3 }) === null &&
+        normalizeFundingRow({ timestamp: 'nonsense', fundingRate: 0.1 }) === null &&
+        normalizeFundingRow(null) === null && normalizeFundingRow('junk') === null);
+    const fundSrc = getFundingSource('binance');
+    const wireRows = fundSrc.parse([
+        { fundingTime: T0, fundingRate: '0.00010000', markPrice: '42000.5' },
+        { fundingTime: T0 + 1, fundingRate: 'x' },
+        'junk', null,
+    ]);
+    check('funding: the binance source maps `fundingTime` -> `timestamp`',
+        wireRows.length === 2 && wireRows[0].timestamp === T0 && wireRows[0].fundingRate === '0.00010000' &&
+        normalizeFundingRow(wireRows[1]) === null);
+    check('funding: the URL targets the USDⓈ-M funding endpoint with an explicit startTime and a page limit',
+        fundSrc.buildUrl({ symbol: 'BTCUSDT', startTime: T0, endTime: T0 + 3 * FUNDING_PERIOD_MS, limit: 1000 }) ===
+        `https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000&startTime=${T0}&endTime=${T0 + 3 * FUNDING_PERIOD_MS}`);
+    check('funding: getFundingSource rejects an unknown source',
+        (() => { try { getFundingSource('ftx'); return false; } catch (e) { return /unknown source/.test(e.message); } })());
+    check('funding: the default backfill start is the perp listing era (2019-09), never `0`',
+        DEFAULT_FUNDING_BACKFILL_START === Date.parse('2019-09-01T00:00:00Z') && FUNDING_PERIOD_MS === 8 * 3_600_000);
+    check('funding: formatFundingRow round-trips through the consumer parser, in both encodings',
+        (() => {
+            const rows = [goodFunding, { timestamp: T0 + FUNDING_PERIOD_MS, fundingRate: -0.0002, markPrice: null }];
+            const iso = serializeFundingRates(rows).split('\n');
+            const back = parseFundingJsonl(serializeFundingRates(rows));
+            const backMs = parseFundingJsonl(serializeFundingRates(rows, 'epoch-ms'));
+            return iso[0] === `{"timestamp":"${new Date(T0).toISOString()}","fundingRate":0.0001,"markPrice":42000.5}` &&
+                !/markPrice/.test(iso[1]) &&
+                back.rows.length === 2 && back.invalid === 0 && back.blank === 0 && back.rows[1].markPrice === null &&
+                backMs.rows[0].timestamp === T0 && backMs.rows[1].fundingRate === -0.0002;
+        })());
+    {
+        const wire = Array.from({ length: 5 }, (_, i) => ({
+            fundingTime: T0 + i * FUNDING_PERIOD_MS, fundingRate: String(0.0001 * (i + 1)), markPrice: '100',
+        }));
+        const pageFn = (pageSize) => async (url) => {
+            const params = new URL(url).searchParams;
+            const startTime = Number(params.get('startTime'));
+            const limit = Math.min(pageSize, Number(params.get('limit')));
+            return { ok: true, status: 200, json: async () => wire.filter((r) => r.fundingTime >= startTime).slice(0, limit) };
+        };
+        const endTime = T0 + 10 * FUNDING_PERIOD_MS;
+        let calls = 0;
+        const limited = await fetchFundingRates('binance', {
+            symbol: 'BTCUSDT', startTime: T0, endTime, limit: 3,
+            fetchFn: async (u) => { calls++; return pageFn(1000)(u); }, sleep: noSleep, now: T0 + 100 * FUNDING_PERIOD_MS,
+        });
+        check('funding: paginates from an explicit startTime and honours the total `limit` in one request',
+            limited.length === 3 && limited[0].timestamp === T0 && limited[2].timestamp === T0 + 2 * FUNDING_PERIOD_MS && calls === 1,
+            JSON.stringify({ rows: limited.length, calls }));
+        // A one-row page forces the cursor to advance by exactly one period: the
+        // endpoint's `startTime` is INCLUSIVE, so without the strict `+1ms` cursor the
+        // first row would be re-fetched forever.
+        let walkCalls = 0;
+        const walked = await fetchFundingRates('binance', {
+            symbol: 'BTCUSDT', startTime: T0, endTime,
+            fetchFn: async (u) => { walkCalls++; return pageFn(1)(u); }, sleep: noSleep, now: T0 + 100 * FUNDING_PERIOD_MS,
+        });
+        check('funding: a one-row page still advances (fundingTime + 1ms) and yields every row exactly once',
+            walked.length === 5 && walkCalls === 6 &&
+            walked.every((r, i) => r.timestamp === T0 + i * FUNDING_PERIOD_MS && Math.abs(r.fundingRate - 0.0001 * (i + 1)) <= 1e-15),
+            JSON.stringify({ rows: walked.length, calls: walkCalls }));
+        const futureDated = await fetchFundingRates('binance', {
+            symbol: 'BTCUSDT', startTime: T0, endTime, fetchFn: pageFn(1000), sleep: noSleep, now: T0,
+        });
+        check('funding: a period dated after `now` is never stored (a funding row is realized at its own timestamp)',
+            futureDated.length === 1 && futureDated[0].timestamp === T0, JSON.stringify(futureDated.length));
+    }
 
     // ------------------------------------------------------------- summarize
     {

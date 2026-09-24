@@ -166,7 +166,7 @@ that was run* (Gelman & Loken 2013), and a mechanism that cannot change the outp
 cannot be tested by it (Adebayo et al. 2018; Fisher, Rudin & Dominici 2019).
 **Implementing: `PLAN-round27.md` R27-1/R27-2.**
 
-## 4. Sample-uniqueness weighting for a *streaming* trainer (round 27) — inert where labels do not overlap, a causal window where they do
+## 4. Sample-uniqueness weighting for a *streaming* trainer (round 27; revised round 28) — the "labels do not overlap" closure was withdrawn: the *span*, not the label, was the cause
 
 **Decision (revised by the second sweep): the shipped labeler's labels do not
 overlap, so average uniqueness is exactly 1 and sample weighting is mathematically
@@ -230,6 +230,10 @@ P1c** — a causal span estimate (EMA of past realized holding periods, or an ex
 `--sample-weight-horizon`), the emitted-stream mean-1 renormalisation, and a re-run. What
 survives unchanged: the batch formula is degenerate here (one label per drain,
 `CONFIG.baseProcessCount = 1`), so the *streaming* estimator is the only expressible form.
+**The re-run has now happened (round 28, `20260923T211549-seed1`; `RUN-ANALYSIS.md` §15.2, and
+§9's "Step-1 run result"): the mechanism is live and mildly positive (paired Δ 0.1668, p 0.0759,
+baseline −0.1147 → +0.0521), not inert and not harmful — so this decision's *closure* is what was
+withdrawn; its conclusion about the batch formula stands.**
 
 ## 5. What the next *power* purchase should buy (round 27) — independence, not bars
 
@@ -318,6 +322,18 @@ short and *no* affordable sample closes that gap (buying the design effect from 
 power purchase.** Tests: `decision`/`analysis.test.js` fixtures with two different SEs and with
 equal SEs.
 
+**Qualification (round 28, Step-2 run = `20260924T045601-seed1`; `RUN-ANALYSIS.md`
+§15.3/§15.5a).** A *paired* requirement is also a function of the fold grid, so "41 clusters would
+close it" is a statement about one cadence, not about the effect. Step 2 bought the hurdle the
+plan asked for — the paired SE did fall (0.13554 → 0.11214, ratio 0.827 against the √(36/54) =
+0.8165 hoped for) — but the paired Δ collapsed +0.2164 → **+0.0289** (p 0.39870) at the same
+time, so the new requirement is **2197** clusters (5017 at 80 % power). A same-model
+baseline-vs-baseline test over identical 15-bar windows attributes the accompanying level change
+(−0.1147 → +0.8978) to the retrain cadence: ΔSharpe **1.01244**, se 0.47504, p 0.02008, while a
+*fixed* position series re-scored under a different fold grid moves Sharpe only ~0.08–0.24. So a
+paired sizing (and any cross-run level comparison) must name its `testSize`, and a paired
+requirement measured on one grid does not transfer to another.
+
 ## 8. The fold-majority hurdle (round 28) — a reported statistic, not a gate
 
 **Decision: the gate implements the round-25/26 recorded decision; the raw fold fractions are
@@ -336,6 +352,15 @@ landing (re-run `promoteDecision` over the four reports' rows with the raw hurdl
 Grounding unchanged: Demšar 2006 (the sign test), Cameron & Miller 2015 (clustered inference),
 Ledoit & Wolf 2008 (Sharpe differences). `PLAN-round28.md` P1e; `BUGS.md` #57.
 
+**Follow-up (round 28 runs; `BUGS.md` #60; `RUN-ANALYSIS.md` §15.2/§15.3).** The same class of
+record-vs-code drift survives for a *third* fold-level statistic: `meanSharpeDelta` — the
+candidate's mean per-fold Sharpe against the baseline's — is still an always-on `gated: true`
+hurdle over the same 288 correlated folds, and it is the first line of every failing verdict
+(`sample-weights` −0.10646 vs −0.04413; `label-conservative` +0.51465 vs +0.70051). It is
+verdict-neutral on all 21 candidate rows of the three runs (no candidate fails *only* this
+hurdle), so it is reported rather than fixed: whether a mean-fold reason was intended to survive
+§6.1's decision is a decision-procedure question, not an arithmetic one.
+
 ## 9. Sample-uniqueness weighting on a streaming trainer: the span must be *measured* (round 28)
 
 **Decision: the causal ring's span horizon is a measured quantity (a causal estimate of the
@@ -352,3 +377,122 @@ norm-percentile `_scaleGradients`, a nonlinearity the control arm exists to expo
 re-test design (arms A/B/C) and the causality requirement (a label's weight may not use a
 span that ends in the future — the walk-forward audit's rule) are in `PLAN-round28.md` P1a′/
 P1b/P1c/P3.
+
+**Step-1 run result (round 28, `20260923T211549-seed1`; `RUN-ANALYSIS.md` §15.2).** The decision
+holds up in production: arm A (`sample-weights`) reports `horizonBars 7, measureHorizon true` —
+the measured causal span (the causal EMA of drained holding periods), against the run's realized
+`heldBars {mean 7.82, max 72}` — and `mean 1.0334` with `min 0.3212 < 1 < max 5.0739`, `ess
+46.34 < n 58.05`, `meanUnnormalised 2.0850` visible. Both arms are live (`identicalFolds 45/288`,
+`firstDifferingFold 0`). The mechanism moves the baseline from −0.1147 to **+0.0521** (break-even
+−2.58 → **+1.22 bps**) and arm C (`scale`) to −0.0182, `min 0.6572 / max 4.5417 / mean 2.0451`;
+the paired test does **not** resolve (A: Δ 0.1668, p 0.0759; C: Δ 0.0964, p 0.3502) and the
+dispersion contrast A − C is unresolvable (Δ 0.0700, p 0.3936, i.e. C keeps ~58 % of A's point
+lift). So the weighting is **live and mildly positive, not inert and not harmful** — and it is a
+dead zone away from significance: at `deadZone 0` A's Δ is 0.2447 (p 0.0051, sign test 26/36
+p 0.0057, break-even +3.98 bps) and +14.60 bps with `enter 0.1/exit 0.05`. The DSR floor is
+untouched (adjDSR 0.294 / 0.319 ≪ 0.95), so nothing promotes, and the dead-zone variant is a new
+candidate with its own A/B rather than a demotion of the shipped policy. Note also the carve-out
+the run exposed: the `scale` control emits the causal EMA *level* (mean 2.045), not a literal
+constant (2.085), so it is a scale control with a ~2 % residual drift.
+
+## 10. Configuration-robust promotion and exposure matching (round 29, P2)
+
+**Decision: a promotion must survive a *grid* of evaluation configurations, and any cross-family
+comparison is quoted only at matched exposure.** Two distinct fragility attacks, both part of the
+shipped decision procedure (`analysis/decision.js#promotionAcrossCadences` /
+`defaultCatastrophic`, `analysis/walkforward.js#exposureDeadZone` / `exposureMatchedPair`), and both
+reachable from a run: `analyze.js --cadences=a,b,c` writes the per-cadence restatement and its
+majority-pass + catastrophic-veto verdict to `report.configurationRobust`, and
+`analyze.js --exposure-match` writes the matched-exposure comparison to `report.exposureMatched`.
+Both passes are opt-in, default-off and pure post-processing of the journaled confidence (no model),
+so the default report is byte-identical. The
+rule is *stricter* than the single-cadence gate, never looser, and it was proved verdict-neutral on
+the retained runs before it landed.
+
+* **(a) Promotion is majority-pass with a catastrophic veto — not unanimity, not a bare majority.**
+  Unanimity across an odd grid of ≥3 cadences is nearly a single-cadence gate at the *worst*
+  cadence (it rejects a real edge that one partition happens to split badly); a bare majority with
+  no veto lets through a candidate that is *outright losing* at one cadence. So
+  `promotionAcrossCadences` passes a candidate that clears the gate at **more than half** the
+  cadences (`majorityFraction = 0.5`) and vetoes it if any cadence is *broken* rather than merely
+  unlucky — `defaultCatastrophic` = a failed look-ahead audit or a negative pooled net Sharpe. The
+  gate is the exact round-25/26 cluster machinery (paired `t(C−1)` Sharpe difference + cluster
+  stability + the DSR floor); the cadence grid only decides *how many* of those must pass. Every
+  level field (Sharpe, DSR, break-even) is reported **with its cadence**, so a "the level is X"
+  statement without a cadence is no longer expressible.
+* **(b) A cross-family comparison must name its exposure.** The position policy is unified in
+  *dimension* (every family emits a confidence on [−1, 1]) but not in *distribution*: the
+  controller's `|confidence|` never exceeds 0.27 while a signal's saturates at 1 (fraction above
+  0.2: 0.93 % vs 83 %), so the shipped `deadZone 0.05` leaves the baseline in the market on 0.508
+  of bars and `sig-momentum` on 0.892 — and the P5 sweep's only promoting row compared an
+  ~80 %-invested book against one that held a position on 16 of 4 320 bars. `exposureMatchedPair`
+  therefore restates each family to a common **in-market share** before comparing them.
+  `exposureDeadZone` finds the scale-free (pointwise) threshold that realises a target share, and
+  the matched row **drops any holding band** (a band's `enter`/`exit` is another absolute
+  confidence-space threshold and its hysteresis floors the attainable exposure);
+  `keepBandInMatch: true` is available for a caller that wants the banded match, and
+  `matchedWithinTolerance` reports when a discrete confidence distribution could not reach the
+  target share. The *report* carries no `pooledMetrics`, so the target share must be read from the
+  restatement, not off the report (`BUGS.md` #63 — reading it off the report silently gave a zero
+  target and a degenerate all-flat "match").
+* **Measured outcome (round-29 runs; `RUN-ANALYSIS.md` §16.3).** (i) Exposure matching is
+  **verdict-neutral on every retained run** (all keep-off before and after), so the shipped failure
+  is not a one-arm-abstaining artefact. (ii) It **kills the pipeline's only manufactured
+  promotion**: §15.5(c)'s 0-bps turnover-policy promotion of `sig-accel` compared a flat baseline
+  (0.37 % of bars) with an 80 %-invested candidate; at matched exposure the candidate's net Sharpe
+  falls +1.19 → +0.92 and its dependence-adjusted DSR 0.9584 → **0.7925** (paired Sharpe p 0.077)
+  ⇒ keep-off. (iii) The four net-positive-Sharpe Step-3 arms fail at **every** cadence of {10, 15,
+  30} (0/3 each), so their keep-offs were not cadence luck.
+* **Scope of the sweep, stated so it cannot be over-read.** P2's cadence grid is a **fixed-position
+  restatement** — the models were trained once at `testStart=60` and the fold grid is re-partitioned
+  — so it measures the *fold partition*, not the *training-set size*. P3's gate **is** a real
+  re-train sweep (three independent `runAnalysis` runs at `testSize ∈ {10, 15, 30}`). A full
+  re-train cadence sweep for P2 is a recorded follow-up (`TODO.md` 97).
+* Grounding: Lo 2002 (the Sharpe estimator depends on the measurement interval under
+  autocorrelation — *why* the cadence is a free parameter at all); AlgoXpert (arXiv 2603.09219:
+  stable parameter regions, **majority pass + catastrophic veto**, OOS-locked parameters);
+  Cameron & Miller 2015 and Ledoit & Wolf 2008 (the cluster unit and the paired-difference SE the
+  cadence gate is applied with).
+
+## 11. An independence purchase is dated by correlation and effective streams, not only by DSR (round 29, P4)
+
+**Decision: adding an independent return series is a *breadth* claim and an *independence* claim at
+once, and the two are dated by different statistics; both must be reported, and neither may be
+silently substituted for the other.** The MC1 reading is that the binding hurdle for the best arms
+is the **design-effect-adjusted DSR** — a surface in `(Sharpe, designEffect, moments, K)`, not a
+Sharpe band (`RUN-ANALYSIS.md` §1.8 / §16.1) — so the natural test of a new sleeve is its effect on
+that surface. But the design effect is a *serial*-dominated estimator on this panel, so a series can
+be a genuine independence purchase at the bar level and still not move the surface. The shipped rule
+is therefore to quote **both**:
+
+* **(a) the bar-level correlation** of the candidate stream with the existing basket (the plan's
+  bar was the 0.29–0.52 cross-stream range — a sleeve in that band buys nothing new), and
+* **(b) the panel's effective streams / `meanPairwiseStreamCorr`** (Kish), and
+* **(c) the dependence-adjusted DSR surface anchor** (the best arm's `dsrAdjusted` against 0.95).
+
+The acceptance bar the plan pre-registered for P4 was **(c) = move `dsrAdjusted` across 0.95**, and
+the measured answer is **no** (`RUN-ANALYSIS.md` §16.5). The record is:
+
+* **The sleeve is real.** Pooled delta-neutral funding carry over the window all eight symbols
+  share (2020-09-13 → 2026-09-24, 6 606 periods): **9.78 %/yr at 0.84 % vol**, carry Sharpe 11.61,
+  maxDD −3.34 %, from **57 939** audited funding rows (0 audit problems on the 8h grid).
+* **(a) passes decisively.** Correlation with the equal-weight price basket is **+0.0027** on the
+  full 15m grid, against the 0.29–0.52 cross-stream range.
+* **(b) passes.** Effective streams **1.2539 → 1.5424 of 9**; `meanPairwiseStreamCorr`
+  0.7686 → 0.6044; cluster SE 0.045370 → 0.042784 (−5.7 %).
+* **(c) does NOT cross.** The delete-one-cluster `designEffect` barely moves (**5.226 → 5.228**)
+  because that estimator is serial-dominated (`designEffect` is `1 + (m−1)ρ̄` with a much larger
+  within-stream autocorrelation than the cross-stream one). So under gate **G-C** the sleeve is a
+  *breadth purchase by the DSR metric* and a *genuine independence purchase by the
+  correlation/effective-streams metric*.
+
+**Consequence for future claims.** "Carry is an independent sleeve" is true as measured by (a)/(b)
+and unsupported as measured by (c); a write-up must say which metric it is quoting. Any future round
+that wants the sleeve as a *tradeable* book must first cost the spot leg and fetch a basis/mark
+series — 9.78 %/yr is the **funding leg only**, on six years of one venue (`TODO.md` 95).
+
+* Grounding: Kish 1965 (the design effect `1+(K−1)ρ̄` and `effectiveStreams`); Grinold 1989 (breadth
+  counts *independent* forecasts, so a market-neutral sleeve is worth more per stream than a ninth
+  correlated one); Asness, Moskowitz & Pedersen 2013 / Moskowitz, Ooi & Pedersen 2012 (combining
+  weakly correlated sleeves is the standard breadth purchase). The DSR-as-a-surface reading is
+  `PLAN-round29.md` §1.8 MC1 with the per-arm anchors in `RUN-ANALYSIS.md` §16.1.

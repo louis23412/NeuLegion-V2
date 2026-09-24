@@ -13,5 +13,5 @@ test('A/B analysis driver evaluates, audits and decides the variant family', asy
         result.failed, 0,
         `${result.failed}/${result.total} analyze checks failed:\n${JSON.stringify(result.failures, null, 2)}`,
     );
-    assert.equal(result.total, 255, `expected exactly the 255 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
+    assert.equal(result.total, 269, `expected exactly the 269 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
 });
