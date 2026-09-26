@@ -75,6 +75,7 @@ import {
     volRegime, momentumAgreement, rangeLocation, volumeImbalance, autocorr1,
     acceleration, causalZScore, positionAt, signalForCandidate, SIGNAL_CANDIDATES,
     reversal, reversalWindow, reversalVol, crossSectionalReversal, REVERSAL_CANDIDATES,
+    volScaledMomentum, blendedMomentum, networkMomentum, regimeGatedMomentum, SIGUP_CANDIDATES,
 } from '../../../src/analysis/features.js';
 import {
     parseFundingJsonl, auditFundingSeries, auditFundingProblems, carryReturns,
@@ -1979,6 +1980,72 @@ export async function run() {
             REVERSAL_CANDIDATES.every((c) => signalForCandidate(c)(panelView, [60, 65, 70]).every((p) => Number.isFinite(p) && p >= -1 && p <= 1)) &&
             REVERSAL_CANDIDATES.every((c) => signalForCandidate(c)({}, [0, 1]).every((p) => p === 0)));
 
+        // --- G-H: the round-30 momentum-upgrade family (opt-in) --------------
+        // Pre-registered in `research/round30-winning-mechanisms.md` §1.2. OPT-IN:
+        // the default roster, `K` and every golden are untouched, so these pin the
+        // primitives' arithmetic and the panel/strict-lag contract.
+        const gRamp = Array.from({ length: 40 }, (_, i) => 0.01 * i);
+        const gWin = gRamp.slice(24, 40);
+        const gMean = gWin.reduce((a, b) => a + b, 0) / 16;
+        const gStd = Math.sqrt(gWin.reduce((a, b) => a + (b - gMean) ** 2, 0) / 15);
+        check('G-H: volScaledMomentum is the exact trailing return sum / trailing sample std',
+            close(volScaledMomentum({ returns: gRamp }, 39, { window: 16 }), (0.01 * (24 + 39) * 16 / 2) / gStd, 1e-12));
+        check('G-H: volScaledMomentum abstains on a flat window and before the window is full',
+            Number.isNaN(volScaledMomentum({ returns: new Array(20).fill(0.01) }, 19, { window: 16 })) &&
+            Number.isNaN(volScaledMomentum({ returns: [0.01, 0.02] }, 1, { window: 16 })));
+        const gRefRisk = (r, t, L) => {
+            const w = r.slice(t - L + 1, t + 1);
+            const m = w.reduce((a, b) => a + b, 0) / w.length;
+            const v = w.reduce((a, b) => a + (b - m) ** 2, 0) / (w.length - 1);
+            return v > 0 ? w.reduce((a, b) => a + b, 0) / Math.sqrt(v) : NaN;
+        };
+        const gRefBlend = [8, 16, 32].map((L) => gRefRisk(gRamp, 39, L)).reduce((a, b) => a + b, 0) / 3;
+        check('G-H: blendedMomentum is the mean of the per-horizon risk-adjusted momentum over the 8/16/32 lenses',
+            close(blendedMomentum({ returns: gRamp }, 39, { lenses: [8, 16, 32] }), gRefBlend, 1e-12));
+        check('G-H: blendedMomentum abstains when fewer than two horizons are populated',
+            Number.isNaN(blendedMomentum({ returns: gRamp.slice(0, 20) }, 19, { lenses: [16, 32] })));
+        const gOwn = gRamp.map((v) => v * 1.3);
+        const gOther = gRamp.map((v) => v * 0.7 + 0.001);
+        const gPanel = { streamIndex: 0, labels: ['own', 'other'], returnsByStream: [gOwn, gOther] };
+        check('G-H: networkMomentum is the OTHER stream\'s risk-adjusted momentum at t-lag (own stream skipped)',
+            close(networkMomentum({ returns: gOwn, panel: gPanel }, 39, { window: 16, lag: 1 }),
+                volScaledMomentum({ returns: gOther }, 38, { window: 16 }), 1e-12));
+        check('G-H: networkMomentum abstains without a panel and on a single-stream panel',
+            Number.isNaN(networkMomentum({ returns: gOwn }, 39, { window: 16, lag: 1 })) &&
+            Number.isNaN(networkMomentum({ returns: gOwn, panel: { streamIndex: 0, returnsByStream: [gOwn] } }, 39, { window: 16, lag: 1 })));
+        const gOtherLate = gOther.slice();
+        gOtherLate[39] = 999;
+        const gPanelLate = { streamIndex: 0, returnsByStream: [gOwn, gOtherLate] };
+        check('G-H: networkMomentum is strictly lagged — a change at t in another stream cannot move the position at t (while lag=0 reads it, so the check is non-vacuous)',
+            Object.is(networkMomentum({ returns: gOwn, panel: gPanel }, 39, { window: 16, lag: 1 }),
+                networkMomentum({ returns: gOwn, panel: gPanelLate }, 39, { window: 16, lag: 1 })) &&
+            !Object.is(networkMomentum({ returns: gOwn, panel: gPanel }, 39, { window: 16, lag: 0 }),
+                networkMomentum({ returns: gOwn, panel: gPanelLate }, 39, { window: 16, lag: 0 })));
+        check('G-H: regimeGatedMomentum equals momentum outside the crash regime',
+            regimeGatedMomentum({ returns: gRamp }, 39, { window: 16, gateWindow: 32, gateZ: 2 }) === momentum({ returns: gRamp }, 39, { window: 16 }));
+        const gCrash = new Array(40).fill(0).map((_, i) => (i < 8 ? 0 : (i % 2 ? -0.02 : -0.06)));
+        check('G-H: regimeGatedMomentum abstains inside the crash regime (trailing 32-bar return below -2 sigma)',
+            Number.isNaN(regimeGatedMomentum({ returns: gCrash }, 39, { window: 16, gateWindow: 32, gateZ: 2 })));
+        check('G-H: SIGUP_CANDIDATES is a frozen family of 4 uniquely-idd, well-formed upgrade branches',
+            Object.isFrozen(SIGUP_CANDIDATES) && SIGUP_CANDIDATES.length === 4 &&
+            new Set(SIGUP_CANDIDATES.map((c) => c.id)).size === 4 &&
+            SIGUP_CANDIDATES.every((c) => c.kind === 'signal' && typeof c.fn === 'function' && c.window > 0 && typeof c.label === 'string'));
+        const sigupIds = SIGUP_CANDIDATES.map((c) => c.id);
+        check('G-H: the upgrade branch ids are disjoint from the shipped and reversal families',
+            sigupIds.every((id) => !SIGNAL_CANDIDATES.some((c) => c.id === id) && !REVERSAL_CANDIDATES.some((c) => c.id === id)) &&
+            sigupIds.every((id) => id.startsWith('sig-')));
+        check('G-H: only the network arm is cross-sectional (the panel-scoped upgrade)',
+            SIGUP_CANDIDATES.filter((c) => c.crossSectional === true).map((c) => c.id).join(',') === 'sig-network-momentum');
+        check('G-H: every upgrade signal returns one finite position per test bar inside [-1, 1] and abstains on an empty view',
+            SIGUP_CANDIDATES.every((c) => signalForCandidate(c)(panelView, [60, 65, 70]).every((p) => Number.isFinite(p) && p >= -1 && p <= 1)) &&
+            SIGUP_CANDIDATES.every((c) => signalForCandidate(c)({}, [0, 1]).every((p) => p === 0)));
+        const gPv1 = { ...series1, panel: { streamIndex: 0, returnsByStream: [series1.returns, series1.returns.map((r) => -r)] } };
+        const gPv2 = { ...series2, panel: { streamIndex: 0, returnsByStream: [series2.returns, series2.returns.map((r) => -r)] } };
+        check('G-H: every upgrade arm is causal (position at t invariant to every value after t, panel included)',
+            SIGUP_CANDIDATES.every((c) => positionAt(c, gPv1, t0) === positionAt(c, gPv2, t0)));
+        check('G-H: the upgrade family is non-vacuous (at least one arm is non-zero at t)',
+            SIGUP_CANDIDATES.some((c) => signalForCandidate(c)(panelView, [t0])[0] !== 0));
+
         // --- report pooling (N2) --------------------------------------------
         check('AC: sharpeStandardError is the exact Lo (2002) closed form (annualised)',
             close(wfSharpeStandardError(0, 252, 252), 1, 1e-12) &&
@@ -2317,6 +2384,44 @@ export async function run() {
             check('AD: DEPENDENCE_GATE_READER states the three hurdles and is non-empty',
                 typeof DEPENDENCE_GATE_READER === 'string' && DEPENDENCE_GATE_READER.length > 100 &&
                 DEPENDENCE_GATE_READER.includes('dsrAdjusted'));
+
+            // PLAN-round30.md §5: the dependence adjustment is NOT a monotone shrink
+            // toward 0.5 — `dsrAdjusted` RE-RUNS the whole deflated formula on
+            // `effectiveBars`, so both the sqrt(n) scaling and the
+            // `defaultTrialVariance` hurdle move. For a positive-Sharpe, sub-hurdle arm
+            // it sits BELOW the unadjusted `dsr` (more conservative); for a
+            // negative-Sharpe arm it moves toward 0.5. Pin the exact recomputation and
+            // both directions.
+            const abPropR = abWalk(99, 240, 0);
+            const abPropOf = (rets, effectiveBars) => backtestMetrics({ returns: rets, signals: rets.map(() => 1), costBps: 0, periodsPerYear: 252, trials: 12, effectiveBars });
+            const abPropPos = abPropOf(abPropR, null);
+            const abPropPosAdj = abPropOf(abPropR, 120);
+            const abPropNeg = abPropOf(abPropR.map((x) => -x), null);
+            const abPropNegAdj = abPropOf(abPropR.map((x) => -x), 120);
+            check('AD: dsrAdjusted RE-RUNS the deflated formula on effectiveBars (not a monotone shrink toward 0.5) — a positive-Sharpe arm is deflated BELOW dsr, a negative-Sharpe arm moves toward 0.5',
+                abPropPosAdj.effectiveBars === 120 &&
+                abPropPosAdj.dsrAdjusted === deflatedSharpeRatio({ sharpe: abPropPos.perPeriodNetSharpe, n: 120, skew: skewness(abPropR), kurtosis: kurtosis(abPropR), trials: 12 }) &&
+                abPropPos.netSharpe > 0 && abPropPos.dsrAdjusted < abPropPos.dsr &&
+                abPropNeg.netSharpe < 0 && abPropNegAdj.dsrAdjusted > abPropNeg.dsr);
+
+            // PLAN-round30.md §5 (gate logic): a promotion may never coexist with a
+            // failed GATED hurdle (a `gated:false` reported statistic cannot veto, so it
+            // is exempt) — checked over random fixtures, not one hand-picked case.
+            const abGateFolds = walkForwardSplit({ n: 200, trainSize: 60, testSize: 20 });
+            const abGateSig = (seed) => { const r = abRng(seed); return (tr, te) => te.map(() => (r() < 0.5 ? 1 : -1)); };
+            let abGatePromoted = 0;
+            let abGateViolations = 0;
+            for (let s = 0; s < 24; s++) {
+                const rets = abWalk(9000 + s, 200, 0.1);
+                const base = walkForwardEvaluate({ returns: rets, folds: abGateFolds, signalForFold: abGateSig(9100 + s), costBps: 1, audit: false });
+                const cand = walkForwardEvaluate({ returns: rets, folds: abGateFolds, signalForFold: abGateSig(9200 + s), costBps: 1, audit: false });
+                const d = promoteDecision(base, cand, { minDsr: 0.5, requireCleanAudit: false, rawFoldHurdles: false });
+                if (!d.promote) continue;
+                abGatePromoted++;
+                if (!Array.isArray(d.hurdles) || d.reasons.length || d.hurdles.some((h) => h.gated !== false && h.failed)) abGateViolations++;
+            }
+            check('AD: promoteDecision never promotes with a failed GATED hurdle (24 random fixtures; gated:false statistics are exempt)',
+                abGatePromoted > 0 && abGateViolations === 0, `promoted=${abGatePromoted} violations=${abGateViolations}`);
 
             // --- restateReportAtCost / costLadder ---------------------------
             const abFolds = walkForwardSplit({ n: 90, trainSize: 30, testSize: 10 });

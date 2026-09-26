@@ -567,5 +567,5 @@ Hansen–Lunde–Nason); P2's cadence gate is Lo 2002 + AlgoXpert (arXiv 2603.09
 2015 + Ledoit & Wolf 2008; P4's independence reading is Kish 1965 + Grinold 1989 + Asness, Moskowitz
 & Pedersen 2013; P3's reversal lead is arXiv 2608.21888. The implementation *verdicts* (G-A/G-B/G-C
 branches, the measured numbers) are in
-[`../RUN-ANALYSIS.md`](../RUN-ANALYSIS.md) §16.1–§16.6 and
-[`round29-README.md`](round29-README.md) §8; the frontier they open is `../TODO.md` 94–97.
+[`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §16.1–§16.6 and
+[`research/round29-README.md`](research/round29-README.md) §8; the frontier they open is `../TODO.md` 94–97.

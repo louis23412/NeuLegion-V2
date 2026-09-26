@@ -38,12 +38,13 @@ import { forecastComparison, formatForecast } from './analysis/forecast.js';
 import { foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision, promotionAcrossCadences, defaultCatastrophic } from './analysis/decision.js';
 import { walkForwardSplit } from './analysis/splits.js';
 import { makeCandleViewFor, worldFromCandles, DEFAULT_SHOCK } from './analysis/world.js';
-import { SIGNAL_CANDIDATES, REVERSAL_CANDIDATES, signalForCandidate } from './analysis/features.js';
+import { SIGNAL_CANDIDATES, REVERSAL_CANDIDATES, SIGUP_CANDIDATES, signalForCandidate } from './analysis/features.js';
 import { makeBenchmarkForecaster, BENCHMARK_KINDS } from './analysis/benchmark.js';
 import { CANDLE_MANIFEST } from './candles_audit.js';
 import { parseFundingJsonl, auditFundingSeries, auditFundingProblems, carryPanelStream, pooledCarry, correlation } from './analysis/carry.js';
 import { makeRunId, createRunDirectory, writeJson, writeJsonAtomic, writeReport, appendLog, appendJsonl } from './observer/report.js';
 import { configFingerprint } from './legion/sanitize.js';
+import { DEFAULT_ROSTER_IDS, LINEAGE_BRANCHES, uncoveredVariantIds, DROPPED_VARIANT_IDS } from './lineage.js';
 
 // Feature-vector length used by the online model (a trailing return window plus
 // the current bar's sign). Kept identical to the walk-forward test so a report
@@ -267,11 +268,29 @@ export const REVERSAL_VARIANTS = Object.freeze(
     REVERSAL_CANDIDATES.map((c) => ({ ...c, signal: signalForCandidate(c), appliesTo: 'agnostic' })),
 );
 
-// Every candidate the A/B can resolve by id: the mechanism flags plus the signal
-// family. `kind` (default 'mechanism') distinguishes them in the report. The
-// opt-in variants are NOT here (so the default roster stays lean) but ARE in
-// `RESOLVABLE_VARIANTS`.
-export const ALL_VARIANTS = Object.freeze([...VARIANTS, ...SIGNAL_VARIANTS]);
+// Round 30 (C-SIGUP / C-REGIME, gate G-H): the pre-registered momentum-upgrade
+// candidates from `analysis/features.js#SIGUP_CANDIDATES` (vol-scaled, multi-horizon
+// blended, network/lead-lag and regime-gated momentum). Same contract as
+// `SIGNAL_VARIANTS` (a pure `signal(view, test)` under the one family-wise gate),
+// but resolved only by id (`--variants=sig-vol-momentum,...`) so a default run's
+// roster and `K` are unchanged. `sig-network-momentum` reads the cross-section
+// through `view.panel`, so the driver reports it `not-applicable` on a
+// single-stream run (`BUGS.md` #70).
+export const SIGUP_VARIANTS = Object.freeze(
+    SIGUP_CANDIDATES.map((c) => ({ ...c, signal: signalForCandidate(c), appliesTo: 'agnostic' })),
+);
+
+// Round 30 (PLAN-round30.md section 2): the PRE-REGISTERED default A/B roster.
+// The searched universe (`RESOLVABLE_VARIANTS`) is unchanged — every dropped
+// branch is still resolvable by id for reproducibility — but the default roster
+// is pruned to the arms the acceptance batch showed can plausibly clear the gate.
+// That shrinks `K` (the deflated-Sharpe search size), the cheapest honest lever
+// available; `DROPPED.md` records the measurement that killed each drop and
+// `src/lineage.js#DEFAULT_ROSTER_IDS` is the register's code contract. The roster
+// is pinned by `rosterSnapshot()` in analyze.test.js so a silent re-add fails.
+export const ALL_VARIANTS = Object.freeze(
+    [...VARIANTS, ...SIGNAL_VARIANTS].filter((v) => DEFAULT_ROSTER_IDS.includes(v.id)),
+);
 
 // P1 (round 29 → 30): the model-class benchmark forecasters. Each is an opt-in
 // A/B candidate whose `fit/predict` is a base-rate / ridge / MLP forecaster over
@@ -332,22 +351,73 @@ export const LABEL_VARIANTS = Object.freeze([
 
 // The full resolvable universe: the default A/B family plus the opt-in mechanism
 // variants (`sample-weights`), the opt-in label variants, the P1 benchmark
-// forecasters and the P3 short-horizon reversal family. `resolveVariant` searches
+// forecasters, the P3 short-horizon reversal family and the round-30 momentum
+// upgrades. `resolveVariant` searches
 // this (so `--variants=label-triple` / `--variants=sample-weights` /
-// `--variants=sig-reversal` work), while the default roster stays the lean family
-// (variantRoster below).
-export const RESOLVABLE_VARIANTS = Object.freeze([...ALL_VARIANTS, ...OPT_IN_VARIANTS, ...LABEL_VARIANTS, ...BENCHMARK_VARIANTS, ...REVERSAL_VARIANTS]);
+// `--variants=sig-reversal` / `--variants=sig-vol-momentum` work), while the
+// default roster stays the lean family (variantRoster below).
+export const RESOLVABLE_VARIANTS = Object.freeze([...VARIANTS, ...SIGNAL_VARIANTS, ...OPT_IN_VARIANTS, ...LABEL_VARIANTS, ...BENCHMARK_VARIANTS, ...REVERSAL_VARIANTS, ...SIGUP_VARIANTS]);
+
+// Round 30: the default roster as a content-hashed snapshot. The pin lives in
+// analyze.test.js, so a future edit that silently re-adds a dropped branch (or
+// reorders the roster) fails a test instead of moving every deflated Sharpe. The
+// hash is the stable FNV-1a of the id list (the same primitive `legion/rng.js`
+// uses for worker sub-seeds), so it is portable across the browser and node runs.
+export const rosterSnapshot = () => {
+    const ids = ALL_VARIANTS.map((v) => v.id);
+    return { ids, count: ids.length, hash: hashString(ids.join(',')) };
+};
+
+// Round 30 (BUGS.md #69): the guard the CLI applies to a PRESENT-but-empty list
+// flag. Pure, so it is testable without spawning the CLI: `raw` is the string
+// after `--name=` (null when the flag carried no value). A bare `--name` and a
+// `--name=` both count as given-but-empty and must error rather than silently
+// falling back. Returns the error message, or null when the flag is absent or has
+// at least one non-empty entry.
+export const emptyListFlagError = (name, given, raw, consequence = 'the default dataset') => {
+    if (!given) return null;
+    const list = raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    if (list.length) return null;
+    return `analyze: --${name}= was provided but names no files — refusing to silently fall back to ${consequence} (BUGS.md #69)`;
+};
+
+// Round 30: the register contract in code form (see docs/LINEAGE.md /
+// docs/DROPPED.md). Every field must be empty for the register to be a faithful
+// contract: `uncovered` = a resolvable variant with no lineage entry,
+// `missingVariant` = a register entry naming a variant that no longer resolves,
+// `droppedInRoster` = a DROPPED branch back in the default roster.
+export const rosterRegistration = () => {
+    const resolvableIds = RESOLVABLE_VARIANTS.map((v) => v.id);
+    const rosterIds = ALL_VARIANTS.map((v) => v.id);
+    return {
+        resolvableCount: resolvableIds.length,
+        rosterCount: rosterIds.length,
+        uncovered: uncoveredVariantIds(resolvableIds),
+        missingVariant: LINEAGE_BRANCHES
+            .filter((b) => b.variant && !resolvableIds.includes(b.variant))
+            .map((b) => b.id),
+        droppedInRoster: rosterIds.filter((id) => DROPPED_VARIANT_IDS.includes(id)),
+    };
+};
 
 // R27-2: can this variant's mechanism reach the code path the A/B scores? Returns
 // a one-line reason when it cannot (so the report marks it `not-applicable`
 // instead of presenting it as a tested arm), or null when it can.
-export const notApplicableReason = (variant, model = 'controller') => {
+export const notApplicableReason = (variant, model = 'controller', ctx = {}) => {
     if (!variant) return null;
     if (variant.appliesTo === 'broadcast') {
         return `not-applicable: acts only on the memory broadcast path (broadcastMemory -> _getGlobalLSHCandidates), whose output the scored ${model} model never reads back`;
     }
     if (variant.appliesTo === 'controller' && model !== 'controller') {
         return `not-applicable: acts only on the controller-backed model, not the ${model} model`;
+    }
+    // Round 30 (BUGS.md #70): a cross-sectional candidate reads the OTHER streams
+    // through `view.panel`. On a run with fewer than two aligned streams its
+    // position is identically 0, so it cannot be evaluated — it must be marked
+    // not-applicable (which also excludes it from K and the family-wise search)
+    // rather than reported as a live degenerate arm.
+    if (variant.crossSectional === true && Number.isFinite(ctx.streamCount) && ctx.streamCount < 2) {
+        return `not-applicable: reads the cross-section (view.panel) but this run has ${ctx.streamCount} stream${ctx.streamCount === 1 ? '' : 's'} — the cross-sectional position is identically 0 without ≥2 aligned streams (BUGS.md #70)`;
     }
     return null;
 };
@@ -1123,7 +1193,7 @@ export function evaluateAB({
         // is measured, not assumed); `finalizeAB` marks them inactive and excludes
         // them from K and the search.
         const skipped = !!variant.controllerScoped && model !== 'controller';
-        const notApplicable = notApplicableReason(variant, model);
+        const notApplicable = notApplicableReason(variant, model, { streamCount: streams.length });
         const reports = streams.map((s, si) => {
             // One fold function per (variant, stream): it holds the raw-confidence
             // cache the journal reads (round 26, R26-3).
@@ -1249,7 +1319,7 @@ const finalizeAB = ({
         let status = 'live';
         let reason = null;
         let cmp = null;
-        const naReason = entry.notApplicable || notApplicableReason(variant, model);
+        const naReason = entry.notApplicable || notApplicableReason(variant, model, { streamCount });
         if (naReason) {
             status = 'not-applicable';
             reason = naReason;
@@ -1496,7 +1566,7 @@ export async function evaluateABAsync({
         const variant = variants[vi];
         const startedAt = Date.now();
         const skipped = !!variant.controllerScoped && model !== 'controller';
-        const notApplicable = notApplicableReason(variant, model);
+        const notApplicable = notApplicableReason(variant, model, { streamCount: streams.length });
         const reports = [];
         for (let si = 0; si < streams.length; si++) {
             const s = streams[si];
@@ -2342,8 +2412,11 @@ export async function runAnalysis({
     const variants = variantIds
         ? ['baseline', ...variantIds.filter((id) => id !== 'baseline')].map(resolveVariant)
         : [
-            ...VARIANTS.filter((v) => !v.controllerScoped || useController),
-            ...SIGNAL_VARIANTS,
+            // Round 30: the PRE-REGISTERED default roster (`analyze.js#ALL_VARIANTS`
+            // = `lineage.js#DEFAULT_ROSTER_IDS`), so the default run's `K` is 3.
+            // `--variants=` still resolves any id in `RESOLVABLE_VARIANTS` (the whole
+            // searched universe, including the dropped/parked branches).
+            ...ALL_VARIANTS.filter((v) => !v.controllerScoped || useController),
             // Round 26 (R26-11): the opt-in label variants, appended only when asked
             // for (a label change is a training-set change; it must never be silent).
             ...(labelPolicies && useController ? LABEL_VARIANTS : []),
@@ -3137,10 +3210,14 @@ export async function replicateAnalysis({ seeds = [1, 2, 3], writeFiles = true, 
 export const ANALYZE_USAGE = [
     'npm run analyze [-- <flags>]        (this text: --help / -h)',
     '',
-    '  --file=<path>            single candle JSONL stream (default CONFIG.file)',
-    '  --files=<a,b>            explicit list of candle JSONL streams',
-    '  --symbols=a,b|all        manifest symbols to pool (8 available)',
-    '  --carry-files=<a,b>      funding JSONL per stream (P4 carry sleeve; positional)',
+    '  --file=<path>            single candle JSONL stream (default CONFIG.file; a',
+    '                           present-but-empty value is an error — BUGS.md #69)',
+    '  --files=<a,b>            explicit list of candle JSONL streams (a present-but-',
+    '                           empty list is an error, not a fallback — BUGS.md #69)',
+    '  --symbols=a,b|all        manifest symbols to pool (8 available; a present-but-',
+    '                           empty list is an error — BUGS.md #69)',
+    '  --carry-files=<a,b>      funding JSONL per stream (P4 carry sleeve; positional;',
+    '                           a present-but-empty list is an error — BUGS.md #69)',
     '  --cadences=a,b,c         re-score every active candidate on each fold-grid cadence',
     '                           (P2 fixed-position restatement, no model) and report the',
     '                           majority-pass + catastrophic-veto verdict across the grid',
@@ -3164,7 +3241,8 @@ export const ANALYZE_USAGE = [
     '                           the report always states the break-even cost per candidate)',
     '  --reuse-base             reuse the scored pass as the audit base pass (one fewer',
     '                           refit per fold; the verdict is unchanged)',
-    '  --variants=a,b           narrow the candidate family (baseline is always first)',
+    '  --variants=a,b           narrow the candidate family (baseline is always first;',
+    '                           a present-but-empty list is an error — BUGS.md #69)',
     '  --gate=classic|dependence promotion gate (default dependence: adds the paired',
     '                           cluster Sharpe-difference t-test, the exact sign test over',
     '                           fold windows, and the DSR floor on design-effect-adjusted',
@@ -3199,7 +3277,8 @@ export const ANALYZE_USAGE = [
     '  --seeds=a,b,c            replicate the A/B under several master seeds with CRN and',
     '                           aggregate each variant\'s mean/IQM/stratified-bootstrap CI',
     '                           + seed/fold variance split (writes replication.json',
-    '                           beside the first run dir)',
+    '                           beside the first run dir; a present-but-empty list is an',
+    '                           error — BUGS.md #69)',
     '  --keep-models            keep each fit\'s SQLite state dir (forensics; large)',
     '  --fold-log=all|score|off what folds.jsonl records (default all)',
     '  --save-interval=<n>      full-state checkpoint every n getSignal calls',
@@ -3239,6 +3318,10 @@ if (isMain) {
         return v ? v.split(',').map((s) => s.trim()).filter(Boolean) : null;
     };
     const has = (name) => args.includes(`--${name}`);
+    // Round 30 (BUGS.md #69): `has` matches only the bare `--name` token, so a
+    // `--files=` (present but empty) was indistinguishable from an absent flag and
+    // silently fell back to the default dataset. `flagGiven` matches both forms.
+    const flagGiven = (name) => args.some((a) => a === `--${name}` || a.startsWith(`--${name}=`));
     try {
         if (has('help') || args.includes('-h')) {
             console.log(ANALYZE_USAGE);
@@ -3273,12 +3356,38 @@ if (isMain) {
         const saveInterval = saveIntervalRaw == null
             ? Infinity
             : (/^(inf(inity)?)$/i.test(saveIntervalRaw.trim()) ? Infinity : Number(saveIntervalRaw));
+        // Round 30 (BUGS.md #69): a PRESENT-but-empty `--files=`/`--carry-files=`
+        // used to be treated exactly like an absent flag, so a shell typo silently
+        // scored the default dataset (or dropped the carry sleeve) and the run read
+        // as if the intended experiment had happened. Refuse instead.
+        const fileErr = emptyListFlagError('file', flagGiven('file'), argOf('file'));
+        if (fileErr) throw new Error(fileErr);
+        const filesList = list('files');
+        const filesErr = emptyListFlagError('files', flagGiven('files'), argOf('files'));
+        if (filesErr) throw new Error(filesErr);
+        const carryFilesList = list('carry-files');
+        const carryErr = emptyListFlagError('carry-files', flagGiven('carry-files'), argOf('carry-files'), 'the default (no carry sleeve)');
+        if (carryErr) throw new Error(carryErr);
+        // The same class covers the singular `--file=` and every other LIST flag
+        // whose empty form has no documented meaning: a mistyped/empty shell variable
+        // in `--file=` / `--symbols=` / `--variants=` / `--seeds=` would otherwise run
+        // the default dataset (or the default roster, or a single-seed run) while
+        // looking like the intended experiment. (The enumerated-mode flags
+        // `--model=` / `--gate=` / `--label-policy=` keep their documented "empty =
+        // default" semantics, as do `--cost-ladder=` / `--cadences=`, whose empty
+        // form means "off".)
+        const symbolsErr = emptyListFlagError('symbols', flagGiven('symbols'), argOf('symbols'));
+        if (symbolsErr) throw new Error(symbolsErr);
+        const variantsErr = emptyListFlagError('variants', flagGiven('variants'), argOf('variants'), 'the default roster');
+        if (variantsErr) throw new Error(variantsErr);
+        const seedsErr = emptyListFlagError('seeds', flagGiven('seeds'), argOf('seeds'), 'a single-seed run');
+        if (seedsErr) throw new Error(seedsErr);
         const options = {
             file: argOf('file') || CONFIG.file,
-            files: list('files'),
+            files: filesList,
             symbols: symbols && symbols.length === 1 && symbols[0] === 'all' ? CANDLE_MANIFEST.map((e) => e.symbol) : symbols,
             // P4: the funding/carry files, positionally matched to files/symbols.
-            carryFiles: list('carry-files'),
+            carryFiles: carryFilesList,
             cadences: cadenceList,
             exposureMatch: has('exposure-match'),
             model: argOf('model') || 'controller',

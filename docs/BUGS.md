@@ -90,17 +90,17 @@ production feeds it a fixed window, so the controller's trade bookkeeping saw
 ancient candles and trained on mislabelled trades. Do not size or interpret a run
 until #33 is fixed. If you change anything
 under `src/`, run the full browser suite before and after
-(**2558 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
+(**2585 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
 `consolidation` 48, `consolidation_worker` 18, `fetcher` 111,
 `golden` 23 (bit-exactness), `modules` 51 (assembly), `legion` 57,
-`candles` 192, `locks` 41, `analysis` 621, `price_precision` 29,
+`candles` 192, `locks` 41, `analysis` 638, `price_precision` 29,
 `multisymbol` 28, `lsh` 75 (the round-28 section K retrieval-liveness checks), `surprise` 32, `sample_weights` 57,
 `homeostasis` 30, `evolve` 36, `multiprobe` 77, `binarypc` 39,
 `bitweight` 69, `querymod` 51, `walkforward` 63,
 `dimensions` 185, `guards` 65 (run integrity), `observer` 76 (legion health),
 `controller_invariants` 23 (R27-4b controller contracts, plus the R28 measured-span /
 emitted-stream checks in §D),
-`analyze` 269 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26, R27-1 liveness / R27-2 broadcast-liveness / R27-5 forecast-kind grouping / variant taxonomy after round 27, the round-28 weighting-configuration / measured-gate / inert-reason / active-pair checks, and the round-29 P1 benchmark runner / `--carry-files` / `extraPanelStreams` wiring, plus the round-4 P2 driver wiring and the round-5 fold-dispatch contract checks)) — plus `golden` on
+`analyze` 279 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26, R27-1 liveness / R27-2 broadcast-liveness / R27-5 forecast-kind grouping / variant taxonomy after round 27, the round-28 weighting-configuration / measured-gate / inert-reason / active-pair checks, and the round-29 P1 benchmark runner / `--carry-files` / `extraPanelStreams` wiring, plus the round-4 P2 driver wiring and the round-5 fold-dispatch contract checks, and the round-30 pruned-roster / register-contract / #69 / #70 panel-taxonomy / momentum-upgrade checks)) — plus `golden` on
 its own after any `hivemind/` edit, `multisymbol` after any change to the
 controller's trade/target arithmetic, `lsh` after any change to the memory index,
 `surprise` after any change to the memory write path, `sample_weights` after
@@ -2557,7 +2557,91 @@ browser harness) assert that every fold-dispatch request carries the full set of
 reads — so a future factory option that is not threaded here fails loudly. `analyze` 267 → 269,
 ledger 2556 → 2558.
 
-## Hand-rolled indicators — audit findings
+## Found by the round-29 operator acceptance batch (`RUN-ANALYSIS.md` §17) — #69/#70, FIXED (round 30)
+
+Five fresh acceptance runs came back (§17); two of them (3c P3, 3d P4) exercised the new data paths
+and exposed two report/CLI robustness defects. Neither touches the scored arithmetic and neither
+manufactured a promotion (the gate refused the degenerate candidate). **Both are now FIXED in round
+30** (PLAN-round30.md Workstream E, `C-FIX69`/`C-FIX70`): the CLI refusal plus an
+`analyze.test.js`/`analyze_cli.test.js` pin for #69, and a `notApplicableReason` taxonomy extension
+plus an end-to-end `evaluateAB` pin for #70. The golden suite is unmoved (23/0) and the browser
+ledger moved by the new checks (`analyze` 269 → 279 for #69/#70 + the roster-register pins;
+`analysis` 621 → 638 for the round-30 momentum-upgrade section and the two §5 property tests; total 2558 → 2585).
+
+### 69. An empty `--files=` (or `--carry-files=`) silently falls back to the default dataset (or drops the sleeve) instead of erroring
+
+**FIXED (round 30).** `analyze.js` now refuses a present-but-empty list flag.
+
+The `round29-TESTING.md` §3 commands set `CANDLES_15M` / `FUND` from shell variables. On the batch
+those variables were **unset in the shell that ran 3c/3d**, so the arguments expanded to `--files=`
+and `--carry-files=` (empty values). `analyze.js`'s parser treats an empty value as "not supplied":
+
+- **3c** fell back to `CONFIG.file` (`src/candles.jsonl`) and ran a **single stream at 1h** — 3c's
+  `run.json` records `"streams": 1`, `"candles": 2000`, `"files": ["…/src/candles.jsonl"]` where the
+  guide expects `8` streams and ≈8×2000 candles. The whole P3 acceptance (8-symbol 15m basket) was
+  therefore measured on the wrong dataset while looking like a normal completed run.
+- **3d** ran with `report.carry === null`, `dependence.streams === 8` and `panelStreams: 0` in every
+  cadence evaluation, where the guide's checklist requires `panelStreams === 1` /
+  `dependence.streams === 9`. The sleeve's presence and absence are individually explicit (which is
+  how this was caught), but the *command* silently did nothing for P4.
+
+The class is "an explicitly-passed flag with an empty value is indistinguishable from an absent
+flag", so a mistyped/empty shell variable produces a plausible-looking but off-spec run.
+
+**Fix (round 30).** The CLI parse gains a `flagGiven(name)` helper that matches both `--name` and
+`--name=…`, and a pure `emptyListFlagError(name, given, raw, consequence)` guard: a present-but-empty
+`--files=` / `--carry-files=` (including a bare `--files`, or `--files=,,`) now throws
+`analyze: --files= was provided but names no files — refusing to silently fall back to …` and the run
+exits non-zero, before any data is read. A non-empty list is unaffected. Pinned two ways: the pure
+guard in `analyze.test.js` (browser) and a spawned-CLI refusal in `analyze_cli.test.js` (node-only,
+`BUGS.md #69` message match + a non-empty control run). The operator guide still carries the
+`:?unset` guard warning (`round29-TESTING.md` §3/§5).
+
+**Same class, closed too (round 30, audit pass).** The guard also covers the singular `--file=` and
+every other list flag whose empty form has no documented meaning — `--symbols=`, `--variants=` and
+`--seeds=` — since a mistyped/empty shell variable there was the same silent-fallback footgun (an
+empty `--file=`/`--symbols=` scored the default single-file dataset; an empty `--variants=` ran the
+default roster; an empty `--seeds=` ran a single seed, each while reading as the intended
+experiment). The enumerated-mode flags (`--model=`, `--gate=`, `--label-policy=`) keep their
+documented "empty = default" semantics, as do `--cost-ladder=` and `--cadences=`, whose empty form
+means "off". The `analyze.test.js` §A2c check and the spawned-CLI cases are extended to pin them.
+
+### 70. A panel-requiring signal on a panel-less run is degenerate yet labelled `live` and can be selected as `familywise.best`
+
+**FIXED (round 30).** `notApplicableReason` now marks a cross-sectional arm `not-applicable` when
+the run has fewer than two aligned streams, which also removes it from `K` and the search.
+
+The cross-sectional reversal arm (`features.js#crossSectionalReversal`) reads `view.panel`, the
+per-stream cross-section the driver attaches only when >1 stream is scored. On 3c's **single-stream**
+run there is no panel, so the primitive abstains (`NaN` → 0) and the arm's position series is
+identically zero. Three report fields then misdescribe it:
+
+- **`liveness`** compares emitted positions against the baseline's and reports `status: "live"`
+  (it differs on 101 of 129 folds) — technically true, but the arm is **degenerate** (constant 0),
+  not live. The `inert`/`duplicate`/`not-applicable` taxonomy has no "degenerate/constant" bucket.
+- **`familywise.best`** is `"sig:reversal-xs"`: a zero-variance arm's SPA statistic (0) exceeds every
+  *negative* arm's, so the search names the arm that trades nothing as the family's best.
+- **the forecast MCS** keeps it as the survivor — an all-zero forecast has the lowest Brier loss.
+
+The look-ahead **vacuity audit** does catch it (`vacuous: true`, `reachable: false`, 1 violation) and
+`promoteDecision`'s `candidateAudit` hurdle **fails** it, so the verifier refuses the arm and no
+promotion is manufactured. But the report's *narrative* fields (`liveness`, `familywise.best`, the
+MCS membership) still point at it, and a reader skimming those would draw the wrong conclusion. The
+natural fix is to mark a panel-requiring variant `not-applicable` (the same taxonomy
+`multiprobe`/`querymod` use) when the run has no panel — which would also drop it out of `K` and the
+search — and/or to exclude a constant (zero-variance) arm from `familywise.best`/MCS.
+
+**Fix (round 30).** `notApplicableReason(variant, model, ctx)` gains a panel arm: when
+`variant.crossSectional === true` and `ctx.streamCount < 2` it returns
+`not-applicable: reads the cross-section (view.panel) but this run has N stream(s) — the
+cross-sectional position is identically 0 without ≥2 aligned streams (BUGS.md #70)`. The driver
+passes the scored stream count at every call site (the per-variant evaluation and both liveness
+paths), so the arm is certified `not-applicable`, `active:false`, `search:null`, and drops out of
+`K`, the family-wise search and `familywise.best`. With ≥2 streams the arm is evaluable again. Pinned
+in `analyze.test.js`: the pure taxonomy case (1 stream → not-applicable; 2 streams → applicable) and
+an end-to-end `evaluateAB` case (single stream: not-applicable/out-of-`K`/out-of-search; two streams:
+in `K`). The `analysis.test.js` panel-less abstain-not-throw check is unchanged; #70 was about the
+*status* the abstention reports, not the abstention itself.
 
 `indicatorProcessor.js` is ten independent hand-rolled indicator
 implementations with no shared recurrence helper. A dedicated suite

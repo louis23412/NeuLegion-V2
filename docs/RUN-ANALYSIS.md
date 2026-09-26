@@ -3004,8 +3004,9 @@ probability-calibrated kinds (controller + benchmark) into one Model Confidence 
 checkpoint is bundled (plan §8 allows it to be dropped).
 
 **The run** (8 streams × 4800 candles, `maxBars 600`, `trainSize 60`, `costBps 0`, seed 1;
-the controller/baseline arm is the in-harness bare HiveMind, the same family the retained runs
-journal). Pooled OOS bars ≈ 4 032 (`testSize 15`); the benchmark runs are ~2 min for the whole
+`model: 'bare'` — the round-29 P1 runs were bare, so the baseline row is the bare HiveMind; a
+`--model=controller` run reads a different baseline row, see §17.3). Pooled OOS bars ≈ 4 032
+(`testSize 15`); the benchmark runs are ~2 min for the whole
 4-arm × 8-stream × 36-fold grid (the HiveMind baseline dominates the wall time; the pure
 forecasters are milliseconds — the ~600× gap MC3 records).
 
@@ -3014,7 +3015,7 @@ forecasters are milliseconds — the ~600× gap MC3 records).
 | test 15 | base rate (model) | 0.25296 | −0.0118 | 0.5005 | 0.000 | — | eliminated |
 | test 15 | **linear (ridge)** | **0.25020** | **−0.0008** | **0.5196** | **+0.0191** | **+0.00276** (p 0.008, favors linear) | **{linear}** |
 | test 15 | MLP | 0.27431 | −0.0972 | 0.5035 | +0.0030 | −0.02135 (p 0.001, favors base rate) | eliminated |
-| test 15 | bare HiveMind (baseline) | 0.25382 | −0.0153 | 0.4866 | −0.0139 | — | eliminated |
+| test 15 | bare HiveMind (baseline, `--model=bare`) | 0.25382 | −0.0153 | 0.4866 | −0.0139 | — | eliminated |
 | test 10 | linear | 0.25105 | −0.0043 | 0.5085 | +0.0046 | +0.00199 (p 0.064) | {linear} |
 | test 10 | MLP | 0.27629 | −0.1052 | 0.5031 | −0.0008 | −0.02325 (p 0.001) | eliminated |
 | test 30 | linear | 0.25022 | −0.0009 | 0.5132 | +0.0091 | +0.00256 (p 0.009) | {linear} |
@@ -3454,10 +3455,235 @@ row (Brier/`brierSkill`/accuracy per arm + the MCS₉₀ `{linear}` + the 4 032 
 delta-neutral carry (6 606 periods, 9.78 %/yr, 0.84 % vol, Sharpe 11.61, maxDD −3.34 %), the panel
 dependence (8 → 9 streams: DE 5.226 → 5.228, effective streams 1.2539 → 1.5424, correlation
 +0.0027) and the end-to-end `--carry-files` probe (9/8 streams, `pooledMeanRatePerBar` 1.29e-6,
-correlation −0.128). The suite re-ran green (30 entries, **2 547** checks, 0 failures, `golden`
+correlation −0.128). The suite re-ran green (30 entries, **2 558** checks, 0 failures, `golden`
 23/0 — no fingerprint moved). The pass found and fixed one latent code defect (`BUGS.md` **#67**:
 `restateReportAtCadence`'s default training window was one `testSize` short), registered the
 round-29 exports of `walkforward.js`/`decision.js`/`features.js` in `test/lock-registry.js` (they
 had been left out of the three already-registered modules), and repaired stale test counts in
 `README.md`/`src/README.md`/`LOCKED.md`/`DESIGN.md`/`lsh-ann.md`. P5 remains the one plan item not
 built (DoD item 4 is conditional). Full record: `round29-IMPLEMENTATION.md` §7.
+
+## 17. The round-29 acceptance batch — the operator's five runs (`round29-TESTING.md` §3)
+
+The round-29 guide was run on the operator's own machine (Node **v25.9.0**, repo root
+`src/NeuLegion-master/NeuLegion-master/`) on 2026-09-24/25. Five run directories came back under
+`src/runs/<runId>-seed1/` — the guide's 3a (P2), 3b (P1), 3c (P3), 3d (P4) and 3e (full verdict).
+Their role is **independent reproduction** of §16 from a *fresh run* rather than the offline
+journal restatements §16 was written from. All five ran clean: every `run.log` has **0 warn/error
+lines**, every run reached `phase:"complete"`, and every scored baseline's look-ahead audit is
+`clean` with 0 violations.
+
+| run (all seed 1, CRN, `costLadder [0,2,5,10]`, `reuseBase`, `auditProbesPerFold 1`) | guide step | roster | streams × bars (maxBars) | folds | conc. | wall | verdict |
+| --- | --- | ---: | --- | ---: | ---: | ---: | --- |
+| `20260924T204439-seed1` | 3a **P2** | 14 (11 active, 1 inert, 2 n/a) | 8 × 200 | 72 | 1 | 32.6 min | keep-off — best `sig-momentum` fails **only** the dependence-adjusted DSR |
+| `20260924T212055-seed1` | 3b **P1** | 4 (all live) | 8 × 600 | 288 | 1 | 68.9 min | keep-off — `bench-linear` is the only MCS₉₀ survivor; nothing beats the base rate |
+| `20260924T223701-seed1` | 3c **P3** | 5 (all live) | **1 × 2000 — OFF-SPEC** | 129 | 1 | 101.9 min | **P3 unmeasured** (single stream, 1h) |
+| `20260925T045808-seed1` | 3d **P4** | 14 (12 active, 2 n/a) | 8 × 600 | 288 | 1 | 6 h 31 min | keep-off; cadence grid reproduces §16.3; **carry absent — OFF-SPEC** |
+| `20260925T113330-seed1` | 3e **full** | 14 (12 active, 2 n/a) | 8 × 600 | 288 | 4 | 4 h 30 min | keep-off (full roster + `nextRun` sizing) |
+
+### 17.1 What reproduced exactly
+
+- **§16.3's cadence grid, to 4 dp.** Run 3d's `configurationRobust` (8×600 roster, `cadences
+  [10,15,30]`) gives `sig-momentum` adjDSR **0.8867 / 0.7736 / 0.8271** and `sig-accel`
+  **0.9017 / 0.8608 / 0.8608** at cadences 10/15/30 — **0/3 passes each** — with `sig-range`
+  0.4856/0.2611/0.3589 and `sig-agreement` 0.3353/0.2113/0.2920. This matches §16.3's published
+  table exactly. The cadence-15 restatement (the scored grid) reproduces the scored pooled Sharpe
+  exactly, which is the guide's "nothing else moved" check.
+- **§16.2's benchmark arms, to 5 dp.** Run 3b gives base-rate model Brier **0.25296** / acc 0.5005,
+  ridge **0.25020** / 0.5196 / `brierSkill −0.0008` / `accuracySkill +0.0191`, MLP **0.27431** /
+  0.5035 / `−0.0972`, pooled OOS bars **4032**, and the MCS₉₀ **`{bench-linear}`** with `bench-mlp`,
+  `bench-base-rate` and the controller baseline eliminated at p **0.001 / 0.020 / 0.023**. All
+  match §16.2.
+- **3d and 3e are byte-identical on every scored number.** `baseline.pooledMetrics` and all 14
+  `candidates[*].pooledMetrics` are identical between the **concurrency-1** run *with* `--cadences`
+  (3d) and the **concurrency-4** run *without* it (3e). That is two certificates in one comparison:
+  (i) `--cadences` is **pure post-processing** and moves no scored number (P2's design claim), and
+  (ii) the parallel fold dispatch is **deterministic** (same seed, same CRN, concurrency 1 vs 4) —
+  the property `BUGS.md` #68 had threatened.
+- **The vacuity audit still catches degenerate models.** `bench-base-rate` (a constant forecaster) is
+  `vacuous: true`, `reachable: false`, **8 violations** in 3b; `sig-reversal-xs` is `vacuous: true`,
+  `reachable: false`, **1 violation** in 3c. The gate refuses both (`candidateAudit` hurdle in 3c).
+
+### 17.2 3a (P2): both flags applied — the exposure control is verdict-neutral, and the edge survives it
+
+`report.configurationRobust.cadences === [10,15,30]` and `report.exposureMatched` are both present,
+so the two P2 flags ran. **Cadence grid at 200 bars** (0/3 for every arm): `sig-momentum`
+0.8398 / 0.9129 / 0.8697, `sig-accel` 0.4092 / 0.3241 / 0.1492, `sig-autocorr` 0.7246 / 0.6184 /
+0.7066, `sig-volume` 0.5444 / 0.2852 / 0.1889.
+
+**Exposure-matched A/B** (both families forced to a common in-market share, pointwise dead zone).
+The signal edge is not an exposure artefact — matched, `sig-momentum` still earns **+1.6556** net
+Sharpe (raw +2.1806) and `sig-autocorr` **+1.8243**:
+
+| candidate | raw base/cand in-market share | matched base/cand share | candidate net SR raw → matched | candidate adjDSR raw → matched | matched promote |
+| --- | --- | --- | ---: | ---: | --- |
+| `sig-momentum` | 0.5204 / 0.9046 | 0.4880 / 0.4833 | +2.1806 → **+1.6556** | 0.9129 → **0.9019** | false |
+| `sig-autocorr` | 0.5204 / 0.9093 | 0.4880 / 0.4852 | +1.7875 → **+1.8243** | 0.6184 → 0.6574 | false |
+| `sig-volume` | 0.5204 / 0.8630 | 0.4880 / 0.4815 | +1.0978 → **+1.1759** | 0.2852 → 0.2682 | false |
+| `sig-accel` | 0.5204 / 0.8639 | 0.4880 / 0.4759 | +1.3440 → **+0.9146** | 0.3241 → 0.2246 | false |
+| `sig-vol-regime` | 0.5204 / 0.8880 | 0.4880 / 0.4833 | +0.5360 → **+0.7744** | 0.1093 → 0.1263 | false |
+
+Every matched candidate still fails the adjusted-DSR floor, and `carry` is absent (no P4 flag).
+**`matchedWithinTolerance` is `false` for all 10 active candidates**: the pointwise dead-zone rule
+lands both arms at ≈0.485 while the target (the minimum of the two families' scored shares) is
+0.5185–0.5204, so it undershoots by ≈0.032 > tol 0.02. This is exactly the documented
+`BUGS.md` #63 behaviour (a pointwise rule can only select by threshold), not a verdict change —
+but note the flag fires for *every* candidate at this window, so it carries no discriminating
+information there. (Compare §16.3's 600-bar matched row, where `sig-momentum`'s adjDSR fell
+0.9129 → 0.9019 here vs 0.7736 → 0.5587 there: the 200-bar window *overstates* the arm, which is
+why 3a is the sanity run and 3e is the verdict.)
+
+### 17.3 3b (P1): the negative branch reproduces — controller-baseline discrepancy RECONCILED (model-path mismatch)
+
+The testSize-15 benchmark readout reproduces every arm (see §17.1) but **not** the controller-
+baseline row: 3b's `forecast.byId.baseline` is Brier **0.2522** / `brierSkill −0.0086` / accuracy
+**0.4978**, whereas §16.2's table (and the §7-part-1 audit re-derivation) records
+**0.25382 / −0.0153 / 0.4866**. The *trading* baseline is identical in both (`netSharpe −0.1147`,
+`breakEven −2.58 bps`, `turnover 31.1`), so the difference is confined to the calibration/forecast
+readout. Both point the same way (skill < 0), so **no verdict moves**.
+
+**Resolution (round 30, closes `TODO.md` 101).** The two runs are on **different model paths**, not
+different code states. The round-29 P1 runs used `model: 'bare'` (`round29-IMPLEMENTATION.md` §"runs
+reproduced offline": "the `model: 'bare'` runs used for the P1/P3 rosters"), so §16.2's baseline row
+is the **bare HiveMind** — the table says so literally ("bare HiveMind (baseline)"). The acceptance
+re-run 3b's command (`round29-TESTING.md` §3) omits `--model`, which defaults to `--model=controller`,
+so its baseline row is the **shipped controller**. This is exactly the observed signature:
+
+- every **benchmark** arm matches to 5 dp (base-rate `0.25296`/`−0.0118`/`0.5005`, ridge
+  `0.25020`/`−0.0008`/`0.5196`, MLP `0.27431`/`−0.0972`/`0.5035`) — a benchmark reads the feature
+  vector through its own factory and is **model-path-independent**, so it cannot move when the model
+  path changes;
+- only the **baseline** row moves — it is the one arm whose factory is chosen by `--model`;
+- the **trading** result is unchanged because at this configuration the two paths emit the same
+  position series (the controller wrapper is effectively a pass-through here), while the journaled
+  *confidence* — and hence the Brier/accuracy — differs.
+
+Not a defect and not non-determinism: within the batch the controller baseline is reproducible
+(3b, 3d and 3e — all `--model=controller` 8×600 — all read `brier 0.2521533 / skill −0.0086142 /
+accuracy 0.4977679` to the last digit). The corrected P1 command therefore carries `--model=bare`
+for an apples-to-apples §16.2 comparison (`round29-TESTING.md` §3/§5). No number in §16.2 changes;
+the row is a *model-path* label, now stated.
+
+Everything else is as in §16: the MCS₉₀ is `{bench-linear}` alone (it eliminates the MLP, the
+base-rate model **and** the controller baseline), `bench-linear`'s `brierSkill` is **−0.0008** (≈0 —
+no skill vs the base rate), and every arm's break-even is ≤ 1.54 bps, so nothing approaches a
+promotion on this roster. `bench-base-rate`'s audit is `vacuous` (expected for a constant forecaster).
+
+### 17.4 3c (P3): OFF-SPEC — P3 remains unmeasured
+
+`--files="$CANDLES_15M"` expanded to an **empty** string, so `analyze.js` silently fell back to the
+default single-file dataset: the run scored **1 stream** (`src/candles.jsonl`, 1h) over 2000 bars —
+**not** the 8-symbol 15m basket §16.4 measures. Consequently: §16.4's Step-3 pooled measurement is
+not reproduced; the cross-sectional arm `sig-reversal-xs` reads a panel that does not exist and
+emits **nothing** (`netSharpe 0`, `turnover 0`, `nonZeroFraction 0`); and the run's *narrative*
+fields mislead — `sig-reversal-xs` is `liveness: "live"`, is the `familywise.best` (`statistic 0` >
+every negative arm) and the MCS₉₀ survivor, purely because an all-zero forecast has the lowest Brier
+loss. The vacuity audit and the `candidateAudit` hurdle correctly refuse it (`vacuous: true`,
+`reachable: false`, 1 violation), so no promotion is manufactured. On the single 1h stream **all
+four reversal arms are negative** (reversal −0.127, −4 −0.107, −vol −0.156, −xs 0), consistent with
+§16.4's 1h finding that reversal loses at 1h. **The P3 acceptance gate is unmeasured; re-run with
+the 8 × `src/data/candles_<sym>_15m.jsonl`.**
+
+### 17.5 3d (P4): OFF-SPEC — P4 remains unmeasured
+
+`--carry-files="$FUND"` expanded to empty, so the sleeve was never appended: `report.carry` is
+**`null`**, `dependence.streams` is **8** (no `dependenceWithoutExtras`), and **every** cadence
+evaluation reports `panelStreams: 0`. The run therefore *did* execute the P2 cadence chain
+(reproducing §16.3, §17.1) but measured **nothing** about P4. **The P4 acceptance gate is
+unmeasured; re-run with the 8 × `src/data/funding_<sym>_8h.jsonl`.**
+
+### 17.6 3e (full verdict): the round's decisive fresh run
+
+The 8×600, 288-fold, 14-roster run at concurrency 4 — the same design as 3d without the opt-in
+flags, at full width. Scored baseline: `netSharpe **−0.1147**`, `turnover 31.1`,
+`breakEven **−2.58 bps**`; audit clean/reachable (229/288). The run is **underpowered for the
+baseline's own (null) effect** (`power.mdeSharpeDependent 1.044 > 1`, `varianceInflation 4.87`) yet
+**powered for the featured candidate** (`decision.nextRun.mde95Dependent 0.902` vs an observed
+1.085). Candidate table (cost 0):
+
+| candidate | net Sharpe | break-even (bps) | turnover | adjDSR | paired p (1-sided) | tightest gated hurdle |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `sig-momentum` | **+1.0848** | **14.64** | 810 | 0.7736 | 0.0293 | `minDsrAdjusted` |
+| `sig-accel` | **+1.0194** | **11.57** | 861 | 0.8608 | 0.0493 | `minDsrAdjusted` |
+| `sig-range` | +0.4490 | 5.57 | 833 | 0.2611 | — | `meanSharpeDelta` |
+| `sig-agreement` | +0.3912 | 3.71 | 1025 | 0.2113 | — | `meanSharpeDelta` |
+| `sig-volume` | −0.0008 | −0.01 | 582 | 0.0478 | — | `clusterStability` |
+| `sig-autocorr` | −0.0996 | −1.23 | 793 | 0.0306 | — | `meanSharpeDelta` |
+| `pca-hash` | −0.1104 | −2.48 | 31 | 0.0306 | — | `pairedSharpeDifference` |
+| `surprise` | −0.0284 | −0.67 | 31 | 0.0433 | — | `clusterStability` |
+| `homeostasis` | −0.1627 | −3.52 | 31 | 0.0239 | — | `dsrDelta` |
+| `sig-vol-regime` | −0.3135 | −4.34 | 678 | 0.0071 | — | `dsrDelta` |
+| `sig-frac-momentum` | −0.4185 | −1.67 | 2092 | 0.0119 | — | `dsrDelta` |
+
+- **Dependence is the wall.** The featured candidate panel: `designEffect 3.624`,
+  `effectiveBars 1192`, `meanPairwiseStreamCorr 0.5196`, `equicorrelationDesignEffect 4.637`,
+  `effectiveStreams **1.725 of 8**`. `sig-momentum`'s paired cluster difference is 1.199
+  (SE 0.614, **p 0.0293**) and leave-one-cluster-out stable (fraction positive 1, worst 0.852) —
+  but its `dsrAdjusted` is 0.7736, so the **only binding gate** is the dependence-adjusted DSR
+  floor. `sig-accel` is identical in kind (p 0.0493, adjDSR 0.8608).
+- **Cost ladder.** `sig-momentum` clears `{0,2,5,10}` bps (`nextRun.clearsBps` all true); its
+  adjDSR falls 0.7736 → 0.6446 → 0.4317 → 0.1594. `sig-accel` 0.8608 → 0.7142 → 0.4262 → 0.0908.
+  Nothing crosses 0.95 at any cost.
+- **Family-wise.** SPA p **0.473**, best `sig:momentum`, `rejected: []`; `familyCorrelation`
+  `meanPairwiseExcessCorr 0.0996`, max pair `sig-agreement`~`sig-range` r **0.810**,
+  `effectiveTrials **5.51 of 11**`.
+- **Forecast.** The controller family (baseline, `surprise`, `homeostasis`, `pca-hash`) is an
+  MCS tie at 90/95% — every `brierSkill` is −0.0066…−0.0086, i.e. **no skill** (`status`
+  `'base-rate'`). The signal family's MCS eliminates `sig-range`, `sig-agreement`, `sig-momentum`,
+  `sig-autocorr` — but a signal's journaled "confidence" is a **normalised z-score, not a
+  calibrated probability**, so this is a Brier-loss artefact of treating z-scores as probabilities,
+  **not** an economic statement (the two eliminated *positive-Sharpe* arms are the round's best;
+  `dm.available` is `false` cross-kind by design, R27-5).
+- **`nextRun` (sizing).** Paired clusters needed **28** (have 36) at the measured difference and
+  **60** at 80% power; cheapest flip = "magnitude"; `barsToDetectDependent **3512**`; a same-shaped
+  rerun at 2× folds projects ≈ **32.4M ms (~9 h)** at the measured per-fold cost. Parallelism bought
+  only **1.45×** (concurrency 1: 6 h 31 m; 4: 4 h 30 m) because the in-process look-ahead refits do
+  not parallelise.
+
+### 17.7 What the batch establishes — good, bad, bugs, and where to invest
+
+**Good.** The pipeline runs end-to-end, deterministically, and **reproducibly from a fresh run**
+(P1's arms to 5 dp, P2's cadence grid to 4 dp), `--cadences` is proven pure post-processing, parallel
+determinism is re-established, the vacuity audit + `candidateAudit` correctly refuse degenerate arms,
+and both P2 flags are wired and reachable. There are no crashes and no warning/error log lines.
+
+**The signal edge is real and cost-robust but dependence-limited.** `sig-momentum`'s break-even
+(14.6 bps) clears any realistic 1h taker cost, its edge survives equal-exposure matching (matched
+Sharpe 1.66 at 200 bars; 0.90 adjDSR vs 0.91 raw), and its paired difference is significant and
+leave-one-out stable. The binding constraint is **always** the dependence-adjusted DSR — effective
+streams ≈1.7 of 8, because the basket is essentially one factor — not the edge's magnitude or its
+cost.
+
+**Bad.** (i) The controller baseline is negative (`−0.1147`) and its confidence/model are unskilful
+(forecast `brierSkill` ≈ −0.009; model `status 'base-rate'`); (ii) **every** candidate fails the
+dependence-adjusted DSR floor at every cost level and every cadence; (iii) the run is underpowered
+for a baseline-sized effect (variance inflation **4.87×**) because the 8 crypto streams are highly
+correlated; (iv) nothing promotes (SPA p 0.47); (v) the two acceptance runs meant to test the *new
+data* (P3/P4) were invoked with empty file variables and measured the wrong experiment.
+
+**Bugs / defects found by the batch** (all recorded in `BUGS.md`, none in the scored arithmetic):
+**#69** — an empty `--files=` (or `--carry-files=`) silently falls back to the default dataset (or
+silently drops the sleeve) instead of erroring, so a mistyped/empty shell variable yields a
+plausible-looking off-spec run (exactly the 3c/3d failure mode); **#70** — a panel-requiring signal
+(`crossSectionalReversal`) on a panel-less run is degenerate yet still labelled `liveness: "live"`
+and can be chosen as the `familywise.best`/MCS survivor (the vacuity audit and `candidateAudit`
+hurdle refuse it, but the status fields do not); plus the §17.3 controller-baseline forecast-row
+discrepancy (reconciliation item, not a defect).
+
+**Invest** (evidence-backed): the **signal family**, above all `sig-momentum` (top: break-even
+14.6 bps, matched-exposure robust) and `sig-accel` (11.6 bps, adjDSR 0.861); the **funding/carry
+sleeve** as a *breadth* purchase (the one measured independence lever — G-C does not cross but the
+correlation/effective-streams gain is real); **decorrelated / non-crypto data and more independent
+folds** (the binding constraint: effective streams 1.7 of 8, variance inflation 4.9×); **K-pruning**
+(the honest-K restatement is what killed the round-27 `sig-accel` promotion); and **parallelising the
+audit probes** (concurrency bought only 1.45×).
+
+**Drop / park** (evidence-backed): `pca-hash` (economically nil — ΔSharpe 0.004, p 0.19,
+`foldWinFraction` 0.01; inert at 200 bars, 6/288 differing folds at 600); `sig-frac-momentum`
+(−0.42 at turnover 2092 — worst in every dimension); `sig-vol-regime` and `homeostasis` (negative at
+600 bars); `surprise` (≈baseline, not significant); `sig-autocorr` (regime-dependent: **+1.79 at
+200 bars vs −0.10 at 600** — not robust); `bench-mlp` (worst forecaster); `bench-base-rate`
+(un-auditable — keep only as the base-rate reference); and `multiprobe`/`querymod` (never scored on
+the controller — remove from the roster or re-scope). The **reversal family** is negative on 1h (3c)
+and economically inaccessible on 15m (§16.4) — park pending the maker-fee/queue model (TODO 94).
+Corrected re-runs and the follow-ups are recorded in `TODO.md` 98–101.

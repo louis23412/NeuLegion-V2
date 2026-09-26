@@ -364,3 +364,51 @@ test('the analyze CLI documents and threads the R27-9 flag surface', () => {
         fs.rmSync(root, { recursive: true, force: true });
     }
 });
+
+test('the analyze CLI refuses a present-but-empty list flag (--files/--carry-files/--symbols/--variants/--seeds) (BUGS.md #69)', () => {
+    // Round 30: `--files=` used to be indistinguishable from an absent flag, so a
+    // shell typo silently scored the DEFAULT dataset and the run read as if the
+    // intended experiment had happened. The corrected P3/P4 acceptance commands
+    // (`round29-TESTING.md` §5) depend on this refusal, because their off-spec runs
+    // expanded empty shell variables. The audit pass extends the same guard to the
+    // other list flags whose empty form has no documented meaning.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neulegion-analyze-69-'));
+    try {
+        const cases = [
+            ['--file=', /--file= was provided but names no files/],
+            ['--files=', /--files= was provided but names no files/],
+            ['--files=,', /--files= was provided but names no files/],
+            ['--carry-files=', /--carry-files= was provided but names no files/],
+            ['--symbols=', /--symbols= was provided but names no files/],
+            ['--variants=', /--variants= was provided but names no files/],
+            ['--seeds=', /--seeds= was provided but names no files/],
+        ];
+        for (const [flag, re] of cases) {
+            const res = spawnSync(process.execPath, [
+                analyzePath, flag, '--model=controller', '--variants=sig-momentum',
+                '--bars=60', '--train=20', '--test=5', '--audit=0', '--progress-ms=-1',
+            ], {
+                cwd: projectRoot,
+                encoding: 'utf8',
+                env: { ...process.env, NEULEGION_STATE: path.join(root, `state-${flag.replace(/[^a-z]/gi, '')}`) },
+            });
+            assert.notEqual(res.status, 0, `${flag} should have failed but exited 0`);
+            assert.match(res.stderr + res.stdout, re, `${flag} did not report the BUGS.md #69 refusal`);
+        }
+
+        // The guard must not over-reject: a non-empty --files list still runs.
+        const file = path.join(root, 'candles.jsonl');
+        writeCandles(file, 90);
+        const ok = spawnSync(process.execPath, [
+            analyzePath, `--files=${file}`, '--model=controller', '--variants=sig-momentum',
+            '--bars=90', '--train=20', '--test=5', '--audit=0', '--progress-ms=-1',
+        ], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: path.join(root, 'state-ok') },
+        });
+        assert.equal(ok.status, 0, `a non-empty --files run exited ${ok.status}:\n${ok.stderr}`);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});

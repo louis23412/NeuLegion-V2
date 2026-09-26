@@ -11,5 +11,5 @@ test('analysis: performance/splits/labels/uniqueness exactness', async () => {
     const result = await run();
     const failures = result.failures || [];
     assert.equal(result.failed, 0, failures.map((f) => `${f.name}: ${f.detail}`).join('\n'));
-    assert.equal(result.total, 621, `expected exactly the 621 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
+    assert.equal(result.total, 638, `expected exactly the 638 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
 });

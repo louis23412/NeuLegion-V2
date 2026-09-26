@@ -292,4 +292,23 @@ fixed three stale counts in the `test/lock-registry.js` notes (`guards` 58→65,
 authority file. All 30 browser entries are green at **2558 / 0**, with `golden.test.js` 23/0
 (DoD item 8).
 
+**Operator acceptance batch (2026-09-24/25; `RUN-ANALYSIS.md` §17, `round29-IMPLEMENTATION.md` §8).**
+The five `round29-TESTING.md` §3 runs came back. **Reproduced:** P1's benchmark arms (to 5 dp, MCS₉₀
+`{bench-linear}`, negative branch confirmed), P2's cadence grid (to 4 dp: `sig-momentum`
+0.887/0.774/0.827, `sig-accel` 0.902/0.861/0.861, 0/3 each), and `--cadences`/`--exposure-match` as
+pure post-processing (the concurrency-1 run *with* `--cadences` is byte-identical to the
+concurrency-4 run *without* it on every scored number — which also re-establishes parallel
+determinism after `BUGS.md` #68). Both P2 flags are reachable and the exposure control is
+verdict-neutral (nothing promotes; the signal edge survives matching at +1.66 matched Sharpe).
+**Unmeasured:** **P3 (3c) and P4 (3d) were invoked with empty `$CANDLES_15M` / `$FUND` variables**, so
+they silently ran the default 1h single file / no sleeve; their acceptance gates are still open and
+must be re-run (`round29-TESTING.md` §5). The full-roster run (3e) confirms the round's diagnosis:
+`sig-momentum` +1.0848 / break-even 14.6 bps and `sig-accel` +1.0194 / 11.6 bps, but **every**
+candidate fails the dependence-adjusted DSR (effective streams **1.7 of 8**) and nothing promotes
+(SPA p 0.473). Two findings from the batch are logged (`BUGS.md` #69: an empty `--files=` /
+`--carry-files=` falls back silently instead of erroring; #70: a panel-requiring signal on a
+panel-less run is degenerate yet labelled `live` and can be selected `familywise.best`), plus one
+reconciliation item (§16.2's controller-baseline forecast row — trading identical, so no verdict
+moves). **Invest/drop guidance** is in `RUN-ANALYSIS.md` §17.7.
+
 

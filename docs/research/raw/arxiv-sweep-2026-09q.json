@@ -1,0 +1,490 @@
+{
+  "generated": "2026-09-25",
+  "purpose": "Round-30 sweep — what PROVED WORKING in the project (momentum/trend, carry/funding, evaluation robustness, decorrelation/breadth, costs/vol-targeting). Relevance-sorted arXiv queries; only relevant hits kept.",
+  "queries": {
+    "tsmom": {
+      "kept": [
+        "1702.07374v1 [2017-02-07] Time series momentum and contrarian effects in the Chinese stock market",
+        "1904.04912v3 [2019-04-09] Enhancing Time Series Momentum Strategies Using Deep Neural Networks",
+        "2106.08420v4 [2021-06-15] Trend-Following Strategies via Dynamic Momentum Learning",
+        "2406.08742v1 [2024-06-13] DeepUnifiedMom: Unified Time-series Momentum Portfolio Construction via Multi-Task Learning with Multi-Gate Mixture of Experts",
+        "2112.08534v3 [2021-12-16] Trading with the Momentum Transformer: An Intelligent and Interpretable Architecture",
+        "2607.00475v1 [2026-07-01] End-to-End Parametric Portfolio Policies for Cross-Asset Futures Timing: When Do AI Models Beat Simple Rules?",
+        "1911.10107v1 [2019-11-22] Deep Reinforcement Learning for Trading"
+      ]
+    },
+    "xsmom": {
+      "kept": [
+        "2302.10175v1 [2023-02-20] Spatio-Temporal Momentum: Jointly Learning Time-Series and Cross-Sectional Strategies",
+        "1707.05552v1 [2017-07-18] Wax and wane of the cross-sectional momentum and contrarian effects: Evidence from the Chinese stock markets",
+        "2012.07149v1 [2020-12-13] Building Cross-Sectional Systematic Strategies By Learning to Rank",
+        "2406.08448v1 [2024-06-12] Heterogeneous Beliefs Model of Stock Market Predictability",
+        "2510.26228v1 [2025-10-30] ChatGPT in Systematic Investing -- Enhancing Risk-Adjusted Returns with LLMs"
+      ]
+    },
+    "fundingrate": {
+      "kept": [
+        "1912.03270v1 [2019-11-26] BitMEX Funding Correlation with Bitcoin Exchange Rate",
+        "2506.08573v1 [2025-06-10] Designing funding rates for perpetual futures in cryptocurrency markets",
+        "2601.10812v1 [2026-01-15] Optimal Liquidation of Perpetual Contracts",
+        "2209.03307v1 [2022-09-07] A primer on perpetuals"
+      ]
+    },
+    "voltarget": {
+      "kept": [
+        "2603.01298v2 [2026-03-01] Single-Asset Adaptive Leveraged Volatility Control",
+        "2511.08571v1 [2025-11-11] Forecast-to-Fill: Benchmark-Neutral Alpha and Billion-Dollar Capacity in Gold Futures (2015-2025)",
+        "2204.02757v2 [2022-04-06] Risk budget portfolios with convex Non-negative Matrix Factorization"
+      ]
+    },
+    "momcrash": {
+      "kept": [
+        "2604.09060v2 [2026-04-10] Taming the Black Swan: A Momentum-Gated Hierarchical Optimisation Framework for Asymmetric Alpha Generation"
+      ]
+    },
+    "trend": {
+      "kept": [
+        "2009.12155v1 [2020-09-25] A Decade of Evidence of Trend Following Investing in Cryptocurrencies",
+        "1404.3274v1 [2014-04-12] Two centuries of trend following",
+        "2109.08242v1 [2021-09-16] Trading styles and long-run variance of asset prices",
+        "2412.14361v2 [2024-12-18] Refining and Robust Backtesting of A Century of Profitable Industry Trends",
+        "2507.15876v1 [2025-07-17] Re-evaluating Short- and Long-Term Trend Factors in CTA Replication: A Bayesian Graphical Approach"
+      ]
+    },
+    "perp": {
+      "kept": [
+        "2212.06888v7 [2022-12-13] Fundamentals of Perpetual Futures",
+        "2310.11771v2 [2023-10-18] Perpetual Futures Pricing",
+        "2501.09404v1 [2025-01-16] Agent-Based Simulation of a Perpetual Futures Market",
+        "2602.15182v1 [2026-02-16] Autodeleveraging as Online Learning",
+        "2512.01112v3 [2025-11-30] Autodeleveraging: Impossibilities and Optimization",
+        "2601.06084v1 [2025-12-31] Who sets the range? Funding mechanics and 4h context in crypto markets"
+      ]
+    },
+    "cryptomom": {
+      "kept": [
+        "1904.00890v1 [2019-04-01] Momentum and liquidity in cryptocurrencies",
+        "2211.13274v1 [2022-11-23] Investor base and idiosyncratic volatility of cryptocurrencies",
+        "1802.03708v8 [2018-02-11] A Time-Varying Network for Cryptocurrencies"
+      ]
+    },
+    "mktneutral": {
+      "kept": [
+        "1911.00919v1 [2019-11-03] The Reactive Beta Model",
+        "1608.08268v1 [2016-08-29] On the Market-Neutrality of Optimal Pairs-Trading Strategies",
+        "2607.18001v1 [2026-07-20] AlphaZeroBeta: Deep Reinforcement Learning for Market-Neutral Portfolios",
+        "2412.12350v1 [2024-12-16] A multi-factor market-neutral investment strategy for New York Stock Exchange equities"
+      ]
+    },
+    "overfit": {
+      "kept": [
+        "2209.05559v6 [2022-09-12] Deep Reinforcement Learning for Cryptocurrency Trading: Practical Approach to Address Backtest Overfitting",
+        "1408.1159v2 [2014-08-06] Determining Optimal Trading Rules without Backtesting",
+        "1905.05023v1 [2019-05-01] Avoiding Backtesting Overfitting by Covariance-Penalties: an empirical investigation of the ordinary and total least squares cases",
+        "2605.23955v4 [2026-05-11] From Accuracy to Auditability: A Survey of Determinism in Financial AI Systems",
+        "2607.12455v3 [2026-07-14] EVOQUANT: Self-Evolving Verifier-Guided Strategy Optimization for Robust Quantitative Trading",
+        "2008.09481v1 [2020-08-12] Learning low-frequency temporal patterns for quantitative trading"
+      ]
+    },
+    "breadth": {
+      "kept": [
+        "2506.20385v3 [2025-06-25] Empirical estimator of diversification quotient",
+        "2303.01657v1 [2023-03-03] An Optimization Study of Diversification Return Portfolios",
+        "2411.06080v1 [2024-11-09] The lexical ratio: A new perspective on portfolio diversification"
+      ]
+    },
+    "volscale": {
+      "kept": [
+        "2308.11294v1 [2023-08-22] Network Momentum across Asset Classes",
+        "1904.04912v3 [2019-04-09] Enhancing Time Series Momentum Strategies Using Deep Neural Networks",
+        "2005.13665v3 [2020-05-27] Deep Learning for Portfolio Optimization"
+      ]
+    },
+    "turncost": {
+      "kept": [
+        "1904.08925v1 [2019-04-11] The impact of proportional transaction costs on systematically generated portfolios",
+        "2412.11575v2 [2024-12-16] Cost-aware Portfolios in a Large Universe of Assets",
+        "2312.05169v2 [2023-12-08] Onflow: a model free, online portfolio allocation algorithm robust to transaction fees",
+        "1709.06296v2 [2017-09-19] Large-Scale Portfolio Allocation Under Transaction Costs and Model Uncertainty"
+      ]
+    },
+    "carryCrypto": {
+      "kept": [
+        "2405.15461v5 [2024-05-24] Optimal market-neutral currency trading on the cryptocurrency platform"
+      ]
+    },
+    "regimeMom": {
+      "kept": [
+        "2105.13727v3 [2021-05-28] Slow Momentum with Fast Reversion: A Trading Strategy Using Deep Learning and Changepoint Detection",
+        "1402.3030v2 [2014-02-13] Information ratio analysis of momentum strategies",
+        "2112.08534v3 [2021-12-16] Trading with the Momentum Transformer: An Intelligent and Interpretable Architecture"
+      ]
+    },
+    "ensembleTrade": {
+      "kept": [
+        "2007.11098v1 [2020-07-14] Generating Trading Signals by ML algorithms or time series ones?",
+        "2010.03315v4 [2020-10-07] Tail-risk protection: Machine Learning meets modern Econometrics",
+        "1901.01751v3 [2019-01-07] Generative Adversarial Networks for Financial Trading Strategies Fine-Tuning and Combination",
+        "2510.22348v1 [2025-10-25] Causal and Predictive Modeling of Short-Horizon Market Risk and Systematic Alpha Generation Using Hybrid Machine Learning Ensembles",
+        "2604.04812v1 [2026-04-06] SysTradeBench: An Iterative Build-Test-Patch Benchmark for Strategy-to-Code Trading Systems with Drift-Aware Diagnostics",
+        "2404.08935v1 [2024-04-13] Developing An Attention-Based Ensemble Learning Framework for Financial Portfolio Optimisation"
+      ]
+    }
+  },
+  "kept": {
+    "1702.07374v1": {
+      "published": "2017-02-07",
+      "title": "Time series momentum and contrarian effects in the Chinese stock market",
+      "summary": "This paper concentrates on the time series momentum or contrarian effects in the Chinese stock market. We evaluate the performance of the time series momentum strategy applied to major stock indices in mainland China and explore the relation between the performance of time series momentum strategies"
+    },
+    "1904.04912v3": {
+      "published": "2019-04-09",
+      "title": "Enhancing Time Series Momentum Strategies Using Deep Neural Networks",
+      "summary": "While time series momentum is a well-studied phenomenon in finance, common strategies require the explicit definition of both a trend estimator and a position sizing rule. In this paper, we introduce Deep Momentum Networks -- a hybrid approach which injects deep learning based trading rules into the"
+    },
+    "2106.08420v4": {
+      "published": "2021-06-15",
+      "title": "Trend-Following Strategies via Dynamic Momentum Learning",
+      "summary": "Time series momentum strategies are widely applied in the quantitative financial industry and its academic research has grown rapidly since the work of Moskowitz, Ooi and Pedersen (2012). However, trading signals are usually obtained via simple observation of past return measurements. In this articl"
+    },
+    "2406.08742v1": {
+      "published": "2024-06-13",
+      "title": "DeepUnifiedMom: Unified Time-series Momentum Portfolio Construction via Multi-Task Learning with Multi-Gate Mixture of Experts",
+      "summary": "This paper introduces DeepUnifiedMom, a deep learning framework that enhances portfolio management through a multi-task learning approach and a multi-gate mixture of experts. The essence of DeepUnifiedMom lies in its ability to create unified momentum portfolios that incorporate the dynamics of time"
+    },
+    "2112.08534v3": {
+      "published": "2021-12-16",
+      "title": "Trading with the Momentum Transformer: An Intelligent and Interpretable Architecture",
+      "summary": "We introduce the Momentum Transformer, an attention-based deep-learning architecture, which outperforms benchmark time-series momentum and mean-reversion trading strategies. Unlike state-of-the-art Long Short-Term Memory (LSTM) architectures, which are sequential in nature and tailored to local processing, an attention"
+    },
+    "2607.00475v1": {
+      "published": "2026-07-01",
+      "title": "End-to-End Parametric Portfolio Policies for Cross-Asset Futures Timing: When Do AI Models Beat Simple Rules?",
+      "summary": "Timing-based tilts across asset classes can drive much of the risk and return of a diversified cross-asset portfolio. The standard approach forecasts returns and then optimizes weights. We instead study an end-to-end AI-based policy that maps market states directly to portfolio weights, and we then "
+    },
+    "1911.10107v1": {
+      "published": "2019-11-22",
+      "title": "Deep Reinforcement Learning for Trading",
+      "summary": "We adopt Deep Reinforcement Learning algorithms to design trading strategies for continuous futures contracts. Both discrete and continuous action spaces are considered and volatility scaling is incorporated to create reward functions which scale trade positions based on market volatility. We test o"
+    },
+    "2302.10175v1": {
+      "published": "2023-02-20",
+      "title": "Spatio-Temporal Momentum: Jointly Learning Time-Series and Cross-Sectional Strategies",
+      "summary": "We introduce Spatio-Temporal Momentum strategies, a class of models that unify both time-series and cross-sectional momentum strategies by trading assets based on their cross-sectional momentum features over time. While both time-series and cross-sectional momentum strategies are designed to systema"
+    },
+    "1707.05552v1": {
+      "published": "2017-07-18",
+      "title": "Wax and wane of the cross-sectional momentum and contrarian effects: Evidence from the Chinese stock markets",
+      "summary": "This paper investigates the time-varying risk-premium relation of the Chinese stock markets within the framework of cross-sectional momentum and contrarian effects by adopting the Capital Asset Pricing Model and the French-Fama three factor model. The evolving arbitrage opportunities are also studie"
+    },
+    "2012.07149v1": {
+      "published": "2020-12-13",
+      "title": "Building Cross-Sectional Systematic Strategies By Learning to Rank",
+      "summary": "The success of a cross-sectional systematic strategy depends critically on accurately ranking assets prior to portfolio construction. Contemporary techniques perform this ranking step either with simple heuristics or by sorting outputs from standard regression or classification models, which have be"
+    },
+    "2406.08448v1": {
+      "published": "2024-06-12",
+      "title": "Heterogeneous Beliefs Model of Stock Market Predictability",
+      "summary": "This paper proposes a theory of stock market predictability patterns based on a model of heterogeneous beliefs. In a discrete finite time framework, some agents receive news about an asset's fundamental value through a noisy signal. The investors are heterogeneous in that they have different beliefs"
+    },
+    "2510.26228v1": {
+      "published": "2025-10-30",
+      "title": "ChatGPT in Systematic Investing -- Enhancing Risk-Adjusted Returns with LLMs",
+      "summary": "This paper investigates whether large language models (LLMs) can improve cross-sectional momentum strategies by extracting predictive signals from firm-specific news. We combine daily U.S. equity returns for S&amp;P 500 constituents with high-frequency news data and use prompt-engineered queries to "
+    },
+    "1912.03270v1": {
+      "published": "2019-11-26",
+      "title": "BitMEX Funding Correlation with Bitcoin Exchange Rate",
+      "summary": "This paper examines the relationship between Inverse Perpetual Swap contracts, a Bitcoin derivative akin to futures and the margin funding interest rates levied on BitMEX. This paper proves the Heteroskedastic nature of funding rates and goes onto establish a causal relationship between the funding "
+    },
+    "2506.08573v1": {
+      "published": "2025-06-10",
+      "title": "Designing funding rates for perpetual futures in cryptocurrency markets",
+      "summary": "In cryptocurrency markets, a key challenge for perpetual future issuers is maintaining alignment between the perpetual future price and target value. This study addresses this challenge by exploring the relationship between funding rates and perpetual future prices. Our results demonstrate that by a"
+    },
+    "2601.10812v1": {
+      "published": "2026-01-15",
+      "title": "Optimal Liquidation of Perpetual Contracts",
+      "summary": "An agent holds a position in a perpetual contract with payoff function $ψ$ and attempts to liquidate the position while managing transaction costs, inventory risk, and funding rate payments. By solving the agent's stochastic control problem we obtain a closed-form expression for the optimal trading "
+    },
+    "2209.03307v1": {
+      "published": "2022-09-07",
+      "title": "A primer on perpetuals",
+      "summary": "We consider a continuous-time financial market with no arbitrage and no transactions costs. In this setting, we introduce two types of perpetual contracts, one in which the payoff to the long side is a fixed function of the underlyers and the long side pays a funding rate to the short side, the othe"
+    },
+    "2603.01298v2": {
+      "published": "2026-03-01",
+      "title": "Single-Asset Adaptive Leveraged Volatility Control",
+      "summary": "This paper introduces a methodology for constructing a market index composed of a liquid risky asset and a liquid risk-free asset that achieves a fixed target volatility. Existing volatility-targeting strategies typically scale portfolio exposure inversely with a variance forecast, but such open-loo"
+    },
+    "2511.08571v1": {
+      "published": "2025-11-11",
+      "title": "Forecast-to-Fill: Benchmark-Neutral Alpha and Billion-Dollar Capacity in Gold Futures (2015-2025)",
+      "summary": "We test whether simple, interpretable state variables-trend and momentum-can generate durable out-of-sample alpha in one of the world's most liquid assets, gold. Using a rolling 10-year training and 6-month testing walk-forward from 2015 to 2025 (2,793 trading days), we convert a smoothed trend-mome"
+    },
+    "2204.02757v2": {
+      "published": "2022-04-06",
+      "title": "Risk budget portfolios with convex Non-negative Matrix Factorization",
+      "summary": "We propose a portfolio allocation method based on risk factor budgeting using convex Nonnegative Matrix Factorization (NMF). Unlike classical factor analysis, PCA, or ICA, NMF ensures positive factor loadings to obtain interpretable long-only portfolios. As the NMF factors represent separate sources"
+    },
+    "2604.09060v2": {
+      "published": "2026-04-10",
+      "title": "Taming the Black Swan: A Momentum-Gated Hierarchical Optimisation Framework for Asymmetric Alpha Generation",
+      "summary": "Conventional momentum strategies, despite their proven efficacy in generating alpha, frequently suffer from the \"Winner's Curse\", a structural vulnerability in which high performing assets exhibit clustered volatility and severe drawdowns during market reversals. To counteract this propensity for mo"
+    },
+    "2009.12155v1": {
+      "published": "2020-09-25",
+      "title": "A Decade of Evidence of Trend Following Investing in Cryptocurrencies",
+      "summary": "Cryptocurrency markets have many of the characteristics of 20th century commodities markets, making them an attractive candidate for trend following strategies. We present a decade of evidence from the infancy of bitcoin, showcasing the potential investor returns in cryptocurrency trend following, 2"
+    },
+    "1404.3274v1": {
+      "published": "2014-04-12",
+      "title": "Two centuries of trend following",
+      "summary": "We establish the existence of anomalous excess returns based on trend following strategies across four asset classes (commodities, currencies, stock indices, bonds) and over very long time scales. We use for our studies both futures time series, that exist since 1960, and spot time series that allow"
+    },
+    "2109.08242v1": {
+      "published": "2021-09-16",
+      "title": "Trading styles and long-run variance of asset prices",
+      "summary": "Trading styles can be classified into either trend-following or mean-reverting. If the net trading style is trend-following the traded asset is more likely to move in the same direction it moved previously (the opposite is true if the net style is mean-reverting). The result of this is to introduce "
+    },
+    "2412.14361v2": {
+      "published": "2024-12-18",
+      "title": "Refining and Robust Backtesting of A Century of Profitable Industry Trends",
+      "summary": "We revisit the long-only trend-following strategy presented in A Century of Profitable Industry Trends by Zarattini and Antonacci, which achieved exceptional historical performance with an 18.2% annualized return and a Sharpe Ratio of 1.39. While the results outperformed benchmarks, practical implem"
+    },
+    "2507.15876v1": {
+      "published": "2025-07-17",
+      "title": "Re-evaluating Short- and Long-Term Trend Factors in CTA Replication: A Bayesian Graphical Approach",
+      "summary": "Commodity Trading Advisors (CTAs) have historically relied on trend-following rules that operate on vastly different horizons from long-term breakouts that capture major directional moves to short-term momentum signals that thrive in fast-moving markets. Despite a large body of work on trend followi"
+    },
+    "2212.06888v7": {
+      "published": "2022-12-13",
+      "title": "Fundamentals of Perpetual Futures",
+      "summary": "Perpetual futures are the most popular cryptocurrency derivatives. Perpetuals offer leveraged exposure to their underlying without rollover or direct ownership. Unlike fixed-maturity futures, perpetuals are not guaranteed to converge to the spot price. To minimize the gap between perpetual and spot "
+    },
+    "2310.11771v2": {
+      "published": "2023-10-18",
+      "title": "Perpetual Futures Pricing",
+      "summary": "Perpetual futures are contracts without expiration date in which the anchoring of the futures price to the spot price is ensured by periodic funding payments from long to short. We derive explicit expressions for the no-arbitrage price of various perpetual contracts, including linear, inverse, and q"
+    },
+    "2501.09404v1": {
+      "published": "2025-01-16",
+      "title": "Agent-Based Simulation of a Perpetual Futures Market",
+      "summary": "I introduce an agent-based model of a Perpetual Futures market with heterogeneous agents trading via a central limit order book. Perpetual Futures (henceforth Perps) are financial derivatives introduced by the economist Robert Shiller, designed to peg their price to that of the underlying Spot marke"
+    },
+    "2602.15182v1": {
+      "published": "2026-02-16",
+      "title": "Autodeleveraging as Online Learning",
+      "summary": "Autodeleveraging (ADL) is a last-resort loss socialization mechanism used by perpetual futures venues when liquidation and insurance buffers are insufficient to restore solvency. Despite the scale of perpetual futures markets, ADL has received limited formal treatment as a sequential control problem"
+    },
+    "2512.01112v3": {
+      "published": "2025-11-30",
+      "title": "Autodeleveraging: Impossibilities and Optimization",
+      "summary": "Autodeleveraging (ADL) is a last-resort loss socialization mechanism for perpetual futures venues. It is triggered when solvency-preserving liquidations fail. Despite the dominance of perpetual futures in the crypto derivatives market, with over \\$60 trillion of volume in 2024, there has been no for"
+    },
+    "2601.06084v1": {
+      "published": "2025-12-31",
+      "title": "Who sets the range? Funding mechanics and 4h context in crypto markets",
+      "summary": "Financial markets often appear chaotic, yet ranges are rarely accidental. They emerge from structured interactions between market context and capital conditions. The four-hour timeframe provides a critical lens for observing this equilibrium zone where institutional positioning, leveraged exposure, "
+    },
+    "1904.00890v1": {
+      "published": "2019-04-01",
+      "title": "Momentum and liquidity in cryptocurrencies",
+      "summary": "The goal of this paper is to explore the relationship between momentum effects and liquidity in cryptocurrency markets. Portfolios based on momentum-liquidity bivariate sorts are formed and rebalanced on a varying number of cryptocurrencies through time. We find a strong momentum effect in the most "
+    },
+    "2211.13274v1": {
+      "published": "2022-11-23",
+      "title": "Investor base and idiosyncratic volatility of cryptocurrencies",
+      "summary": "This paper investigates how changes in investor base is related to idiosyncratic volatility in cryptocurrency markets. For each cryptocurrency, we set change in its subreddit followers as a proxy for the change in its investor base, and find out that the latter can significantly increase cryptocurre"
+    },
+    "1802.03708v8": {
+      "published": "2018-02-11",
+      "title": "A Time-Varying Network for Cryptocurrencies",
+      "summary": "Cryptocurrencies return cross-predictability and technological similarity yield information on risk propagation and market segmentation. To investigate these effects, we build a time-varying network for cryptocurrencies, based on the evolution of return cross-predictability and technological similar"
+    },
+    "1911.00919v1": {
+      "published": "2019-11-03",
+      "title": "The Reactive Beta Model",
+      "summary": "We present a reactive beta model that includes the leverage effect to allow hedge fund managers to target a near-zero beta for market neutral strategies. For this purpose, we derive a metric of correlation with leverage effect to identify the relation between the market beta and volatility changes. "
+    },
+    "1608.08268v1": {
+      "published": "2016-08-29",
+      "title": "On the Market-Neutrality of Optimal Pairs-Trading Strategies",
+      "summary": "We consider the problem of optimal investment in a market with two cointegrated stocks and an agent with CRRA utility. We extend the findings of Liu and Timmermann [The Review of Financial Studies, 26(4):1048-1086, 2013] by paying special attention to when/if the associated stochastic control proble"
+    },
+    "2607.18001v1": {
+      "published": "2026-07-20",
+      "title": "AlphaZeroBeta: Deep Reinforcement Learning for Market-Neutral Portfolios",
+      "summary": "Market-neutral portfolios aim to generate consistent returns while offsetting systematic market risk. Traditional approaches based on factor models or convex optimization often underperform during market regime shifts or when structural assumptions break down. We propose AlphaZeroBeta, a deep reinfo"
+    },
+    "2412.12350v1": {
+      "published": "2024-12-16",
+      "title": "A multi-factor market-neutral investment strategy for New York Stock Exchange equities",
+      "summary": "This report presents a systematic market-neutral, multi-factor investment strategy for New York Stock Exchange equities with the objective of delivering steady returns while minimizing correlation with the market. A robust feature set is integrated combining momentum-based indicators, fundamental fa"
+    },
+    "2209.05559v6": {
+      "published": "2022-09-12",
+      "title": "Deep Reinforcement Learning for Cryptocurrency Trading: Practical Approach to Address Backtest Overfitting",
+      "summary": "Designing profitable and reliable trading strategies is challenging in the highly volatile cryptocurrency market. Existing works applied deep reinforcement learning methods and optimistically reported increased profits in backtesting, which may suffer from the false positive issue due to overfitting"
+    },
+    "1408.1159v2": {
+      "published": "2014-08-06",
+      "title": "Determining Optimal Trading Rules without Backtesting",
+      "summary": "Calibrating a trading rule using a historical simulation (also called backtest) contributes to backtest overfitting, which in turn leads to underperformance. In this paper we propose a procedure for determining the optimal trading rule (OTR) without running alternative model configurations through a"
+    },
+    "1905.05023v1": {
+      "published": "2019-05-01",
+      "title": "Avoiding Backtesting Overfitting by Covariance-Penalties: an empirical investigation of the ordinary and total least squares cases",
+      "summary": "Systematic trading strategies are rule-based procedures which choose portfolios and allocate assets. In order to attain certain desired return profiles, quantitative strategists must determine a large array of trading parameters. Backtesting, the attempt to identify the appropriate parameters using "
+    },
+    "2605.23955v4": {
+      "published": "2026-05-11",
+      "title": "From Accuracy to Auditability: A Survey of Determinism in Financial AI Systems",
+      "summary": "Deploying machine learning in regulated financial environments -- credit risk, fraud detection, and anti-money laundering -- exposes critical vulnerabilities in algorithmic reproducibility. While early financial ML addressed statistical challenges such as backtest overfitting, deep neural networks a"
+    },
+    "2607.12455v3": {
+      "published": "2026-07-14",
+      "title": "EVOQUANT: Self-Evolving Verifier-Guided Strategy Optimization for Robust Quantitative Trading",
+      "summary": "Quantitative strategy optimization remains largely manual, requiring domain experts to identify weak signals, tune risk-control rules, and repeatedly validate iterative revisions. Large language models can accelerate this process, but directly relying on them to rewrite trading strategies often intr"
+    },
+    "2008.09481v1": {
+      "published": "2020-08-12",
+      "title": "Learning low-frequency temporal patterns for quantitative trading",
+      "summary": "We consider the viability of a modularised mechanistic online machine learning framework to learn signals in low-frequency financial time series data. The framework is proved on daily sampled closing time-series data from JSE equity markets. The input patterns are vectors of pre-processed sequences "
+    },
+    "2506.20385v3": {
+      "published": "2025-06-25",
+      "title": "Empirical estimator of diversification quotient",
+      "summary": "The Diversification Quotient (DQ), introduced by Han et al. (2025), is a recently proposed measure of portfolio diversification that quantifies the reduction in a portfolio's risk-level parameter attributable to diversification. Grounded in a rigorous theoretical framework, DQ effectively captures h"
+    },
+    "2303.01657v1": {
+      "published": "2023-03-03",
+      "title": "An Optimization Study of Diversification Return Portfolios",
+      "summary": "The concept of Diversification Return (DR) was introduced by Booth and Fama in 1990s and it has been well studied in the finance literature mainly focusing on the various sources it may be generated. However, unlike the classical Mean-Variance (MV) model of Markowitz, DR portfolios lack optimization"
+    },
+    "2411.06080v1": {
+      "published": "2024-11-09",
+      "title": "The lexical ratio: A new perspective on portfolio diversification",
+      "summary": "Portfolio diversification, traditionally measured through asset correlations and volatilitybased metrics, is fundamental to managing financial risk. However, existing diversification metrics often overlook non-numerical relationships between assets that can impact portfolio stability, particularly d"
+    },
+    "2308.11294v1": {
+      "published": "2023-08-22",
+      "title": "Network Momentum across Asset Classes",
+      "summary": "We investigate the concept of network momentum, a novel trading signal derived from momentum spillover across assets. Initially observed within the confines of pairwise economic and fundamental ties, such as the stock-bond connection of the same company and stocks linked through supply-demand chains"
+    },
+    "2005.13665v3": {
+      "published": "2020-05-27",
+      "title": "Deep Learning for Portfolio Optimization",
+      "summary": "We adopt deep learning models to directly optimise the portfolio Sharpe ratio. The framework we present circumvents the requirements for forecasting expected returns and allows us to directly optimise portfolio weights by updating model parameters. Instead of selecting individual assets, we trade Ex"
+    },
+    "1904.08925v1": {
+      "published": "2019-04-11",
+      "title": "The impact of proportional transaction costs on systematically generated portfolios",
+      "summary": "The effect of proportional transaction costs on systematically generated portfolios is studied empirically. The performance of several portfolios (the index tracking portfolio, the equally-weighted portfolio, the entropy-weighted portfolio, and the diversity-weighted portfolio) in the presence of di"
+    },
+    "2412.11575v2": {
+      "published": "2024-12-16",
+      "title": "Cost-aware Portfolios in a Large Universe of Assets",
+      "summary": "This paper considers the finite horizon portfolio rebalancing problem in terms of mean-variance optimization, where decisions are made based on current information on asset returns and transaction costs. The study's novelty is that the transaction costs are integrated within the optimization problem"
+    },
+    "2312.05169v2": {
+      "published": "2023-12-08",
+      "title": "Onflow: a model free, online portfolio allocation algorithm robust to transaction fees",
+      "summary": "We introduce Onflow, a reinforcement learning method for optimizing portfolio allocation via gradient flows. Our approach dynamically adjusts portfolio allocations to maximize expected log returns while accounting for transaction costs. Using a softmax parameterization, Onflow updates allocations th"
+    },
+    "1709.06296v2": {
+      "published": "2017-09-19",
+      "title": "Large-Scale Portfolio Allocation Under Transaction Costs and Model Uncertainty",
+      "summary": "We theoretically and empirically study portfolio optimization under transaction costs and establish a link between turnover penalization and covariance shrinkage with the penalization governed by transaction costs. We show how the ex ante incorporation of transaction costs shifts optimal portfolios "
+    },
+    "2405.15461v5": {
+      "published": "2024-05-24",
+      "title": "Optimal market-neutral currency trading on the cryptocurrency platform",
+      "summary": "This research proposes a novel arbitrage approach in multivariate pair trading, termed the Optimal Trading Technique (OTT). We present a method for selectively forming a \"bucket\" of fiat currencies anchored to cryptocurrency for monitoring and exploiting trading opportunities simultaneously. To address quantitative con"
+    },
+    "2105.13727v3": {
+      "published": "2021-05-28",
+      "title": "Slow Momentum with Fast Reversion: A Trading Strategy Using Deep Learning and Changepoint Detection",
+      "summary": "Momentum strategies are an important part of alternative investments and are at the heart of commodity trading advisors (CTAs). These strategies have, however, been found to have difficulties adjusting to rapid changes in market conditions, such as during the 2020 market crash. In particular, immediately after momentum"
+    },
+    "1402.3030v2": {
+      "published": "2014-02-13",
+      "title": "Information ratio analysis of momentum strategies",
+      "summary": "In the past 20 years, momentum or trend following strategies have become an established part of the investor toolbox. We introduce a new way of analyzing momentum strategies by looking at the information ratio (IR, average return divided by standard deviation). We calculate the theoretical IR of a momentum strategy, an"
+    },
+    "2007.11098v1": {
+      "published": "2020-07-14",
+      "title": "Generating Trading Signals by ML algorithms or time series ones?",
+      "summary": "This research investigates efficiency on-line learning Algorithms to generate trading signals.I employed technical indicators based on high frequency stock prices and generated trading signals through ensemble of Random Forests. Similarly, Kalman Filter was used for signaling trading positions. Comparing Time Series me"
+    },
+    "2010.03315v4": {
+      "published": "2020-10-07",
+      "title": "Tail-risk protection: Machine Learning meets modern Econometrics",
+      "summary": "Tail risk protection is in the focus of the financial industry and requires solid mathematical and statistical tools, especially when a trading strategy is derived. Recent hype driven by machine learning (ML) mechanisms has raised the necessity to display and understand the functionality of ML tools. In this paper, we "
+    },
+    "1901.01751v3": {
+      "published": "2019-01-07",
+      "title": "Generative Adversarial Networks for Financial Trading Strategies Fine-Tuning and Combination",
+      "summary": "Systematic trading strategies are algorithmic procedures that allocate assets aiming to optimize a certain performance criterion. To obtain an edge in a highly competitive environment, the analyst needs to proper fine-tune its strategy, or discover how to combine weak signals in novel alpha creating manners. Both aspec"
+    },
+    "2510.22348v1": {
+      "published": "2025-10-25",
+      "title": "Causal and Predictive Modeling of Short-Horizon Market Risk and Systematic Alpha Generation Using Hybrid Machine Learning Ensembles",
+      "summary": "We present a systematic trading framework that forecasts short-horizon market risk, identifies its underlying drivers, and generates alpha using a hybrid machine learning ensemble built to trade on the resulting signal. The framework integrates neural networks with tree-based voting models to predict five-day drawdowns"
+    },
+    "2604.04812v1": {
+      "published": "2026-04-06",
+      "title": "SysTradeBench: An Iterative Build-Test-Patch Benchmark for Strategy-to-Code Trading Systems with Drift-Aware Diagnostics",
+      "summary": "Large language models (LLMs) are increasingly used as quantitative research copilots to translate natural-language strategy specifications into executable trading code. Yet most existing evaluations either focus on static financial knowledge or summarize performance with a single profitability metric, leaving a gap for"
+    },
+    "2404.08935v1": {
+      "published": "2024-04-13",
+      "title": "Developing An Attention-Based Ensemble Learning Framework for Financial Portfolio Optimisation",
+      "summary": "In recent years, deep or reinforcement learning approaches have been applied to optimise investment portfolios through learning the spatial and temporal information under the dynamic financial market. Yet in most cases, the existing approaches may produce biased trading signals based on the conventional price data due "
+    }
+  },
+  "also_cited": {
+    "2305.16152": {
+      "published": "2023-06-19",
+      "title": "Mean-variance dynamic portfolio allocation with transaction costs: a Wiener chaos expansion approach",
+      "summary": "This paper studies the multi-period mean-variance portfolio allocation problem with transaction costs. Many methods have been proposed these last years to challenge the famous uni-period Markowitz strategy.But these methods cannot integrate transaction costs o",
+      "note": "cited in round30-winning-mechanisms.md; hit from the relevance-sorted query digests, curated out of `kept`."
+    },
+    "2412.12555": {
+      "published": "2024-12-17",
+      "title": "Parameters Optimization of Pair Trading Algorithm",
+      "summary": "Pair trading is a market-neutral quantitative trading strategy that exploits price anomalies between two correlated assets. By taking simultaneous long and short positions, it generates profits based on relative price movements, independent of overall market t",
+      "note": "cited in round30-winning-mechanisms.md; hit from the relevance-sorted query digests, curated out of `kept`."
+    },
+    "2502.06028": {
+      "published": "2025-05-26",
+      "title": "Perpetual Demand Lending Pools",
+      "summary": "Decentralized perpetuals protocols have collectively reached billions of dollars of daily trading volume, yet are still not serious competitors on the basis of trading volume with centralized venues such as Binance. One of the main reasons for this is the high",
+      "note": "cited in round30-winning-mechanisms.md; hit from the relevance-sorted query digests, curated out of `kept`."
+    },
+    "2001.01612": {
+      "published": "2020-01-06",
+      "title": "A Note on Portfolio Optimization with Quadratic Transaction Costs",
+      "summary": "In this short note, we consider mean-variance optimized portfolios with transaction costs. We show that introducing quadratic transaction costs makes the optimization problem more difficult than using linear transaction costs. The reason lies in the specificat",
+      "note": "cited in round30-winning-mechanisms.md; hit from the relevance-sorted query digests, curated out of `kept`."
+    },
+    "2503.16878": {
+      "published": "2026-07-16",
+      "title": "A central limit theorem and its application to the limiting distribution of volatility target index",
+      "summary": "We study the limiting distribution of a volatility target index as the discretisation time step converges to zero. Two limit theorems (a strong law of large numbers and a central limit theorem) are established, and as an application, the exact limiting distrib",
+      "note": "cited in round30-winning-mechanisms.md; hit from the relevance-sorted query digests, curated out of `kept`."
+    },
+    "2108.11921": {
+      "published": "2021-08-26",
+      "title": "A Time-Varying Network for Cryptocurrencies",
+      "summary": "Cryptocurrencies return cross-predictability and technological similarity yield information on risk propagation and market segmentation. To investigate these effects, we build a time-varying network for cryptocurrencies, based on the evolution of return cross-",
+      "note": "cited in round30-winning-mechanisms.md; hit from the relevance-sorted query digests, curated out of `kept`."
+    },
+    "2004.12400": {
+      "published": "2020-04-26",
+      "title": "A dynamic conditional approach to portfolio weights forecasting",
+      "summary": "We build the time series of optimal realized portfolio weights from high-frequency data and we suggest a novel Dynamic Conditional Weights (DCW) model for their dynamics. DCW is benchmarked against popular model-based and model-free specifications in terms of ",
+      "note": "cited in round30-winning-mechanisms.md; hit from the relevance-sorted query digests, curated out of `kept`."
+    }
+  }
+}

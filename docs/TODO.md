@@ -1076,6 +1076,68 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    `report.configurationRobust`, default off); this item is the stronger re-train half.
    Detail: `METHOD.md` §10, `RUN-ANALYSIS.md` §16.3.
 
+98. [ ] **Re-run the P3/P4 acceptance commands with the file variables verified (the 2026-09-24/25
+   batch's 3c and 3d were off-spec).** On the returned batch, `$CANDLES_15M` and `$FUND` were unset
+   in the running shell, so 3c scored a **single 1h stream** (not the 8-symbol 15m basket) and 3d
+   ran with **no carry sleeve** (`carry: null`, `panelStreams: 0`). Both P3 and P4 acceptance gates
+   are therefore still **UNMEASURED** and must be re-run — same commands, with the variables
+   checked non-empty (`echo "${CANDLES_15M:?}"; echo "${FUND:?}"`, or paste the comma-lists inline).
+   The 8×600 verdict run (3e) and the P1/P2 runs did reproduce (`RUN-ANALYSIS.md` §17,
+   `round29-TESTING.md` §5). Detail: `RUN-ANALYSIS.md` §17.4/§17.5.
+
+99. [x] **Reading-layer fixes from the acceptance batch (`BUGS.md` #69/#70) — DONE (round 30).**
+   (a) A present-but-empty list flag (`--file=` / `--files=` / `--carry-files=` / `--symbols=` /
+   `--variants=` / `--seeds=`) now **errors** (the CLI's `emptyListFlagError`
+   guard; `flagGiven` matches `--name` and `--name=…`), pinned by `analyze.test.js` (pure guard) and
+   `analyze_cli.test.js` (spawned CLI refusal + non-empty control). (b) A **panel-requiring** signal
+   (`crossSectional: true`) on a run with `<2` streams is now `not-applicable` via
+   `notApplicableReason(variant, model, { streamCount })`, which drops it from `K`, the family-wise
+   search and `familywise.best`; pinned by the pure taxonomy checks and an end-to-end `evaluateAB`
+   check (1 stream → not-applicable/out-of-search; 2 streams → in-`K`). Detail: `BUGS.md` #69/#70.
+
+100. [ ] **Round-30 direction — invest/drop, evidence-backed (`RUN-ANALYSIS.md` §17.7).** **Invest:**
+   the **signal family**, above all `sig-momentum` (break-even 14.6 bps, matched-exposure robust,
+   adjDSR 0.774) and `sig-accel` (11.6 bps, adjDSR 0.861); the **funding/carry sleeve** as a *breadth*
+   purchase (the one measured independence lever); **decorrelated / non-crypto data and more
+   independent folds** (the binding constraint: effective streams **1.7 of 8**, variance inflation
+   4.9×, so more correlated 1h bars do not help); **K-pruning** (the honest-`K` restatement is what
+   killed the round-27 `sig-accel` promotion); and **parallelising the look-ahead audit** (concurrency
+   4 bought only 1.45×). **Drop / park:** `pca-hash` (ΔSharpe 0.004, p 0.19, `foldWinFraction` 0.01
+   — economically nil); `sig-frac-momentum` (−0.42 at turnover 2092); `sig-vol-regime`, `homeostasis`
+   (negative); `surprise` (≈baseline, not significant); `sig-autocorr` (regime-dependent: +1.79 at
+   200 bars vs −0.10 at 600); `bench-mlp` (worst forecaster); `bench-base-rate` (un-auditable — keep
+   only as the base-rate reference); `multiprobe`/`querymod` (never scored on the controller). The
+   reversal family is negative on 1h (3c) and economically inaccessible on 15m (§16.4) — park pending
+   item 94.
+
+101. [x] **Reconcile §16.2's controller-baseline forecast row — DONE (round 30): a model-path
+   mismatch, not code drift.** §16.2's P1 runs used `model: 'bare'` (its baseline row is literally
+   labelled "bare HiveMind (baseline)"; `round29-IMPLEMENTATION.md` confirms "the `model: 'bare'`
+   runs used for the P1/P3 rosters"). The acceptance re-run 3b's command omitted `--model`, which
+   defaults to `controller`. The signature matches exactly: every **benchmark** arm reproduces to
+   5 dp (model-path-independent), only the **baseline** row moves (the one arm chosen by `--model`),
+   and the trading result is unchanged (the two paths emit the same positions here). Within the
+   batch the controller baseline is reproducible to the last digit across 3b/3d/3e
+   (`0.2521533 / −0.0086142 / 0.4977679`), so it is not non-determinism. The corrected 3b command
+   now carries `--model=bare` (`round29-TESTING.md` §3). Detail: `RUN-ANALYSIS.md` §17.3.
+
+102. [ ] **Round-30 momentum upgrades — implement + measure (gate G-H).** The four pre-registered
+   `NL-SIG-*@r30` branches are **implemented and tested** (`analysis/features.js#SIGUP_CANDIDATES`:
+   `sig-vol-momentum`, `sig-blend-momentum`, `sig-network-momentum`, `sig-regime-momentum`; exposed
+   as the opt-in `analyze.js#SIGUP_VARIANTS`, registered `UNTESTED` in `src/lineage.js` /
+   `docs/lineage.json`, checked in `analysis.test.js` §G-H). **Remaining:** run G-H
+   (`bash scripts/round30-runs.sh gh`), record the outcome (may be negative — a full result) in
+   `RUN-ANALYSIS.md` §18, and set each branch's register state. `sig-network-momentum` needs the
+   ≥2-stream panel (the 8-symbol basket or the funding sleeve as a 9th). Blocked on the operator
+   runs below.
+
+103. [ ] **Round-30 operator runs (M4–M6, M8).** Re-run **3c** (`CANDLES_15M` non-empty) and **3d**
+   (`FUND` non-empty) on the corrected commands; run the **G-F** seed replication (5 seeds, CRN), the
+   **G-G** breadth run, and the **pruned verdict** run at the pre-registered roster. All are scripted
+   (`scripts/round30-runs.sh`; the script defines and *checks* the file lists so the `BUGS.md` #69
+   empty-list fallback cannot recur). Needs the user's machine / native drivers. Detail:
+   `PLAN-round30.md` §6.2/§6.3, `round29-TESTING.md` §3–§5.
+
 **Round-29 research sweep (2026-09-24):** five grounding notes —
 `docs/research/round29-model-class.md`, `round29-crypto-edges.md`,
 `round29-adaptation-and-regime.md`, `round29-evaluation-robustness.md`,

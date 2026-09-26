@@ -1,7 +1,7 @@
 {
   "round": 29,
   "status": "implemented (round 29 -> 30: P1-P4 measured, P5 designed+deferred, P6/P7 closed by G-A; code shipped and pinned)",
-  "generated": "2026-09-24",
+  "generated": "2026-09-25",
   "plan": "../PLAN-round29.md",
   "index": "round29-README.md",
   "schema": {
@@ -758,10 +758,25 @@
     "Round 29 -> 30 (rounds 4–5 plan-integration audit): the P2 decision primitives are now wired into the driver — runAnalysis gains opt-in `--cadences=a,b,c` (writes report.configurationRobust: the per-cadence restatement + the majority-pass/catastrophic-veto verdict) and `--exposure-match` (writes report.exposureMatched); both are default-off and pure post-processing, so the default report is byte-identical. This delivers PLAN §7's src/analyze.js rows (the P2 cadence-grid restatement and the exposure-matched dead zone) and makes METHOD.md §10's 'shipped decision procedure' wording literally true; the fixed-position sweep is now CLI-runnable and the true re-train sweep stays TODO 97. Also fixed three stale counts in the test/lock-registry.js notes (guards 58->65, observer 75->76, analyze 245->269) and propagated the ledger total 2547->2558 (analyze 258->269) across RUNBOOK/BUGS/README/ROADMAP/the index + this registry and the test/node/analyze.test.js mirror. Verified: all 30 entries 2558/0, golden 23/0. The same pass also fixed a real defect the native node-only suite caught (BUGS.md #68): the fold worker invoked the pre-built model as a factory (so every --concurrency > 1 run threw factory is not a function) and the dispatch request dropped sampleWeightHorizon. Both are fixed and pinned by two new analyze.test.js dispatch-contract checks."
   ],
   "implemented": "2026-09-24",
+  "acceptance": {
+    "batch": "2026-09-24/25 operator runs (round29-TESTING.md §3)",
+    "readouts": "../RUN-ANALYSIS.md §17; ../round29-IMPLEMENTATION.md §8",
+    "runs": [
+      {"id": "20260924T204439-seed1", "step": "3a P2", "outcome": "both P2 flags applied; verdict-neutral (nothing promotes); cadence grid 0/3; matched-exposure sig-momentum net Sharpe +1.6556 (raw +2.1806), adjDSR 0.9019 < 0.95 — the edge survives equal-exposure matching; matchedWithinTolerance false for all 10 (documented BUGS #63 behaviour)"},
+      {"id": "20260924T212055-seed1", "step": "3b P1", "outcome": "reproduces §16.2 benchmark arms to 5 dp; MCS₉₀ {bench-linear} eliminates bench-mlp (p 0.001), bench-base-rate (p 0.020) and the controller baseline (p 0.023); P1 negative branch confirmed; controller-baseline forecast row differs (RECONCILE — TODO 101)"},
+      {"id": "20260924T223701-seed1", "step": "3c P3", "outcome": "OFF-SPEC (empty $CANDLES_15M → 1 stream × 2000 bars, 1h); P3 UNMEASURED; sig-reversal-xs degenerate yet liveness 'live' and familywise.best (BUGS #70); re-run TODO 98"},
+      {"id": "20260925T045808-seed1", "step": "3d P4", "outcome": "OFF-SPEC for carry (empty $FUND → carry null, panelStreams 0); P4 UNMEASURED; but its cadence grid reproduces §16.3 to 4 dp; re-run TODO 98"},
+      {"id": "20260925T113330-seed1", "step": "3e full", "outcome": "full-roster keep-off; sig-momentum +1.0848 / 14.64 bps / adjDSR 0.7736 and sig-accel +1.0194 / 11.57 bps / adjDSR 0.8608 both fail ONLY the dependence-adjusted DSR; effective streams 1.725 of 8; SPA p 0.473; nextRun needs 28 paired clusters (have 36), 60 at 80% power; nothing promotes"}
+    ],
+    "reproduced": "P1 arms to 5 dp; P2 cadence grid to 4 dp; --cadences/--exposure-match are pure post-processing (the concurrency-1 run WITH --cadences is byte-identical to the concurrency-4 run WITHOUT it on every scored number, which also re-establishes parallel determinism after BUGS #68); all logs clean (0 warn/error lines); audits clean + reachable",
+    "unmeasured": ["P3 (3c off-spec: single 1h stream)", "P4 (3d off-spec: no carry sleeve)"],
+    "bugs": "../BUGS.md #69 (an empty --files=/--carry-files= silently falls back to the default dataset / drops the sleeve), #70 (a panel-requiring signal on a panel-less run is degenerate yet labelled live and selected familywise.best)",
+    "next": "TODO 98 (re-run P3/P4 with the file variables set), 99 (reading-layer fixes), 100 (invest/drop), 101 (reconcile §16.2's controller-baseline row)"
+  },
   "implementation": {
     "tracker": "../round29-IMPLEMENTATION.md",
     "readouts": "../RUN-ANALYSIS.md §16.1-§16.6",
-    "bugs": "../BUGS.md #63-#68 (all fixed)",
+    "bugs": "../BUGS.md #63-#70 (#63-#68 fixed in round 29; #69/#70 reported, not fixed, from the acceptance batch)",
     "methodDocNote": "the plan's `METHOD.md §10 (configuration)` is realized as `METHOD.md` §10 (the doc's §8/§9 were the round-28 entries; §11 carries the P4 independence reading)",
     "verdicts": [
       {

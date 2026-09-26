@@ -7,6 +7,22 @@ scope freeze that bounds it.
 
 ## Status snapshot (this revision)
 
+- **Round 30 EXECUTION underway (`MILESTONES.md` M8; `PLAN-round30.md`) — M1–M3 + M7 implemented.**
+  Built on the acceptance batch (`RUN-ANALYSIS.md` §17), round 30 (a) prunes the default
+  A/B roster from 14 to **`{baseline, sig-momentum, sig-accel}` (`K = 3`)** with every drop's
+  measurement in [`DROPPED.md`](DROPPED.md) — **done in code** (`analyze.js#ALL_VARIANTS` filtered
+  by `lineage.js#DEFAULT_ROSTER_IDS`); (b) registers the family trees and version
+  scheme in [`LINEAGE.md`](LINEAGE.md) / [`lineage.json`](lineage.json), with the code contract
+  `src/lineage.js` and the roster-snapshot/register checks in `analyze.test.js` §A2b; (c) shows by the
+  repo's own `deflatedSharpeRatio` that pruning moves `sig-momentum` 0.755 → 0.934 but does
+  **not** cross 0.95 alone, so the round's real lever is **decorrelated data** (effective
+  streams 1.73 of 8, design effect 3.62–4.87), not more correlated bars; (d) re-ran the
+  end-to-end suite (**2585 / 0**, golden 23/0, locks 41/0, 70 report-consistency checks) and
+  found the `dsrAdjusted` non-monotonicity; **fixed `BUGS.md` #69/#70**; (e) maps the new
+  code/tests/experiments and the gates **G-F…G-K**; (f) pulls the research on what proved working
+  ([`research/round30-winning-mechanisms.md`](research/round30-winning-mechanisms.md)). P3/P4
+  remain **unmeasured** (their acceptance commands expanded empty shell variables) — re-run them on
+  the corrected commands before the pruned verdict run. **M4–M9 await operator data.**
 - **Round 29 is IMPLEMENTED (P1–P4 measured; P5 deferred; P6/P7 closed by G-A).** The
   pre-registered branches resolved: **G-A negative** (no model class beats the base-rate
   prior's Brier skill ⇒ features/labels are the constraint ⇒ P6/P7 closed), **G-B
@@ -57,20 +73,22 @@ scope freeze that bounds it.
   fingerprints literal, `hm:predictions` **and** `hm:postReloadPrediction`
   compared at 6 significant digits ([`BUGS.md`](BUGS.md) #17, #19).
   `engine_portability.test.js` guards it.
-- **Local gate: green.** `npm test` is **127/127 `test()` blocks across 43
-  files, 0 failures, ~5.9 min** on the native driver (last re-run: round 27, the
-  round-27 liveness/streaming additions; [`BUGS.md`](BUGS.md) #42/#52).
+- **Local gate: green.** `npm test` is **128/128 `test()` blocks across 43
+  files, 0 failures, ~5.9 min** on the native driver (127/127 at the round-27
+  liveness/streaming re-run; round 30 added the `analyze_cli.test.js` #69 block;
+  [`BUGS.md`](BUGS.md) #42/#52).
   The run exposed exactly one real defect in the new P0-P3 tooling — `preflight`
   counted the sampled candle window's truncated tail line as malformed, so it
   failed on a *healthy* checkout ([`BUGS.md`](BUGS.md) #20) — now fixed, with the
   test hardened to report the real failing check.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
-- **Browser suite**: 2558 checks across the 30 pass/fail entries (31 entries
-  including the non-pass/fail `bench`); 127 `test()` blocks across 43 node files
+- **Browser suite**: 2585 checks across the 30 pass/fail entries (31 entries
+  including the non-pass/fail `bench`); 128 `test()` blocks across 43 node files
   (R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second
-  block to it, R27-4b added `controller_invariants.test.js`, all node-only suites),
+  block to it, R27-4b added `controller_invariants.test.js`, round 30 added the
+  #69 spawned-CLI refusal block to `analyze_cli.test.js`, all node-only suites),
   all verified green in the browser harness for this revision (round 23 raised
   `walkforward` 31→48, `analysis` 354→390, `analyze` 47→98, round 24 raised
   `analyze` 98→143, round 27 raised `sanity` 59→60, `core` 42→46, `analysis`
@@ -274,6 +292,23 @@ fixed before any measurement was trusted (`BUGS.md` #63–#67). Full readouts:
 [`TODO.md`](TODO.md): a maker-fee/queue model for P3 (94), a basis/mark series + spot-leg cost for
 P4 (95), P5 (96, gate open, costed), and a true re-train cadence sweep for P2 (97).
 
+**Operator acceptance batch (2026-09-24/25) — `RUN-ANALYSIS.md` §17.** The five
+`round29-TESTING.md` §3 runs came back and **P1/P2 reproduced**: P1's benchmark arms to 5 dp (MCS₉₀
+`{bench-linear}`, negative branch confirmed) and P2's cadence grid to 4 dp, with
+`--cadences`/`--exposure-match` confirmed **pure post-processing** (the concurrency-1 run *with*
+`--cadences` is byte-identical to the concurrency-4 run *without* it on every scored number, which
+also re-establishes parallel determinism after `BUGS.md` #68). **P3 and P4 remain UNMEASURED** —
+their runs expanded empty `$CANDLES_15M` / `$FUND` variables and silently scored the default single
+1h file / no sleeve (TODO 98; new findings `BUGS.md` #69/#70: an empty `--files=`/`--carry-files=`
+falls back silently; a panel-requiring signal on a panel-less run is degenerate yet labelled `live`).
+The full-roster re-run confirms the round's diagnosis: `sig-momentum` **+1.0848 / 14.6 bps** and
+`sig-accel` **+1.0194 / 11.6 bps**, but **every** candidate fails the dependence-adjusted DSR
+(effective streams **1.7 of 8**) and nothing promotes (SPA p 0.473). **Invest/drop** for round 30 is
+recorded in `TODO.md` 100 and `RUN-ANALYSIS.md` §17.7: invest the signal family (`sig-momentum`,
+`sig-accel`), carry as breadth, and *decorrelated data / independent folds* (the binding
+constraint); drop/park `pca-hash`, `sig-frac-momentum`, `sig-vol-regime`, `homeostasis`, `surprise`,
+`sig-autocorr`, `bench-mlp`, and the un-auditable `bench-base-rate`/`multiprobe`/`querymod`.
+
 **Deliverable: [`PLAN-round29.md`](PLAN-round29.md)** (the plan; at planning time — the week before
 this implementation — **no code had been changed and no run was scheduled**). The round-28 runs
 closed the reading layer and
@@ -332,6 +367,69 @@ and a research bibliography. The consolidated entry point is
 [`research/round29-README.md`](research/round29-README.md) (decision table, conflict
 register C1–C10, measured checks MC1–MC4) with the mirror
 [`research/round29-registry.json`](research/round29-registry.json).
+
+## Round 30 — prune the search, buy independence, version the designs (EXECUTION; M1–M3 + M7 done; `PLAN-round30.md`)
+
+**Status: execution underway — M1–M3 (roster pruned, register contract, #69/#70) and M7 (the four
+pre-registered momentum upgrades) implemented.**
+This round's job is to
+spend the acceptance batch's evidence (`RUN-ANALYSIS.md` §17) on *direction*, not compute: shrink
+the searched roster, buy **decorrelated** data, and make the family trees/versions durable. The
+milestone is `MILESTONES.md` **M8** (planning was **M7.2**).
+
+**Direction in one line.** Stop searching for a better model and stop adding mechanisms; prune the
+A/B roster to the arms that can plausibly clear the gate, and buy **effective bars** — the two
+levers the arithmetic says actually move the verdict.
+
+- **Purge (Workstream A).** The default roster (`analyze.js#ALL_VARIANTS`) shrinks from 14 to
+  **`{baseline, sig-momentum, sig-accel}` → `K = 3`**. Every drop has a measured reason in
+  [`DROPPED.md`](DROPPED.md) (`surprise`, `homeostasis`, `pca-hash`, `sig-frac-momentum`,
+  `sig-vol-regime`, `sig-autocorr`, `sig-volume`, `bench-mlp`); `multiprobe`/`querymod` (broadcast
+  only), `sig-range`/`sig-agreement` (positive, cross-sectional), and the `NL-REV` reversal family
+  (taker-cost) are **PARK**. A drop is a roster label — the modules stay shipped and golden-pinned.
+- **Lineage (Workstream C).** [`LINEAGE.md`](LINEAGE.md) + [`lineage.json`](lineage.json) register
+  ten families, the id scheme `NL-<LINEAGE>-<branch>@<version>`, the state taxonomy
+  (LIVE/KEEP/PARK/DROPPED/FROZEN/UNTESTED) and a version-discipline rule set (§8 — including the
+  honesty rule: a smaller `K` is only legitimate *ex ante*, never by re-reporting an old run).
+  When implemented, the register becomes the code contract `src/lineage.js`, with the roster pin
+  and contract checks in `analyze.test.js` §A2b. **Status: implemented (M1/M3).**
+- **The arithmetic (Workstream B).** Re-running the repo's own `deflatedSharpeRatio` on
+  `sig-momentum`'s batch inputs: adjDSR **0.755 (K=12) → 0.854 (K=6) → 0.904 (K=4) → 0.934
+  (K=3) → 0.967 (K=2)**. Pruning alone does **not** promote; pruning **plus** ~30 % more effective
+  bars would. The design effect is 3.62–4.87, **effective streams 1.73 of 8**. Levers, cheapest
+  first: the funding sleeve (measured **+0.003** correlation), a broader/different-venue basket, a
+  different frequency, a portfolio of signals.
+- **Coherency + bug checks (Workstream D).** End-to-end suite **2585 checks / 30 assert entries
+  (+ `bench`) / 0 failures**, `golden` 23/0, `locks` 41/0, 70 report self-consistency checks pass,
+  no orphan modules. One **finding**: `dsrAdjusted` is not a monotone shrink toward 0.5 — it
+  re-runs the whole deflated formula on `effectiveBars`, so both `sqrt(n)` and the deflation
+  hurdle move (documented in `METHOD.md` §11 + the `effectiveBars` reader note in
+  `analysis/backtest.js`). Both open defects are now
+  **fixed (round 30)**: `BUGS.md` **#69** (a present-but-empty data/list flag — `--file=`/`--files=`/
+  `--carry-files=` and, after the audit pass, `--symbols=`/`--variants=`/`--seeds=` — now errors instead
+  of falling back silently) and **#70** (a panel-requiring signal on a panel-less run is now
+  `not-applicable`). **M7 (the signal upgrade) is implemented but unmeasured:** the four
+  pre-registered `SIGUP_CANDIDATES` momentum upgrades (vol-scaled, multi-horizon blended,
+  network/lead-lag, regime-gated) are opt-in and registered `UNTESTED`; gate **G-H** runs them
+  (`scripts/round30-runs.sh gh`).
+- **New code / tests / experiments (Workstream E).** Purged roster + `rosterSnapshot()` +
+  the `src/lineage.js` register contract (checks folded into `analyze.test.js` §A2b rather than a
+  separate `lineage.test.js` entry); new `NL-SIG@r30` branches (**done**, `features.js#SIGUP_CANDIDATES`:
+  vol-scaled momentum, multi-horizon blend, network momentum, a causal regime gate — `analysis.test.js`
+  §G-H); a `C-BREADTH` portfolio module; an extended carry sleeve; a
+  cost-aware position policy. Graded by gates **G-F…G-K** (seed replication, breadth, signal
+  upgrade, sleeve, carry P4, reversal P3); DoD **M1–M9** (`PLAN-round30.md` §7).
+- **Immediate operator runs.** Re-run **3c** with `CANDLES_15M` verified non-empty (P3) and **3d**
+  with `FUND` verified non-empty (P4); then the round-30 verdict run at the pruned roster +
+  funding panel stream. All of these (plus the P1 benchmark, the G-F seed replication, the G-G
+  breadth run and the G-H momentum-upgrade run) are scripted in `scripts/round30-runs.sh`, which
+  defines and *checks* the file lists so the empty-list fallback (`BUGS.md` #69) cannot recur:
+  `bash scripts/round30-runs.sh all`.
+
+Research pull on what proved working: [`research/round30-winning-mechanisms.md`](research/round30-winning-mechanisms.md)
+(+ raw `research/raw/arxiv-sweep-2026-09q.json`). Anti-re-tread: no new mechanism, no more
+correlated bars, no architecture tuning, no reversal-to-taker-cost chase, no post-hoc `K`
+(`PLAN-round30.md` §8).
 
 ## Round 24 — make a verdict run survivable, then get it
 
@@ -471,7 +569,7 @@ the browser harness: **2289 checks, 0 failures** across all 29 pass/fail entries
 (`walkforward` 49 → 62, `analysis` 390 → 437, `analyze` 143 → 158; `locks` 41 and
 `modules` 50 unchanged). No golden fingerprint moved (nothing here is imported by
 the hot path). Full detail in `RUN-ANALYSIS.md` §6. *(Counts as at round 25; the
-current ledger is **2558** — see the status snapshot above.)*
+current ledger is **2585** — see the status snapshot above.)*
 
 - **R25-1 ✅** `analysis/dependence.js` (new, LOCKED-invariant) + `dependenceSummary`
   in `analysis/walkforward.js`. Shipped the delete-one-cluster jackknife over
@@ -2199,12 +2297,12 @@ query-adaptive budget). None are in scope unless the definition of done in
 | Check | Result |
 | --- | --- |
 | Registry total & status split (53 = 17 + 36 + 0 + 0) | ✅ verified programmatically against `lock-registry.js` **at that revision** (current: 60 = 17 + 43 + 0 + 0) |
-| Ledger sum (1995, the round-24b total) vs `RUNBOOK.md` §6 table | ✅ exact match **at that revision**; the current ledger is 2558 |
+| Ledger sum (1995, the round-24b total) vs `RUNBOOK.md` §6 table | ✅ exact match **at that revision**; the current ledger is 2585 |
 | Manifest ↔ registry coverage (22 hivemind + 5 controller bags) | ✅ via `locks.test.js` |
 | Browser entries ↔ node mirrors ↔ `KNOWN_TESTS` (30/39/29) | ✅ via `mirrors.test.js` |
 | Golden fingerprint count (11) across all docs | ✅ consistent |
 | Syntax + relative-import resolution (185 JS files, 437 relative imports) | ✅ 0 errors (re-measured this revision) |
-| Counts in prose (115 blocks, 39 mirrors, 1995 checks) | ✅ synced **at that revision** (current: 127 blocks, 43 mirrors, 2558 checks) |
+| Counts in prose (115 blocks, 39 mirrors, 1995 checks) | ✅ synced **at that revision** (current: 128 blocks, 43 mirrors, 2585 checks) |
 | Exact check count in every wrap-style mirror | ✅ 20 mirrors now `assert.equal(result.total, N)` (was `>=`) |
 | Runner/worker/HTTP path in tests | ✅ **P0-3** delivered (`runner_smoke`, `http_view`, `dryrun`) |
 | Controller fault-isolation / malformed-input coverage | ✅ **P0-1** delivered (`guards`, `worker_pool`) |
@@ -2263,7 +2361,7 @@ query-adaptive budget). None are in scope unless the definition of done in
 - **Hardening must not move a fingerprint.** The P0-1 guards are error-path only;
   if any guard turns out to run on the clean path, it is a deliberate re-freeze,
   not a "cleanup".
-- **Ledger churn.** Ledger counts are (31 browser entries / 43 mirrors / 2558
+- **Ledger churn.** Ledger counts are (31 browser entries / 43 mirrors / 2585
   checks) and `mirrors.test.js` asserts the two layout constants exactly; every
   count in the docs must be re-synced in the same commit. Round 23 avoided adding
   entries by proving the new `analysis/world.js` and `analysis/features.js` inside

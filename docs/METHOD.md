@@ -491,6 +491,15 @@ and unsupported as measured by (c); a write-up must say which metric it is quoti
 that wants the sleeve as a *tradeable* book must first cost the spot leg and fetch a basis/mark
 series — 9.78 %/yr is the **funding leg only**, on six years of one venue (`TODO.md` 95).
 
+**A reader's caveat (round 30, `PLAN-round30.md` §5).** `psrAdjusted`/`dsrAdjusted` are **not**
+monotone shrinks of `psr`/`dsr` toward 0.5. The *whole* deflated formula is re-run on
+`effectiveBars`, so both the `sqrt(n)` scaling and the `defaultTrialVariance` deflation hurdle move
+together. For a positive-Sharpe but sub-hurdle arm the adjusted DSR can sit **below** the
+unadjusted one (more conservative), while for a negative-Sharpe arm it moves **toward** 0.5.
+Comparing one report's `dsr` with another report's `dsrAdjusted` therefore compares two different
+deflations, not two edges (the gate itself reads `dsrAdjusted` only). Pinned by `analysis.test.js`
+§AD.
+
 * Grounding: Kish 1965 (the design effect `1+(K−1)ρ̄` and `effectiveStreams`); Grinold 1989 (breadth
   counts *independent* forecasts, so a market-neutral sleeve is worth more per stream than a ninth
   correlated one); Asness, Moskowitz & Pedersen 2013 / Moskowitz, Ooi & Pedersen 2012 (combining

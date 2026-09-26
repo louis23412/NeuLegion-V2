@@ -33,8 +33,9 @@
 import fs from 'fs';
 import path from 'path';
 import {
-    VARIANTS, SIGNAL_VARIANTS, ALL_VARIANTS, LABEL_VARIANTS, OPT_IN_VARIANTS, RESOLVABLE_VARIANTS, BENCHMARK_VARIANTS, REVERSAL_VARIANTS,
+    VARIANTS, SIGNAL_VARIANTS, ALL_VARIANTS, LABEL_VARIANTS, OPT_IN_VARIANTS, RESOLVABLE_VARIANTS, BENCHMARK_VARIANTS, REVERSAL_VARIANTS, SIGUP_VARIANTS,
     FEATURE_LEN, resolveVariant, applyVariant, notApplicableReason, listVariants, formatVariantList, forecastKindOf, inertReasonFor,
+    rosterSnapshot, rosterRegistration, emptyListFlagError,
     featureVector, makeHiveMindModelFactory, makeControllerModelFactory, makeBenchmarkModelFactory, makeSignalForVariant,
     withSeed, evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, readCloses, readCandles, runAnalysis,
     replicateAnalysis,
@@ -100,10 +101,91 @@ export async function run() {
     check('the signal family is non-empty and every id is unique across the family',
         SIGNAL_VARIANTS.length >= 8 && new Set(ALL_VARIANTS.map((v) => v.id)).size === ALL_VARIANTS.length,
         `signals=${SIGNAL_VARIANTS.length} all=${ALL_VARIANTS.length}`);
+    // ---- A2b. Round 30: the PRE-REGISTERED, pruned default roster -----------
+    // PLAN-round30.md §2/§3.1: the default roster shrinks to the keepers so K (the
+    // deflated-Sharpe search size) shrinks with it. The snapshot is a content-hashed
+    // pin, so a silent re-add of a dropped branch fails here rather than quietly
+    // inflating every DSR. The dropped branches stay resolvable by id.
+    const roster = rosterSnapshot();
+    check('R30: the default roster is the pre-registered {baseline, sig-momentum, sig-accel}',
+        ALL_VARIANTS.map((v) => v.id).join(',') === 'baseline,sig-momentum,sig-accel' && roster.count === 3,
+        JSON.stringify(roster));
+    check('R30: the roster snapshot is a stable content-hashed id list',
+        // 1842652344 is the FNV-1a (`legion/rng.js#hashString`) of the pinned id
+        // string 'baseline,sig-momentum,sig-accel': a reorder or re-add fails here,
+        // not only the explicit id-list check above.
+        roster.hash === 1842652344 && roster.hash === rosterSnapshot().hash &&
+        Number.isInteger(roster.hash) && roster.hash >= 0 && roster.hash <= 0xFFFFFFFF &&
+        roster.ids.length === roster.count);
+    check('R30: every resolvable variant has a lineage entry and every register variant resolves',
+        rosterRegistration().uncovered.length === 0 && rosterRegistration().missingVariant.length === 0,
+        JSON.stringify(rosterRegistration()));
+    check('R30: no DROPPED branch is in the default roster',
+        rosterRegistration().droppedInRoster.length === 0, JSON.stringify(rosterRegistration().droppedInRoster));
+    check('R30: the searched universe keeps every branch resolvable by id (reproducibility)',
+        resolveVariant('surprise').id === 'surprise' && resolveVariant('sig-frac-momentum').id === 'sig-frac-momentum' &&
+        resolveVariant('sig-autocorr').id === 'sig-autocorr' && resolveVariant('bench-mlp').id === 'bench-mlp' &&
+        RESOLVABLE_VARIANTS.length >= 25,
+        `resolvable=${RESOLVABLE_VARIANTS.length}`);
+    // ---- A2c. Round 30 (#69): a present-but-empty list flag errors ----------
+    check('R30 (#69): a present-but-empty list flag errors instead of falling back (--file/--files/--carry-files/--symbols/--variants/--seeds)',
+        emptyListFlagError('file', true, '') !== null &&
+        emptyListFlagError('file', true, null) !== null &&
+        emptyListFlagError('file', true, '/tmp/x.jsonl') === null &&
+        emptyListFlagError('file', false, null) === null &&
+        emptyListFlagError('files', true, '') !== null &&
+        emptyListFlagError('files', true, null) !== null &&
+        emptyListFlagError('files', true, ',,') !== null &&
+        emptyListFlagError('files', true, 'a.jsonl') === null &&
+        emptyListFlagError('files', false, null) === null &&
+        emptyListFlagError('carry-files', true, '') !== null &&
+        emptyListFlagError('symbols', true, '') !== null &&
+        emptyListFlagError('symbols', true, 'btcusdt') === null &&
+        emptyListFlagError('variants', true, '') !== null &&
+        emptyListFlagError('variants', true, 'baseline,sig-momentum') === null &&
+        emptyListFlagError('seeds', true, '') !== null &&
+        emptyListFlagError('seeds', true, '1,2,3') === null,
+        JSON.stringify(emptyListFlagError('files', true, '')));
+    // ---- A2d. Round 30 (#70): a cross-sectional arm needs the panel ---------
+    const xsReversal = resolveVariant('sig-reversal-xs');
+    check('R30 (#70): a cross-sectional candidate is not-applicable on a <2-stream run and stays out of K',
+        xsReversal.crossSectional === true &&
+        notApplicableReason(xsReversal, 'controller', { streamCount: 1 }).includes('cross-section') &&
+        notApplicableReason(xsReversal, 'controller', { streamCount: 2 }) === null &&
+        notApplicableReason(xsReversal, 'controller') === null,
+        String(notApplicableReason(xsReversal, 'controller', { streamCount: 1 })));
+    check('R30 (#70): a non-cross-sectional candidate stays applicable on a single-stream run',
+        notApplicableReason(resolveVariant('sig-momentum'), 'controller', { streamCount: 1 }) === null &&
+        notApplicableReason(resolveVariant('sig-reversal'), 'controller', { streamCount: 1 }) === null);
+    // The taxonomy must be ENFORCED end-to-end: on a single stream the cross-sectional
+    // arm is marked not-applicable, excluded from K and the family-wise search; with
+    // two streams it is evaluable again. A stub signal keeps this about the taxonomy.
+    const xsVariants = [resolveVariant('baseline'), xsReversal];
+    const xsSignal = (v) => (v.id === 'sig-reversal-xs'
+        ? ((tr, te) => te.map((t) => (t % 2 ? 1 : -1)))
+        : ((tr, te) => te.map(() => 0)));
+    const xsSingle = evaluateAB({
+        returns: synthReturns(120), folds: walkForwardSplit({ n: 120, trainSize: 60, testSize: 10 }),
+        variants: xsVariants, signalForVariant: xsSignal, audit: false,
+    });
+    const xsRow = Object.fromEntries(xsSingle.candidates.map((c) => [c.variant.id, c]))['sig-reversal-xs'];
+    check('R30 (#70): a cross-sectional arm on a single stream is not-applicable, out of K and out of the search',
+        xsRow && typeof xsRow.notApplicable === 'string' && /cross-section/.test(xsRow.notApplicable) &&
+        xsRow.active === false && xsRow.search === null && xsSingle.trials === 1,
+        JSON.stringify({ na: xsRow && xsRow.notApplicable, trials: xsSingle.trials, active: xsRow && xsRow.active }));
+    const xsPanel = evaluateAB({
+        worlds: [
+            { label: 'A', returns: synthReturns(120), folds: walkForwardSplit({ n: 120, trainSize: 60, testSize: 10 }) },
+            { label: 'B', returns: synthReturns(120).map((x) => -x), folds: walkForwardSplit({ n: 120, trainSize: 60, testSize: 10 }) },
+        ],
+        variants: xsVariants, signalForVariant: xsSignal, audit: false,
+    });
+    const xsPanelRow = Object.fromEntries(xsPanel.candidates.map((c) => [c.variant.id, c]))['sig-reversal-xs'];
+    check('R30 (#70): the same arm with ≥2 streams is evaluable and stays in K',
+        xsPanelRow && !xsPanelRow.notApplicable && xsPanel.trials === 2,
+        JSON.stringify({ na: xsPanelRow && xsPanelRow.notApplicable, trials: xsPanel.trials }));
     check('every signal candidate is callable and carries kind=signal',
         SIGNAL_VARIANTS.every((v) => typeof v.signal === 'function' && v.kind === 'signal'));
-    check('ALL_VARIANTS = mechanism variants + signal family',
-        ALL_VARIANTS.length === VARIANTS.length + SIGNAL_VARIANTS.length);
     check('resolveVariant finds a signal candidate by id', resolveVariant(SIGNAL_VARIANTS[0].id).id === SIGNAL_VARIANTS[0].id);
     check('the controller position policy is documented and bounded',
         CONTROLLER_POSITION_POLICY.deadZone > 0 && CONTROLLER_POSITION_POLICY.deadZone < 1 &&
@@ -771,16 +853,16 @@ export async function run() {
             rep.trainSize === 60 && rep.testSize === 15 && rep.maxBars === 120 &&
             rep.auditProbesPerFold === 2 && Number.isFinite(rep.probe) && rep.probe > 0 &&
             rep.power && rep.power.bars > 0 && JSON.stringify(rep.positionPolicy) === JSON.stringify(CONTROLLER_POSITION_POLICY));
-        check('runAnalysis evaluates the default 14-candidate family on the controller path (sample-weights is opt-in, not in the roster)',
-            rep.variants.length === 14 && !rep.variants.some((v) => v.id === 'sample-weights') &&
-            rep.variants.filter((v) => v.kind === 'signal').length === 8);
+        check('runAnalysis evaluates the pre-registered roster on the controller path (round 30: 3 arms; sample-weights is opt-in)',
+            rep.variants.length === ALL_VARIANTS.length && ALL_VARIANTS.length === 3 && !rep.variants.some((v) => v.id === 'sample-weights') &&
+            rep.variants.filter((v) => v.kind === 'signal').length === 2);
         check('runAnalysis reports the audit as skipped when audit=false', rep.baseline.audit === null);
         check('the run summary names the model, streams and probe', typeof rep.summary === 'string' && rep.summary.includes('model: controller') && rep.summary.includes('streams=1'));
         check('the run carries a family-wise cross-check over the pooled stream',
             rep.familywise && Number.isFinite(rep.familywise.K) && typeof rep.familywise.best === 'string' && rep.familywise.K === rep.trials,
             JSON.stringify(rep.familywise).slice(0, 200));
         check('every candidate row carries a decision, a reason list and a pooled metrics block',
-            rep.candidates.length === 13 && rep.candidates.every((c) => typeof c.promote === 'boolean' && Array.isArray(c.reasons) && !!c.pooledMetrics && c.kind));
+            rep.candidates.length === ALL_VARIANTS.length - 1 && rep.candidates.every((c) => typeof c.promote === 'boolean' && Array.isArray(c.reasons) && !!c.pooledMetrics && c.kind));
         check('R26-7: runAnalysis states the dependence gate, its alpha and every hurdle it applies',
             rep.gate === 'dependence' && rep.gateAlpha === 0.05 && rep.gateOptions.requireSharpeDiff === true &&
             rep.gateOptions.requireClusterStability === true && rep.gateOptions.minDsrAdjusted === 0.95 && rep.gateOptions.alpha === 0.05 &&
@@ -986,7 +1068,7 @@ export async function run() {
             Object.prototype.hasOwnProperty.call(rep.baseline.model, 'undertrainedFolds') === false,
             JSON.stringify({ under: rep.baseline.model.underTrainedFolds, shallow: rep.baseline.model.shallowHistoryFolds }));
         check('per-variant wall times and the trial count are recorded on every row (baseline first)',
-            rep.timings.length === 14 && rep.timings[0].role === 'baseline' &&
+            rep.timings.length === ALL_VARIANTS.length && rep.timings[0].role === 'baseline' &&
             rep.timings.every((t) => typeof t.id === 'string' && Number.isFinite(t.elapsedMs) && t.elapsedMs >= 0) &&
             // The candidate rows must carry the same provenance: elapsedMs/streams
             // (dropped by evaluateAB's projection before round 25b) and the K every
@@ -1032,8 +1114,8 @@ export async function run() {
             model: 'bare', writeFiles: false, audit: false,
             HiveMind: FakeMind, HiveMindController: VaryCtl,
         });
-        check('--model=bare reproduces the round-22 proxy (14 variants, no controller-scoped candidate, no position policy)',
-            bareRep.report.model === 'bare' && bareRep.report.variants.length === 14 && bareRep.report.positionPolicy === null &&
+        check('--model=bare reproduces the round-22 proxy (the pre-registered roster, no controller-scoped candidate, no position policy)',
+            bareRep.report.model === 'bare' && bareRep.report.variants.length === ALL_VARIANTS.length && bareRep.report.positionPolicy === null &&
             !bareRep.report.variants.some((v) => v.id === 'sample-weights'));
 
         const narrowed = await runAnalysis({
@@ -1061,11 +1143,11 @@ export async function run() {
         // `optimistic` is the shipped labeller and the baseline behaviour. The
         // `conservative` and `triple` labels are opt-in A/B candidates: a label
         // change is a *training-set* change, so it must be asked for explicitly and
-        // the default family must stay exactly 14 candidates.
+        // the default family must stay exactly the pre-registered roster (round 30).
         check('R26-11/R28: the label variants resolve by id but stay out of the default family (opt-in only)',
             resolveVariant('label-conservative').id === 'label-conservative' &&
             resolveVariant('label-triple').id === 'label-triple' &&
-            LABEL_VARIANTS.length === 2 && RESOLVABLE_VARIANTS.length === ALL_VARIANTS.length + OPT_IN_VARIANTS.length + LABEL_VARIANTS.length + BENCHMARK_VARIANTS.length + REVERSAL_VARIANTS.length &&
+            LABEL_VARIANTS.length === 2 && RESOLVABLE_VARIANTS.length === VARIANTS.length + SIGNAL_VARIANTS.length + OPT_IN_VARIANTS.length + LABEL_VARIANTS.length + BENCHMARK_VARIANTS.length + REVERSAL_VARIANTS.length + SIGUP_VARIANTS.length &&
             ALL_VARIANTS.every((v) => v.kind !== 'label') &&
             LABEL_VARIANTS.every((v) => v.controllerScoped === true && v.kind === 'label' &&
                 typeof v.configure === 'function' && (v.labelPolicy === 'conservative' || v.labelPolicy === 'triple')),
@@ -1081,6 +1163,19 @@ export async function run() {
             resolveVariant('sig-reversal-xs').crossSectional === true &&
             forecastKindOf(resolveVariant('sig-reversal')) === 'signal',
             `reversal=${REVERSAL_VARIANTS.length} resolvable=${RESOLVABLE_VARIANTS.length}`);
+        // G-H (round 30, C-SIGUP / C-REGIME): the pre-registered momentum upgrades
+        // resolve by id, stay out of the default roster (K untouched), and exactly
+        // one arm is the panel reader (`sig-network-momentum`).
+        check('G-H: the momentum-upgrade family resolves by id, stays opt-in, and only the network arm reads the panel',
+            SIGUP_VARIANTS.length === 4 &&
+            resolveVariant('sig-vol-momentum').id === 'sig-vol-momentum' && resolveVariant('sig-regime-momentum').id === 'sig-regime-momentum' &&
+            SIGUP_VARIANTS.every((v) => v.kind === 'signal' && typeof v.signal === 'function' && !ALL_VARIANTS.includes(v)) &&
+            SIGUP_VARIANTS.filter((v) => v.crossSectional === true).length === 1 &&
+            resolveVariant('sig-network-momentum').crossSectional === true &&
+            notApplicableReason(resolveVariant('sig-network-momentum'), 'controller', { streamCount: 1 }).includes('cross-section') &&
+            notApplicableReason(resolveVariant('sig-vol-momentum'), 'controller', { streamCount: 1 }) === null &&
+            forecastKindOf(resolveVariant('sig-blend-momentum')) === 'signal',
+            `sigup=${SIGUP_VARIANTS.length} resolvable=${RESOLVABLE_VARIANTS.length}`);
         check('R26-11: a label variant overrides the run-level policy on the controller (configure runs after the default), and the horizon is threaded',
             (() => {
                 const mk = (over) => makeControllerModelFactory({
@@ -1122,8 +1217,8 @@ export async function run() {
             model: 'controller', writeFiles: false, audit: false, labelPolicies: true,
             HiveMind: FakeMind, HiveMindController: VaryCtl,
         });
-        check('R26-11: --label-policies appends exactly the two label variants to the 14-candidate family',
-            lpFull.report.variants.length === 16 &&
+        check('R26-11: --label-policies appends exactly the two label variants to the pre-registered roster',
+            lpFull.report.variants.length === ALL_VARIANTS.length + 2 &&
             lpFull.report.variants.slice(-2).map((v) => v.id).join(',') === 'label-conservative,label-triple',
             JSON.stringify(lpFull.report.variants.map((v) => v.id)));
         check('R26-11: the label variants are controller-scoped, so --model=bare never runs them even when asked',
@@ -1736,7 +1831,7 @@ export async function run() {
     check('run.json records the round-24 integrity config (retention, reachability, fold log, folds, roster)',
         q1Run.modelRetention === 'discard' && q1Run.requireReachable === true && q1Run.foldLog === 'all' &&
         q1Run.reuseBase === false && q1Run.costBps === 0 &&
-        q1Run.folds === 4 && Array.isArray(q1Run.variants) && q1Run.variants.length === 14,
+        q1Run.folds === 4 && Array.isArray(q1Run.variants) && q1Run.variants.length === ALL_VARIANTS.length,
         JSON.stringify({ retention: q1Run.modelRetention, folds: q1Run.folds, variants: q1Run.variants.length }));
     const q1Rep = qReadJson(q1.runDir, 'report.json');
     check('R26-12: run.json and report.json record the checkpoint throttle (the A/B default is the never-dump "inf")',
@@ -1754,18 +1849,18 @@ export async function run() {
         q1Run.intervalBars === 1 && q1Run.streamSelect === false && q1Rep.intervalBars === 1 && q1Rep.streamSelection === null,
         JSON.stringify({ interval: q1Run.intervalBars, select: q1Run.streamSelect }));
     check('report.json is the canonical complete verdict with the machine-readable audit block',
-        q1Rep.status === 'complete' && q1Rep.schema === 'nl.analyze.v1' && q1Rep.candidates.length === 13 &&
+        q1Rep.status === 'complete' && q1Rep.schema === 'nl.analyze.v1' && q1Rep.candidates.length === ALL_VARIANTS.length - 1 &&
         !!q1Rep.baseline.audit && typeof q1Rep.baseline.audit.clean === 'boolean' && typeof q1Rep.baseline.audit.probes === 'number' &&
         typeof q1Rep.candidates[0].audit.clean === 'boolean' && !!q1Rep.familywise && typeof q1Rep.reader === 'string' && !!q1Rep.artifacts);
     const q1Part = qReadJson(q1.runDir, 'partial-report.json');
     check('partial-report.json is the per-variant checkpoint, matching the final report row counts',
-        q1Part.status === 'complete' && q1Part.schema === 'nl.analyze.v1' && q1Part.candidates.length === 13 && q1Part.variants.length === 14);
+        q1Part.status === 'complete' && q1Part.schema === 'nl.analyze.v1' && q1Part.candidates.length === ALL_VARIANTS.length - 1 && q1Part.variants.length === ALL_VARIANTS.length);
     // R27-5: the FIRST checkpoint carries the full config echo, so a kill-and-recover
     // reader can reconstruct the run's design (gate, K, throttle, label, concurrency,
     // resampling, CRN, selection floor) without guessing it from the code.
     check('R27-5: partial-report.json carries the run config echo in its checkpoint',
         q1Part.gate === 'dependence' && q1Part.gateOptions && q1Part.gateOptions.requireSharpeDiff === true &&
-        q1Part.trials === q1Rep.trials && q1Part.variantsTotal === 14 && q1Part.saveInterval === 'inf' && q1Part.labelPolicy === 'optimistic' &&
+        q1Part.trials === q1Rep.trials && q1Part.variantsTotal === ALL_VARIANTS.length && q1Part.saveInterval === 'inf' && q1Part.labelPolicy === 'optimistic' &&
         q1Part.labelHorizonBars === null && Number.isFinite(q1Part.concurrency) &&
         q1Part.intervalBars === 1 && q1Part.commonRandomNumbers === true && q1Part.streamSelection === null &&
         q1Part.turnoverSweep === false && q1Part.minTrainingSteps === 1 &&
@@ -1781,11 +1876,11 @@ export async function run() {
             const log = fs.readFileSync(path.join(q1.runDir, 'run.log'), 'utf8').trim().split('\n')
                 .map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
             const vc = log.filter((r) => r.message === 'progress' && r.data && r.data.phase === 'variant-checkpoint');
-            return vc.length === 14 && vc.every((r) => typeof r.data.variantId === 'string' && typeof r.data.kind === 'string' && Number.isFinite(r.data.elapsedMs));
+            return vc.length === ALL_VARIANTS.length && vc.every((r) => typeof r.data.variantId === 'string' && typeof r.data.kind === 'string' && Number.isFinite(r.data.elapsedMs));
         })());
     const q1Prog = qReadJson(q1.runDir, 'progress.json');
     check('progress.json is a complete heartbeat (every budgeted pass accounted for)',
-        q1Prog.phase === 'complete' && q1Prog.counters.events === q1Prog.counters.eventsTotal && q1Prog.counters.eventsTotal === 224 &&
+        q1Prog.phase === 'complete' && q1Prog.counters.events === q1Prog.counters.eventsTotal && q1Prog.counters.eventsTotal === 16 * ALL_VARIANTS.length &&
         q1Prog.reuseBase === false && q1Prog.costBps === 0,
         JSON.stringify(q1Prog.counters));
     const q1Folds = fs.readFileSync(path.join(q1.runDir, 'folds.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));

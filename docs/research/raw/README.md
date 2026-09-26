@@ -216,6 +216,38 @@ discarded and only relevant hits are kept in the JSON snapshots.
   **gated, pre-registered probe**, not a default change, and the principled default is a
   learned/dimension-sized `es`.
 
+- `arxiv-sweep-2026-09q.json` — **refresh (round-30 planning): the *what-proved-working*
+  sweep.** Where `09o`/`09p` asked *where an edge is documented*, this one grounds the
+  directions the acceptance batch actually confirmed: the **momentum/trend** family
+  (**1404.3274** *Two centuries of trend following*, **2009.12155** *A Decade of Evidence of
+  Trend Following Investing in Cryptocurrencies* — the closest published analogue to
+  `sig:momentum` on this basket; **1402.3030** information-ratio analysis of momentum;
+  **2308.11294** network momentum across asset classes; **2105.13727** *Slow Momentum with
+  Fast Reversion* — the changepoint/regime sibling of the round's best arm; **2112.08534**
+  the Momentum Transformer; **2406.08742** DeepUnifiedMom; **2607.00475** end-to-end
+  parametric policies — *when do AI models beat simple rules?*; **1904.00890** momentum and
+  liquidity in cryptocurrencies; **2604.09060** momentum-crash gating); the **carry/funding**
+  sleeve (**2212.06888** *Fundamentals of Perpetual Futures*, **2209.03307** *A primer on
+  perpetuals*, **2506.08573** designing funding rates, **1912.03270** BitMEX funding
+  correlation, **2601.06084** funding mechanics, **2405.15461** optimal market-neutral
+  currency trading); **decorrelation/breadth** as the binding lever (**2303.01657**
+  diversification-return portfolios, **2506.20385** an empirical diversification-quotient
+  estimator, **2411.06080** the lexical ratio, **1904.04912/2308.11294** deep TSMOM with
+  volatility scaling); **cost/turnover** honesty (**1904.08925** proportional transaction
+  costs on systematically generated portfolios, **2412.11575** cost-aware portfolios,
+  **2312.05169** Onflow, **1709.06296** transaction costs + model uncertainty);
+  **vol-targeting** (**2603.01298** adaptive leveraged volatility control, **2511.08571**
+  benchmark-neutral alpha + capacity); **market-neutral** construction (**2607.18001**
+  AlphaZeroBeta, **2412.12350** multi-factor market-neutral, **1608.08268** pairs-trading
+  neutrality); and **evaluation robustness** (**2605.23955** a survey of determinism in
+  financial AI, **2209.05559** DRL crypto backtest overfitting, **1408.1159** trading rules
+  without backtesting). Relevance-sorted queries (`sortBy=relevance` — date-sorted
+  multi-phrase queries returned almost pure noise); only relevant hits kept. The file also
+  carries an `also_cited` block — seven further papers cited by
+  `../round30-winning-mechanisms.md` that a relevance query returned but the first curation
+  dropped (ids re-pulled from the arXiv API so every citation in the note is backed by this
+  file). Grounding note: `../round30-winning-mechanisms.md`; plan: `../../PLAN-round30.md`.
+
 ## Topics swept
 
 - test-time training / test-time memory

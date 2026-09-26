@@ -28,12 +28,12 @@ npm install
 npm test
 ```
 
-Expect **all green** (`node --test` prints `pass 127`, `fail 0`). This single command is the whole
+Expect **all green** (`node --test` prints `pass 128`, `fail 0`). This single command is the whole
 check: it runs
 
-* the **30 mirrored browser entries → 2558 checks** — all 30 assert zero failures, and **22 of
+* the **30 mirrored browser entries → 2585 checks** — all 30 assert zero failures, and **22 of
   them also pin their entry's exact count**, so any drift fails loudly
-  (`analyze` 269, `analysis` 621, `candles` 192, `fetcher` 111, `multiprobe` 77, `lsh` 75,
+  (`analyze` 279, `analysis` 638, `candles` 192, `fetcher` 111, `multiprobe` 77, `lsh` 75,
   `observer` 76, `guards` 65, `golden` 23, … — see the table in `RUNBOOK.md` §6), and
 * the **13 node-only suites** (real `worker_threads` / SQLite / HTTP / process machinery:
   `parallel_folds`, `analyze_cli`, `checkpoint_throttle`, `report_lifecycle`, `shutdown`,
@@ -66,6 +66,16 @@ CANDLES_15M="src/data/candles_btcusdt_15m.jsonl,src/data/candles_ethusdt_15m.jso
 FUND="src/data/funding_btcusdt_8h.jsonl,src/data/funding_ethusdt_8h.jsonl,src/data/funding_solusdt_8h.jsonl,src/data/funding_bnbusdt_8h.jsonl,src/data/funding_xrpusdt_8h.jsonl,src/data/funding_adausdt_8h.jsonl,src/data/funding_dogeusdt_8h.jsonl,src/data/funding_linkusdt_8h.jsonl"
 ```
 
+> **Verify the variables are non-empty before running — this is the failure that actually
+> happened.** On the 2026-09-24/25 batch, `$CANDLES_15M` and `$FUND` were unset in the shell that
+> ran 3c/3d, so `--files=` and `--carry-files=` expanded to the empty string and `analyze.js`
+> **silently fell back** to the default single-file dataset / no sleeve (see §5 and `BUGS.md` #69).
+> Check with `echo "${CANDLES_15M:?unset}"; echo "${FUND:?unset}"` (the `:?` form errors if unset),
+> or paste the comma-lists inline instead of using variables. **Round 30 also makes this a hard
+> error:** `analyze.js` now refuses a present-but-empty `--file=` / `--files=` / `--carry-files=` /
+> `--symbols=` / `--variants=` / `--seeds=` (`BUGS.md` #69), so an empty expansion aborts the run
+> (non-zero exit) instead of silently scoring the default dataset.
+
 Order matters only in that **3a is the fast sanity run** — do it first and check the box before
 committing to the longer ones. Sizing guidance (cost law, measured wall times): `RUNBOOK.md`
 "How to test / sizing a run".
@@ -89,13 +99,19 @@ In the run's `report.json`, confirm:
 ### 3b. P1 — model-class benchmark
 
 ```bash
-npm run analyze -- --symbols=all --bars=600 --train=60 --test=15 --audit-probes=1 --reuse-base --variants=bench-base-rate,bench-linear,bench-mlp --cost-ladder=0,2,5,10
+npm run analyze -- --model=bare --symbols=all --bars=600 --train=60 --test=15 --audit-probes=1 --reuse-base --variants=bench-base-rate,bench-linear,bench-mlp --cost-ladder=0,2,5,10
 ```
 
 In `report.json`, confirm the `forecast` block scores `base-rate` / `linear` / `mlp` in the
 **probability-calibrated MCS group** beside the baseline, each row carrying `brierSkill` and
 `accuracySkill` (the P1 readout is negative: nothing beats the base rate — see `RUN-ANALYSIS.md`
 §16.2).
+
+> **`--model=bare` is required for a §16.2 comparison (round 30, `TODO.md` 101).** The round-29 P1
+> runs were bare, so §16.2's baseline row is the *bare* HiveMind (`0.25382 / −0.0153 / 0.4866`).
+> Omitting `--model` defaults to `controller`, whose baseline row reads
+> `0.25215 / −0.00861 / 0.49777` — the benchmark arms match either way (they read the feature vector
+> through their own factory), but the baseline row does not. See `RUN-ANALYSIS.md` §17.3.
 
 ### 3c. P3 — short-horizon reversal on the 15m basket
 
@@ -124,12 +140,21 @@ Confirm in `report.json`:
 
 ### 3e. Full-size verdict (optional — the real one; hours)
 
-The identical design at full width with the shipped defaults (all 14 candidates, 8 symbols ×
+The identical design at full width with the shipped defaults (the **pruned** roster — round 30
+reduced the default to `{baseline, sig-momentum, sig-accel}`, so this now scores **K = 3** rather
+than the round-29 14 arms; pass `--variants=…` explicitly to override — 8 symbols ×
 600 bars, no opt-in additions). This is the run the verdict is read from:
 
 ```bash
 npm run analyze -- --symbols=all --bars=600 --train=60 --test=15 --audit-probes=1 --reuse-base --concurrency=4 --cost-ladder=0,2,5,10
 ```
+
+> **Round 30 — the pruned verdict run.** This command is now the round-30 verdict run
+> (`PLAN-round30.md` §6.3, gate **G-G**): with the pruned roster, `K` drops 14 → 3, so the
+> family-wise deflation hurdle shrinks. Add the funding sleeve (`--carry-files="$FUND"`) to fold the
+> P4 breadth purchase into the same run; the arithmetic says pruning alone reaches adjDSR ≈ 0.934
+> for `sig-momentum` (short of the 0.95 floor), so the sleeve/extra streams are the lever that can
+> actually cross it.
 
 ---
 
@@ -164,3 +189,37 @@ above directly.)
 
 **If `npm test` is red**, attach the failing output (the `node --test` tail is enough) and tell me
 which entry failed; I can re-run any single entry offline.
+
+---
+
+## 5. Observed results — the 2026-09-24/25 batch (what to expect, and the one mistake to avoid)
+
+Five runs came back and are written up in full at `RUN-ANALYSIS.md` §17 and
+`round29-IMPLEMENTATION.md` §8. The headline:
+
+| run | result |
+| --- | --- |
+| **3a (P2)** | both flags applied; nothing promotes; cadence grid 0/3; exposure-matched `sig-momentum` **+1.66** Sharpe (raw +2.18) — the edge survives matching but adjDSR 0.902 < 0.95 |
+| **3b (P1)** | reproduces §16.2's benchmark arms to 5 dp; MCS₉₀ = `{bench-linear}`; **negative branch confirmed** (nothing beats the base rate) |
+| **3c (P3)** | **ran the wrong experiment** — see below |
+| **3d (P4)** | **ran the wrong experiment for carry**, but its cadence grid reproduces §16.3 to 4 dp |
+| **3e (full)** | full-roster keep-off; **the dependence-adjusted DSR is the only binding hurdle** for `sig-momentum`/`sig-accel`; run underpowered (variance inflation 4.87×, effective streams 1.7 of 8) |
+
+**The mistake that actually happened (and how the report hid it).** `CANDLES_15M` and `FUND` were
+not set in the shell that ran 3c/3d, so:
+
+- **3c** ran `--files=` (empty) → `analyze.js` fell back to the default `src/candles.jsonl`, so the
+  run scored **1 stream at 1h** instead of 8 at 15m. It is visible in `run.json` as
+  `"streams": 1` and `"candles": 2000` (not ≈8×2000), and in `report.json` as one `sig-reversal-xs`
+  arm that emits **nothing** (`netSharpe 0`, `turnover 0`) yet is labelled `liveness: "live"` and
+  becomes the `familywise.best` (`BUGS.md` #70).
+- **3d** ran `--carry-files=` (empty) → `report.carry` is `null`, `dependence.streams` is 8, and
+  every `configurationRobust` evaluation carries `panelStreams: 0` (it should be **1**).
+
+Both are confirmed against the §3 checklists ("the run reports 8 streams and a candle count ≈ 8 ×
+2000"; "`carry.panelStreams === 1` … `dependence.streams === 9`"). **Re-run 3c and 3d with the
+variables verified non-empty** (see the warning in §3). Everything else reproduced.
+
+**Also note:** at the 3a window (200 bars) `exposureMatched.candidates.<id>.matchedWithinTolerance`
+is `false` for every active candidate — the pointwise match undershoots the common target
+(0.485 vs 0.520). That is the documented `BUGS.md` #63 behaviour, not a failure of the run.

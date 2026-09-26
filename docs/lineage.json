@@ -1,0 +1,108 @@
+{
+  "schema": {
+    "id": "NL-<LINEAGE>-<branch>@<version>  (version = @rNN milestone or @rNN.n behavioural revision)",
+    "state": "LIVE | KEEP | PARK | DROPPED | FROZEN | UNTESTED",
+    "lineage": "CTRL | MECH | SIG | REV | BENCH | LABEL | EVAL | DATA | HARNESS | LEGION"
+  },
+  "established": "2026-09-25 (round-30 planning)",
+  "human": "LINEAGE.md",
+  "lineages": {
+    "CTRL": {
+      "name": "HiveMind controller",
+      "question": "is the model skilful?",
+      "code": "src/hivemind/**"
+    },
+    "MECH": {
+      "name": "controller/memory mechanism",
+      "question": "does this mechanism move the score?",
+      "code": "src/hivemind/memory|ensemble|training/**"
+    },
+    "SIG": {
+      "name": "causal signal family",
+      "question": "is there a cross-sectional/price edge?",
+      "code": "src/analysis/features.js"
+    },
+    "REV": {
+      "name": "short-horizon reversal family",
+      "question": "is there a fast mean-reversion edge net of cost?",
+      "code": "src/analysis/features.js"
+    },
+    "BENCH": {
+      "name": "model-class benchmarks",
+      "question": "architecture or features the constraint?",
+      "code": "src/analysis/benchmark.js"
+    },
+    "LABEL": {
+      "name": "trade-label policies",
+      "question": "does the training target matter?",
+      "code": "src/hivemind/controller/trades.js"
+    },
+    "EVAL": {
+      "name": "walk-forward + significance + gate stack",
+      "question": "is a verdict honest?",
+      "code": "src/analysis/{walkforward,decision,dependence,performance,reality_check,overfitting,forecast,backtest}.js"
+    },
+    "DATA": {
+      "name": "data sleeves",
+      "question": "what new information is there?",
+      "code": "src/data/**, src/candle_fetcher.js, src/funding_fetcher.js"
+    },
+    "HARNESS": {
+      "name": "test harness, goldens, lock registry",
+      "question": "is the code pinned?",
+      "code": "test/**, docs/LOCKED.md"
+    },
+    "LEGION": {
+      "name": "outer evolutionary population",
+      "question": "can evolution breed a better controller?",
+      "code": "src/legion/**"
+    }
+  },
+  "branches": [
+    { "id": "NL-CTRL-hivemind@r29", "lineage": "CTRL", "branch": "hivemind", "state": "LIVE", "variant": "baseline", "note": "the scored baseline controller", "evidence": "RUN-ANALYSIS.md §16-§17" },
+
+    { "id": "NL-MECH-surprise@r2", "lineage": "MECH", "branch": "surprise", "state": "DROPPED", "variant": "surprise", "evidence": "net Sharpe +0.098 @200 / -0.028 @600; never significant", "dropped": "DROPPED.md" },
+    { "id": "NL-MECH-homeostasis@r2", "lineage": "MECH", "branch": "homeostasis", "state": "DROPPED", "variant": "homeostasis", "evidence": "-0.2249 @200 / -0.1627 @600", "dropped": "DROPPED.md" },
+    { "id": "NL-MECH-pca-hash@r13", "lineage": "MECH", "branch": "pca-hash", "state": "DROPPED", "variant": "pca-hash", "evidence": "inert 72/72 @200; 6/288 @600 but paired dSharpe 0.0043 p 0.19 foldWin 0.01", "dropped": "DROPPED.md" },
+    { "id": "NL-MECH-multiprobe@r16", "lineage": "MECH", "branch": "multiprobe", "state": "PARK", "variant": "multiprobe", "evidence": "appliesTo broadcast; not scoreable here (R27-2)" },
+    { "id": "NL-MECH-querymod@r17", "lineage": "MECH", "branch": "querymod", "state": "PARK", "variant": "querymod", "evidence": "appliesTo broadcast; not scoreable here (R27-2)" },
+    { "id": "NL-MECH-sample-weights@r28", "lineage": "MECH", "branch": "sample-weights", "state": "PARK", "variant": "sample-weights", "evidence": "opt-in; confounded BUGS.md #54" },
+    { "id": "NL-MECH-sample-weights-scale-control@r28", "lineage": "MECH", "branch": "sample-weights-scale-control", "state": "PARK", "variant": "sample-weights-scale-control", "evidence": "LR-only control arm" },
+    { "id": "NL-MECH-memory@r29", "lineage": "MECH", "branch": "memory-subsystem", "state": "FROZEN", "note": "the LSH/replay/consolidation subsystem itself is core and golden-pinned; only the hypotheses above are dropped" },
+
+    { "id": "NL-SIG-momentum@r23", "lineage": "SIG", "branch": "momentum", "state": "KEEP", "variant": "sig-momentum", "evidence": "net Sharpe +1.0848, break-even 14.64 bps, adjDSR 0.7736 (binding hurdle only)" },
+    { "id": "NL-SIG-accel@r27", "lineage": "SIG", "branch": "accel", "state": "KEEP", "variant": "sig-accel", "evidence": "net Sharpe +1.0194, break-even 11.57 bps, adjDSR 0.8608 (highest)" },
+    { "id": "NL-SIG-range@r23", "lineage": "SIG", "branch": "range", "state": "PARK", "variant": "sig-range", "evidence": "+0.4490, adjDSR 0.2611; real cross-sectional content (common-share 0.61)" },
+    { "id": "NL-SIG-agreement@r23", "lineage": "SIG", "branch": "agreement", "state": "PARK", "variant": "sig-agreement", "evidence": "+0.3912, adjDSR 0.2113; r 0.81 with sig-range" },
+    { "id": "NL-SIG-volume@r23", "lineage": "SIG", "branch": "volume", "state": "DROPPED", "variant": "sig-volume", "evidence": "-0.0008 (exactly flat)", "dropped": "DROPPED.md" },
+    { "id": "NL-SIG-autocorr@r23", "lineage": "SIG", "branch": "autocorr", "state": "DROPPED", "variant": "sig-autocorr", "evidence": "regime-dependent: +1.79 @200 vs -0.10 @600", "dropped": "DROPPED.md" },
+    { "id": "NL-SIG-vol-regime@r23", "lineage": "SIG", "branch": "vol-regime", "state": "DROPPED", "variant": "sig-vol-regime", "evidence": "-0.3135, fails dsrDelta", "dropped": "DROPPED.md" },
+    { "id": "NL-SIG-frac-momentum@r23", "lineage": "SIG", "branch": "frac-momentum", "state": "DROPPED", "variant": "sig-frac-momentum", "evidence": "-0.4185, turnover 2092 (worst arm)", "dropped": "DROPPED.md" },
+    { "id": "NL-SIG-vol-momentum@r30", "lineage": "SIG", "branch": "vol-momentum", "state": "UNTESTED", "variant": "sig-vol-momentum", "evidence": "pre-registered round-30 upgrade (gate G-H): vol-scaled momentum (1904.04912); opt-in, not in the default roster" },
+    { "id": "NL-SIG-blend-momentum@r30", "lineage": "SIG", "branch": "blend-momentum", "state": "UNTESTED", "variant": "sig-blend-momentum", "evidence": "pre-registered round-30 upgrade (gate G-H): multi-horizon blended momentum (2112.08534); opt-in" },
+    { "id": "NL-SIG-network-momentum@r30", "lineage": "SIG", "branch": "network-momentum", "state": "UNTESTED", "variant": "sig-network-momentum", "evidence": "pre-registered round-30 upgrade (gate G-H): network/lead-lag momentum (2308.11294); opt-in; requires the panel (BUGS.md #70)" },
+    { "id": "NL-SIG-regime-momentum@r30", "lineage": "SIG", "branch": "regime-momentum", "state": "UNTESTED", "variant": "sig-regime-momentum", "evidence": "pre-registered round-30 upgrade (gate G-H): causal regime/crash gate (2105.13727 / 2604.09060); opt-in" },
+
+    { "id": "NL-REV-reversal@r29", "lineage": "REV", "branch": "reversal", "state": "PARK", "variant": "sig-reversal", "evidence": "15m acc 0.5191; break-even 0.337 bps vs 5-10 bps taker" },
+    { "id": "NL-REV-reversal-4@r29", "lineage": "REV", "branch": "reversal-4", "state": "PARK", "variant": "sig-reversal-4", "evidence": "best break-even 0.562 bps" },
+    { "id": "NL-REV-reversal-vol@r29", "lineage": "REV", "branch": "reversal-vol", "state": "PARK", "variant": "sig-reversal-vol", "evidence": "0.323 bps; vol-scaling adds nothing" },
+    { "id": "NL-REV-reversal-xs@r29", "lineage": "REV", "branch": "reversal-xs", "state": "PARK", "variant": "sig-reversal-xs", "evidence": "requires the panel; degenerate single-stream (BUGS.md #70)" },
+
+    { "id": "NL-BENCH-base-rate@r29", "lineage": "BENCH", "branch": "base-rate", "state": "PARK", "variant": "bench-base-rate", "evidence": "the reference bar" },
+    { "id": "NL-BENCH-linear@r29", "lineage": "BENCH", "branch": "linear", "state": "PARK", "variant": "bench-linear", "evidence": "MCS winner but brierSkill -0.0008 = no skill" },
+    { "id": "NL-BENCH-mlp@r29", "lineage": "BENCH", "branch": "mlp", "state": "DROPPED", "variant": "bench-mlp", "evidence": "Brier 0.27431, skill -0.0972 (worst)", "dropped": "DROPPED.md" },
+
+    { "id": "NL-LABEL-conservative@r26", "lineage": "LABEL", "branch": "conservative", "state": "PARK", "variant": "label-conservative", "evidence": "untested in the acceptance batch" },
+    { "id": "NL-LABEL-triple@r26", "lineage": "LABEL", "branch": "triple", "state": "PARK", "variant": "label-triple", "evidence": "untested in the acceptance batch" },
+
+    { "id": "NL-EVAL-gate@r26", "lineage": "EVAL", "branch": "dependence-gate", "state": "FROZEN", "evidence": "cadence/exposure flags pure post-processing (3d == 3e)" },
+    { "id": "NL-EVAL-significance@r25", "lineage": "EVAL", "branch": "significance-stack", "state": "FROZEN", "evidence": "PSR/DSR/MinTRL + SPA/Romano-Wolf" },
+
+    { "id": "NL-DATA-1h-8@r22", "lineage": "DATA", "branch": "candles-1h", "state": "LIVE", "evidence": "8 symbols 1h basket" },
+    { "id": "NL-DATA-15m-8@r29", "lineage": "DATA", "branch": "candles-15m", "state": "LIVE", "evidence": "P3 basket; CANDLE_MANIFEST_15M" },
+    { "id": "NL-DATA-funding-8@r29", "lineage": "DATA", "branch": "funding-8h", "state": "LIVE", "evidence": "carry sleeve; the one measured independence lever" },
+
+    { "id": "NL-HARNESS-golden@r29", "lineage": "HARNESS", "branch": "golden+lock-registry", "state": "FROZEN", "evidence": "2558 checks / 30 entries, golden 23/0" },
+    { "id": "NL-LEGION-evolve@r22", "lineage": "LEGION", "branch": "evolve", "state": "UNTESTED", "evidence": "built, never scored" }
+  ]
+}

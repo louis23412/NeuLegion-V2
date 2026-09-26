@@ -101,6 +101,13 @@ export function backtestMetrics({
     // honest sample size. `null` (the default, and every single-stream report)
     // means "no correction was justified", which is not the same as "adjusted to
     // the same value".
+    //
+    // NOTE (PLAN-round30 §5): this is NOT a monotone shrink of `dsr` toward 0.5.
+    // The WHOLE deflated formula is re-run on `nEff`, so both the `sqrt(n)`
+    // scaling and the `defaultTrialVariance` deflation hurdle move together. For a
+    // positive-Sharpe, sub-hurdle arm `dsrAdjusted` can sit BELOW `dsr` (more
+    // conservative); for a negative-Sharpe arm it moves toward 0.5 (pinned by
+    // `analysis.test.js` §AD).
     effectiveBars = null,
 }) {
     const pos = positions || positionsFromSignals(signals, { lag: 1 });

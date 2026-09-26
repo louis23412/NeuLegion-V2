@@ -120,6 +120,22 @@ The shipped manifest is 8 Binance 1h symbols (~567k rows / ~63 MB) audited by
 workflow source lives at `docs/ci/update-candles.yml` (copy it to
 `.github/workflows/` — the workspace file API forbids a literal `.github` dir).
 
+### 5.1 The A/B verdict + the round-30 operator set
+
+The `analyze` run set (and, from round 30, the P1/P3/P4 re-runs, the pruned verdict run, the G-F
+seed replication, the G-G breadth run and the G-H momentum-upgrade run) is scripted. It defines the 15m/funding file lists and
+**checks every file exists before running**, so the empty-list fallback that invalidated the
+2026-09-24/25 3c/3d runs (`BUGS.md` #69) cannot recur:
+
+```bash
+bash scripts/round30-runs.sh            # prints the stage list
+bash scripts/round30-runs.sh p3         # one stage per invocation
+bash scripts/round30-runs.sh all        # the whole set (hours)
+```
+
+`round29-TESTING.md` §3 is the full command reference and the per-run readouts; `PLAN-round30.md`
+§6.3 lists the immediate runs and §6.2 the gates (`G-F…G-K`). Every run writes `state/runs/<runId>/`.
+
 ## 6. Tests — the authoritative gate
 
 ```bash
@@ -166,8 +182,8 @@ starts no run, and that the seed aggregate is written — the browser entry
 imports `runAnalysis` directly, so the argument-parsing block is otherwise
 untested). `bench` is the only
 browser entry
-without a mirror (it prints timings). So `npm test` reports **127 `test()`
-blocks across 43 files** (44 with `helpers.js`) rather than 2558 checks; a green
+without a mirror (it prints timings). So `npm test` reports **128 `test()`
+blocks across 43 files** (44 with `helpers.js`) rather than 2585 checks; a green
 run — plus `failed === 0` and the ledger count from every wrap-style mirror — is
 the gate. Measured **~5.9 min** at round 22 (`BUGS.md` #21): the `dimensions`
 sweep of both `forceMin` branches dominates (~353 s), then `lsh` (~177 s) and
@@ -192,12 +208,17 @@ wrap-style mirrors assert against. **Expected totals (all must be 0 failures):**
 | `modules` | 51 | | `querymod` | 51 |
 | `legion` | 57 | | `walkforward` | 63 |
 | `candles` | 192 | | `dimensions` | 185 |
-| `locks` | 41 | | `analysis` | 621 |
+| `locks` | 41 | | `analysis` | 638 |
 | `price_precision` | 29 | | `multisymbol` | 28 |
 | `guards` | 65 | | `observer` | 76 |
-| `analyze` | 269 | | `controller_invariants` | 23 |
+| `analyze` | 279 | | `controller_invariants` | 23 |
 
-**Total: 2558 checks.** Every one passed in the development sandbox's browser
+**Total: 2585 checks.** (Round 30 changed two counts: `analyze` 269 → 279 — the pruned-roster pin,
+the roster snapshot/registration and present-but-empty-list-flag checks, the cross-sectional
+panel taxonomy checks, and the momentum-upgrade family check; `analysis` 621 → 638 — the
+`SIGUP_CANDIDATES` momentum-upgrade section (§G-H, 636) plus the two §5 critical-mechanics property tests (`dsrAdjusted` is a re-run, not a shrink; promote ⇒ no failed gated hurdle); total 2558 → 2585. The `test/node/analyze.test.js`
+mirror had been left at the stale 269 and is corrected to 279 here.) Every one passed in the
+development sandbox's browser
 harness (esbuild-wasm + sql.js shims) at the freeze; `npm test` is the local
 confirmation on the real native drivers. (Round 23 changed three counts:
 `walkforward` 31 → 48 from the `viewFor`/vacuity section K, `analysis` 354 → 390
@@ -366,8 +387,16 @@ ISO-string mismatch) are fixed and pinned in `analysis.test.js`. Readouts: `RUN-
 
 **The rounds 4–5 post-implementation audit then moved `analyze` 258 → 269** (+11 checks: 8 P2-wiring + the P4+P2 sleeve-chaining check + the 2 fold-dispatch-contract checks, for
 the opt-in `--cadences` / `--exposure-match` driver passes), leaving every other entry unchanged, so
-the ledger is **2558** browser checks / **127/127** node blocks. The same pass repaired three stale
-counts in the `test/lock-registry.js` notes (`guards` 58→65, `observer` 75→76, `analyze` 245→269).
+the ledger was **2558** browser checks / **127/127** node blocks at the round-29 freeze. **Round 30
+moved `analyze` 269 → 279** (the pruned-roster pin, the roster snapshot/registration, the
+present-but-empty-list-flag guard, the cross-sectional panel taxonomy and the momentum-upgrade
+family) **and `analysis` 621 → 638** (the pre-registered `SIGUP_CANDIDATES` momentum upgrades,
+gate G-H), so the current ledger is
+**2585** browser checks / **128/128** node blocks (round 30 added one node block — the
+`analyze_cli.test.js` `BUGS.md` #69 spawned-CLI refusal — to the 127 the round-29 freeze certified). The same post-implementation pass repaired three
+stale counts in the `test/lock-registry.js` notes (`guards` 58→65, `observer` 75→76, `analyze`
+245→269); round 30 added the three new `analyze.js` exports — and the five `features.js` upgrade
+exports — to those notes' curated lists.
 
 ### What to attach from an `analyze` run
 

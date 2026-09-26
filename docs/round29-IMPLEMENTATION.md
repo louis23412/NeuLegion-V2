@@ -524,3 +524,28 @@ explicitly-conditional P5** — every `PLAN-round29.md` §5.2 gate has its recor
 negative, G-B negative, G-C not crossed, G-D open, G-E closed with P7), every §7 file-map row is
 delivered or superseded by a recorded decision (I1–I14), and DoD items 1, 2, 3, 5, 6, 7, 8, 9 are
 met with item 4 conditional on P5. Nothing else is outstanding.
+
+---
+
+## 8. The operator's acceptance batch — the five returned runs (`round29-TESTING.md` §3)
+
+The guide was run by the operator on their machine (Node v25.9.0) on 2026-09-24/25 and five run
+directories were returned (`src/runs/<runId>-seed1/`). Full readout: `RUN-ANALYSIS.md` §17. Summary:
+
+| run | guide step | bytes of config | outcome |
+| --- | --- | --- | --- |
+| `20260924T204439-seed1` | 3a P2 | `--symbols=all --bars=200 --cadences=10,15,30 --exposure-match` | **both P2 flags applied**; verdict-neutral (nothing promotes); cadence grid 0/3; matched-exposure `sig-momentum` +1.66 Sharpe but adjDSR 0.902 < 0.95 |
+| `20260924T212055-seed1` | 3b P1 | `--symbols=all --bars=600 --variants=bench-*` | **reproduces §16.2's arms**; MCS₉₀ `{bench-linear}` eliminates mlp/base-rate/baseline; P1 negative branch confirmed |
+| `20260924T223701-seed1` | 3c P3 | `--files=` (**empty** → default 1h file) | **OFF-SPEC — P3 unmeasured**: 1 stream × 2000 bars instead of 8 × 15m |
+| `20260925T045808-seed1` | 3d P4 | `--carry-files=` (**empty**) + `--cadences` | **OFF-SPEC for P4** (`carry: null`, `panelStreams 0`) but the **cadence grid reproduces §16.3 to 4 dp** |
+| `20260925T113330-seed1` | 3e full | `--symbols=all --bars=600 --concurrency=4` | full-roster keep-off; dependency-adjusted DSR is the only binding hurdle; `nextRun` sizing present |
+
+**Acceptance result.** P1 and P2 reproduce (P1's arms to 5 dp; P2's cadence grid to 4 dp; `--cadences`
+proven pure post-processing by 3d ≡ 3e on every scored number; parallel determinism re-established).
+**P3 and P4 are UNMEASURED** because their commands expanded empty file variables; the corrected
+commands (set `$CANDLES_15M` / `$FUND` in the *same* shell) are now recorded in `round29-TESTING.md`
+§5. Two findings were logged (`BUGS.md` #69/#70: an empty `--files=`/`--carry-files=` falls back
+silently; a panel-requiring signal on a panel-less run is degenerate yet labelled `live`), plus one
+reconciliation item (§16.2's controller-baseline forecast row does not reproduce on a fresh run —
+the trading baseline is identical, so no verdict moves). No scored-arithmetic defect was found, and
+every run was clean (0 warn/error log lines, audits clean/reachable).
