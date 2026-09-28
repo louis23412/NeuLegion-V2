@@ -182,8 +182,8 @@ starts no run, and that the seed aggregate is written — the browser entry
 imports `runAnalysis` directly, so the argument-parsing block is otherwise
 untested). `bench` is the only
 browser entry
-without a mirror (it prints timings). So `npm test` reports **130 `test()`
-blocks across 45 files** (46 with `helpers.js`) rather than 2753 checks; a green
+without a mirror (it prints timings). So `npm test` reports **131 `test()`
+blocks across 45 files** (46 with `helpers.js`) rather than 2768 checks; a green
 run — plus `failed === 0` and the ledger count from every wrap-style mirror — is
 the gate. Measured **~5.9 min** at round 22 (`BUGS.md` #21): the `dimensions`
 sweep of both `forceMin` branches dominates (~353 s), then `lsh` (~177 s) and
@@ -206,15 +206,15 @@ wrap-style mirrors assert against. **Expected totals (all must be 0 failures):**
 | `fetcher` | 111 | | `binarypc` | 39 |
 | `golden` | 23 | | `bitweight` | 69 |
 | `modules` | 51 | | `querymod` | 51 |
-| `legion` | 57 | | `walkforward` | 74 |
+| `legion` | 57 | | `walkforward` | 83 |
 | `candles` | 192 | | `dimensions` | 185 |
 | `locks` | 41 | | `analysis` | 638 |
 | `price_precision` | 29 | | `multisymbol` | 28 |
 | `guards` | 65 | | `observer` | 76 |
-| `analyze` | 280 | | `controller_invariants` | 23 |
+| `analyze` | 286 | | `controller_invariants` | 23 |
 | `contracts` | 141 | | `legacy_hivemind` | 15 |
 
-**Total: 2753 checks.** **(Round 32** — the lab R2/R3 ports — moved `walkforward` 63 → **74**, `analyze` 279 → **280**, and the ledger 2741 → **2753**: the pure `blockStability` statistic (ported from the lab's `e2_arm_sweep.js`, same trailing-block layout and default k=6, exact hand-computed windows [1.5, 0, −1.5] pinned), its wiring into all three report builders (single, async twin, and `poolReports` over the price-only panel, so an extra sleeve stream cannot move it), the `blocks:` render line (the two exact line-count checks moved 8 → 9), and the default-off `minBlockPositiveFraction` gate hurdle; the lab R3 port extends the rendered
+**Total: 2768 checks.** **(Round 33** — the lab R1 port — moved `walkforward` 74 → **83**, `analyze` 280 → **286**, and the ledger 2753 → **2768**: the model-free long-sample scorer (`scoreSignalFullHistory` through the same `positionAt` pipeline the A/B scores, with the 5/10 bps restatements and the `blockStability` readout), the equal-weight tail-aligned pooler (`poolSignalFullHistory`, reusing the `poolFolds` arithmetic — one stream is the identity), and the `buildFullHistoryBlock` report block, pinned by nine new section-R1 checks including the F-13 equivalence (contiguous scoring equals the walk-forward assembly bar-for-bar, modulo the fold's no-exposure first bar, which is pinned exactly); the `--history=full` driver wiring (`history` recorded in `run.json`/`report.json`, `full-history` summary lines naming every arm's pooled Sharpe, default-off so the default report is byte-identical), pinned by six new `analyze` checks including the pure-post-processing proof (scored numbers identical with the flag on). **(Round 32** — the lab R2/R3 ports — moved `walkforward` 63 → **74**, `analyze` 279 → **280**, and the ledger 2741 → **2753**: the pure `blockStability` statistic (ported from the lab's `e2_arm_sweep.js`, same trailing-block layout and default k=6, exact hand-computed windows [1.5, 0, −1.5] pinned), its wiring into all three report builders (single, async twin, and `poolReports` over the price-only panel, so an extra sleeve stream cannot move it), the `blocks:` render line (the two exact line-count checks moved 8 → 9), and the default-off `minBlockPositiveFraction` gate hurdle; the lab R3 port extends the rendered
 `cost-ladder` lines with every candidate's restated net Sharpe (pinned by one new `analyze` check —
 the machine rows already carried the numbers, the decision block did not). **Round 31 / V2.0 added two entries** — `contracts` **136** (the contract
 layer, the primitives' exact vectors, the ported book fixtures and the import law, sections A–J) and
@@ -419,7 +419,7 @@ gate G-H), so the round-30 ledger was
 **2585** browser checks / **128/128** node blocks (round 30 added one node block — the
 `analyze_cli.test.js` `BUGS.md` #69 spawned-CLI refusal — to the 127 the round-29 freeze certified).
 **Round 31 / V2.0 then added two entries and two mirrors**, so the current ledger is
-**2741 → 2753** browser checks (round 32: the lab R2/R3 ports, `walkforward` 63 → 74, `analyze` 279 → 280) / **130/130** node blocks (the 128 above plus one block each for
+**2741 → 2753** browser checks (round 32: the lab R2/R3 ports, `walkforward` 63 → 74, `analyze` 279 → 280) and **2753 → 2768** (round 33: the lab R1 port, `walkforward` 74 → 83, `analyze` 280 → 286, plus one `analyze_cli.test.js` block for the `--history` surface) / **131/131** node blocks (pending the operator's native confirmation; 130/130 confirmed 2026-09-28; the 128 above plus one block each for
 `test/node/contracts.test.js` and `test/node/legacy_hivemind.test.js`). The same post-implementation pass repaired three
 stale counts in the `test/lock-registry.js` notes (`guards` 58→65, `observer` 75→76, `analyze`
 245→269); round 30 added the three new `analyze.js` exports — and the five `features.js` upgrade

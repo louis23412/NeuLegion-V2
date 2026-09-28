@@ -1,7 +1,6 @@
 # PLAN — round 31: the pivot — stop predicting, start allocating
 
-**Status: PARTIALLY IMPLEMENTED — the V2 layer (V2.0/V2.1/V2.2) has LANDED; the measurement ports
-(W1/W4-W6 gates) have not.** Authored from the end-to-end read of the shipped project
+**Status: PARTIALLY IMPLEMENTED — the V2 layer (V2.0/V2.1/V2.2) has LANDED and the W1 measurement ports (R1/R2/R3, rounds 32–33) have LANDED; the W4/W5/W6 ports have not.** Authored from the end-to-end read of the shipped project
 (`src/NeuLegion-master/NeuLegion-master`), the lab (`src/NeuLegion-lab`, 81 findings, 19 leads, 66
 cycles) and the operator's 2026-09-26/27 run corpus (`src/runs`, CYCLE-065 / `RUN-ANALYSIS.md` §18).
 **What has changed:** the additive V2 contract/registry layer and the three pinned sleeve plugins
@@ -151,13 +150,19 @@ The lab's `FOLD-BACK` R1–R3, ported as one small round:
    contiguous scorer is equivalent to the walk-forward path for a parameter-free signal (F-13), and
    the dominant cost is `poolReports`' dependence estimate (~155 s at 3 562 folds, F-14), so bound
    the cluster count or keep the long-sample path dependence-free.
+   **Status (round 33): PORTED.** `analysis/walkforward.js#scoreSignalFullHistory` + `poolSignalFullHistory`
+   + `buildFullHistoryBlock`, wired as the opt-in `--history=full` driver mode (`analyze.js` records
+   `history` in `run.json`/`report.json` and renders `full-history` lines; default reports are
+   byte-identical). The pooled row carries no raw series; the long-sample path is deliberately
+   dependence-free (the F-14 cost); model arms land `{available:false}` per audit A10.
+   `walkforward` 74 → 83, `analyze` 280 → 286, ledger 2753 → 2768.
 2. **`blockStability`** — split the scored series into k disjoint windows, report each window's
    Sharpe, the positive fraction and the min/max; add it to `pooledMetrics`/the decision block and
    make it a gate input. This is the cheap statistic that catches J1 at the source.
    **Status (round 32): PORTED.** `analysis/walkforward.js#blockStability` (from the lab's
    `e2_arm_sweep.js`, same layout/k=6), wired into all three report builders over the price-only
    panel, rendered as the `blocks:` line, and available as the default-off `minBlockPositiveFraction`
-   gate hurdle (`walkforward` 63 → 74 checks, ledger 2741 → 2753 with the R3 line below). R1 remains open.
+   gate hurdle (`walkforward` 63 → 74 checks, ledger 2741 → 2753 with the R3 line below). R1 is ported in round 33 (see item 1 above).
 3. **The cost block by default** — full-history break-even and `netSharpe` at 5 and 10 bps, not only
    the ladder at the run's single `costBps`.
    **Status (round 32): reporting half PORTED.** The ladder already restated every candidate at

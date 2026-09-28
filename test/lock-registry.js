@@ -216,6 +216,8 @@ export const ANALYSIS_MODULES = Object.freeze({
         'foldWinFraction', 'auditNoLookahead', 'walkForwardEvaluate', 'walkForwardEvaluateAsync', 'promoteDecision',
         // Round 32 (lab R2): the window-robustness statistic + opt-in gate hurdle.
         'blockStability',
+        // Round 33 (lab R1): the model-free long-sample scorer + pooler + report block.
+        'scoreSignalFullHistory', 'poolSignalFullHistory', 'buildFullHistoryBlock',
         'formatReport', 'familywiseSearch', 'walkForwardSearch',
         'sharpeStandardError', 'minimumDetectableSharpe', 'barsToDetect', 'UNDERPOWERED_MDE', 'poolReports',
         'dependenceSummary', 'clustersOf', 'pairedPromotionTest', 'restateReportAtCost', 'costLadder',
@@ -541,6 +543,8 @@ export const SUPPORT_MODULES = Object.freeze({
         'rosterSnapshot', 'rosterRegistration', 'emptyListFlagError',
         'featureVector', 'makeHiveMindModelFactory', 'makeControllerModelFactory', 'withSeed',
         'makeSignalForVariant', 'evaluateAB', 'formatAnalysis', 'readCloses', 'readCandles',
+        // Round 33 (lab R1): the long-sample readout renderer (pure, beside formatAnalysis).
+        'formatFullHistory',
         'CONTROLLER_POSITION_POLICY', 'CONTROLLER_MODEL', 'runAnalysis',
         'auditVerdict', 'probesPerFold', 'auditBlock', 'ANALYZE_USAGE',
     ],

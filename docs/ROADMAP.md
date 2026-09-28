@@ -19,12 +19,11 @@ scope freeze that bounds it.
   additive V2 contract/registry layer is **in the repo** (`src/core/**`, `src/plugins/**`;
   `MIGRATION-V2.md`, `ARCHITECTURE-v2.md`) with no legacy module edited and no golden moved — V2.0
   contracts, V2.1 the ported pure layers, V2.2 sleeves+risk — proven by the `contracts` (141) +
-  `legacy_hivemind` (15) entries in both harnesses (**2753 / 0** browser; round 32 added the 12-check and independently by the lab
+  `legacy_hivemind` (15) entries in both harnesses (**2768 / 0** browser; round 32 added the 12-check and independently by the lab
   (`CYCLE-066` / **F-81**: `e73_port_verify.js` 10/10). Six workstreams (W1 decision soundness, W2
   sleeve port, W3 portfolio/risk, W4 model demotion + memory unlock, W5 independence, W6 shipped-path
-  fixes), gates G1–G5, the first bankable positive result at **G5**; V2.3/V2.4 + the W1 (R1/R3),
-  W4/W5/W6 ports remain open — **W1/R2 (`blockStability`) and W1/R3 (ladder netSharpes) are ported in round 32** (default-off gate
-  hurdle, ledger **2753**). See [`PLAN-round31.md`](PLAN-round31.md).
+  fixes), gates G1–G5, the first bankable positive result at **G5**; V2.3/V2.4 +
+  the W4/W5/W6 ports remain open — **W1/R1 (the long-sample scorer), W1/R2 (`blockStability`) and W1/R3 (ladder netSharpes) are ported in rounds 32–33** (all default-off, ledger **2768**). See [`PLAN-round31.md`](PLAN-round31.md).
 - **Round 30 EXECUTION underway (`MILESTONES.md` M8; `PLAN-round30.md`) — M1–M3 + M7 implemented.**
   Built on the acceptance batch (`RUN-ANALYSIS.md` §17), round 30 (a) prunes the default
   A/B roster from 14 to **`{baseline, sig-momentum, sig-accel}` (`K = 3`)** with every drop's
@@ -96,15 +95,17 @@ scope freeze that bounds it.
   on the operator's machine (130/130, 0 failures, 363 s)** (127/127 at the round-27
   liveness/streaming re-run; round 30 added the `analyze_cli.test.js` #69 block;
   round 31 added the `contracts.test.js` + `legacy_hivemind.test.js` V2 mirrors;
-  [`BUGS.md`](BUGS.md) #42/#52).
+  [`BUGS.md`](BUGS.md) #42/#52; round 33 adds one `analyze_cli.test.js` block for
+  `--history`, so the current suite is 131 blocks — pending the operator's native
+  confirmation).
   The run exposed exactly one real defect in the new P0-P3 tooling — `preflight`
   counted the sampled candle window's truncated tail line as malformed, so it
   failed on a *healthy* checkout ([`BUGS.md`](BUGS.md) #20) — now fixed, with the
   test hardened to report the real failing check.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
-- **Browser suite**: 2753 checks across the 32 pass/fail entries (33 entries
-  including the non-pass/fail `bench`); 130 `test()` blocks across 45 node files
+- **Browser suite**: 2768 checks across the 32 pass/fail entries (33 entries
+  including the non-pass/fail `bench`); 131 `test()` blocks across 45 node files
   (R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second
   block to it, R27-4b added `controller_invariants.test.js`, round 30 added the
@@ -458,8 +459,8 @@ correlated bars, no architecture tuning, no reversal-to-taker-cost chase, no pos
 plan was written from the end-to-end read of the project, the lab (`src/NeuLegion-lab`, 81 findings /
 19 leads / 66 cycles) and the 2026-09-26/27 run corpus (`src/runs`, `RUN-ANALYSIS.md` §18); the
 **V2.0–V2.2** contract/registry layer has since landed additively (`src/core/**`, `src/plugins/**`; no
-legacy module edited, no golden moved), and the **W1/W4/W5/W6 measurement ports + V2.3/V2.4 remain
-TODO**.
+legacy module edited, no golden moved), and the **W4/W5/W6 measurement ports + V2.3/V2.4 remain
+TODO** (W1 is fully ported: R1/R2/R3 in rounds 32–33).
 
 **Direction in one line.** Round 30's own leverage table (`PLAN-round30.md` §3.1) and every model
 result since round 23 say the same thing from two directions: **the learned layer cannot predict, and
@@ -638,7 +639,7 @@ the browser harness: **2289 checks, 0 failures** across all 29 pass/fail entries
 (`walkforward` 49 → 62, `analysis` 390 → 437, `analyze` 143 → 158; `locks` 41 and
 `modules` 50 unchanged). No golden fingerprint moved (nothing here is imported by
 the hot path). Full detail in `RUN-ANALYSIS.md` §6. *(Counts as at round 25; the
-current ledger is **2753** — see the status snapshot above.)*
+current ledger is **2768** — see the status snapshot above.)*
 
 - **R25-1 ✅** `analysis/dependence.js` (new, LOCKED-invariant) + `dependenceSummary`
   in `analysis/walkforward.js`. Shipped the delete-one-cluster jackknife over

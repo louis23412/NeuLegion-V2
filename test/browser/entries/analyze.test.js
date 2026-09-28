@@ -37,7 +37,7 @@ import {
     FEATURE_LEN, resolveVariant, applyVariant, notApplicableReason, listVariants, formatVariantList, forecastKindOf, inertReasonFor,
     rosterSnapshot, rosterRegistration, emptyListFlagError,
     featureVector, makeHiveMindModelFactory, makeControllerModelFactory, makeBenchmarkModelFactory, makeSignalForVariant,
-    withSeed, evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, readCloses, readCandles, runAnalysis,
+    withSeed, evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, formatFullHistory, readCloses, readCandles, runAnalysis,
     replicateAnalysis,
     CONTROLLER_MODEL, CONTROLLER_POSITION_POLICY, probesPerFold, auditVerdict,
 } from '../../../src/analyze.js';
@@ -950,6 +950,39 @@ export async function run() {
             p2Rep.baseline.pooledMetrics.netSharpe === tsOff.report.baseline.pooledMetrics.netSharpe &&
             JSON.stringify(p2Rep.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])) ===
             JSON.stringify(tsOff.report.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])));
+        // Round 33 (lab R1): the long-sample readout is opt-in, recorded, and
+        // cannot change a scored number.
+        check('R1-wiring: history is window by default (null fullHistory block, no summary line)',
+            tsOff.report.history === 'window' && tsOff.report.fullHistory === null &&
+            !tsOff.report.summary.includes('full-history '));
+        const fhRun = await runAnalysis({ ...tsCfg, history: 'full' });
+        const fhRep = fhRun.report;
+        const fhActive = tsOff.report.candidates.filter((c) => c.active).map((c) => c.id);
+        check('R1-wiring: --history=full scores every active signal arm over the full stream and pools it',
+            fhRep.history === 'full' && fhRep.fullHistory && fhRep.fullHistory.available === true &&
+            fhRep.fullHistory.mode === 'contiguous' && fhRep.fullHistory.trials === fhRep.trials &&
+            fhRep.fullHistory.streams.length === 1 && fhRep.fullHistory.streams[0].bars === 120 &&
+            fhActive.length > 0 && fhActive.every((id) => {
+                const a = fhRep.fullHistory.arms[id];
+                return a && a.available === true && a.bars === 120 && a.streams === 1 &&
+                    Number.isFinite(a.pooledMetrics.netSharpe) && Number.isFinite(a.pooledMetrics.breakEvenCostBps) &&
+                    Number.isFinite(a.netSharpeAt5bps) && Number.isFinite(a.netSharpeAt10bps) &&
+                    a.blockStability.blocks === 6 && a.perStream.length === 1;
+            }),
+            JSON.stringify({ active: fhActive, arms: Object.keys(fhRep.fullHistory ? fhRep.fullHistory.arms : {}) }));
+        check('R1-wiring: the summary names every scored arm\u2019s full-history Sharpe beside the verdict',
+            fhActive.every((id) => fhRep.summary.includes(`full-history ${id}`)) &&
+            fhRep.summary.includes('@5bps=') && fhRep.summary.includes('blocks k=6'));
+        check('R1-wiring: the long-sample readout changes no scored number (pure post-processing)',
+            fhRep.baseline.pooledMetrics.netSharpe === tsOff.report.baseline.pooledMetrics.netSharpe &&
+            JSON.stringify(fhRep.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])) ===
+            JSON.stringify(tsOff.report.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])));
+        check('R1-wiring: an unknown history mode is refused before any work',
+            (await runAnalysis({ history: 'bogus', writeFiles: false, HiveMind: FakeMind, HiveMindController: VaryCtl })
+                .then(() => 'no-throw', (e) => String((e && e.message) || e))).includes('unknown history'));
+        check('R1-wiring: formatFullHistory renders nothing for a null block and names the reason for an unscored arm',
+            formatFullHistory(null) === '' &&
+            formatFullHistory({ available: true, arms: { x: { id: 'x', available: false, reason: 'no model here' } } }).includes('n/a (no model here)'));
         // R26-6: the bar interval and the stream basket are opt-in, recorded, and
         // cannot change how an included stream is scored.
         check('R26-6: the stream interval and selection are off by default (raw bars, no selection block)',

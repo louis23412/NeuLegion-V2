@@ -30,7 +30,7 @@ import { CONFIG } from './legion/config.js';
 import { mulberry32, hashString } from './legion/rng.js';
 import { runWorkerThread } from './legion/workers.js';
 import { makeFoldExecutor, normaliseConcurrency } from './analysis/parallel.js';
-import { walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision, formatReport, walkForwardSearch, probToPosition, confidenceToPosition, confidenceFromProb, restateReportAtCost, restateReportAtPolicy, verifyPolicyRoundTrip, restateReportAtCadence, exposureMatchedPair, poolReports, costLadder, familyCorrelation, DEPENDENCE_GATE_READER } from './analysis/walkforward.js';
+import { walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision, formatReport, walkForwardSearch, probToPosition, confidenceToPosition, confidenceFromProb, restateReportAtCost, restateReportAtPolicy, verifyPolicyRoundTrip, restateReportAtCadence, exposureMatchedPair, poolReports, costLadder, familyCorrelation, DEPENDENCE_GATE_READER, scoreSignalFullHistory, poolSignalFullHistory, buildFullHistoryBlock } from './analysis/walkforward.js';
 import { turnoverSweep as runTurnoverSweep, formatTurnoverSweep } from './analysis/holding.js';
 import { resampleCandles, designEffectOfStreams, selectStreams as runStreamSelection, formatStreamSelection } from './analysis/streams.js';
 import { seedDistribution, formatSeedReplication } from './analysis/replication.js';
@@ -1665,6 +1665,36 @@ export const auditVerdict = (report) => {
 // run-level blocks (`costLadder`, `familyCorrelation`, `gate`) that are computed
 // after the evaluation: they are optional so `formatAnalysis(result)` still
 // renders on its own (the tests, and any caller that only wants the raw A/B).
+// Round 33 (lab R1): render the long-sample readout. One line per arm naming the
+// pooled full-history Sharpe, the break-even, the 5/10 bps restatements and the
+// block readout, so a verdict read off the --bars window can be compared at a
+// glance. Unavailable arms state their reason; a null block renders nothing (the
+// default run is byte-identical).
+export function formatFullHistory(block) {
+    if (!block || block.available === false) return '';
+    const arms = block.arms || {};
+    const lines = [];
+    for (const id of Object.keys(arms)) {
+        const a = arms[id];
+        if (!a || a.available === false) {
+            lines.push(`full-history ${id}: n/a (${(a && a.reason) || 'not scored'})`);
+            continue;
+        }
+        const m = a.pooledMetrics || {};
+        const bs = a.blockStability || {};
+        const per = Array.isArray(a.perStream)
+            ? a.perStream.map((s) => `${s.label} ${Number.isFinite(s.metrics && s.metrics.netSharpe) ? s.metrics.netSharpe.toFixed(4) : 'n/a'}`).join(', ')
+            : '';
+        lines.push(`full-history ${id}: pooled Sharpe=${Number.isFinite(m.netSharpe) ? m.netSharpe.toFixed(4) : 'n/a'}` +
+            ` @${a.bars}bars/${a.streams}streams breakEven=${m.breakEvenCostBps == null ? 'n/a' : `${m.breakEvenCostBps.toFixed(4)}bps`}` +
+            ` @5bps=${Number.isFinite(a.netSharpeAt5bps) ? a.netSharpeAt5bps.toFixed(4) : 'n/a'}` +
+            ` @10bps=${Number.isFinite(a.netSharpeAt10bps) ? a.netSharpeAt10bps.toFixed(4) : 'n/a'}` +
+            ` blocks k=${bs.blocks == null ? 'n/a' : bs.blocks} positive=${Number.isFinite(bs.positiveFraction) ? bs.positiveFraction.toFixed(4) : 'n/a'}` +
+            (per ? ` | streams: ${per}` : ''));
+    }
+    return lines.join('\n');
+}
+
 export function formatAnalysis(result, extra = {}) {
     const lines = [];
     const s = result.search;
@@ -1813,6 +1843,13 @@ export function formatAnalysis(result, extra = {}) {
     if (extra.decision) {
         const renderedDecision = formatDecision(extra.decision);
         if (renderedDecision) for (const line of renderedDecision.split('\n')) lines.push(line);
+    }
+    // Round 33 (lab R1): the long-sample readout beside the verdict — the same
+    // arms scored contiguously over the full history, so a window artefact
+    // (F-01) is visible on the summary itself.
+    if (extra.fullHistory) {
+        const renderedFull = formatFullHistory(extra.fullHistory);
+        if (renderedFull) for (const line of renderedFull.split('\n')) lines.push(line);
     }
     lines.push(`audit: baseline ${auditVerdict(result.baseline)}`);
     return lines.join('\n');
@@ -2164,6 +2201,13 @@ export async function runAnalysis({
     // active candidate against the baseline at a MATCHED in-market share.
     cadences = null,
     exposureMatch = false,
+    // Round 33 (lab R1): 'window' (default) scores only the --bars verdict window;
+    // 'full' additionally scores every ACTIVE signal arm contiguously over each
+    // stream's FULL history (no folds) and attaches the `fullHistory` readout
+    // beside the verdict. Model arms are never re-scored (a controller fit replays
+    // all history per fold — O(n^2) per stream — so full-history scoring is
+    // signal-only by construction, audit A10).
+    history = 'window',
     // Round 26 (R26-13): common random numbers. With CRN (the default) every
     // variant's fold seed depends only on the master seed and `testStart`, so the
     // variant comparison is PAIRED on the random draws and the variance of the
@@ -2204,6 +2248,12 @@ export async function runAnalysis({
     if (!['optimistic', 'conservative', 'triple'].includes(labelPolicy)) {
         throw new Error(`analyze: unknown labelPolicy "${labelPolicy}" (optimistic | conservative | triple)`);
     }
+    // Round 33 (lab R1): fail fast on a misspelled history mode (an enumerated
+    // flag, like --label-policy — the BUGS.md #69 discipline).
+    if (history !== 'window' && history !== 'full') {
+        throw new Error(`analyze: unknown history "${history}" (window | full)`);
+    }
+    const historyFull = history === 'full';
     // Round 26 (R26-4): resolve the fold loop's in-flight width once, so the manifest,
     // the checkpoints and the report all state what was actually used.
     const width = normaliseConcurrency(concurrency);
@@ -2279,6 +2329,10 @@ export async function runAnalysis({
             // worker rebuilds the same view from it. Reporting uses the `candles`
             // count above, so this field is internal to the driver.
             candleData: world.candles,
+            // Round 33 (lab R1): the UNSLICED resampled series for the long-sample
+            // readout. Null unless `--history=full` (the default run retains
+            // nothing extra); the verdict path always reads the sliced world.
+            fullCandles: historyFull ? candles : null,
         });
     }
 
@@ -2455,6 +2509,7 @@ export async function runAnalysis({
             configFingerprint: configFingerprint(CONFIG),
             type: 'analyze',
             model: modelPath,
+            history,
             files: inputs,
             candles: totalCandles,
             streams: worlds.length,
@@ -2814,6 +2869,25 @@ export async function runAnalysis({
     // every real run rather than assumed.
     const policyRoundTrip = verifyPolicyRoundTrip(result.baseline, useController ? POSITION_POLICY : IDENTITY_POSITION_POLICY);
 
+    // Round 33 (lab R1, F-01/J1): the long-sample readout. Every ACTIVE signal arm
+    // scored contiguously over each stream's FULL history (no folds — the F-13
+    // equivalence) and pooled as an equal-weight basket at the run's active K.
+    // Pure post-processing of the retained candle series (no model), so it cannot
+    // move a scored number. Null unless `--history=full`, so the default report
+    // is byte-identical.
+    const fullHistoryBlock = historyFull
+        ? buildFullHistoryBlock({
+            fullStreams: worlds.map((w) => ({
+                label: w.label,
+                closes: (w.fullCandles || []).map((c) => c.close),
+                volumes: (w.fullCandles || []).map((c) => c.volume),
+            })),
+            variants: activeCandidates.map((c) => c.variant),
+            trials: result.trials,
+            costBps,
+        })
+        : null;
+
     // Round 26 (R26-14): score the family as forecasters — proper scores (Brier +
     // reliability/resolution/uncertainty, log score), the Diebold–Mariano test of
     // each candidate's per-bar Brier loss against the baseline, and the Hansen–
@@ -3125,12 +3199,16 @@ export async function runAnalysis({
         // { available:false, reason }. Null when `--decision=0`.
         decisionEnabled: decision !== false,
         decision: decisionBlock,
+        // Round 33 (lab R1): the long-sample readout beside the verdict (null
+        // unless `--history=full`). A diagnostic column, not a second gate.
+        history,
+        fullHistory: fullHistoryBlock,
         progress: { ...counters, phase: 'complete', elapsedMs: durationMs },
         artifacts: runDir
             ? { folds: 'folds.jsonl', log: 'run.log', progress: 'progress.json', partial: 'partial-report.json' }
             : null,
         reader: `canonical verdict. Per candidate: \`promote\` + \`reasons\` + \`pooledMetrics\` (incl. \`grossPnl\` and \`breakEvenCostBps\` = the per-unit-turnover cost in bps at which the gross edge is exactly consumed, so a high-turnover signal can be compared to a low-turnover mechanism on one axis) + \`audit\` (clean/reachable/reachableFolds/probes/viewDiffers/baseReused) + \`search\` (family-wise) + round-25 blocks: \`dependence\` (delete-one-cluster jackknife SE over fold-window clusters, design effect, effective bars, equicorrelation reading; null on a single stream), \`promotionTest\` (paired cluster Sharpe-difference t(C-1) + exact sign test over fold windows) and \`gate\` (which hurdles were APPLIED vs SKIPPED-no-panel). The run-level \`power\` block carries the pooled Sharpe SE/MDE, an \`underpowered\` flag (MDE95 above 1.0: a null verdict that could not detect Sharpe 1 is uninformative) and \`barsToDetect1\`; \`power.seDependent\`/\`mdeSharpeDependent\` are the same numbers under the cluster jackknife. \`trials\` (top-level and per candidate) is K, the searched-roster size every DSR was deflated by. \`timings\` records each variant's wall time; the measured cost law is \`time ~= k * streams * passes * modelVariants * sum_f(testStart_f)\` with \`k ~= 0.036 s\` per history bar replayed (a model fit warms up by replaying all history up to the fold, so per-fold cost grows with the fold index - the run is O(n^2) per stream, not linear in bars). \`costLadder\` restates the entire verdict at each cost level in bps of turnover; \`familyCorrelation\` reports how correlated the candidates' excess returns were (a diagnostic only — the deflated Sharpe deliberately keeps trials=K); \`turnoverSweep\` (null unless \`--turnover-sweep\`) restates the journaled confidence under a dead-zone x entry/exit-hysteresis x minimum-holding grid and names the policy with the highest break-even cost, so the economic ceiling can be attacked offline (no model, no re-run); \`streamSelection\` (null unless \`--select-streams\`) measures the basket's Kish design effect over the streams' own returns and reports the greedy most-diversifying order — with \`keep\` set it also names the kept basket and its design effect — and \`intervalBars\` is the resampling factor every stream was built at (1 = the raw bars). \`commonRandomNumbers\` says whether the variant comparison was paired on the random draws (R26-13 common random numbers; default true). \`folds.jsonl\` holds one line per fold-pass (source: stage=score|base|probe, probeIndex for the probe bar, the pass's bar indices, emitted positions, realised returns and metrics), so the pooled metrics AND the audit can be recomputed offline; \`run.log\` is the event journal; \`progress.json\` is the liveness heartbeat. \`configurationRobust\` (present only with \`--cadences\`) is the P2 configuration-robust promotion sweep: every active candidate re-scored on each cadence grid with \`restateReportAtCadence\` (fixed-position, no model) plus the majority-pass + catastrophic-veto verdict from \`promotionAcrossCadences\`. \`exposureMatched\` (present only with \`--exposure-match\`) is the P2 matched-in-market-share comparison of each active candidate against the baseline (\`exposureMatchedPair\`). Both are null unless their flag is set.`,
-        summary: formatAnalysis(result, { gate: { mode: gateMode, alpha: gateAlphaResolved }, costLadder: ladder, familyCorrelation: familyCorr, turnoverSweep: turnover, streamSelection, intervalBars: intervalFactor, commonRandomNumbers: crn, forecast: forecastBlock, decision: decisionBlock, model: modelStats }),
+        summary: formatAnalysis(result, { gate: { mode: gateMode, alpha: gateAlphaResolved }, costLadder: ladder, familyCorrelation: familyCorr, turnoverSweep: turnover, streamSelection, intervalBars: intervalFactor, commonRandomNumbers: crn, forecast: forecastBlock, decision: decisionBlock, fullHistory: fullHistoryBlock, model: modelStats }),
     };
 
     state.phase = 'complete';
@@ -3151,6 +3229,8 @@ export async function runAnalysis({
             costLadder: report.costLadder,
             familyCorrelation: report.familyCorrelation,
             timings: report.timings,
+            history: report.history,
+            fullHistory: report.fullHistory,
             summary: report.summary,
             decision: report.decision,
             finishedAt: report.finishedAt,
@@ -3228,6 +3308,10 @@ export const ANALYZE_USAGE = [
     '  --exposure-match         also quote each active candidate against the baseline at a',
     '                           MATCHED in-market share (P2 exposure matching; no model)',
     '  --model=controller|bare  shipped controller (default) or the round-22 proxy',
+    '  --history=window|full    score the verdict window only (default), or ALSO score',
+    '                           every active signal arm contiguously over each stream\u2019s',
+    '                           FULL history beside the verdict (lab R1; no folds, no',
+    '                           model — model arms keep --bars)',
     '  --train=<n> --test=<n>   walk-forward sizes (default 60 / 15)',
     '  --bars=<n>               bars per stream, most recent (default 300)',
     '  --seed=<n>               seed (default 1)',
@@ -3395,6 +3479,7 @@ if (isMain) {
             cadences: cadenceList,
             exposureMatch: has('exposure-match'),
             model: argOf('model') || 'controller',
+            history: argOf('history') || 'window',
             trainSize: num('train', 60),
             testSize: num('test', 15),
             maxBars: num('bars', 300),

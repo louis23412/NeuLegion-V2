@@ -90,7 +90,7 @@ production feeds it a fixed window, so the controller's trade bookkeeping saw
 ancient candles and trained on mislabelled trades. Do not size or interpret a run
 until #33 is fixed. If you change anything
 under `src/`, run the full browser suite before and after
-(**2753 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
+(**2768 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
 `consolidation` 48, `consolidation_worker` 18, `fetcher` 111,
 `golden` 23 (bit-exactness), `modules` 51 (assembly), `legion` 57,
 `candles` 192, `locks` 41, `analysis` 638, `price_precision` 29,

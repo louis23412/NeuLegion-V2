@@ -1748,7 +1748,7 @@ pinned on a bare `HiveMind` (identical predictions **and** identical
       book primitives/sleeves is in and verified. Tests land in both harnesses:
       `test/browser/entries/contracts.test.js` (**141** checks) + its node mirror,
       and `legacy_hivemind.test.js` (**15**) + its node mirror; the full browser
-      suite is **2753 / 0** (32 entries; round 32 added the 12-check R2/R3 ports). The lab verified the port independently:
+      suite is **2768 / 0** (32 entries; round 32 added the 12-check R2/R3 ports, round 33 the 15-check R1 port). The lab verified the port independently:
       **CYCLE-066 / F-81** — `experiments/e73_port_verify.js` gates on **all 10
       checks** (R8 `6.18 / 10× / 46.04`, R7 `1.07 / 8× / 182.59`, OI
       `0.92 / 198× / 15.22`; ported rows+returns bit-for-bit vs the lab), now folded
@@ -1761,7 +1761,8 @@ pinned on a bare `HiveMind` (identical predictions **and** identical
       browser-entry/node-mirror ledgers at 31/43, so adding the two entries would
       have failed `npm test`; now 33/45 (the guard that keeps a mirror from being
       forgotten, and the reason it had to be edited in the same change).
-      **Open (not scheduled here):** V2.3/V2.4, the W1/W4/W5/W6 measurement ports,
+      **Open (not scheduled here):** V2.3/V2.4, the W4/W5/W6 ports (W1 is done —
+      R1/R2/R3 ported in rounds 32–33),
       and the shipped-path defects **F-61/F-69/F-70/F-71/F-74/F-76/L10-cs** — all
       still TODO in `PLAN-round31.md`. **Gate CLEARED (2026-09-28):** `npm test`
       on the operator's native driver is **130/130 `test()` blocks across 45

@@ -19,8 +19,11 @@
 
 import HiveMind from '../../../src/hivemind/hiveMind.js';
 import { walkForwardSplit } from '../../../src/analysis/splits.js';
-import { walkForwardEvaluate, promoteDecision, walkForwardSearch, formatReport, auditNoLookahead, sharpeStandardError, minimumDetectableSharpe, barsToDetect, poolReports, dependenceSummary, clustersOf, pairedPromotionTest, restateReportAtCost, costLadder, familyCorrelation, DEPENDENCE_GATE_READER, blockStability } from '../../../src/analysis/walkforward.js';
+import { walkForwardEvaluate, promoteDecision, walkForwardSearch, formatReport, auditNoLookahead, sharpeStandardError, minimumDetectableSharpe, barsToDetect, poolReports, dependenceSummary, clustersOf, pairedPromotionTest, restateReportAtCost, costLadder, familyCorrelation, DEPENDENCE_GATE_READER, blockStability, scoreSignalFullHistory, poolSignalFullHistory, buildFullHistoryBlock } from '../../../src/analysis/walkforward.js';
 import { makeCandleViewFor, shockCandles, shockFactor, worldFromCandles, DEFAULT_SHOCK } from '../../../src/analysis/world.js';
+import { SIGNAL_CANDIDATES } from '../../../src/analysis/features.js';
+import { purgedCVBacktest, strategyReturns } from '../../../src/analysis/backtest.js';
+import { sharpeRatio } from '../../../src/analysis/performance.js';
 import { CANDLE_MANIFEST } from '../../../src/candles_audit.js';
 
 const FEATURE_LEN = 12;
@@ -741,6 +744,98 @@ export async function run(options = {}) {
                         !!hLo && hLo.failed === false && dLo.promote === true &&
                         dOk.promote === true;
                 })());
+        }
+
+        // ---- R1. the model-free long-sample scorer (round 33, lab R1) ------------
+        //
+        // A parameter-free signal scored contiguously over the whole history must
+        // equal the walk-forward assembly over the same bars (lab F-13): the fold
+        // boundaries add no information when there is nothing to fit. Pinned here
+        // on a noisy synthetic series — a perfect trend makes every window Sharpe
+        // undefined (zero-variance windows read 0 by the lab convention), which
+        // would prove nothing about the assembly.
+        {
+            const rndL = mulberry32(7);
+            const closesL = [];
+            let pxL = 100;
+            for (let i = 0; i < 400; i++) { pxL *= 1 + 0.0008 + (rndL() - 0.5) * 0.02; closesL.push(pxL); }
+            const momL = SIGNAL_CANDIDATES.find((c) => c.id === 'sig-momentum');
+            const full = scoreSignalFullHistory({ closes: closesL, candidate: momL, costBps: 0, trials: 3 });
+            check('R1: the long-sample scorer emits one position per bar over the full history',
+                full.available === true && full.bars === 400 && full.signals.length === 400 && full.returns.length === 400 &&
+                full.metrics && Number.isFinite(full.metrics.netSharpe) && Number.isFinite(full.metrics.breakEvenCostBps) &&
+                Number.isFinite(full.netSharpeAt5bps) && Number.isFinite(full.netSharpeAt10bps) &&
+                full.blockStability.blocks === 6,
+                JSON.stringify({ sharpe: full.metrics.netSharpe, be: full.metrics.breakEvenCostBps }));
+            check('R1: degenerate inputs return the unavailable shape, never a fabricated row',
+                scoreSignalFullHistory({ closes: closesL, candidate: null }).available === false &&
+                scoreSignalFullHistory({ closes: [100], candidate: momL }).available === false &&
+                scoreSignalFullHistory({ closes: [], candidate: momL }).available === false &&
+                poolSignalFullHistory([], {}).available === false &&
+                poolSignalFullHistory([{ available: false }], {}).available === false);
+            check('R1: the reported metrics are the strategy arithmetic on the retained series (no second path)',
+                (() => {
+                    const net0 = strategyReturns({ returns: full.returns, signals: full.signals, costBps: 0 }).returns;
+                    const net5 = strategyReturns({ returns: full.returns, signals: full.signals, costBps: 5 }).returns;
+                    const net10 = strategyReturns({ returns: full.returns, signals: full.signals, costBps: 10 }).returns;
+                    return full.metrics.netSharpe === sharpeRatio(net0, { periodsPerYear: 252 }) &&
+                        full.netSharpeAt5bps === sharpeRatio(net5, { periodsPerYear: 252 }) &&
+                        full.netSharpeAt10bps === sharpeRatio(net10, { periodsPerYear: 252 }) &&
+                        JSON.stringify(full.blockStability) === JSON.stringify(blockStability([full.net], 6, { periodsPerYear: 252 }));
+                })());
+            check('R1: contiguous scoring equals the walk-forward assembly over the same bars (lab F-13)',
+                (() => {
+                    const trainL = Array.from({ length: 300 }, (_, i) => i);
+                    const testL = Array.from({ length: 100 }, (_, i) => i + 300);
+                    const cv = purgedCVBacktest({
+                        returns: full.returns, signals: full.signals,
+                        folds: [{ train: trainL, test: testL, testStart: 300, testEnd: 400 }],
+                        costBps: 0, periodsPerYear: 252, trials: 3,
+                    });
+                    // The fold decides the same positions, bar for bar; the held
+                    // P&L matches from the second test bar — the first test bar
+                    // is the fold's no-exposure bar (positions restart flat, so
+                    // its net is exactly 0 rather than the continuous book's).
+                    return cv.pooledBars === 100 &&
+                        cv.foldSignals[0].every((s, j) => s === full.signals[300 + j]) &&
+                        cv.pooledReturns[0] === 0 &&
+                        cv.pooledReturns.slice(1).every((r, j) => r === full.net[301 + j]);
+                })());
+            const shortL = scoreSignalFullHistory({ closes: closesL.slice(-250), candidate: momL, costBps: 0, trials: 3 });
+            const pool1 = poolSignalFullHistory([{ label: 'A', ...shortL }], { trials: 3 });
+            check('R1: pooling one stream is the identity (the verdict one-report convention)',
+                pool1.available === true && pool1.bars === 250 && pool1.streams === 1 &&
+                pool1.pooledMetrics.netSharpe === shortL.metrics.netSharpe &&
+                pool1.pooledMetrics.turnover === shortL.metrics.turnover &&
+                pool1.perStream.length === 1 && pool1.perStream[0].label === 'A');
+            const pool2 = poolSignalFullHistory([{ label: 'A', ...full }, { label: 'B', ...shortL }], { trials: 3 });
+            check('R1: pooling tail-aligns to the shortest stream and sums the strategy aggregates',
+                pool2.available === true && pool2.bars === 250 && pool2.streams === 2 &&
+                pool2.pooledMetrics.turnover === full.metrics.turnover + shortL.metrics.turnover &&
+                Number.isFinite(pool2.pooledMetrics.netSharpe) && Number.isFinite(pool2.netSharpeAt5bps) &&
+                Number.isFinite(pool2.netSharpeAt10bps) && pool2.blockStability.blocks === 6 && pool2.perStream.length === 2);
+            const blockL = buildFullHistoryBlock({
+                fullStreams: [{ label: 'A', closes: closesL }, { label: 'B', closes: closesL.slice(-250) }],
+                variants: [momL, { id: 'baseline', label: 'baseline', kind: 'mechanism' }],
+                trials: 3,
+                costBps: 0,
+            });
+            check('R1: the report block scores every signal arm and explains every non-signal arm',
+                blockL.available === true && blockL.mode === 'contiguous' && blockL.trials === 3 &&
+                blockL.streams.length === 2 && blockL.streams[0].bars === 400 &&
+                blockL.arms['sig-momentum'].available === true &&
+                blockL.arms['sig-momentum'].bars === 250 && blockL.arms['sig-momentum'].streams === 2 &&
+                Number.isFinite(blockL.arms['sig-momentum'].pooledMetrics.netSharpe) &&
+                blockL.arms['sig-momentum'].perStream.length === 2 &&
+                blockL.arms.baseline.available === false && /--bars/.test(blockL.arms.baseline.reason));
+            check('R1: the pooled row carries no raw series (report.json-safe at any history length)',
+                (() => {
+                    const a = blockL.arms['sig-momentum'];
+                    return a.net === undefined && a.gross === undefined && a.signals === undefined && a.returns === undefined &&
+                        JSON.stringify(a).length < 20000;
+                })());
+            check('R1: no stream is no block (every arm explains itself)',
+                buildFullHistoryBlock({ fullStreams: [], variants: [momL], trials: 3 }).arms['sig-momentum'].available === false);
         }
     }
 

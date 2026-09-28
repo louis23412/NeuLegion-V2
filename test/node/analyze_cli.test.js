@@ -365,6 +365,70 @@ test('the analyze CLI documents and threads the R27-9 flag surface', () => {
     }
 });
 
+test('the analyze CLI documents and threads the R33 --history flag (lab R1)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neulegion-analyze-r33-'));
+    try {
+        // (1) `--help` advertises the history mode.
+        const help = spawnSync(process.execPath, [analyzePath, '--help'], { cwd: projectRoot, encoding: 'utf8' });
+        assert.equal(help.status, 0, `--help exited ${help.status}: ${help.stderr}`);
+        assert.match(help.stdout, /--history=window\|full/, '--help does not document --history');
+
+        // (2) The default is the verdict window only: recorded, no block.
+        const file = path.join(root, 'candles.jsonl');
+        writeCandles(file, 100);
+        const tiny = [
+            `--file=${file}`,
+            '--bars=100', '--train=20', '--test=5',
+            '--model=controller', '--variants=sig-momentum',
+            '--audit=0', '--progress-ms=-1',
+        ];
+        const defDir = path.join(root, 'state-def');
+        const def = spawnSync(process.execPath, [analyzePath, ...tiny], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: defDir },
+        });
+        assert.equal(def.status, 0, `the default run exited ${def.status}:\n${def.stderr}`);
+        const defDirPath = path.join(defDir, 'runs', fs.readdirSync(path.join(defDir, 'runs'))[0]);
+        const defManifest = JSON.parse(fs.readFileSync(path.join(defDirPath, 'run.json'), 'utf8'));
+        const defReport = JSON.parse(fs.readFileSync(path.join(defDirPath, 'report.json'), 'utf8'));
+        assert.equal(defManifest.history, 'window', 'run.json does not default history to window');
+        assert.equal(defReport.history, 'window', 'report.json does not record history');
+        assert.equal(defReport.fullHistory, null, 'the default run must carry no fullHistory block');
+
+        // (3) `--history=full` records the mode and scores the long-sample column —
+        //     moving no scored number (a readout, not a second gate).
+        const fullDir = path.join(root, 'state-full');
+        const full = spawnSync(process.execPath, [analyzePath, ...tiny, '--history=full'], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: fullDir },
+        });
+        assert.equal(full.status, 0, `the full-history run exited ${full.status}:\n${full.stderr}`);
+        const fullDirPath = path.join(fullDir, 'runs', fs.readdirSync(path.join(fullDir, 'runs'))[0]);
+        const fullManifest = JSON.parse(fs.readFileSync(path.join(fullDirPath, 'run.json'), 'utf8'));
+        const fullReport = JSON.parse(fs.readFileSync(path.join(fullDirPath, 'report.json'), 'utf8'));
+        assert.equal(fullManifest.history, 'full', '--history=full was not recorded');
+        assert.equal(fullReport.history, 'full', 'report.json did not honour --history=full');
+        assert.ok(fullReport.fullHistory && fullReport.fullHistory.available === true, 'report.json carries no fullHistory block');
+        assert.ok(fullReport.fullHistory.arms['sig-momentum'] && fullReport.fullHistory.arms['sig-momentum'].available === true, 'sig-momentum has no full-history arm');
+        assert.match(fullReport.summary, /full-history sig-momentum/, 'the summary names no full-history line');
+        const scored = (r) => JSON.stringify([r.baseline.pooledMetrics.netSharpe, r.candidates.map((c) => [c.id, c.promote, c.pooledMetrics.netSharpe])]);
+        assert.equal(scored(fullReport), scored(defReport), 'a history readout changed a scored number');
+
+        // (4) A misspelled mode is refused before any work.
+        const bad = spawnSync(process.execPath, [analyzePath, ...tiny, '--history=bogus'], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: path.join(root, 'state-bad') },
+        });
+        assert.notEqual(bad.status, 0, '--history=bogus exited 0');
+        assert.match(bad.stderr + bad.stdout, /unknown history/, '--history=bogus was not refused as an unknown mode');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('the analyze CLI refuses a present-but-empty list flag (--files/--carry-files/--symbols/--variants/--seeds) (BUGS.md #69)', () => {
     // Round 30: `--files=` used to be indistinguishable from an absent flag, so a
     // shell typo silently scored the DEFAULT dataset and the run read as if the

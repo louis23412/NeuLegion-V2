@@ -117,7 +117,7 @@ complete; the second runs the adapter against real `better-sqlite3`). **Not runn
 this environment:** the native node suites (13 of them) — run `npm test` locally
 (`docs/round29-TESTING.md` §1). **Cleared 2026-09-28:** the operator's native `npm test`
 is **130/130 blocks, 0 failures** (both V2 mirrors included). **Round 32** (the lab R2 port)
-moved the browser suite 2741 → **2753** (`walkforward` 63 → 74, `analyze` 279 → 280; no golden moved, no node-block change).
+moved the browser suite 2741 → **2753** (`walkforward` 63 → 74, `analyze` 279 → 280; no golden moved, no node-block change). **Round 33** (the lab R1 port) moved it 2753 → **2768** (`walkforward` 74 → 83, `analyze` 280 → 286; the new exports joined the curated lock lists in the same change; no golden moved, no node-block change).
 
 ## 8. Next work units
 
