@@ -49,6 +49,7 @@ import {
 import {
     forecastPairs, brierBinIndex, brierScore, logScore, brierDecomposition, brierLosses,
     bootstrapMeans, dieboldMariano, modelConfidenceSet, forecastComparison, formatForecast,
+    realizedVolatility, ewmaVolForecast, volForecastSkill,
 } from '../../../src/analysis/forecast.js';
 import {
     foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision,
@@ -4254,6 +4255,60 @@ export async function run() {
         })());
     } catch (e) {
         check('R48 W6 hardening checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    // ---- AQ. R49 (W4b): the winnable job — realized-vol forecasting ----
+    // Direction is unpredictable (G-A); vol is predictable (F-16/L09). Three
+    // pure helpers the model must beat OOS at matched exposure. Additive only.
+    try {
+        check('R49 (W4b): realized vol is the causal rolling RMS', (() => {
+            const v = realizedVolatility([1, -1, 1, -1], 2);
+            return v.length === 3 && v.every((x) => Math.abs(x - 1) < 1e-12);
+        })());
+        check('R49 (W4b): realized vol length contract', (() => {
+            return realizedVolatility([0.1, 0.2], 5).length === 0 && realizedVolatility([0.1, 0.2, 0.3], 3).length === 1;
+        })());
+        check('R49 (W4b): EWMA is causal and exact on the hand path', (() => {
+            const f = ewmaVolForecast([1, 2, 4], { lambda: 0.5 });
+            return f.length === 3 && Math.abs(f[0] - 1) < 1e-12 && Math.abs(f[1] - 1) < 1e-12 && Math.abs(f[2] - 1.5) < 1e-12;
+        })());
+        check('R49 (W4b): EWMA defaults to RiskMetrics 0.94 and validates lambda', (() => {
+            let threw = false;
+            try { ewmaVolForecast([1, 2], { lambda: 2 }); } catch (e) { threw = /W4b/.test(e.message); }
+            const d = ewmaVolForecast([2, 2, 2]);
+            return threw && d.every((x) => x === 2);
+        })());
+        check('R49 (W4b): EWMA forecast never reads the current bar', (() => {
+            const a = ewmaVolForecast([1, 1, 1, 99], { lambda: 0.9 });
+            const b = ewmaVolForecast([1, 1, 1, -99], { lambda: 0.9 });
+            return a[3] === b[3];
+        })());
+        check('R49 (W4b): skill is 1 - MSE(f)/MSE(b) on the hand pair', (() => {
+            const s = volForecastSkill([1, 2, 3], [1, 2, 3], [0, 0, 0]);
+            return s.available === true && Math.abs(s.skill - 1) < 1e-12 && s.mseForecast === 0;
+        })());
+        check('R49 (W4b): skill fails closed on degenerate baselines', (() => {
+            const s1 = volForecastSkill([1, 1], [1, 1], [1, 1]);
+            const s2 = volForecastSkill([], [], []);
+            return s1.available === false && s2.available === false;
+        })());
+        check('R49 (W4b): skill is negative when the forecast hurts', (() => {
+            const s = volForecastSkill([0, 0, 0], [10, 10, 10], [1, 1, 1]);
+            return s.available === true && s.skill < 0 && Math.abs(s.skill - (1 - 100 / 1)) < 1e-9;
+        })());
+        check('R49 (W4b): EWMA beats a flat baseline on trending vol', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8];
+            const f = ewmaVolForecast(vols, { lambda: 0.5 });
+            const flat = vols.map(() => 4.5);
+            const s = volForecastSkill(vols.slice(1), f.slice(1), flat.slice(1));
+            return s.available === true && s.skill > 0;
+        })());
+        check('R49 (W4b): realized vol of a constant series is the constant magnitude', (() => {
+            const v = realizedVolatility([0.02, 0.02, 0.02, 0.02], 4);
+            return v.length === 1 && Math.abs(v[0] - 0.02) < 1e-12;
+        })());
+    } catch (e) {
+        check('R49 W4b vol-forecast checks completed', false, e && e.stack ? e.stack : String(e));
     }
     } catch (e) {
         check('R35 W6 fix checks completed', false, e && e.stack ? e.stack : String(e));

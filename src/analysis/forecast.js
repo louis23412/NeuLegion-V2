@@ -501,6 +501,74 @@ export function forecastComparison({
     };
 }
 
+// ---------------------------------------------------------------------------
+// W4b (round 49): the winnable job — realized-volatility forecasting.
+// ---------------------------------------------------------------------------
+// Direction is not predictable at this horizon (G-A, F-06…F-09); volatility is
+// the one documented predictability in returns, and F-16/L09 already showed a
+// causal EWMA is the forecaster to use. These three pure helpers are the
+// measurement the model must beat out of sample at matched exposure before it
+// earns a place in the default path. Additive: no scored path reads them.
+//
+// `realizedVolatility(returns, window)`: causal rolling root-mean-square of
+// returns — the realized-vol proxy. Returns an array of length
+// max(0, n-window+1) (no null padding, so a caller can align it explicitly).
+// `ewmaVolForecast(vols, {lambda})`: causal one-step-ahead EWMA (RiskMetrics
+// 1996, lambda=0.94 daily): out[0] = vols[0], out[t] = lambda*out[t-1] +
+// (1-lambda)*vols[t-1]. `volForecastSkill(actual, forecast, baseline)`: the
+// MSE skill 1 - MSE(f)/MSE(b), NaN when either MSE is not positive-finite.
+export function realizedVolatility(returns, window) {
+    if (!Array.isArray(returns) || !Number.isInteger(window) || window < 1) return [];
+    const n = returns.length;
+    if (n < window) return [];
+    const out = [];
+    let sumSq = 0;
+    for (let i = 0; i < window; i++) {
+        const x = returns[i];
+        sumSq += Number.isFinite(x) ? x * x : 0;
+    }
+    out.push(Math.sqrt(sumSq / window));
+    for (let t = window; t < n; t++) {
+        const a = returns[t];
+        const d = returns[t - window];
+        if (Number.isFinite(a)) sumSq += a * a;
+        if (Number.isFinite(d)) sumSq -= d * d;
+        out.push(Math.sqrt(Math.max(0, sumSq) / window));
+    }
+    return out;
+}
+
+export function ewmaVolForecast(vols, { lambda = 0.94 } = {}) {
+    if (!Array.isArray(vols) || !vols.length) return [];
+    if (!Number.isFinite(lambda) || lambda < 0 || lambda > 1) throw new Error(`ewmaVolForecast: lambda must be in [0,1] (got ${lambda}) (W4b)`);
+    const out = new Array(vols.length);
+    out[0] = vols[0];
+    for (let t = 1; t < vols.length; t++) {
+        const prev = vols[t - 1];
+        out[t] = lambda * out[t - 1] + (1 - lambda) * (Number.isFinite(prev) ? prev : out[t - 1]);
+    }
+    return out;
+}
+
+export function volForecastSkill(actual, forecast, baseline) {
+    const mse = (a, f) => {
+        let sum = 0;
+        let n = 0;
+        const len = Math.min(Array.isArray(a) ? a.length : 0, Array.isArray(f) ? f.length : 0);
+        for (let i = 0; i < len; i++) {
+            if (!Number.isFinite(a[i]) || !Number.isFinite(f[i])) continue;
+            const d = a[i] - f[i];
+            sum += d * d;
+            n++;
+        }
+        return n ? sum / n : NaN;
+    };
+    const mf = mse(actual, forecast);
+    const mb = mse(actual, baseline);
+    if (!Number.isFinite(mf) || !Number.isFinite(mb) || !(mb > 0)) return { available: false, reason: 'insufficient finite pairs or non-positive baseline MSE (W4b)' };
+    return { available: true, mseForecast: mf, mseBaseline: mb, skill: 1 - mf / mb };
+}
+
 // Render the forecast block for the human summary.
 export function formatForecast(block) {
     if (!block || !block.available) return `forecast: unavailable (${block ? block.reason : 'none'})`;

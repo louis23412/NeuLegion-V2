@@ -241,6 +241,7 @@ export const ANALYSIS_MODULES = Object.freeze({
         'forecastPairs', 'brierBinIndex', 'brierScore', 'logScore', 'brierDecomposition',
         'brierLosses', 'bootstrapMeans', 'dieboldMariano', 'modelConfidenceSet',
         'forecastComparison', 'formatForecast',
+        'realizedVolatility', 'ewmaVolForecast', 'volForecastSkill',
     ],
     'decision.js': [
         'foldConcentration', 'confidencePersistence', 'nextRunPlan',
