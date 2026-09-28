@@ -171,3 +171,37 @@ export function scoreSleeveBook(weightRows, retRows, panel, { costBps = 0 } = {}
     const fn = Array.isArray(panel) && panel.length ? factorNeutralSharpe(book.net, panel) : { raw: book.netSharpe, neutral: NaN, residual: null };
     return { book, neutralSharpe: fn.neutral, rawSharpe: fn.raw, panelStreams: Array.isArray(panel) ? panel.length : 0 };
 }
+
+export function stressHalves(net) {
+    if (!Array.isArray(net) || net.length < 4) return { first: NaN, second: NaN, min: NaN };
+    for (const v of net) if (!Number.isFinite(v)) return { first: NaN, second: NaN, min: NaN };
+    const h = Math.floor(net.length / 2);
+    const sh = (a) => {
+        const m = a.reduce((x, v) => x + v, 0) / a.length;
+        let s = 0;
+        for (const v of a) s += (v - m) * (v - m);
+        const sd = a.length > 1 ? Math.sqrt(s / (a.length - 1)) : NaN;
+        return sd > 0 ? m / sd : 0;
+    };
+    const first = sh(net.slice(0, h));
+    const second = sh(net.slice(h));
+    return { first, second, min: Math.min(first, second) };
+}
+export function worstBlock(net, blocks = 6) {
+    const k = Number.isInteger(blocks) ? blocks : Math.floor(blocks);
+    if (!Array.isArray(net) || net.length < 1 || !Number.isFinite(k) || k < 1) return NaN;
+    for (const v of net) if (!Number.isFinite(v)) return NaN;
+    const size = Math.floor(net.length / k);
+    if (size < 1) return NaN;
+    let worst = Infinity;
+    for (let b = 0; b < k; b++) {
+        const seg = net.slice(b * size, (b + 1) * size);
+        const m = seg.reduce((x, v) => x + v, 0) / seg.length;
+        let s = 0;
+        for (const v of seg) s += (v - m) * (v - m);
+        const sd = Math.sqrt(s / (seg.length - 1));
+        const sh = sd > 0 ? m / sd : 0;
+        if (sh < worst) worst = sh;
+    }
+    return worst;
+}

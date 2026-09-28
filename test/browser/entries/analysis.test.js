@@ -88,7 +88,7 @@ import {
 import {
     clipWeights, bandWeights, cleanBook, cleanForSleeve, SLEEVE_SPECS, MIN_TRAIN_PERIODS,
     inverseVolWeights, volTargetScale, clippedTrailingMedianSchedule, fixedSplitJointSize,
-    bookReturns, bookTurnover, scoreBook, scoreSleeveBook,
+    bookReturns, bookTurnover, scoreBook, scoreSleeveBook, stressHalves, worstBlock,
 } from '../../../src/analysis/portfolio.js';
 import {
     benchmarkSeries, relativePerformance, stationaryBlockIndices,
@@ -3963,6 +3963,14 @@ export async function run() {
             (() => { const s = scoreSleeveBook([[0.5]], [[0.01]], null); return s && Number.isNaN(s.neutralSharpe) && s.panelStreams === 0; })());
         check('R38: scoreSleeveBook rejects a ragged book',
             scoreSleeveBook([[0.5]], [[0.01, 0.02]], [[0.01]]) === null);
+        check('R39 (A18): stressHalves splits first/second-half Sharpe with the min',
+            (() => { const s = stressHalves([0.02, 0.03, 0.01, -0.02, -0.03, -0.01]); return s.first > 1 && s.second < -1 && s.min === s.second; })());
+        check('R39 (A18): stressHalves is NaN on degenerate input',
+            Number.isNaN(stressHalves([0.01]).min) && Number.isNaN(stressHalves([0.01, NaN, 0.02, 0.03]).first));
+        check('R39 (A18): worstBlock finds the weakest contiguous block',
+            (() => { const w = worstBlock([0.04, 0.06, 0.04, 0.06, -0.04, -0.06, -0.04, -0.06, 0.04, 0.06, 0.04, 0.06], 3); return w < -4 && w > -5; })());
+        check('R39 (A18): worstBlock is NaN on degenerate input',
+            Number.isNaN(worstBlock([0.01], 6)) && Number.isNaN(worstBlock([0.01, NaN], 2)));
     } catch (e) {
         check('R35 W6 fix checks completed', false, e && e.stack ? e.stack : String(e));
     }

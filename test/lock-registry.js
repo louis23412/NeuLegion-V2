@@ -298,6 +298,7 @@ export const ANALYSIS_MODULES = Object.freeze({
         'cleanForSleeve', 'inverseVolWeights', 'volTargetScale',
         'clippedTrailingMedianSchedule', 'fixedSplitJointSize',
         'bookReturns', 'bookTurnover', 'scoreBook', 'scoreSleeveBook',
+        'stressHalves', 'worstBlock',
     ],
 });
 

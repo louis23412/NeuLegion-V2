@@ -857,6 +857,54 @@ export async function run(options = {}) {
         }
     }
 
+    try {
+        const sA = [0.01, -0.005, 0.02, 0.008, -0.012, 0.015, 0.004, -0.006];
+        const sB = [0.008, -0.002, 0.015, 0.01, -0.008, 0.012, 0.006, -0.003];
+        const sC = [0.012, -0.008, 0.022, 0.005, -0.015, 0.018, 0.002, -0.008];
+        const sleeve = [0.001, 0.0015, -0.0005, 0.002, 0.0008, -0.0012, 0.0018, 0.0004];
+        const mkRep = (streams, price) => ({
+            streamReturns: streams,
+            priceStreamReturns: price || null,
+            dependence: { available: true, foldLength: 4 },
+        });
+        const base = mkRep([sA, sB]);
+        const withSleeve = mkRep([sA, sB, sleeve], [sA, sB]);
+        check('R39 (L10-cs): clustersOf reads the price panel when a sleeve is present',
+            clustersOf(withSleeve).length === clustersOf(base).length &&
+            clustersOf(withSleeve)[0].length === clustersOf(base)[0].length &&
+            clustersOf(mkRep([sA, sB, sleeve]))[0].length === 12);
+        const cand = mkRep([sA.map((v) => v * 1.5), sB.map((v) => v * 1.5)]);
+        const candSleeve = mkRep([sA.map((v) => v * 1.5), sB.map((v) => v * 1.5), sleeve], [sA.map((v) => v * 1.5), sB.map((v) => v * 1.5)]);
+        const pPlain = pairedPromotionTest(base, cand);
+        const pSleeve = pairedPromotionTest(withSleeve, candSleeve);
+        check('R39 (L10-cs): the paired test is invariant to an identical sleeve on both reports',
+            pPlain.available && pSleeve.available && pSleeve.nClusters === pPlain.nClusters &&
+            Math.abs(pSleeve.sharpeDifference.value - pPlain.sharpeDifference.value) < 1e-12);
+        const sig = [1, 1, -1, 1, -1, 1, 1, -1];
+        const mkStream = (rets) => ({
+            folds: [],
+            pooledReturns: rets.slice(),
+            pooledGross: rets.slice(),
+            foldLengths: [8],
+            foldInputs: [{ returns: rets.slice(), signals: sig.slice() }],
+        });
+        const pooled = poolReports([mkStream(sA), mkStream(sB)], { extraPanelStreams: [sleeve] });
+        check('R39 (L10-cs): poolReports retains the price-only panel beside the extended one',
+            pooled.priceStreamReturns && pooled.priceStreamReturns.length === 2 &&
+            pooled.streamReturns.length === 3 && pooled.panelStreams === 1 &&
+            pooled.dependenceWithoutExtras && pooled.dependenceWithoutExtras.available);
+        const reCost = restateReportAtCost(pooled, 5);
+        check('R39 (L10-cs): restateReportAtCost carries the price panel forward',
+            reCost && reCost.priceStreamReturns && reCost.priceStreamReturns.length === 2 &&
+            reCost.streamReturns.length === 3);
+        const rePol = restateReportAtPolicy(pooled, {});
+        check('R39 (L10-cs): restateReportAtPolicy carries the price panel forward',
+            rePol && rePol.priceStreamReturns && rePol.priceStreamReturns.length === 2 &&
+            rePol.streamReturns.length === 3);
+    } catch (e) {
+        check('R39 L10-cs checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
     const failed = checks.filter((c) => !c.pass);
     return { total: checks.length, failed: failed.length, failures: failed, checks };
 }

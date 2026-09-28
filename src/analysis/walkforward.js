@@ -871,11 +871,14 @@ export function dependenceSummary({ streamReturns, streamFoldLengths = null, fol
 // The fold-window clusters of a report, or null when the report has no
 // cross-stream panel (a single stream) or no retained per-stream returns.
 export function clustersOf(report, { periodsPerYear = 252 } = {}) {
-    if (!report || !Array.isArray(report.streamReturns) || report.streamReturns.length < 2) return null;
+    const panel = report && Array.isArray(report.priceStreamReturns) && report.priceStreamReturns.length >= 2
+        ? report.priceStreamReturns
+        : (report ? report.streamReturns : null);
+    if (!report || !Array.isArray(panel) || panel.length < 2) return null;
     const q = report.dependence && report.dependence.available ? report.dependence.foldLength : null;
     if (!Number.isInteger(q) || q < 1) return null;
     try {
-        return foldWindowClusters(report.streamReturns, q);
+        return foldWindowClusters(panel, q);
     } catch {
         return null;
     }
@@ -962,6 +965,8 @@ export function poolReports(reports, { periodsPerYear = 252, trials = 1, extraPa
         pooledGross,
         streamReturns,
         streamFoldLengths,
+        priceStreamReturns,
+        priceStreamFoldLengths: priceFoldLengths,
         foldInputs,
         foldLengths: reports.flatMap((r) => r.foldLengths || []),
         aggregate: aggregateFolds(perFold),
@@ -1472,6 +1477,8 @@ export function restateReportAtCost(report, costBps, { periodsPerYear = 252, tri
         pooledGross,
         streamReturns: hasPanel ? rebuilt.streamReturns : report.streamReturns,
         streamFoldLengths: hasPanel ? rebuilt.streamFoldLengths : report.streamFoldLengths,
+        priceStreamReturns: hasPanel ? streamReturns : (report.priceStreamReturns || null),
+        priceStreamFoldLengths: hasPanel ? priceFoldLengths : (report.priceStreamFoldLengths || null),
         // Carry the sleeve forward so a restatement can itself be restated (the
         // cost ladder re-scores the SAME report at each level, but a chained
         // restatement must not silently lose the independent stream), plus the
@@ -1570,6 +1577,8 @@ export function restateReportAtPolicy(report, policy = {}, { costBps = 0, period
         pooledGross,
         streamReturns: rebuilt.streamReturns,
         streamFoldLengths: rebuilt.streamFoldLengths,
+        priceStreamReturns: report.streamFoldLengths ? streamReturns : (report.priceStreamReturns || null),
+        priceStreamFoldLengths: report.streamFoldLengths ? priceFoldLengths : (report.priceStreamFoldLengths || null),
         // P2: carry the journal forward so a restated report can itself be restated
         // (chained cadence/policy/exposure sweeps) without re-reading the run.
         foldInputs: report.foldInputs,
