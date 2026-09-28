@@ -267,6 +267,7 @@ export const ANALYSIS_MODULES = Object.freeze({
         'clusterStability', 'regularizedIncompleteBeta', 'studentTPValue', 'studentTCdf',
         // R28 (BUGS.md #56): the exact one-sided t quantile the paired sizing reads.
         'studentTCritical',
+        'firstPCWeights', 'factorNeutralResidual', 'factorNeutralSharpe',
     ],
     'world.js': [
         'DEFAULT_SHOCK', 'shockFactor', 'volumeShockFactor', 'shockCandles', 'makeCandleViewFor', 'worldFromCandles',
@@ -296,6 +297,7 @@ export const ANALYSIS_MODULES = Object.freeze({
         'MIN_TRAIN_PERIODS', 'clipWeights', 'bandWeights', 'cleanBook', 'SLEEVE_SPECS',
         'cleanForSleeve', 'inverseVolWeights', 'volTargetScale',
         'clippedTrailingMedianSchedule', 'fixedSplitJointSize',
+        'bookReturns', 'bookTurnover', 'scoreBook', 'scoreSleeveBook',
     ],
 });
 

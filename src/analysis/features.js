@@ -44,7 +44,7 @@ export function clampPosition(z, { saturation = DEFAULT_POSITION.saturation } = 
 }
 
 const finiteSum = (s, a, b) => {
-    if (!s || a < 0) return NaN;
+    if (!s || a < 0 || b < a) return NaN;
     let acc = 0;
     for (let i = a; i <= b; i++) {
         if (!Number.isFinite(s[i])) return NaN;
@@ -288,6 +288,7 @@ export function blendedMomentum(series, t, { lenses = [8, 16, 32] } = {}) {
 export function networkMomentum(series, t, { window = 16, lag = 1 } = {}) {
     const p = series.panel;
     if (!p || !Array.isArray(p.returnsByStream)) return NaN;
+    if (!Number.isInteger(p.streamIndex) || p.streamIndex < 0 || p.streamIndex >= p.returnsByStream.length) return NaN;
     const end = t - lag;
     if (end < 0) return NaN;
     let acc = 0;
@@ -313,7 +314,7 @@ export function regimeGatedMomentum(series, t, { window = 16, gateWindow = 32, g
     const r = series.returns;
     const m = finiteSum(r, t - window + 1, t);
     if (!Number.isFinite(m)) return NaN;
-    const v = varianceOf(r, t - window + 1, t);
+    const v = varianceOf(r, t - gateWindow + 1, t);
     const gate = finiteSum(r, t - gateWindow + 1, t);
     if (Number.isFinite(v) && v > 0 && Number.isFinite(gate)) {
         const threshold = -gateZ * Math.sqrt(v) * Math.sqrt(gateWindow);
@@ -343,7 +344,8 @@ export function causalZScore(fn, series, t, {
     let acc = 0;
     for (const v of vals) acc += (v - m) * (v - m);
     const std = Math.sqrt(acc / (vals.length - 1));
-    if (!(std > 0)) return 0;
+    const scale = Math.max(1, Math.abs(m));
+    if (!(std > 1e-12 * scale)) return 0;
     return (raw - m) / std;
 }
 

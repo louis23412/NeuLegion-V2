@@ -12,6 +12,8 @@
 // tail winsorisation (F-54), not a shrink; the band is the general cost tool
 // (F-52/F-53/F-58) and stacks on the cap for R8 only.
 
+import { factorNeutralSharpe } from './dependence.js';
+
 export const MIN_TRAIN_PERIODS = 2555;
 const FIN = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -106,4 +108,66 @@ export function fixedSplitJointSize(sizes, w) {
         acc += w[i] * sizes[i];
     }
     return acc;
+}
+
+export function bookReturns(weightRows, retRows) {
+    if (!Array.isArray(weightRows) || !Array.isArray(retRows) || weightRows.length !== retRows.length || !weightRows.length) return null;
+    const out = [];
+    for (let i = 0; i < weightRows.length; i++) {
+        const w = weightRows[i], r = retRows[i];
+        if (!Array.isArray(w) || !Array.isArray(r) || w.length !== r.length) return null;
+        let a = 0;
+        for (let j = 0; j < w.length; j++) {
+            if (!Number.isFinite(w[j]) || !Number.isFinite(r[j])) return null;
+            a += w[j] * r[j];
+        }
+        out.push(a);
+    }
+    return out;
+}
+export function bookTurnover(weightRows) {
+    if (!Array.isArray(weightRows) || weightRows.length < 2) return 0;
+    let a = 0;
+    for (let i = 1; i < weightRows.length; i++) {
+        const p = weightRows[i - 1], c = weightRows[i];
+        if (!Array.isArray(p) || !Array.isArray(c) || p.length !== c.length) return NaN;
+        for (let j = 0; j < c.length; j++) {
+            if (!Number.isFinite(p[j]) || !Number.isFinite(c[j])) return NaN;
+            a += Math.abs(c[j] - p[j]);
+        }
+    }
+    return a;
+}
+export function scoreBook(weightRows, retRows, { costBps = 0 } = {}) {
+    const gross = bookReturns(weightRows, retRows);
+    if (!gross) return null;
+    const n = gross.length;
+    const mg = gross.reduce((a, v) => a + v, 0) / n;
+    let sg = 0;
+    for (const v of gross) sg += (v - mg) * (v - mg);
+    sg = n > 1 ? Math.sqrt(sg / (n - 1)) : NaN;
+    const to = bookTurnover(weightRows);
+    if (!Number.isFinite(to)) return null;
+    const cost = (costBps / 1e4) * to / n;
+    const net = gross.map((v) => v - cost);
+    const mn = net.reduce((a, v) => a + v, 0) / n;
+    let sn = 0;
+    for (const v of net) sn += (v - mn) * (v - mn);
+    sn = n > 1 ? Math.sqrt(sn / (n - 1)) : NaN;
+    const be = to > 0 ? (1e4 * gross.reduce((a, v) => a + v, 0)) / to : null;
+    return {
+        gross, net,
+        grossSharpe: sg > 0 ? mg / sg : 0,
+        netSharpe: sn > 0 ? mn / sn : 0,
+        turnover: to,
+        turnoverPerYear: to,
+        breakEvenCostBps: be,
+    };
+}
+
+export function scoreSleeveBook(weightRows, retRows, panel, { costBps = 0 } = {}) {
+    const book = scoreBook(weightRows, retRows, { costBps });
+    if (!book) return null;
+    const fn = Array.isArray(panel) && panel.length ? factorNeutralSharpe(book.net, panel) : { raw: book.netSharpe, neutral: NaN, residual: null };
+    return { book, neutralSharpe: fn.neutral, rawSharpe: fn.raw, panelStreams: Array.isArray(panel) ? panel.length : 0 };
 }

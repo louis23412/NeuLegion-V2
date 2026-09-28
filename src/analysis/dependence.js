@@ -467,3 +467,76 @@ export function studentTPValue(t, df, { twoSided = true } = {}) {
 // distribution value — `studentTCdf(-Infinity)` is 1, not 0. Use `studentTPValue`
 // and read the option; a true CDF would be `1 - studentTPValue(t, df, { twoSided: false })`.
 export const studentTCdf = studentTPValue;
+
+export function firstPCWeights(panel) {
+    if (!Array.isArray(panel) || panel.length < 1) return null;
+    const n = Math.min(...panel.map((s) => Array.isArray(s) ? s.length : 0));
+    if (!(n >= 2)) return null;
+    const k = panel.length;
+    const means = panel.map((s) => {
+        let a = 0, c = 0;
+        for (let i = 0; i < n; i++) { const v = s[i]; if (Number.isFinite(v)) { a += v; c++; } }
+        return c > 0 ? a / c : NaN;
+    });
+    if (means.some((m) => !Number.isFinite(m))) return null;
+    const cov = Array.from({ length: k }, () => new Array(k).fill(0));
+    for (let a = 0; a < k; a++) for (let b = a; b < k; b++) {
+        let s = 0, c = 0;
+        for (let i = 0; i < n; i++) { const x = panel[a][i] - means[a], y = panel[b][i] - means[b]; if (Number.isFinite(x) && Number.isFinite(y)) { s += x * y; c++; } }
+        const v = c >= 2 ? s / (c - 1) : NaN;
+        if (!Number.isFinite(v)) return null;
+        cov[a][b] = v; cov[b][a] = v;
+    }
+    let w = new Array(k).fill(0);
+    w[0] = 1;
+    for (let it = 0; it < 200; it++) {
+        const z = cov.map((row) => row.reduce((a, v, j) => a + v * w[j], 0));
+        const nrm = Math.sqrt(z.reduce((a, v) => a + v * v, 0));
+        if (!(nrm > 0)) return null;
+        const w2 = z.map((v) => v / nrm);
+        let d = 0;
+        for (let j = 0; j < k; j++) d = Math.max(d, Math.abs(w2[j] - w[j]));
+        w = w2;
+        if (d < 1e-12) break;
+    }
+    return w;
+}
+export function factorNeutralResidual(series, panel) {
+    if (!Array.isArray(series) || !Array.isArray(panel) || !panel.length) return null;
+    const n = Math.min(series.length, ...panel.map((s) => Array.isArray(s) ? s.length : 0));
+    if (!(n >= 2)) return null;
+    const w = firstPCWeights(panel.map((s) => s.slice(0, n)));
+    if (!w) return null;
+    const means = panel.map((s) => s.slice(0, n).reduce((a, v) => a + v, 0) / n);
+    const pc = [];
+    for (let i = 0; i < n; i++) {
+        let a = 0;
+        for (let j = 0; j < panel.length; j++) { const v = panel[j][i]; if (!Number.isFinite(v)) { a = NaN; break; } a += w[j] * v; }
+        pc.push(a);
+    }
+    if (pc.some((v) => !Number.isFinite(v))) return null;
+    let ms = 0; for (let i = 0; i < n; i++) ms += series[i];
+    ms /= n;
+    let mp = 0; for (let i = 0; i < n; i++) mp += pc[i];
+    mp /= n;
+    let cov = 0, vp = 0;
+    for (let i = 0; i < n; i++) { cov += (series[i] - ms) * (pc[i] - mp); vp += (pc[i] - mp) * (pc[i] - mp); }
+    if (!(vp > 0)) return series.slice(0, n).map((v) => v - ms);
+    const beta = cov / vp;
+    return series.slice(0, n).map((v, i) => v - beta * pc[i]);
+}
+export function factorNeutralSharpe(series, panel) {
+    const r = factorNeutralResidual(series, panel);
+    if (!r || r.length < 2) return { raw: NaN, neutral: NaN, residual: null };
+    const mean = (a) => a.reduce((x, v) => x + v, 0) / a.length;
+    const stdS = (a) => {
+        const m = mean(a);
+        let s = 0;
+        for (const v of a) s += (v - m) * (v - m);
+        return Math.sqrt(s / (a.length - 1));
+    };
+    const mr = mean(series.slice(0, r.length)), sr = stdS(series.slice(0, r.length));
+    const mn = mean(r), sn = stdS(r);
+    const nScale = Math.max(1, Math.abs(mn));
+    return { raw: sr > 0 ? mr / sr : 0, neutral: sn > 1e-12 * nScale ? mn / sn : 0, residual: r };
+}

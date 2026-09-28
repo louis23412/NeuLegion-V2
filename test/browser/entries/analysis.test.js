@@ -66,6 +66,7 @@ import {
     equicorrelationEffectiveSize, foldWindowClusters, concatClusters, clusterJackknife,
     pairedClusterTest, pairedClusterSignTest, signTest, signTestFloor,
     regularizedIncompleteBeta, studentTPValue, studentTCdf, studentTCritical, clusterStability,
+    firstPCWeights, factorNeutralResidual, factorNeutralSharpe,
 } from '../../../src/analysis/dependence.js';
 import {
     DEFAULT_SHOCK, shockFactor, shockCandles, makeCandleViewFor, worldFromCandles,
@@ -87,6 +88,7 @@ import {
 import {
     clipWeights, bandWeights, cleanBook, cleanForSleeve, SLEEVE_SPECS, MIN_TRAIN_PERIODS,
     inverseVolWeights, volTargetScale, clippedTrailingMedianSchedule, fixedSplitJointSize,
+    bookReturns, bookTurnover, scoreBook, scoreSleeveBook,
 } from '../../../src/analysis/portfolio.js';
 import {
     benchmarkSeries, relativePerformance, stationaryBlockIndices,
@@ -3889,6 +3891,80 @@ export async function run() {
             /Read `scales` before comparing/.test(step2.reader));
     } catch (e) {
         check('R28 reporting checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    try {
+        const constSeries = { returns: Array.from({ length: 64 }, () => 0.001) };
+        const constFn = () => 0.001;
+        check('R35 (L10-bs): causalZScore abstains on an exactly-constant window',
+            causalZScore(constFn, constSeries, 63, { window: 1, zWindow: 32, minObs: 8 }) === 0,
+            `${causalZScore(constFn, constSeries, 63, { window: 1, zWindow: 32, minObs: 8 })}`);
+        check('R35 (L10-bs): positionAt is 0 for an information-free constant feature',
+            positionAt({ fn: constFn, window: 1, zWindow: 32, minObs: 8, saturation: 2 }, constSeries, 63) === 0);
+        check('R35 (L10-bt): momentum on an empty window is NaN, not 0',
+            Number.isNaN(momentum({ returns: [0.01] }, 0, { window: 16 })));
+        const twoStream = [Array.from({ length: 64 }, (_, i) => 0.001 * ((i % 3) - 1)), Array.from({ length: 64 }, (_, i) => 0.002 * ((i % 5) - 2))];
+        check('R35 (L10-bu): networkMomentum abstains when streamIndex is absent',
+            Number.isNaN(networkMomentum({ returns: twoStream[0], panel: { returnsByStream: twoStream } }, 63, { window: 16, lag: 1 })));
+        check('R35 (L10-bu): networkMomentum abstains when streamIndex is out of range',
+            Number.isNaN(networkMomentum({ returns: twoStream[0], panel: { streamIndex: 7, returnsByStream: twoStream } }, 63, { window: 16, lag: 1 })));
+        const rGate = [].concat(Array.from({ length: 8 }, () => 1), Array.from({ length: 8 }, () => -3), Array.from({ length: 16 }, () => -1));
+        check('R35 (L10-bv): regime gate scales by the gate window, not the momentum window',
+            momentum({ returns: rGate }, 31, { window: 16 }) === -16 &&
+            Number.isNaN(regimeGatedMomentum({ returns: rGate }, 31, { window: 16, gateWindow: 32, gateZ: 2 })),
+            `${regimeGatedMomentum({ returns: rGate }, 31, { window: 16, gateWindow: 32, gateZ: 2 })}`);
+        const kCandles = Array.from({ length: 24 }, (_, i) => ({ open: 100 + i, high: 101 + i, low: 99 + i, close: 100 + i, volume: 1000 }));
+        const badPanel = { label: 'x', labels: ['a', 'b'], returnsByStream: [[0.01], [0.02]] };
+        check('R35 (L10-cc): makeCandleViewFor with an absent streamIndex yields a null panel',
+            makeCandleViewFor(kCandles, { panel: badPanel })(null, null).panel === null);
+        check('R35 (L10-cc): makeCandleViewFor with an out-of-range streamIndex yields a null panel on a probe pass',
+            makeCandleViewFor(kCandles, { panel: { streamIndex: 5, label: 'x', labels: ['a', 'b'], returnsByStream: [[0.01], [0.02]] } })(null, { after: 3, probe: 0.05 }).panel === null);
+        check('R35 (L10-cd): worldFromCandles maxBars 0 yields an empty world',
+            (() => { const w = worldFromCandles(kCandles, { maxBars: 0 }); return w.candles.length === 0 && w.returns.length === 0; })());
+        check('R35 (L10-cd): worldFromCandles rejects negative and fractional maxBars',
+            (() => { let n = 0; try { worldFromCandles(kCandles, { maxBars: -5 }); } catch { n++; } try { worldFromCandles(kCandles, { maxBars: 7.5 }); } catch { n++; } return n === 2; })());
+        check('R36 (A2): firstPCWeights is a unit vector aligned with the common factor',
+            (() => { const w = firstPCWeights([Array.from({ length: 64 }, (_, i) => Math.sin(i / 4)), Array.from({ length: 64 }, (_, i) => Math.sin(i / 4) + 0.001 * ((i % 7) - 3))]); return w && Math.abs(Math.sqrt(w[0] * w[0] + w[1] * w[1]) - 1) < 1e-9 && Math.abs(Math.abs(w[0]) - Math.SQRT1_2) < 0.05; })());
+        check('R36 (A2): a pure-beta series has raw Sharpe far above its factor-neutral Sharpe',
+            (() => { const f = Array.from({ length: 128 }, (_, i) => Math.sin(i / 5) + 0.3); const s = f.map((v) => 2 * v); const r = factorNeutralSharpe(s, [f, f.map((v) => v + 0.0001)]); return Math.abs(r.raw) > 0.2 && Math.abs(r.neutral) < 0.02; })());
+        check('R36 (A2): an orthogonal alpha survives factor removal',
+            (() => { const f = Array.from({ length: 128 }, (_, i) => Math.sin(i / 5)); const a = Array.from({ length: 128 }, (_, i) => (i % 2 ? 0.5 : -0.5) + 0.2); const r = factorNeutralSharpe(a, [f, f.map((v) => -v)]); return r.neutral > 0.2; })());
+        check('R36 (A2): single-stream panel neutralises to ~0 (no free breadth)',
+            (() => { const s = Array.from({ length: 64 }, (_, i) => 0.01 * Math.sin(i / 3)); const r = factorNeutralSharpe(s, [s.slice()]); return Math.abs(r.neutral) < 1e-9; })());
+        check('R36 (A2): factorNeutralResidual is orthogonal to the first PC',
+            (() => {
+                const f1 = Array.from({ length: 96 }, (_, i) => Math.sin(i / 6));
+                const f2 = Array.from({ length: 96 }, (_, i) => Math.cos(i / 6));
+                const s = f1.map((v, i) => v + 0.3 * f2[i]);
+                const res = factorNeutralResidual(s, [f1, f2]);
+                const w = firstPCWeights([f1, f2]);
+                const pc = f1.map((_, i) => w[0] * f1[i] + w[1] * f2[i]);
+                let cov = 0; const m1 = res.reduce((a, v) => a + v, 0) / res.length, m2 = pc.reduce((a, v) => a + v, 0) / pc.length;
+                for (let i = 0; i < res.length; i++) cov += (res[i] - m1) * (pc[i] - m2);
+                return Math.abs(cov) < 1e-6;
+            })());
+        check('R36 (A2): factorNeutralSharpe returns null residual on degenerate input',
+            factorNeutralSharpe([1], [[1]]).residual === null && Number.isNaN(factorNeutralSharpe([1], [[1]]).neutral));
+        check('R37 (G2): bookReturns dots weights against returns per period',
+            JSON.stringify(bookReturns([[0.125, -0.125], [0.1, 0.1]], [[0.02, 0.04], [0.01, -0.01]])) === JSON.stringify([-0.0025, 0]));
+        check('R37 (G2): bookReturns rejects ragged and non-finite books',
+            bookReturns([[0.1]], [[0.01, 0.02]]) === null && bookReturns([[NaN]], [[0.01]]) === null);
+        check('R37 (G2): bookTurnover sums absolute weight changes',
+            Math.abs(bookTurnover([[0.125, -0.125], [0.1, 0.1]]) - 0.25) < 1e-12 && bookTurnover([[0.1]]) === 0);
+        check('R37 (G2): scoreBook at zero cost has net equal to gross with matching Sharpe',
+            (() => { const s = scoreBook([[0.5, 0.5], [0.5, 0.5], [0.5, 0.5]], [[0.02, 0.0], [0.0, 0.02], [0.01, 0.01]]); return s && s.net.every((v, i) => v === s.gross[i]) && Math.abs(s.netSharpe - s.grossSharpe) < 1e-12; })());
+        check('R37 (G2): scoreBook break-even equals gross over turnover in bps',
+            (() => { const s = scoreBook([[1, 0], [0, 1]], [[0.02, 0.0], [0.0, 0.04]]); return s && Math.abs(s.breakEvenCostBps - (1e4 * 0.06 / 2)) < 1e-9; })());
+        check('R37 (G2): scoreBook cost lowers net Sharpe monotonically',
+            (() => { const w = [[1, 0], [0, 1], [1, 0]]; const r = [[0.02, 0.0], [0.0, 0.04], [0.03, 0.0]]; return scoreBook(w, r, { costBps: 0 }).netSharpe > scoreBook(w, r, { costBps: 25 }).netSharpe; })());
+        check('R38: scoreSleeveBook composes the book with the factor-neutral hurdle',
+            (() => { const w = [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]]; const r = [[0.02, 0.0], [0.0, 0.02], [0.01, 0.01], [0.015, 0.005]]; const s = scoreSleeveBook(w, r, [r.map((row) => row[0]), r.map((row) => row[1])]); return s && s.book && Number.isFinite(s.neutralSharpe) && s.panelStreams === 2; })());
+        check('R38: scoreSleeveBook without a panel carries NaN neutral and zero streams',
+            (() => { const s = scoreSleeveBook([[0.5]], [[0.01]], null); return s && Number.isNaN(s.neutralSharpe) && s.panelStreams === 0; })());
+        check('R38: scoreSleeveBook rejects a ragged book',
+            scoreSleeveBook([[0.5]], [[0.01, 0.02]], [[0.01]]) === null);
+    } catch (e) {
+        check('R35 W6 fix checks completed', false, e && e.stack ? e.stack : String(e));
     }
 
     const failed = checks.filter((c) => !c.pass);

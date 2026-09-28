@@ -19,11 +19,11 @@ scope freeze that bounds it.
   additive V2 contract/registry layer is **in the repo** (`src/core/**`, `src/plugins/**`;
   `MIGRATION-V2.md`, `ARCHITECTURE-v2.md`) with no legacy module edited and no golden moved — V2.0
   contracts, V2.1 the ported pure layers, V2.2 sleeves+risk — proven by the `contracts` (141) +
-  `legacy_hivemind` (15) entries in both harnesses (**2780 / 0** browser; round 32 added the 12-check and independently by the lab
+  `legacy_hivemind` (15) entries in both harnesses (**2805 / 0** browser; round 32 added the 12-check and independently by the lab
   (`CYCLE-066` / **F-81**: `e73_port_verify.js` 10/10). Six workstreams (W1 decision soundness, W2
   sleeve port, W3 portfolio/risk, W4 model demotion + memory unlock, W5 independence, W6 shipped-path
   fixes), gates G1–G5, the first bankable positive result at **G5**; V2.3/V2.4 +
-  the W4/W5/W6 ports remain open — **W1/R1 (the long-sample scorer), W1/R2 (`blockStability`) and W1/R3 (ladder netSharpes) are ported in rounds 32–33** (all default-off, ledger **2780** after the round-34a F-61, 34b F-69, 34c F-70, 34d F-76 fixes plus the 34e W3 portfolio layer). See [`PLAN-round31.md`](PLAN-round31.md).
+  the W4/W5/W6 ports remain open — **W1/R1 (the long-sample scorer), W1/R2 (`blockStability`) and W1/R3 (ladder netSharpes) are ported in rounds 32–33** (all default-off, ledger **2805** after the round-34a F-61, 34b F-69, 34c F-70, 34d F-76 fixes plus the 34e W3 portfolio layer). See [`PLAN-round31.md`](PLAN-round31.md).
 - **Round 30 EXECUTION underway (`MILESTONES.md` M8; `PLAN-round30.md`) — M1–M3 + M7 implemented.**
   Built on the acceptance batch (`RUN-ANALYSIS.md` §17), round 30 (a) prunes the default
   A/B roster from 14 to **`{baseline, sig-momentum, sig-accel}` (`K = 3`)** with every drop's
@@ -104,7 +104,7 @@ scope freeze that bounds it.
   test hardened to report the real failing check.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
-- **Browser suite**: 2780 checks across the 32 pass/fail entries (33 entries
+- **Browser suite**: 2805 checks across the 32 pass/fail entries (33 entries
   including the non-pass/fail `bench`); 131 `test()` blocks across 45 node files
   (R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second

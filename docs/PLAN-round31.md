@@ -1,6 +1,6 @@
 # PLAN — round 31: the pivot — stop predicting, start allocating
 
-**Status: PARTIALLY IMPLEMENTED — the V2 layer (V2.0/V2.1/V2.2) has LANDED and the W1 measurement ports (R1/R2/R3, rounds 32–33) have LANDED; round 34 landed four W6 fixes (F-61/F-69/F-70/F-76) plus the W3 `analysis/portfolio.js` foundation (ledger 2768 → 2780, harness green). The W4/W5 ports, the remaining W6 items (F-71/F-74/L10-cs et al) and the `--sleeve` run mode have not.** Authored from the end-to-end read of the shipped project
+**Status: PARTIALLY IMPLEMENTED — the V2 layer (V2.0/V2.1/V2.2) has LANDED and the W1 measurement ports (R1/R2/R3, rounds 32–33) have LANDED; round 34 landed four W6 fixes (F-61/F-69/F-70/F-76) plus the W3 `analysis/portfolio.js` foundation (ledger 2768 → 2780, harness green); round 35 landed the F-71/F-74 shipped-path fixes (ledger 2780 → 2805, harness green). The W4/W5 ports, the remaining W6 item (L10-cs et al) and the `--sleeve` run mode have not.** Authored from the end-to-end read of the shipped project
 (`src/NeuLegion-master/NeuLegion-master`), the lab (`src/NeuLegion-lab`, 81 findings, 19 leads, 66
 cycles) and the operator's 2026-09-26/27 run corpus (`src/runs`, CYCLE-065 / `RUN-ANALYSIS.md` §18).
 **What has changed:** the additive V2 contract/registry layer and the three pinned sleeve plugins

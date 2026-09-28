@@ -93,14 +93,16 @@ export function makeCandleViewFor(candles, { frequency, panel = null } = {}) {
     const baseCloses = candles.map((c) => c.close);
     const baseVolumes = candles.map((c) => (Number.isFinite(c.volume) ? c.volume : 1));
     const baseReturns = barReturns(baseCloses);
-    const panelFor = (own) => (panel
-        ? {
+    const panelFor = (own) => {
+        if (!panel) return null;
+        if (!Number.isInteger(panel.streamIndex) || panel.streamIndex < 0 || panel.streamIndex >= panel.returnsByStream.length) return null;
+        return {
             streamIndex: panel.streamIndex,
             label: panel.label,
             labels: panel.labels,
             returnsByStream: panel.returnsByStream.map((rs, i) => (i === panel.streamIndex ? own : rs)),
-        }
-        : null);
+        };
+    };
     return (returns, perturb) => {
         if (!perturb) {
             const own = returns || baseReturns;
@@ -124,7 +126,11 @@ export function makeCandleViewFor(candles, { frequency, panel = null } = {}) {
 // A world from real candles: `{ candles, closes, returns }`. `maxBars` keeps the
 // most recent bars (the A/B's bounded window).
 export function worldFromCandles(candles, { maxBars = null } = {}) {
-    const bars = maxBars && candles.length > maxBars ? candles.slice(-maxBars) : candles.slice();
+    if (maxBars != null) {
+        if (!Number.isInteger(maxBars) || maxBars < 0) throw new Error(`worldFromCandles: maxBars must be a non-negative integer or null, got ${String(maxBars)}`);
+        if (maxBars === 0) return { candles: [], closes: [], volumes: [], returns: [] };
+    }
+    const bars = maxBars != null && candles.length > maxBars ? candles.slice(-maxBars) : candles.slice();
     const closes = bars.map((c) => c.close);
     const volumes = bars.map((c) => (Number.isFinite(c.volume) ? c.volume : 1));
     return { candles: bars, closes, volumes, returns: barReturns(closes) };
