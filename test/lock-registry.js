@@ -298,7 +298,7 @@ export const ANALYSIS_MODULES = Object.freeze({
         'cleanForSleeve', 'inverseVolWeights', 'volTargetScale',
         'clippedTrailingMedianSchedule', 'fixedSplitJointSize',
         'bookReturns', 'bookTurnover', 'scoreBook', 'scoreSleeveBook',
-        'stressHalves', 'worstBlock',
+        'stressHalves', 'worstBlock', 'scoreBookReturns', 'blockSharpes', 'scoreG5',
     ],
 });
 
@@ -560,6 +560,9 @@ export const SUPPORT_MODULES = Object.freeze({
         'makeSignalForVariant', 'evaluateAB', 'formatAnalysis', 'readCloses', 'readCandles',
         // Round 33 (lab R1): the long-sample readout renderer (pure, beside formatAnalysis).
         'formatFullHistory',
+        // Round 44 (W2): the sleeve run-mode entry (pure core beside runAnalysis;
+        // the CLI's file reads and run-directory writes stay outside this contract).
+        'runSleeveAnalysis',
         'CONTROLLER_POSITION_POLICY', 'CONTROLLER_MODEL', 'runAnalysis',
         'auditVerdict', 'probesPerFold', 'auditBlock', 'ANALYZE_USAGE',
     ],

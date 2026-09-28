@@ -88,7 +88,7 @@ import {
 import {
     clipWeights, bandWeights, cleanBook, cleanForSleeve, SLEEVE_SPECS, MIN_TRAIN_PERIODS,
     inverseVolWeights, volTargetScale, clippedTrailingMedianSchedule, fixedSplitJointSize,
-    bookReturns, bookTurnover, scoreBook, scoreSleeveBook, stressHalves, worstBlock,
+    bookReturns, bookTurnover, scoreBook, scoreSleeveBook, stressHalves, worstBlock, scoreBookReturns, blockSharpes, scoreG5,
 } from '../../../src/analysis/portfolio.js';
 import {
     benchmarkSeries, relativePerformance, stationaryBlockIndices,
@@ -3971,6 +3971,51 @@ export async function run() {
             (() => { const w = worstBlock([0.04, 0.06, 0.04, 0.06, -0.04, -0.06, -0.04, -0.06, 0.04, 0.06, 0.04, 0.06], 3); return w < -4 && w > -5; })());
         check('R39 (A18): worstBlock is NaN on degenerate input',
             Number.isNaN(worstBlock([0.01], 6)) && Number.isNaN(worstBlock([0.01, NaN], 2)));
+        check('R41: blockSharpes exposes the per-block Sharpes worstBlock reads',
+            (() => { const all = blockSharpes([0.04, 0.06, 0.04, 0.06, -0.04, -0.06, -0.04, -0.06, 0.04, 0.06, 0.04, 0.06], 3); return Array.isArray(all) && all.length === 3 && all[1] < 0 && all[0] > 0 && all[2] > 0 && all[1] === worstBlock([0.04, 0.06, 0.04, 0.06, -0.04, -0.06, -0.04, -0.06, 0.04, 0.06, 0.04, 0.06], 3); })());
+        check('R41: blockSharpes is null on degenerate input',
+            blockSharpes([0.01], 6) === null && blockSharpes([0.01, NaN, 0.02, 0.03], 2) === null);
+        check('R41 (G5): scoreG5 passes a clean book on every knob',
+            (() => {
+                const net = [0.04, 0.06, 0.04, 0.06, 0.03, 0.05, 0.04, 0.06, 0.05, 0.04, 0.06, 0.03];
+                const g = scoreG5({ net, costBps: 0, blocks: 6, dsrAdjusted: 1.2, neutralSharpe: 0.8, sizeUsd: 5e6, capacityUsd: 11.5e6, decayDocumented: true, unseenData: true });
+                return g.verdict === true && g.reasons.length === 0 && g.knobs.length === 9;
+            })());
+        check('R41 (G5): scoreG5 fails each knob independently with its name in reasons',
+            (() => {
+                const net = [0.04, 0.06, 0.04, 0.06, 0.03, 0.05, 0.04, 0.06, 0.05, 0.04, 0.06, 0.03];
+                const base = { net, costBps: 0, blocks: 6, dsrAdjusted: 1.2, neutralSharpe: 0.8, decayDocumented: true, unseenData: true };
+                const bad = scoreG5({ ...base, net: net.map((v) => -v) });
+                const noDsr = scoreG5({ ...base, dsrAdjusted: null });
+                const noNeu = scoreG5({ ...base, neutralSharpe: null });
+                const over = scoreG5({ ...base, sizeUsd: 50e6, capacityUsd: 11.5e6 });
+                const noDec = scoreG5({ ...base, decayDocumented: false });
+                const seen = scoreG5({ ...base, unseenData: false });
+                return bad.verdict === false && bad.reasons.includes('level') &&
+                    noDsr.verdict === false && noDsr.reasons.includes('dsr') &&
+                    noNeu.verdict === false && noNeu.reasons.includes('neutral') &&
+                    over.verdict === false && over.reasons.includes('capacity') &&
+                    noDec.verdict === false && noDec.reasons.includes('decay') &&
+                    seen.verdict === false && seen.reasons.includes('unseen');
+            })());
+        check('R41 (G5): scoreG5 fails the blocks knob below 4/6 and passes capacity vacuously with no size',
+            (() => {
+                const mixed = [0.04, 0.06, 0.04, 0.06, -0.04, -0.06, -0.04, -0.06, -0.05, -0.04, -0.06, -0.03];
+                const g = scoreG5({ net: mixed, blocks: 3, dsrAdjusted: 2, neutralSharpe: 1, decayDocumented: true, unseenData: true });
+                const paper = scoreG5({ net: mixed.map((v) => -v), blocks: 3, dsrAdjusted: 2, neutralSharpe: 1, decayDocumented: true, unseenData: true });
+                return g.verdict === false && g.reasons.includes('blocks') &&
+                    paper.knobs.find((k) => k.knob === 'capacity').pass === true;
+            })());
+        check('R41 (G5): scoreG5 halves and worstBlock ride reported-never-gating, non-finite net fails level',
+            (() => {
+                const net = [0.04, 0.06, 0.04, 0.06, 0.03, 0.05, 0.04, 0.06, 0.05, 0.04, 0.06, 0.03];
+                const g = scoreG5({ net, dsrAdjusted: 1.2, neutralSharpe: 0.8, decayDocumented: true, unseenData: true });
+                const halves = g.knobs.find((k) => k.knob === 'halves');
+                const worst = g.knobs.find((k) => k.knob === 'worstBlock');
+                const nan = scoreG5({ net: [0.1, NaN, 0.2, 0.3], dsrAdjusted: 1.2, neutralSharpe: 0.8, decayDocumented: true, unseenData: true });
+                return halves.gated === false && worst.gated === false && Number.isFinite(halves.value) &&
+                    nan.verdict === false && nan.reasons.includes('level');
+            })());
     } catch (e) {
         check('R35 W6 fix checks completed', false, e && e.stack ? e.stack : String(e));
     }

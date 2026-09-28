@@ -632,7 +632,7 @@ for every component — is [`../docs/LOCKED.md`](../docs/LOCKED.md) and
   `consolidation_logic.js`,
   `candle_quality.js`): exact reference vectors.
 - **LOCKED (invariant, V2)** — the round-31 layer (`core/contracts/*`, `core/registry.js`,
-  `core/primitives/*`, `plugins/*`): exact reference vectors in `contracts.test.js` (141 checks) plus
+  `core/primitives/*`, `plugins/*`): exact reference vectors in `contracts.test.js` (151 checks) plus
   the engine's own goldens for the legacy adapter (`legacy_hivemind.test.js`, 15 checks). Registered
   in `../test/lock-registry.js#CORE_REGISTRY` (8) + `PLUGIN_REGISTRY` (7); not part of the legacy
   registry totals. See the "V2" section above and `docs/LOCKED.md`.

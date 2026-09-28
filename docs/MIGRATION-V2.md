@@ -105,7 +105,7 @@ the audit view; the primitive is proved now so the runtime cannot silently skip 
 | suite | before | after |
 | --- | ---: | ---: |
 | browser suite (all entries, `bench` excluded) | 2585 checks / 0 failures | **2741 / 0** |
-| new entry `contracts.test.js` | — | **141 / 0** (sections A–J) |
+| new entry `contracts.test.js` | — | **151 / 0** (sections A–K) |
 | new entry `legacy_hivemind.test.js` | — | **15 / 0** |
 | `golden.test.js` | 23 / 0 | **23 / 0** (unmoved) |
 | `locks.test.js` | 41 / 0 | **41 / 0** (unchanged count; `DOMAINS.core` added) |
@@ -124,6 +124,10 @@ moved the browser suite 2741 → **2753** (`walkforward` 63 → 74, `analyze` 27
 1. **Wire the sleeve book into the scoring path** (round-31 W2+W3): a `--sleeve` run mode
    that builds the panel view from the existing data layer, calls the sleeve → book → risk
    chain, and scores it through the unchanged gate. Gate **G2** then has a number.
+   **(Round 40: the scoring half landed** — driver-side `src/sleeve_score.js` scores
+   every sleeve's own P&L through the pinned `single` + `cap-band` chain by the gate's
+   own arithmetic with the A2/A18 readouts beside it, proved in `contracts` §K. The
+   data-layer view builder + CLI flag are next.)
 2. **The shipped-path fixes (W6)**: F-61 (`carryOnBarGrid` sub-8h), F-69 (`benchmark` ridge
    `ybar`), F-70 (`hitRate`), F-71 (features L10-bs/bu/bv), F-74 (`panelFor`), F-76
    (`holding` `costBps`), L10-cs (`clustersOf` paired test). Each needs its own entry +

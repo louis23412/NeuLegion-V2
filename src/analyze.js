@@ -42,6 +42,7 @@ import { SIGNAL_CANDIDATES, REVERSAL_CANDIDATES, SIGUP_CANDIDATES, signalForCand
 import { makeBenchmarkForecaster, BENCHMARK_KINDS } from './analysis/benchmark.js';
 import { CANDLE_MANIFEST } from './candles_audit.js';
 import { parseFundingJsonl, auditFundingSeries, auditFundingProblems, carryPanelStream, pooledCarry, correlation } from './analysis/carry.js';
+import { runSleeveReport, formatSleeveReport, SLEEVE_IDS } from './sleeve_score.js';
 import { makeRunId, createRunDirectory, writeJson, writeJsonAtomic, writeReport, appendLog, appendJsonl } from './observer/report.js';
 import { configFingerprint } from './legion/sanitize.js';
 import { DEFAULT_ROSTER_IDS, LINEAGE_BRANCHES, uncoveredVariantIds, DROPPED_VARIANT_IDS } from './lineage.js';
@@ -2130,6 +2131,28 @@ export const makeNodeFoldDispatcher = ({ url, spawn = null, timeoutMs = null } =
     });
 };
 
+// Run a structural sleeve against real data (round 44, `--sleeve`).
+//
+// The W2 acceptance: sleeves are not `controller` candidates — they are books
+// scored by the same metrics. `readFile` is injected so the browser harness
+// pins this without the native driver; the CLI passes the real reader and
+// writes the run directory itself. Throws fail-closed on missing inputs
+// (BUGS.md #69); a sleeve with no runnable data lands `available:false` in
+// the report instead of throwing, so the artifact always says what ran.
+export async function runSleeveAnalysis({
+    sleeve = 'carry-dispersion', carryFiles = null, files = null, symbols = null,
+    file = CONFIG.file, costBps = 0, readFile = (f) => fs.readFileSync(f, 'utf8'),
+} = {}) {
+    if (!carryFiles || !carryFiles.length) {
+        throw new Error('analyze: --sleeve needs --carry-files (funding JSONL per stream, positionally matched to the candle inputs)');
+    }
+    const inputs = files && files.length ? files : (symbols && symbols.length ? resolveSymbolFiles(symbols) : [file]);
+    const fundingTexts = carryFiles.map((f) => readFile(f));
+    const candleTexts = inputs.map((f) => readFile(f));
+    const result = runSleeveReport({ sleeveId: sleeve, fundingTexts, candleTexts, costBps });
+    return { inputs, carryFiles, sleeve, costBps, result, summary: formatSleeveReport(result) };
+}
+
 // Run the A/B against real candle data. Loads the model lazily so importing this
 // module for its pure core never touches the SQLite driver.
 //
@@ -3302,6 +3325,11 @@ export const ANALYZE_USAGE = [
     '                           empty list is an error — BUGS.md #69)',
     '  --carry-files=<a,b>      funding JSONL per stream (P4 carry sleeve; positional;',
     '                           a present-but-empty list is an error — BUGS.md #69)',
+    '  --sleeve=<id>            score a structural sleeve as a book instead of the A/B',
+    '                           (W2 acceptance; needs --carry-files plus --files/--symbols;',
+    '                           only carry-dispersion runs on shipped data — the',
+    '                           positioning sleeves report available:false; a present-but-',
+    '                           empty value is an error — BUGS.md #69)',
     '  --cadences=a,b,c         re-score every active candidate on each fold-grid cadence',
     '                           (P2 fixed-position restatement, no model) and report the',
     '                           majority-pass + catastrophic-veto verdict across the grid',
@@ -3521,7 +3549,31 @@ if (isMain) {
             log: (line) => console.log(line),
         };
         const seedList = list('seeds');
-        if (seedList) {
+        const sleeveGiven = flagGiven('sleeve');
+        const sleeveId = argOf('sleeve');
+        if (sleeveGiven) {
+            // Round 44 (W2): the sleeve run mode — a structural book scored by the
+            // gate's own arithmetic, not an A/B. Writes run.json + report.json
+            // beside the A/B runs so the G2/G5 evidence has the same artifact shape.
+            if (sleeveId == null || !String(sleeveId).trim()) throw new Error('analyze: --sleeve= is present but empty (a sleeve id is required — BUGS.md #69)');
+            if (!SLEEVE_IDS.includes(sleeveId)) throw new Error(`analyze: unknown --sleeve "${sleeveId}" (known: ${SLEEVE_IDS.join(', ')})`);
+            if (!carryFilesList || !carryFilesList.length) throw new Error('analyze: --sleeve needs --carry-files (funding JSONL per stream, positionally matched to the candle inputs)');
+            const sleeveSymbols = symbols && symbols.length === 1 && symbols[0] === 'all' ? CANDLE_MANIFEST.map((e) => e.symbol) : symbols;
+            const sleeveCost = num('cost-bps', 0);
+            const sleeveT0 = performance.now();
+            const startedAt = Date.now();
+            const sleeveOut = await runSleeveAnalysis({
+                sleeve: sleeveId, carryFiles: carryFilesList, files: filesList,
+                symbols: sleeveSymbols, costBps: sleeveCost,
+            });
+            const durationMs = performance.now() - sleeveT0;
+            const runId = `${makeRunId({ seed: num('seed', 1), startedAt })}-sleeve`;
+            const runDir = createRunDirectory(CONFIG.stateFolder, runId);
+            writeJson(runDir, 'run.json', { runId, mode: 'sleeve', sleeve: sleeveId, startedAt, costBps: sleeveCost, inputs: sleeveOut.inputs, carryFiles: carryFilesList });
+            writeReport(runDir, { mode: 'sleeve', sleeve: sleeveId, costBps: sleeveCost, durationMs, inputs: sleeveOut.inputs, carryFiles: carryFilesList, result: sleeveOut.result });
+            console.log(sleeveOut.summary);
+            console.log(`\nsleeve report at ${path.join(runDir, 'report.json')} (${durationMs.toFixed(0)}ms)`);
+        } else if (seedList) {
             // Round 26 (R26-13): replicate under several master seeds and print each
             // variant's distribution, not a single-seed point estimate.
             const seeds = seedList.map((s) => Number(s)).filter((s) => Number.isFinite(s));

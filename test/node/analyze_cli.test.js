@@ -429,8 +429,7 @@ test('the analyze CLI documents and threads the R33 --history flag (lab R1)', ()
     }
 });
 
-test('the analyze CLI refuses a present-but-empty list flag (--files/--carry-files/--symbols/--variants/--seeds) (BUGS.md #69)', () => {
-    // Round 30: `--files=` used to be indistinguishable from an absent flag, so a
+test('the analyze CLI refuses a present-but-empty list flag (--files/--carry-files/--symbols/--variants/--seeds) (BUGS.md #69)', () => {    // Round 30: `--files=` used to be indistinguishable from an absent flag, so a
     // shell typo silently scored the DEFAULT dataset and the run read as if the
     // intended experiment had happened. The corrected P3/P4 acceptance commands
     // (`round29-TESTING.md` §5) depend on this refusal, because their off-spec runs
@@ -472,6 +471,79 @@ test('the analyze CLI refuses a present-but-empty list flag (--files/--carry-fil
             env: { ...process.env, NEULEGION_STATE: path.join(root, 'state-ok') },
         });
         assert.equal(ok.status, 0, `a non-empty --files run exited ${ok.status}:\n${ok.stderr}`);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('the analyze CLI scores a structural sleeve with --sleeve (round 44, W2)', () => {
+    // The W2 acceptance: `--sleeve=carry-dispersion --carry-files=... --files=...`
+    // scores the book (no model, no folds) and persists run.json/report.json
+    // beside the A/B runs. Synthetic fixtures keep it to seconds.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neulegion-analyze-sleeve-'));
+    try {
+        const grid = 28_800_000;
+        const t0 = 1_700_000_000_000 - (1_700_000_000_000 % grid);
+        const fund = (file, fn) => {
+            const rows = [];
+            for (let i = 0; i < 40; i++) rows.push(JSON.stringify({ timestamp: t0 + i * grid, fundingRate: fn(i), markPrice: 100 + i }));
+            fs.writeFileSync(file, rows.join('\n'));
+        };
+        const candles = (file, start, rets) => {
+            let p = start;
+            const rows = [];
+            for (let i = 0; i <= rets.length; i++) {
+                rows.push(JSON.stringify({ timestamp: new Date(t0 + i * grid - 3_600_000).toISOString(), close: p }));
+                if (i < rets.length) p *= (1 + rets[i]);
+            }
+            fs.writeFileSync(file, rows.join('\n'));
+        };
+        const rets = [];
+        for (let i = 0; i < 40; i++) rets.push(i % 2 ? 0.01 : -0.005);
+        const f0 = path.join(root, 'fund0.jsonl');
+        const f1 = path.join(root, 'fund1.jsonl');
+        const c0 = path.join(root, 'cand0.jsonl');
+        const c1 = path.join(root, 'cand1.jsonl');
+        fund(f0, () => 0.0001);
+        fund(f1, (i) => (i < 10 ? 0.0005 : 0.0008));
+        candles(c0, 100, rets);
+        candles(c1, 200, rets.map((r) => -r));
+        const stateDir = path.join(root, 'state');
+        const res = spawnSync(process.execPath, [
+            analyzePath,
+            '--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`,
+            '--cost-bps=4',
+        ], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: stateDir },
+        });
+        assert.equal(res.status, 0, `the sleeve run exited ${res.status}:\n${res.stderr}`);
+        assert.match(res.stdout, /carry-dispersion/, 'the summary does not name the sleeve');
+        const runDir = path.join(stateDir, 'runs', fs.readdirSync(path.join(stateDir, 'runs'))[0]);
+        const manifest = JSON.parse(fs.readFileSync(path.join(runDir, 'run.json'), 'utf8'));
+        const report = JSON.parse(fs.readFileSync(path.join(runDir, 'report.json'), 'utf8'));
+        assert.equal(manifest.mode, 'sleeve', 'run.json does not record the sleeve mode');
+        assert.equal(report.mode, 'sleeve', 'report.json does not record the sleeve mode');
+        assert.equal(report.sleeve, 'carry-dispersion', 'report.json does not name the sleeve');
+        assert.equal(report.result.available, true, `the sleeve book is unavailable: ${report.result.reason}`);
+        assert.equal(report.result.buckets, 40, 'the sleeve book covers the wrong grid');
+
+        // Refusals: empty id, unknown id, missing funding files.
+        for (const [flags, re] of [
+            [['--sleeve='], /--sleeve= is present but empty/],
+            [['--sleeve'], /--sleeve= is present but empty/],
+            [['--sleeve=nope', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`], /unknown --sleeve/],
+            [['--sleeve=carry-dispersion', `--files=${c0},${c1}`], /needs --carry-files/],
+        ]) {
+            const bad = spawnSync(process.execPath, [analyzePath, ...flags], {
+                cwd: projectRoot,
+                encoding: 'utf8',
+                env: { ...process.env, NEULEGION_STATE: path.join(root, `state-bad-${Math.random().toString(36).slice(2)}`) },
+            });
+            assert.notEqual(bad.status, 0, `${flags.join(' ')} should have failed but exited 0`);
+            assert.match(bad.stderr + bad.stdout, re, `${flags.join(' ')} was not refused`);
+        }
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }

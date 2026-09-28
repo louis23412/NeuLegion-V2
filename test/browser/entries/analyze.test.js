@@ -38,6 +38,7 @@ import {
     rosterSnapshot, rosterRegistration, emptyListFlagError,
     featureVector, makeHiveMindModelFactory, makeControllerModelFactory, makeBenchmarkModelFactory, makeSignalForVariant,
     withSeed, evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, formatFullHistory, readCloses, readCandles, runAnalysis,
+    runSleeveAnalysis,
     replicateAnalysis,
     CONTROLLER_MODEL, CONTROLLER_POSITION_POLICY, probesPerFold, auditVerdict,
 } from '../../../src/analyze.js';
@@ -2120,6 +2121,52 @@ export async function run() {
         JSON.stringify(reuseRun.candidates.map((c) => [c.decision.promote, c.report.audit.clean, c.report.audit.reachableFolds])) &&
         reuseRun.baseline.audit.baseReused === 6 && refitRun.baseline.audit.baseReused === 0,
         JSON.stringify({ refitReused: refitRun.baseline.audit.baseReused, reuseReused: reuseRun.baseline.audit.baseReused }));
+
+    // ---- S1. the `--sleeve` run mode (round 44, W2) ---------------------------
+    // Sleeves are books, not candidates: injected file texts in, the G2 report
+    // object out. No model, no folds, no DB — the CLI only reads files and
+    // writes the run directory around this.
+    {
+        const sGrid = 28_800_000;
+        const sT0 = 1_700_000_000_000 - (1_700_000_000_000 % sGrid);
+        const sRets = [];
+        for (let i = 0; i < 40; i++) sRets.push(i % 2 ? 0.01 : -0.005);
+        const sFund = (fn) => {
+            const rows = [];
+            for (let i = 0; i < 40; i++) rows.push(JSON.stringify({ timestamp: sT0 + i * sGrid, fundingRate: fn(i), markPrice: 100 + i }));
+            return rows.join('\n');
+        };
+        const sCandles = (start, rets) => {
+            let p = start;
+            const rows = [];
+            for (let i = 0; i <= rets.length; i++) {
+                rows.push(JSON.stringify({ timestamp: new Date(sT0 + i * sGrid - 3_600_000).toISOString(), close: p }));
+                if (i < rets.length) p *= (1 + rets[i]);
+            }
+            return rows.join('\n');
+        };
+        const sFundTexts = [sFund(() => 0.0001), sFund((i) => (i < 10 ? 0.0005 : 0.0008)), sFund((i) => (i < 10 ? 0.0008 : 0.0005))];
+        const sCandleTexts = [sCandles(100, sRets), sCandles(200, sRets.map((r) => -r)), sCandles(300, sRets.map((r) => r / 2))];
+        const sFiles = ['f0', 'f1', 'f2'];
+        const sRead = (f) => {
+            const fi = sFiles.indexOf(f);
+            if (fi >= 0) return sCandleTexts[fi];
+            if (f === 'c0') return sFundTexts[0];
+            if (f === 'c1') return sFundTexts[1];
+            if (f === 'c2') return sFundTexts[2];
+            throw new Error(`unexpected file ${f}`);
+        };
+        const sOut = await runSleeveAnalysis({ sleeve: 'carry-dispersion', carryFiles: ['c0', 'c1', 'c2'], files: sFiles, costBps: 4, readFile: sRead });
+        check('the sleeve mode scores the book with the run cost and names its inputs',
+            sOut.sleeve === 'carry-dispersion' && sOut.costBps === 4 && sOut.result.available === true &&
+            sOut.result.buckets === 40 && sOut.inputs.length === 3 && sOut.summary.includes('carry-dispersion'));
+        const sFade = await runSleeveAnalysis({ sleeve: 'toptrader-fade', carryFiles: ['c0', 'c1', 'c2'], files: sFiles, readFile: sRead });
+        check('a positioning sleeve reports available:false with its data requirement',
+            sFade.result.available === false && /toptrader|open interest/i.test(sFade.result.reason));
+        let sThrew = false;
+        try { await runSleeveAnalysis({ sleeve: 'carry-dispersion', carryFiles: [], files: sFiles, readFile: sRead }); } catch (err) { sThrew = /--carry-files/.test(String(err && err.message)); }
+        check('a sleeve run without funding files throws naming --carry-files', sThrew);
+    }
 
     try { if (typeof fs.rmSync === 'function') fs.rmSync('.nl-analyze-test', { recursive: true, force: true }); } catch { /* best effort */ }
 

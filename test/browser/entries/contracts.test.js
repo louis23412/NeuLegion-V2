@@ -26,6 +26,9 @@
 //                            imports plugins or the legacy engine; the legacy tree
 //                            never imports core (so the locked paths are unmoved).
 //   I. THE ONE-VIEW RULE     the scoring view and the audit view must be identical.
+//   K. THE SLEEVE COMPOSITION the driver-side sleeve -> book -> risk -> gate chain
+//                            (sleeve weights through the pinned risk spec, scored
+//                            by the gate's own arithmetic + A2/A18 readouts).
 //
 // Section H is the modulariy guarantee made mechanical; sections D/E are the port's
 // arithmetic (the lab's `e73_port_verify.js` re-derives the same numbers from the
@@ -98,6 +101,8 @@ import { singleBook } from '../../../src/plugins/books/single.js';
 import { fixedSplitBook, commonTimeIndexes } from '../../../src/plugins/books/fixed-split.js';
 import { legacyHivemindLearner, LEGACY_HIVEMIND_DEFAULTS } from '../../../src/plugins/learners/legacy-hivemind.js';
 import { DEFAULT_STACK, PLUGIN_IDS, installDefaultStack } from '../../../src/plugins/index.js';
+import { SLEEVE_IDS, resolveSleeve, scoreSleeve, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport } from '../../../src/sleeve_score.js';
+import { bookReturns, bookTurnover, scoreBook, scoreBookReturns } from '../../../src/analysis/portfolio.js';
 
 // The lock register's V2 section (`test/lock-registry.js`) and the module-by-module
 // export contract it is validated against (the analysis/support pattern: both
@@ -751,6 +756,240 @@ export async function run(options = {}) {
             .every((k) => PLUGIN_REGISTRY[k].state === 'UNTESTED' && PLUGIN_REGISTRY[k].defaultStack === false));
     check('J: the lock levels used by the core section are the real ones',
         Object.values(CORE_REGISTRY).every((e) => Object.values(LOCK_LEVELS).includes(e.status)));
+
+    // ---- K. the sleeve composition (round 40) --------------------------------
+    // The driver-side composer is the only place that calls sleeve -> book ->
+    // risk -> gate together (the import law forbids every other placement), so
+    // this section proves the chain, not the parts: the scored book is exactly
+    // the sleeve's own P&L through the pinned risk spec, and the G2/A2/A18
+    // readouts ride beside it.
+    const kW = [[0.5, -0.5], [0.4, -0.4], [0.6, -0.6], [-0.2, 0.2]];
+    const kR = [[0.01, 0.02], [0.02, -0.01], [-0.01, 0.03], [0.02, 0.01]];
+    const kDot = scoreBook(kW, kR, { costBps: 0 });
+    const kPre = scoreBookReturns(bookReturns(kW, kR), kW, { costBps: 0 });
+    check('K: scoreBookReturns is the scoreBook arithmetic on a precomputed gross series',
+        kDot && kPre && deepEqual(kDot, kPre));
+    check('K: scoreBookReturns rejects a non-finite gross, an empty gross and ragged weights',
+        scoreBookReturns([0.1, NaN], [[1], [1]]) === null &&
+        scoreBookReturns([], []) === null &&
+        scoreBookReturns([0.1, 0.2], [[1]]) === null);
+    check('K: the composer resolves exactly the three registered sleeves and throws on an unknown id',
+        deepEqual([...SLEEVE_IDS], ['carry-dispersion', 'toptrader-fade', 'oi-change']) &&
+        resolveSleeve('carry-dispersion') === carryDispersionSleeve &&
+        (() => { try { resolveSleeve('nope'); return false; } catch (e) { return e.message.includes('known:'); } })());
+    const kCarryView = {
+        fRate: [[0.01, 0.03, 0.02], [0.02, 0.01, 0.03], [0.03, 0.02, 0.01], [0.01, 0.02, 0.03], [0.02, 0.03, 0.01], [0.03, 0.01, 0.02]],
+        basisPnl: [[0.001, -0.002, 0.001], [0.002, 0.001, -0.001], [-0.001, 0.002, 0.001], [0.001, 0.001, 0.002], [0.002, -0.001, 0.001], [-0.002, 0.001, 0.002]],
+        times: [0, 1, 2, 3, 4, 5],
+    };
+    const kCarry = scoreSleeve('carry-dispersion', kCarryView, { costBps: 0 });
+    check('K: the carry sleeve scores through the pinned chain (single book + cap-band)',
+        kCarry.available === true && kCarry.weightRows.length === 5 &&
+        kCarry.weightRows.every((row) => row.every((x) => Math.abs(x) <= 0.125 + 1e-12)) &&
+        deepEqual(kCarry.net, carryDispersionSleeve.returns(kCarryView,
+            capBandRisk.applyForSleeve(singleBook.compose([{ rows: carryDispersionSleeve.signal(kCarryView), weight: 1 }]).weightRows, 'carry-dispersion'))));
+    const kCarry10 = scoreSleeve('carry-dispersion', kCarryView, { costBps: 10 });
+    check('K: sleeve costs are monotone (net@10 <= net@0) and the turnover is the book turnover',
+        kCarry10.available === true && kCarry10.netSharpe <= kCarry.netSharpe + 1e-12 &&
+        near(kCarry.turnover, bookTurnover(kCarry.weightRows)));
+    const kCarryPanel = scoreSleeve('carry-dispersion', kCarryView, {
+        costBps: 0,
+        panel: [[0.01, 0.02, 0.01, -0.01, 0.02], [0.02, 0.01, -0.02, 0.01, 0.01]],
+    });
+    check('K: the neutral Sharpe is NaN without a panel and finite beside one',
+        Number.isNaN(kCarry.neutralSharpe) && kCarry.panelStreams === 0 &&
+        Number.isFinite(kCarryPanel.neutralSharpe) && kCarryPanel.panelStreams === 2);
+    const kFadeView = {
+        topLS: [[1.2, 1.1, 1.3, 1.0, 1.2, 1.1, 1.4, 1.2], [0.9, 1.0, 0.8, 1.1, 0.9, 1.0, 0.9, 1.1], [1.0, 1.2, 1.1, 1.3, 1.0, 1.2, 1.0, 0.9]],
+        spotRet: [[0.01, -0.01, 0.02], [0.02, 0.01, -0.01], [-0.01, 0.02, 0.01], [0.01, 0.01, 0.02], [0.02, -0.02, 0.01], [-0.02, 0.01, 0.02], [0.01, 0.02, -0.01], [0.02, 0.01, 0.01], [-0.01, -0.01, 0.02], [0.01, 0.02, 0.01], [0.02, -0.01, -0.02], [-0.01, 0.01, 0.01]],
+        times: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    };
+    const kFade = scoreSleeve('toptrader-fade', kFadeView, {});
+    check('K: the fade sleeve scores and respects its 12.5% cap',
+        kFade.available === true && kFade.weightRows.length > 0 &&
+        kFade.weightRows.every((row) => row.every((x) => Math.abs(x) <= 0.125 + 1e-12)) &&
+        deepEqual(kFade.net, toptraderFadeSleeve.returns(kFadeView,
+            capBandRisk.applyForSleeve(singleBook.compose([{ rows: toptraderFadeSleeve.signal(kFadeView), weight: 1 }]).weightRows, 'toptrader-fade'))));
+    const kOiView = {
+        oiValue: [[100, 102, 101, 103, 105, 104, 106, 108], [200, 198, 202, 201, 199, 203, 205, 204], [150, 151, 149, 152, 150, 153, 151, 154]],
+        spotRet: kFadeView.spotRet,
+        times: kFadeView.times,
+    };
+    const kOi = scoreSleeve('oi-change', kOiView, {});
+    check('K: the OI sleeve scores through its 50/50 blend + band chain',
+        kOi.available === true && kOi.weightRows.length > 0 &&
+        deepEqual(kOi.net, oiChangeSleeve.returns(kOiView,
+            capBandRisk.applyForSleeve(singleBook.compose([{ rows: oiChangeSleeve.signal(kOiView), weight: 1 }]).weightRows, 'oi-change'))));
+    check('K: an empty sleeve (no placeable rows) is unavailable, not a throw',
+        (() => {
+            const r = scoreSleeve('toptrader-fade', { topLS: [null, null], spotRet: [], times: [] }, {});
+            return r.available === false && typeof r.reason === 'string';
+        })());
+    const kLong = scoreSleeve('toptrader-fade', {
+        topLS: kFadeView.topLS.map((s) => [...s, ...s, ...s]),
+        spotRet: [...kFadeView.spotRet, ...kFadeView.spotRet, ...kFadeView.spotRet],
+        times: kFadeView.times.map((t) => t),
+    }, {});
+    check('K: the A18 stress readouts ride on the scored book (finite halves, finite worst block)',
+        kLong.available === true && Number.isFinite(kLong.stress.first) && Number.isFinite(kLong.stress.second) &&
+        Number.isFinite(kLong.stress.min) && Number.isFinite(kLong.worstBlock));
+
+    // ---- K2. the carry view builder (round 42) -------------------------------
+    // Parsed funding rows + exact spot closes -> the aligned R8 panel. The rank
+    // change is a PARTIAL rotation (B/C swap, A pinned top): an exact-mirror
+    // rank reversal is a fixed point of the normalized EWMA (per-row L1
+    // renormalization resets the magnitude, so a mirrored target can never
+    // cross zero), while partial churn — the production case with 8 symbols —
+    // drifts the weights normally.
+    const kGrid = 28_800_000;
+    const kT0 = 1_700_000_000_000 - (1_700_000_000_000 % kGrid);
+    const kN = 40;
+    const kFlip = 10;
+    const kCloses = (start, rets) => {
+        const out = [];
+        let p = start;
+        for (let i = 0; i <= rets.length; i++) {
+            out.push({ timestamp: kT0 + i * kGrid, close: p });
+            if (i < rets.length) p *= (1 + rets[i]);
+        }
+        return out;
+    };
+    const kRets = [];
+    for (let i = 0; i < kN; i++) kRets.push(i % 2 ? 0.01 : -0.005);
+    const kRateA = (i) => 0.0001;
+    const kRateB = (i) => (i < kFlip ? 0.0005 : 0.0008);
+    const kRateC = (i) => (i < kFlip ? 0.0008 : 0.0005);
+    const kRowsA = [];
+    const kRowsB = [];
+    const kRowsC = [];
+    for (let i = 0; i < kN; i++) {
+        kRowsA.push({ timestamp: kT0 + i * kGrid, fundingRate: kRateA(i), markPrice: 100 + i });
+        kRowsB.push({ timestamp: kT0 + i * kGrid, fundingRate: kRateB(i), markPrice: 200 - i });
+        kRowsC.push({ timestamp: kT0 + i * kGrid, fundingRate: kRateC(i), markPrice: 300 + i });
+    }
+    kRowsA.push({ timestamp: kT0 + 2 * kGrid + 4 * 3_600_000, fundingRate: 0.0002, markPrice: 102.5 });
+    const kStreams = () => ([
+        { fundingRows: kRowsA, spotCloses: kCloses(100, kRets) },
+        { fundingRows: kRowsB, spotCloses: kCloses(200, kRets.map((r) => -r)) },
+        { fundingRows: kRowsC, spotCloses: kCloses(300, kRets.map((r) => r / 2)) },
+    ]);
+    const kView = buildCarrySleeveView({ streams: kStreams() });
+    check('K2: the builder aligns the common grid and SUMS sub-grid funding rows into their bucket',
+        kView.buckets === kN && kView.streams === 3 && kView.times.length === kN &&
+        near(kView.fRate[2][0], 0.0001 + 0.0002, 1e-12) && near(kView.fRate[2][1], 0.0005, 1e-12) && near(kView.fRate[2][2], 0.0008, 1e-12));
+    check('K2: the builder intersects to common buckets and reads exact-boundary spot legs per stream',
+        (() => {
+            const cut = buildCarrySleeveView({ streams: [{ ...kStreams()[0] }, { fundingRows: kRowsB.slice(1), spotCloses: kCloses(200, kRets.map((r) => -r)) }, kStreams()[2]] });
+            const shifted = buildCarrySleeveView({ streams: [{ fundingRows: kRowsA, spotCloses: kCloses(100, kRets).map((c) => ({ ...c, timestamp: c.timestamp + 1 })) }, kStreams()[1], kStreams()[2]] });
+            const colA = shifted.basisPnl.map((row) => row[0]);
+            const colBC = shifted.basisPnl.slice(1).map((row) => row[1]).concat(shifted.basisPnl.slice(1).map((row) => row[2]));
+            return cut.buckets === kN - 1 && colA.every((x) => x === null) && colBC.every((x) => x !== null);
+        })());
+    check('K2: the built view scores end-to-end with turnover and a finite break-even',
+        (() => {
+            const s = scoreSleeve('carry-dispersion', kView, { costBps: 4 });
+            return s.available === true && s.turnover > 0 && Number.isFinite(s.breakEvenCostBps) &&
+                s.gross.length === s.weightRows.length && s.spec === carryDispersionSleeve.spec;
+        })());
+    check('K2: the legs are separated (basisPnl is spot-minus-perp only, funding lives in fRate alone)',
+        (() => {
+            const v = buildCarrySleeveView({ streams: kStreams() });
+            const srets = [kRets, kRets.map((r) => -r), kRets.map((r) => r / 2)];
+            const mbase = [100, 200, 300];
+            const mdir = [1, -1, 1];
+            for (let i = 1; i < v.times.length; i++) {
+                for (let j = 0; j < 3; j++) {
+                    if (j === 0 && (i === 2 || i === 3)) continue;
+                    const b = v.basisPnl[i][j];
+                    if (b === null) return false;
+                    const spot = srets[j][i - 1];
+                    const perp = (mbase[j] + mdir[j] * i) / (mbase[j] + mdir[j] * (i - 1)) - 1;
+                    if (Math.abs(b - (spot - perp)) > 1e-9) return false;
+                }
+            }
+            return true;
+        })());
+    check('K2: a zero mark is missing data, never a price (no fabricated +-100% basis)',
+        (() => {
+            const zeroMark = (base, dir) => {
+                const rows = [];
+                for (let i = 0; i < 5; i++) rows.push({ timestamp: kT0 + i * kGrid, fundingRate: 0.0001, markPrice: i === 2 ? 0 : base + dir * i });
+                return rows;
+            };
+            const v = buildCarrySleeveView({
+                streams: [
+                    { fundingRows: zeroMark(100, 1), spotCloses: kCloses(100, [0.001, 0.001, 0.001, 0.001, 0.001]) },
+                    { fundingRows: zeroMark(200, -1), spotCloses: kCloses(200, [0.001, 0.001, 0.001, 0.001, 0.001]) },
+                ],
+            });
+            return v.buckets === 5 && v.basisPnl[2].every((x) => x === null) &&
+                v.basisPnl[3].every((x) => x === null) &&
+                v.basisPnl[1].every((x) => x !== null && Math.abs(x) < 0.05) &&
+                v.basisPnl[4].every((x) => x !== null && Math.abs(x) < 0.05);
+        })());
+
+    // ---- K3. the `--sleeve` run-mode core (round 44) ---------------------------
+    // File TEXTS in, the G2 report object out: the CLI only reads files and
+    // writes the report, everything scored lives here. Only carry-dispersion
+    // runs on shipped data; the positioning sleeves land available:false.
+    const kFundText = (fn) => {
+        const rows = [];
+        for (let i = 0; i < 40; i++) rows.push(JSON.stringify({ timestamp: kT0 + i * kGrid, fundingRate: fn(i), markPrice: 100 + i }));
+        return rows.join('\n');
+    };
+    const kCandleText = (start, rets) => {
+        let p = start;
+        const rows = [];
+        for (let i = 0; i <= rets.length; i++) {
+            rows.push(JSON.stringify({ timestamp: new Date(kT0 + i * kGrid - 3_600_000).toISOString(), close: p }));
+            if (i < rets.length) p *= (1 + rets[i]);
+        }
+        return rows.join('\n');
+    };
+    const kFundTexts = [kFundText(() => 0.0001), kFundText((i) => (i < 10 ? 0.0005 : 0.0008)), kFundText((i) => (i < 10 ? 0.0008 : 0.0005))];
+    const kCandleTexts = [kCandleText(100, kRets), kCandleText(200, kRets.map((r) => -r)), kCandleText(300, kRets.map((r) => r / 2))];
+    check('K3: texts parse to the common grid with full marks and a clean basis',
+        (() => {
+            const p = parseSleeveInputs({ fundingTexts: kFundTexts, candleTexts: kCandleTexts });
+            return p.streams === 3 && p.buckets === 40 && p.nullBasisFraction < 0.05 && p.markedFraction === 1 &&
+                p.view.times.length === 40 && p.view.fRate[0].every((x) => Number.isFinite(x));
+        })());
+    check('K3: the report scores the book with G5 knobs and a printable summary',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4 });
+            const text = formatSleeveReport(r);
+            return r.available === true && r.buckets === 40 && r.turnoverAnnual > 0 && Number.isFinite(r.breakEvenCostBps) &&
+                Array.isArray(r.g5knobs) && r.g5knobs.length > 0 && r.g5verdict === false &&
+                text.includes('carry-dispersion') && text.includes('G5 verdict false');
+        })());
+    check('K3: unknown sleeves and positioning sleeves are unavailable, not throws',
+        (() => {
+            const u = runSleeveReport({ sleeveId: 'nope', fundingTexts: kFundTexts, candleTexts: kCandleTexts });
+            const f = runSleeveReport({ sleeveId: 'toptrader-fade', fundingTexts: kFundTexts, candleTexts: kCandleTexts });
+            const o = runSleeveReport({ sleeveId: 'oi-change', fundingTexts: kFundTexts, candleTexts: kCandleTexts });
+            return u.available === false && f.available === false && o.available === false &&
+                typeof u.reason === 'string' && typeof f.reason === 'string' &&
+                formatSleeveReport(f).includes('unavailable');
+        })());
+    check('K3: ragged inputs are unavailable with a reason (empty funding, mismatched lists)',
+        (() => {
+            const e = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: [''], candleTexts: kCandleTexts.slice(0, 1) });
+            const m = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts.slice(0, 1) });
+            return e.available === false && m.available === false &&
+                typeof e.reason === 'string' && typeof m.reason === 'string';
+        })());
+    check('K2: the builder rejects an empty stream list and scores an empty intersection as no view',
+        (() => {
+            let threw = false;
+            try { buildCarrySleeveView({ streams: [] }); } catch { threw = true; }
+            const noCommon = buildCarrySleeveView({
+                streams: [
+                    { fundingRows: [{ timestamp: kT0, fundingRate: 0.001, markPrice: 1 }], spotCloses: [] },
+                    { fundingRows: [{ timestamp: kT0 + kGrid, fundingRate: 0.001, markPrice: 1 }], spotCloses: [] },
+                ],
+            });
+            return threw && noCommon.buckets === 0 && noCommon.fRate.length === 0;
+        })());
 
     const failed = checks.filter((c) => !c.pass);
     return { total: checks.length, failed: failed.length, failures: failed, checks };

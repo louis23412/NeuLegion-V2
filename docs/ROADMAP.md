@@ -18,12 +18,12 @@ scope freeze that bounds it.
   bar (a `MemoryBank` plugin contract with per-plugin goldens replaces the whole-engine freeze). The
   additive V2 contract/registry layer is **in the repo** (`src/core/**`, `src/plugins/**`;
   `MIGRATION-V2.md`, `ARCHITECTURE-v2.md`) with no legacy module edited and no golden moved — V2.0
-  contracts, V2.1 the ported pure layers, V2.2 sleeves+risk — proven by the `contracts` (141) +
-  `legacy_hivemind` (15) entries in both harnesses (**2814 / 0** browser; round 32 added the 12-check and independently by the lab
+  contracts, V2.1 the ported pure layers, V2.2 sleeves+risk — proven by the `contracts` (151) +
+  `legacy_hivemind` (15) entries in both harnesses (**2834 / 0** browser; round 32 added the 12-check and independently by the lab
   (`CYCLE-066` / **F-81**: `e73_port_verify.js` 10/10). Six workstreams (W1 decision soundness, W2
   sleeve port, W3 portfolio/risk, W4 model demotion + memory unlock, W5 independence, W6 shipped-path
   fixes), gates G1–G5, the first bankable positive result at **G5**; V2.3/V2.4 +
-  the W4/W5/W6 ports remain open — **W1/R1 (the long-sample scorer), W1/R2 (`blockStability`) and W1/R3 (ladder netSharpes) are ported in rounds 32–33** (all default-off, ledger **2814** after the round-34a F-61, 34b F-69, 34c F-70, 34d F-76 fixes plus the 34e W3 portfolio layer). See [`PLAN-round31.md`](PLAN-round31.md).
+  the W4/W5/W6 ports remain open — **W1/R1 (the long-sample scorer), W1/R2 (`blockStability`) and W1/R3 (ladder netSharpes) are ported in rounds 32–33** (all default-off, ledger **2830** after the round-34a F-61, 34b F-69, 34c F-70, 34d F-76 fixes, the 34e W3 portfolio layer, the round-35 F-71/F-74 fixes, the rounds 36–39 A2/G2/composer/L10-cs/A18 landings, the round-40 sleeve composition and the round-41 G5 conjunction and the round-42 carry view builder). See [`PLAN-round31.md`](PLAN-round31.md).
 - **Round 30 EXECUTION underway (`MILESTONES.md` M8; `PLAN-round30.md`) — M1–M3 + M7 implemented.**
   Built on the acceptance batch (`RUN-ANALYSIS.md` §17), round 30 (a) prunes the default
   A/B roster from 14 to **`{baseline, sig-momentum, sig-accel}` (`K = 3`)** with every drop's
@@ -104,9 +104,10 @@ scope freeze that bounds it.
   test hardened to report the real failing check.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
-- **Browser suite**: 2814 checks across the 32 pass/fail entries (33 entries
-  including the non-pass/fail `bench`); 131 `test()` blocks across 45 node files
-  (R26-12 added `checkpoint_throttle.test.js`, R26-4 added
+- **Browser suite**: 2843 checks across the 32 pass/fail entries (33 entries
+  including the non-pass/fail `bench`); 132 `test()` blocks across 45 node files
+  (round 44 adds the `--sleeve` spawn block to `analyze_cli.test.js` — pending
+  the operator's native confirmation; R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second
   block to it, R27-4b added `controller_invariants.test.js`, round 30 added the
   #69 spawned-CLI refusal block to `analyze_cli.test.js`, round 31 added the V2

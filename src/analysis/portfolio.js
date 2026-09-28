@@ -138,9 +138,10 @@ export function bookTurnover(weightRows) {
     }
     return a;
 }
-export function scoreBook(weightRows, retRows, { costBps = 0 } = {}) {
-    const gross = bookReturns(weightRows, retRows);
-    if (!gross) return null;
+export function scoreBookReturns(gross, weightRows, { costBps = 0 } = {}) {
+    if (!Array.isArray(gross) || !gross.length) return null;
+    for (const v of gross) if (!Number.isFinite(v)) return null;
+    if (!Array.isArray(weightRows) || weightRows.length !== gross.length) return null;
     const n = gross.length;
     const mg = gross.reduce((a, v) => a + v, 0) / n;
     let sg = 0;
@@ -163,6 +164,11 @@ export function scoreBook(weightRows, retRows, { costBps = 0 } = {}) {
         turnoverPerYear: to,
         breakEvenCostBps: be,
     };
+}
+export function scoreBook(weightRows, retRows, { costBps = 0 } = {}) {
+    const gross = bookReturns(weightRows, retRows);
+    if (!gross) return null;
+    return scoreBookReturns(gross, weightRows, { costBps });
 }
 
 export function scoreSleeveBook(weightRows, retRows, panel, { costBps = 0 } = {}) {
@@ -188,20 +194,83 @@ export function stressHalves(net) {
     return { first, second, min: Math.min(first, second) };
 }
 export function worstBlock(net, blocks = 6) {
-    const k = Number.isInteger(blocks) ? blocks : Math.floor(blocks);
-    if (!Array.isArray(net) || net.length < 1 || !Number.isFinite(k) || k < 1) return NaN;
-    for (const v of net) if (!Number.isFinite(v)) return NaN;
-    const size = Math.floor(net.length / k);
-    if (size < 1) return NaN;
+    const all = blockSharpes(net, blocks);
+    if (!all) return NaN;
     let worst = Infinity;
+    for (const sh of all) if (sh < worst) worst = sh;
+    return worst;
+}
+export function blockSharpes(net, blocks = 6) {
+    const k = Number.isInteger(blocks) ? blocks : Math.floor(blocks);
+    if (!Array.isArray(net) || net.length < 1 || !Number.isFinite(k) || k < 1) return null;
+    for (const v of net) if (!Number.isFinite(v)) return null;
+    const size = Math.floor(net.length / k);
+    if (size < 1) return null;
+    const out = [];
     for (let b = 0; b < k; b++) {
         const seg = net.slice(b * size, (b + 1) * size);
         const m = seg.reduce((x, v) => x + v, 0) / seg.length;
         let s = 0;
         for (const v of seg) s += (v - m) * (v - m);
-        const sd = Math.sqrt(s / (seg.length - 1));
-        const sh = sd > 0 ? m / sd : 0;
-        if (sh < worst) worst = sh;
+        const sd = seg.length > 1 ? Math.sqrt(s / (seg.length - 1)) : NaN;
+        out.push(sd > 0 ? m / sd : 0);
     }
-    return worst;
+    return out;
+}
+
+// The tightened G5 conjunction (audit A8, round-31 G5): the first bankable
+// positive result is not one number but five computable knobs plus two human
+// attestations, all of which must hold. The machine checks what it can and
+// RECORDS what only a human can (decay documentation, unseen data) — an
+// attestation is pass-through, never computed, so the report can never claim a
+// check it did not run.
+//
+// Knobs (all gating): `level` (net Sharpe at the stated cost above `minSharpe`),
+// `blocks` (fraction of positive block Sharpes at/above `minBlockFraction`,
+// default 4/6), `dsr` (`dsrAdjusted` at/above `minDsrAdjusted`, default 0.95 —
+// null reads as fail, not skip: an unscored hurdle is not a cleared one),
+// `neutral` (factor-neutral Sharpe above `minNeutralSharpe`, default 0),
+// `capacity` (passes vacuously when no size is stated; a paper Sharpe with no
+// size claim breaches nothing). Reported, never gating: split halves and the
+// weakest block. `verdict` is the conjunction.
+export function scoreG5({ net, costBps = 0, blocks = 6, dsrAdjusted = null, neutralSharpe = null, sizeUsd = null, capacityUsd = null, minSharpe = 0, minBlockFraction = 4 / 6, minDsrAdjusted = 0.95, minNeutralSharpe = 0, decayDocumented = false, unseenData = false } = {}) {
+    const knobs = [];
+    const reasons = [];
+    const knob = (name, value, threshold, pass, gated = true, note = null) => {
+        knobs.push({ knob: name, value, threshold, pass: !!pass, gated, note });
+        if (gated && !pass) reasons.push(name);
+    };
+    const fin = (v) => typeof v === 'number' && Number.isFinite(v);
+    const ok = Array.isArray(net) && net.length > 0 && net.every(fin);
+    const mean = ok ? net.reduce((a, v) => a + v, 0) / net.length : NaN;
+    let sd = NaN;
+    if (ok && net.length > 1) {
+        let s = 0;
+        for (const v of net) s += (v - mean) * (v - mean);
+        sd = Math.sqrt(s / (net.length - 1));
+    }
+    const level = sd > 0 ? mean / sd : 0;
+    knob('level', ok ? level : null, minSharpe, ok && level > minSharpe, true, `net Sharpe at ${costBps} bps`);
+    const all = ok ? blockSharpes(net, blocks) : null;
+    const frac = all ? all.filter((x) => x > 0).length / all.length : null;
+    knob('blocks', frac, minBlockFraction, frac !== null && frac + 1e-12 >= minBlockFraction, true, `${all ? all.filter((x) => x > 0).length : 0}/${all ? all.length : 0} positive blocks`);
+    knob('dsr', fin(dsrAdjusted) ? dsrAdjusted : null, minDsrAdjusted,
+        fin(dsrAdjusted) && dsrAdjusted >= minDsrAdjusted, true,
+        fin(dsrAdjusted) ? null : 'dsrAdjusted was not scored — an unscored hurdle fails');
+    knob('neutral', fin(neutralSharpe) ? neutralSharpe : null, minNeutralSharpe,
+        fin(neutralSharpe) && neutralSharpe > minNeutralSharpe, true,
+        fin(neutralSharpe) ? null : 'no factor-neutral readout — an unscored hurdle fails');
+    if (sizeUsd === null && capacityUsd === null) {
+        knob('capacity', null, null, true, true, 'no size claim — nothing to breach');
+    } else {
+        const capOk = fin(sizeUsd) && fin(capacityUsd) && capacityUsd > 0 && sizeUsd <= capacityUsd;
+        knob('capacity', fin(sizeUsd) ? sizeUsd : null, fin(capacityUsd) ? capacityUsd : null, capOk, true,
+            fin(sizeUsd) && fin(capacityUsd) ? `size $${sizeUsd} vs bound $${capacityUsd}` : 'size or bound not stated — an unscored hurdle fails');
+    }
+    const halves = ok && net.length >= 4 ? stressHalves(net) : { first: NaN, second: NaN, min: NaN };
+    knob('halves', halves.min, null, true, false, `split-half Sharpes ${halves.first}/${halves.second} (reported, never gating)`);
+    knob('worstBlock', all ? Math.min(...all) : null, null, true, false, 'weakest-block Sharpe (reported, never gating)');
+    knob('decay', decayDocumented === true, true, decayDocumented === true, true, 'human attestation: a decay check is documented');
+    knob('unseen', unseenData === true, true, unseenData === true, true, 'human attestation: scored on data the frozen spec did not select on');
+    return { verdict: reasons.length === 0, reasons, knobs, costBps, blocks };
 }
