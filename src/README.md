@@ -87,6 +87,35 @@ network lead-lag / causal crash-gated momentum, `../docs/research/round30-winnin
 registered `UNTESTED` in `./lineage.js` / `../docs/LINEAGE.md` until G-H measures them; the checks
 live in `analysis.test.js` §G-H and the resolvability check in `analyze.test.js`.
 
+## V2 — the contract/registry layer (`core/`, `plugins/`)
+
+The **additive** modularity layer from round 31 (`../docs/ARCHITECTURE-v2.md`,
+`../docs/MIGRATION-V2.md`). Nothing under the legacy tree imports it, and it imports no legacy
+module except the single adapter below, so the 11 golden fingerprints cannot move — a fact the
+`contracts.test.js` import-law section asserts over every file (the legacy tree never imports
+`core/`; the contract kernel imports *nothing*; no plugin imports another plugin).**
+
+| module | exports | what it is | proven by |
+| --- | --- | --- | --- |
+| `core/contracts/base.js` | `CONTRACT_VERSION`, `CAPABILITIES`, `PLUGIN_STATES`, `ID_PATTERN`, `defineContract`, `validatePlugin`, `validateInstance`, `assertPlugin`, `assertInstance`, `describeContract` | the contract **kernel**: a contract names the methods a swappable thing must expose; `validatePlugin`/`validateInstance` return every gap in one pass; the capability tag is mandatory (`not-applicable` is a first-class claim). Imports nothing. | `contracts.test.js` |
+| `core/contracts/{source,feature,label,learner,memory,retrieve,sleeve,book,risk,evaluator}.js` | one contract + an `isXPlugin` helper each | the ten contracts (stateful ones — source/learner/memory/retrieve — are factories; pure ones live on the plugin object) | `contracts.test.js` |
+| `core/contracts/index.js` | the barrel + `CONTRACTS`, `CONTRACT_KINDS` | the single import surface for the contracts | `contracts.test.js` |
+| `core/registry.js` | `registerPlugin`, `resolve`/`resolveOrNull`, `ids`/`entries`, `activeRoster`, `stackSnapshot`/`rosterSnapshot`, `report`, `resetRegistry`, … | validate-on-register, no duplicate id, no silent `K`; the roster/stack hashes are registration-order independent and move only when the **default stack** moves | `contracts.test.js` |
+| `core/primitives/{fingerprint,views,weights,series,books}.js` | the ported pure arithmetic | the FNV-1a fingerprint, the one-view rule, the lab's cap→band chain + `MIN_TRAIN_PERIODS`, the causal row math, and the two book constructions (`n` = the book-grid length, explicit) | `contracts.test.js` §D + the lab's `e73_port_verify.js` |
+| `plugins/index.js` | `DEFAULT_STACK`, `installDefaultStack`, `PLUGIN_IDS` | the composition root: the only file that imports plugins; `learner:legacy-hivemind` is the only `defaultStack` plugin | `contracts.test.js` |
+| `plugins/learners/legacy-hivemind.js` | `LEGACY_HIVEMIND_DEFAULTS`, `legacyHivemindLearner`, `isLegacyHivemind` | the **one** legacy bridge: a `learner` factory that constructs the shipped `HiveMind` and delegates every call — no arithmetic of its own | `legacy_hivemind.test.js` + `golden.test.js` (the engine's own 11 fingerprints) |
+| `plugins/sleeves/{carry-dispersion,toptrader-fade,oi-change}.js` | one spec + one sleeve + an `isX` helper each | the lab's three pinned sleeves: R8 (ewma 0.02, cap 1/8, no band), R7 (sign −1, ewma 0.05, cap 1/8, no band), OI (50/50 ewma 0.1+0.25, band 0.03, no cap). Land **`UNTESTED`** | `contracts.test.js`; the port is verified by the lab's `e73` (F-81) |
+| `plugins/risk/cap-band.js` | `CAP_BAND_SPECS`, `DEFAULT_POSITION_SPEC`, `capBandRisk` | the ported cap/no-trade-band chain + the shipped ±1 clamp | `contracts.test.js` |
+| `plugins/books/{single,fixed-split}.js` | `singleBook`, `commonTimeIndexes`, `fixedSplitBook` | single-sleeve and fixed-capital-fraction composition (on the intersection of book times) | `contracts.test.js` |
+
+**The lock class is per-plugin, not whole-engine** (audit A14): a model plugin is pinned by a
+fingerprint (the adapter by the engine's own goldens), an analytic plugin by exact reference
+vectors. Adding a NON-DEFAULT plugin moves no existing proof. The registry holds ids/states only;
+the proofs live in `../test/lock-registry.js` (`CORE_REGISTRY`, `PLUGIN_REGISTRY`) and a drift test
+compares it to `DEFAULT_STACK` in both directions. `docs/LOCKED.md` has the summary block. The
+**port itself is verified on the lab's real data** by `src/NeuLegion-lab/experiments/e73_port_verify.js`
+(F-81): the repo reproduces the published books bit-for-bit (R8 `6.18`, R7 `1.07`, OI `0.92`).
+
 ## Why this directory is split the way it is
 
 `HiveMind` and `HiveMindController` were each originally one ~2.5k–7.5k-line
@@ -602,6 +631,11 @@ for every component — is [`../docs/LOCKED.md`](../docs/LOCKED.md) and
   `hivemind/memory/bitweight.js`, `hivemind/memory/querymod.js`,
   `consolidation_logic.js`,
   `candle_quality.js`): exact reference vectors.
+- **LOCKED (invariant, V2)** — the round-31 layer (`core/contracts/*`, `core/registry.js`,
+  `core/primitives/*`, `plugins/*`): exact reference vectors in `contracts.test.js` (141 checks) plus
+  the engine's own goldens for the legacy adapter (`legacy_hivemind.test.js`, 15 checks). Registered
+  in `../test/lock-registry.js#CORE_REGISTRY` (8) + `PLUGIN_REGISTRY` (7); not part of the legacy
+  registry totals. See the "V2" section above and `docs/LOCKED.md`.
   `price_precision.js` is additionally covered by `multisymbol.test.js` and the
   unchanged golden fingerprints; `surprise.js`, `sample_weights.js`,
   `homeostasis.js` and `evolve.js` are each covered by their own entry (the first

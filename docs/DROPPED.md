@@ -40,6 +40,25 @@ All measured on the 8×600 acceptance run (`RUN-ANALYSIS.md` §17.6) and the 8×
 | `sig-autocorr` | `NL-SIG-autocorr@r23` | **−0.0996** | **not robust to the window**: +1.79 @200 bars but −0.10 @600 — a regime-dependent artefact, not an edge |
 | `sig-volume` | `NL-SIG-volume@r23` | **−0.0008** | exactly flat (break-even −0.01 bps): no edge to reject on cost, no edge to keep |
 
+### 2b. Dropped signal upgrades (NL-SIG `@r30`, the pre-registered `SIGUP` family) — added 2026-09-28
+
+The four pre-registered momentum upgrades (`analysis/features.js#SIGUP_CANDIDATES`, gate G-H) were
+registered `UNTESTED` and never measured in the round-30 A/B. The operator's **2026-09-27 run corpus**
+then measured five momentum arms at **K = 6** (`RUN-ANALYSIS.md` §18.3, `20260927T060215-seed1`); the
+deflection is monotone in `K`, so none promotes — and the strongest arm is unauditable:
+
+| branch | lineage id | net Sharpe | adj. DSR (K=6) | break-even | why dropped |
+| --- | --- | ---: | ---: | ---: | --- |
+| `sig-vol-momentum` | `NL-SIG-vol-momentum@r30` | 1.1667 | 0.9173 | 14.42 bps | fails the adjusted-DSR floor at the searched roster |
+| `sig-blend-momentum` | `NL-SIG-blend-momentum@r30` | 0.7054 | 0.5662 | 8.62 bps | fails decisively |
+| `sig-network-momentum` | `NL-SIG-network-momentum@r30` | 1.3005 | 0.8654 | 15.29 bps | **VACUOUS** look-ahead audit (8 violations, `reachable 0/288`) — the cross-sectional wire is broken (`L10-bu`/`L10-cc`); **unmeasured**, not merely un-promoted |
+| `sig-regime-momentum` | `NL-SIG-regime-momentum@r30` | 1.0657 | 0.8681 | 14.06 bps | fails the adjusted-DSR floor |
+
+**A drop is a roster label.** The modules ship and stay golden-pinned; the branches leave the future
+search. If the cross-sectional wire (A24/W6) is fixed, `sig-network-momentum` is the one worth
+re-measuring — its pooled Sharpe is the corpus's highest, but it is currently *not a measurement*.
+This entry implements `AUDIT-round31-v2.md` amendment **A23**.
+
 ## 3. Dropped benchmark (NL-BENCH)
 
 | branch | lineage id | why dropped |

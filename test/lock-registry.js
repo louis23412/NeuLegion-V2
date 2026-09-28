@@ -38,10 +38,13 @@ export const DOMAINS = Object.freeze({
     continual: 'docs/research/continual-learning.md',
     finance: 'docs/research/financial-validation.md',
     observability: 'docs/research/observability.md',
+    core: 'docs/research/core-contracts.md',
 });
 
 // Citation keys used by the registry. Short form is what appears in docs.
 export const CITATIONS = Object.freeze({
+    parnas1972: 'Parnas, On the Criteria To Be Used in Decomposing Systems into Modules, Communications of the ACM 15(12):1053-1058, 1972 (information hiding: a module boundary is a decision that may change)',
+    fowler2004strangler: 'Fowler, StranglerFigApplication, martinfowler.com, 2004 (incremental replacement of a legacy system behind a seam)',
     charikar2002: 'Charikar, Similarity Estimation Techniques from Rounding Algorithms, STOC 2002',
     kanerva1988: 'Kanerva, Sparse Distributed Memory, MIT Press 1988',
     vaswani2017attention: 'Vaswani et al., Attention Is All You Need, arXiv 1706.03762',
@@ -167,6 +170,8 @@ export const KNOWN_TESTS = Object.freeze([
     'observer.test.js',
     'analyze.test.js',
     'controller_invariants.test.js',
+    'contracts.test.js',
+    'legacy_hivemind.test.js',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -873,6 +878,203 @@ export const CONTROLLER_REGISTRY = Object.freeze({
         citations: ['leprado2018afml'],
         proves: ['core.test.js', 'multisymbol.test.js', 'golden.test.js', 'controller_invariants.test.js'],
         note: 'Open/closed trade bookkeeping against the live DB; direction invariants (TP/SL side) checked in core and across all eight symbols by multisymbol.test.js, and the per-bar bookkeeping pinned by the `ctl:*` fingerprints, all now on the native driver (BUGS.md #18). The target-price grid is owned by price_precision.js. `_sampleWeightsForBatch` is the additive uniqueness-weight bridge (see the `sample_weights.js` support module); it returns null by default, so the training path is unchanged. R27-3/R27-4b: `_updateOpenTrades` now derives the true holding length from the cached window (capped at cacheSize-1) and the triple-barrier time barrier, and `_sampleWeightsForBatch` supports the opt-in `causal-window` mode with `_accumulateSampleWeightStats`/`sampleWeightSummary` reporting; all off by default (`_sampleWeightConfig = null` is bit-identical).',
+    },
+});
+
+// ---------------------------------------------------------------------------
+// The V2 core layer (`src/core/**`, `src/plugins/**`) — contract-first modularity.
+//
+// Round 31 / M11 (`docs/ARCHITECTURE-v2.md` §4, `docs/MIGRATION-V2.md`). This layer
+// is ADDITIVE: no legacy module imports it and it imports no legacy module except
+// the single adapter `plugins/learners/legacy-hivemind.js`, so the 11 golden
+// fingerprints cannot move (proved by `golden.test.js` + the import-law section of
+// `contracts.test.js`). Two lock classes (audit A14): the model adapter is pinned
+// by the engine's own goldens (`legacy_hivemind.test.js`), and every pure module is
+// pinned by exact reference vectors in `contracts.test.js`.
+// ---------------------------------------------------------------------------
+
+export const CORE_MODULES = Object.freeze({
+    'contracts/base.js': [
+        'CONTRACT_VERSION', 'CAPABILITIES', 'CAPABILITY_VALUES', 'PLUGIN_STATES', 'ID_PATTERN',
+        'defineContract', 'validatePlugin', 'validateInstance', 'assertPlugin', 'assertInstance',
+        'describeContract',
+    ],
+    'contracts/index.js': [
+        'CONTRACT_VERSION', 'CAPABILITIES', 'CAPABILITY_VALUES', 'PLUGIN_STATES', 'ID_PATTERN',
+        'defineContract', 'validatePlugin', 'validateInstance', 'assertPlugin', 'assertInstance',
+        'describeContract', 'CONTRACTS', 'CONTRACT_KINDS',
+        'SOURCE_CONTRACT', 'isSourcePlugin', 'FEATURE_CONTRACT', 'isFeaturePlugin',
+        'LABEL_CONTRACT', 'isLabelPlugin', 'LEARNER_CONTRACT', 'isLearnerPlugin',
+        'MEMORY_CONTRACT', 'isMemoryPlugin', 'RETRIEVE_CONTRACT', 'isRetrievePlugin',
+        'SLEEVE_CONTRACT', 'isSleevePlugin', 'BOOK_CONTRACT', 'isBookPlugin',
+        'RISK_CONTRACT', 'isRiskPlugin', 'EVALUATOR_CONTRACT', 'isEvaluatorPlugin',
+    ],
+    'contracts/source.js': ['SOURCE_CONTRACT', 'isSourcePlugin'],
+    'contracts/feature.js': ['FEATURE_CONTRACT', 'isFeaturePlugin'],
+    'contracts/label.js': ['LABEL_CONTRACT', 'isLabelPlugin'],
+    'contracts/learner.js': ['LEARNER_CONTRACT', 'isLearnerPlugin'],
+    'contracts/memory.js': ['MEMORY_CONTRACT', 'isMemoryPlugin'],
+    'contracts/retrieve.js': ['RETRIEVE_CONTRACT', 'isRetrievePlugin'],
+    'contracts/sleeve.js': ['SLEEVE_CONTRACT', 'isSleevePlugin'],
+    'contracts/book.js': ['BOOK_CONTRACT', 'isBookPlugin'],
+    'contracts/risk.js': ['RISK_CONTRACT', 'isRiskPlugin'],
+    'contracts/evaluator.js': ['EVALUATOR_CONTRACT', 'isEvaluatorPlugin'],
+    'primitives/fingerprint.js': ['canonical', 'fnv1a', 'fingerprint'],
+    'primitives/views.js': ['viewIdentity', 'viewFingerprint', 'sameView', 'assertOneView'],
+    'primitives/weights.js': [
+        'MIN_TRAIN_PERIODS', 'clipWeights', 'saturateWeights', 'bandWeights', 'cleanBook',
+        'sumAbs', 'sumRow', 'maxAbs', 'normalizeL1', 'isValidRow', 'turnoverSeries',
+    ],
+    'primitives/series.js': [
+        'rowMean', 'rowStdPopulation', 'sharpeOf', 'meanOf', 'ewmaUpdate', 'blendRows',
+        'dlogPositive', 'firstCommonIndex', 'rowRankWeights', 'rowLevelWeights',
+        'crossSectionalTarget', 'applyWeightPolicy', 'fin',
+    ],
+    'primitives/books.js': ['buildFundingBook', 'buildCrossSectionalBook', 'dlogMatrix', 'blendBooks'],
+    'primitives/index.js': [
+        'canonical', 'fnv1a', 'fingerprint',
+        'viewIdentity', 'viewFingerprint', 'sameView', 'assertOneView',
+        'MIN_TRAIN_PERIODS', 'clipWeights', 'saturateWeights', 'bandWeights', 'cleanBook',
+        'sumAbs', 'sumRow', 'maxAbs', 'normalizeL1', 'isValidRow', 'turnoverSeries',
+        'rowMean', 'rowStdPopulation', 'sharpeOf', 'meanOf', 'ewmaUpdate', 'blendRows',
+        'dlogPositive', 'firstCommonIndex', 'rowRankWeights', 'rowLevelWeights',
+        'crossSectionalTarget', 'applyWeightPolicy', 'fin',
+        'buildFundingBook', 'buildCrossSectionalBook', 'dlogMatrix', 'blendBooks',
+    ],
+    'registry.js': [
+        'KINDS', 'PLUGIN_STATES', 'registerPlugin', 'hasPlugin', 'resolve', 'resolveOrNull',
+        'ids', 'entries', 'capabilityOf', 'stateOf', 'instantiate', 'registeredKinds',
+        'activeRoster', 'stackSnapshot', 'rosterSnapshot', 'report', 'resetRegistry',
+    ],
+    'plugins/index.js': ['DEFAULT_STACK', 'installDefaultStack', 'PLUGIN_IDS'],
+    'plugins/learners/legacy-hivemind.js': ['LEGACY_HIVEMIND_DEFAULTS', 'legacyHivemindLearner', 'isLegacyHivemind'],
+    'plugins/sleeves/carry-dispersion.js': ['CARRY_DISPERSION_SPEC', 'carryDispersionSleeve', 'isCarryDispersion'],
+    'plugins/sleeves/toptrader-fade.js': ['TOPTRADER_FADE_SPEC', 'toptraderFadeSleeve', 'isToptraderFade'],
+    'plugins/sleeves/oi-change.js': ['OI_CHANGE_SPEC', 'oiChangeSleeve', 'isOiChange'],
+    'plugins/risk/cap-band.js': ['CAP_BAND_SPECS', 'DEFAULT_POSITION_SPEC', 'capBandRisk', 'isCapBandRisk'],
+    'plugins/books/single.js': ['singleBook', 'isSingleBook'],
+    'plugins/books/fixed-split.js': ['commonTimeIndexes', 'fixedSplitBook', 'isFixedSplitBook'],
+});
+
+export const CORE_REGISTRY = Object.freeze({
+    'contracts': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'core',
+        citations: ['parnas1972', 'fowler2004strangler'],
+        proves: ['contracts.test.js'],
+        note: 'The ten V2 contracts (source/feature/label/learner/memory/retrieve/sleeve/book/risk/evaluator) and the kernel that validates a plugin against them. Proved: defineContract rejects a non-slug kind, a stub purpose, a duplicate method, a non-array `requires`/`optional` (a string was spread into its CHARACTERS, silently declaring methods \'f\'/\'i\'/\'t\' — R31c) and a stateful contract that lists create; validatePlugin enforces id + capability + required methods and rejects a non-function optional method; a stateful contract validates create() on the plugin and fit()/predict() on the created instance; the capability tag is mandatory (the R27-2 lesson: an off-path arm is not-applicable, never a quiet baseline). Additive: the contract kernel imports nothing at all (asserted by the import-law check).',
+    },
+    'registry.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'core',
+        citations: ['parnas1972', 'leprado2018afml'],
+        proves: ['contracts.test.js'],
+        note: 'The plugin registry: validate-on-register, no duplicate id, no silent K, deterministic roster/stack pins. Proved: an invalid plugin never enters the store, a duplicate id throws, an unknown kind lists the known ones, an unknown state throws, resolve() names the available ids; rosterSnapshot()/stackSnapshot() are 8-hex content hashes that are REGISTRATION-ORDER INDEPENDENT and move only when the default stack moves; activeRoster(kind) is exactly the defaultStack set (an empty roster, not "everything"); the registry never imports a plugin (the composition root pushes plugins in) and holds no proofs (a drift test in contracts.test.js compares it to PLUGIN_REGISTRY); and report() echoes CONTRACT_VERSION rather than a hard-coded string (R31b — a version bump can no longer leave the report stale).',
+    },
+    'primitives/weights.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml'],
+        proves: ['contracts.test.js'],
+        note: 'The ported book hygiene (the lab\'s `prototypes/port.js`, F-27/F-50/F-52/F-53/F-54/F-58/F-60): a strict per-symbol clip-and-hold cap, a per-symbol no-trade band, and the chain CAP-THEN-BAND (order is load-bearing: a fixture proves cleanBook differs from the reverse order). Also saturateWeights (the F-54 smooth-equivalent cap), normalizeL1, sumAbs/maxAbs, and turnoverSeries (e16 — which applies the lab\'s `fin` guard, so a non-finite/non-numeric weight counts as 0 rather than turning a turnover reading into NaN/Infinity; R31b). Proved by exact vectors, the order fixture, the non-finite-weight vector, and the null-argument identities. MIN_TRAIN_PERIODS = 2555 pins the lab\'s ~2.3-year frozen-parameter rule (F-49/F-55/F-59).',
+    },
+    'primitives/series.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml'],
+        proves: ['contracts.test.js'],
+        note: 'The causal row math the sleeves share (e12/e16/e17/e21/e22): finite-only row mean/std, Sharpe at a stated annualisation basis, the EWMA update and the two-row blend (both hardened in R31b so a non-finite leg counts as 0 via the lab\'s `fin`, exactly like `turnoverSeries` — an out-of-contract row can no longer inject NaN/Infinity into a book), the masked and demeaned cross-sectional target (fewer than 3 present symbols -> a flat row; missing symbols are excluded from the mean, never zeroed), the weight policy (daily/ewma/hold, unknown -> throw), the funding-rank and z-score weighting, dlogPositive, and firstCommonIndex (which treats a `null` COLUMN — a symbol with no series at all, the shape `dlogMatrix` returns for it — as never present instead of throwing; R31c). Proved by exact vectors including the tie-order and antisymmetry of the rank weights.',
+    },
+    'primitives/books.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml'],
+        proves: ['contracts.test.js'],
+        note: 'The two book constructions, verbatim ports of the lab\'s constructions: buildFundingBook (target from funding at t-1, P&L = basis + funding at t; e17#buildBook) and buildCrossSectionalBook (the masked demean, the policy, the forward spotRet[i+NEXT]; e21#xsBookImpl / e22#buildMasked, which are the same formula). Proved by hand-computed fixtures, including a flip fixture that pins the previous-period target and the normalize-after-policy order, and a `hold`-phase fixture (R31b) pinning that BOTH shells phase the policy on the same per-row counter (row 0 rebases) — `buildCrossSectionalBook` had passed its absolute grid index `i`, so the same policy object rebalanced differently in the two shells. The lab\'s `e73_port_verify.js` re-derives the same books from the real data and reproduces e52\'s stored numbers. R31c closed three defects in this module: `dlogMatrix`\'s `!series` guard was DEAD inside the `.map` callback (`series` is always the array being mapped), so a symbol with no records at all threw on `.map` instead of yielding a `null` column — the guard now sits at the outer level and `buildCrossSectionalBook` masks a `null` column exactly like a missing symbol; and `blendBooks` now applies the same `fin` guard as `blendRows`/`ewmaUpdate`, so an `Infinity` leg can no longer inject `NaN` into the OI sleeve\'s 50/50 blend.',
+    },
+    'primitives/fingerprint.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'core',
+        citations: ['parnas1972'],
+        proves: ['contracts.test.js'],
+        note: 'The project\'s FNV-1a fingerprint over a canonical rendering (the golden suite\'s EXACT rules: sorted keys, -0 distinguished, typed arrays walked, strings `JSON.stringify`-quoted/escaped so a string can never be read as a number or a key, functions rendered as `[fn]` so a function\'s engine-dependent source cannot leak into a hash, U+0001 part separation). R31b made the string/function branches match the golden suite — before that the doc claimed the golden rules but the code used bare `String(v)` for strings and fell through to source text for functions. Proved: determinism, key-order invariance, -0 vs 0, typed-array equivalence, string-vs-number non-collision, source-independent `[fn]`, and that "ab"+"c" cannot collide with "a"+"bc". This is what rosterSnapshot/stackSnapshot hash.',
+    },
+    'primitives/views.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'core',
+        citations: ['parnas1972'],
+        proves: ['contracts.test.js'],
+        note: 'The one-view rule (audit A16; `BUGS.md` #33 generalised): the runtime produces the view and the evaluator consumes the SAME view, made checkable — viewIdentity reads rows/times/symbols and their length, a perturbed row changes the fingerprint, metadata outside the identity does not, and assertOneView throws with the rule named. This is the generalisation of the round-26 leak that read clean because the audit perturbed a returns array the model never read.',
+    },
+    'plugins/legacy': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'attention',
+        citations: ['vaswani2017attention', 'su2021rope'],
+        proves: ['legacy_hivemind.test.js'],
+        note: 'The ONE bridge between V2 and the shipped engine: `plugins/learners/legacy-hivemind.js`. It is a stateful factory (create() -> {fit, predict, diagnostics, dumpState}) that constructs the shipped `HiveMind` and delegates every call to it — no arithmetic of its own. Proved: importing it registers nothing (no module-eval side effect), its defaults are frozen and match the golden suite\'s bare model (es=3, forceMin), a missing state dir throws its own guard, the instance satisfies the learner contract, the engine\'s own guards survive (a malformed vector still returns NaN, fit() still returns the monotone step count), two instances share no state, the engine prototype surface is the shipped one, and the same seeded trajectory read through the adapter twice is bit-identical. The engine\'s own 11 fingerprints stay the proof of the arithmetic (`golden.test.js`).',
+    },
+});
+
+// The plugin register: every plugin id the composition root installs, with its
+// kind, its landing state and the proof that justifies the state. `contracts.test.js`
+// asserts this and `src/plugins/index.js#DEFAULT_STACK` do not drift (both
+// directions), so the registry can never quietly become a second lock registry.
+export const PLUGIN_REGISTRY = Object.freeze({
+    'learner:legacy-hivemind': {
+        kind: 'learner',
+        state: 'LIVE',
+        defaultStack: true,
+        proves: ['legacy_hivemind.test.js', 'golden.test.js'],
+        citations: ['vaswani2017attention', 'su2021rope'],
+        note: 'The shipped model, as the engine\'s factory. LIVE + defaultStack: the V2.0 acceptance condition is that this default reproduces the 11 legacy goldens.',
+    },
+    'risk:cap-band': {
+        kind: 'risk',
+        state: 'LIVE',
+        defaultStack: false,
+        proves: ['contracts.test.js'],
+        citations: ['leprado2018afml'],
+        note: 'The ported cap/no-trade-band risk policy plus the shipped fixed +/-1 clamp (with the dead-zone hazard documented at BUGS.md #61). LIVE as a policy (it is pure arithmetic proved by vectors) but NOT the default stack: the shipped engine has no risk layer, so nothing is promoted until the sleeve book clears G2.',
+    },
+    'sleeve:carry-dispersion': {
+        kind: 'sleeve',
+        state: 'UNTESTED',
+        defaultStack: false,
+        proves: ['contracts.test.js'],
+        citations: ['leprado2018afml', 'pardo2008walkforward'],
+        note: 'R8: the dollar-neutral rank-funding carry dispersion book (ewma 0.02, cap 1/8, no band). LANDED UNTESTED: the lab\'s numbers (F-17/F-21/F-39/F-41/F-60) say worth porting; the repo\'s own gate (G2/G5) has not scored it yet — that is what promotes it.',
+    },
+    'sleeve:toptrader-fade': {
+        kind: 'sleeve',
+        state: 'UNTESTED',
+        defaultStack: false,
+        proves: ['contracts.test.js'],
+        citations: ['leprado2018afml'],
+        note: 'R7: the cross-sectional toptrader long/short ratio fade (sign -1, ewma 0.05 pinned, cap 1/8, no band). UNTESTED in the repo: the fade sign is a prior validated held-out in the lab (F-30), the lambda is pinned because the walk-forward rule loses here (F-51), and a band does not stack (F-53). R31b: `returns` reads the SAME clamped start as the builder (`max(1, from)`) — reading bare `from` was an off-by-one for a `from: 0` caller.',
+    },
+    'sleeve:oi-change': {
+        kind: 'sleeve',
+        state: 'UNTESTED',
+        defaultStack: false,
+        proves: ['contracts.test.js'],
+        citations: ['leprado2018afml'],
+        note: 'The standalone Δlog(open interest) sleeve: a 50/50 blend of two EWMA books with a pinned 0.03 no-trade band and no cap (F-46/F-56/F-58/F-59). UNTESTED in the repo; the lab says it is weak, churny and STANDALONE (never a joint member with R8 — F-43/F-47). R31b: `returns` reads the SAME clamped start as the builder (`max(1, from)`), so a `from: 0` caller is no longer off by one.',
+    },
+    'book:single': {
+        kind: 'book',
+        state: 'LIVE',
+        defaultStack: false,
+        proves: ['contracts.test.js'],
+        citations: ['leprado2018afml'],
+        note: 'The trivial single-sleeve book. LIVE (pure composition, proved by vectors) and not the default stack; every joint statement is a comparison against it.',
+    },
+    'book:fixed-split': {
+        kind: 'book',
+        state: 'UNTESTED',
+        defaultStack: false,
+        proves: ['contracts.test.js'],
+        citations: ['leprado2018afml'],
+        note: 'Fixed-capital-fraction composition on the INTERSECTION of the sleeves\' book times. UNTESTED as a deployed book; the lab\'s F-43/F-44 say to size a joint book to the fixed split, never to the joint LP (48.5x/yr gross for net@4 0.62).',
     },
 });
 

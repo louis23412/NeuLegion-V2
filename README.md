@@ -240,6 +240,8 @@ Web Worker. Entries are `test/browser/entries/*.test.js`, each exporting
 | `guards.test.js` | 65 | **run-integrity guards** (`legion/sanitize.js`, `legion/rng.js`; ROADMAP P0-1/P0-2): finite coercion, safe JSON, signal/consensus sanitising, the controller-failure budget, config fingerprinting, deterministic per-worker seed derivation, and fail-fast config validation — all error-path/setup-path, so no golden fingerprint moves |
 | `observer.test.js` | 76 | **legion health observer** (`observer/*`; ROADMAP P1-2): calibration (Brier + Murphy decomposition), diversity (entropy/HHI/effective voters/Gini/kappa), drift (EWMA/CUSUM), the consensus-probability map and the pure alert rule engine, plus the deterministic run-id/spool report and the read-only snapshot collector |
 | `controller_invariants.test.js` | 23 | controller determinism + open-book invariants (R27-6): identical emitted positions **and** identical `Math.random()` draw counts across two seeded runs, the exhaustive resolved-barrier split and cache-bounded holding period, monotone `trainingSteps`, the off-state no-op / `inert`-on-`optimistic` liveness facts, and audit non-vacuity |
+| `contracts.test.js` | 141 | **the V2 contract layer** (round-31/M11): the kernel + the ten contracts validate/throw exactly (a missing method, a non-object, a duplicate id, an unknown kind/state, a stateful instance that is not a factory), the registry is deterministic and registration-order independent, the ported primitives match exact reference vectors (the cap→band chain's order, `turnoverSeries`/`ewmaUpdate`/`blendRows` incl. the lab's finite guard, the fingerprint/canonicalisation incl. the golden suite's string-quoting and `[fn]` rules, the one-view rule), the two book shells phase a `hold` policy identically and the sleeves' `returns` share the builder's clamped start, the sleeves/books/risk plugins reproduce the lab's hand-computed fixtures, the absent-data masks (a `null` signal column / a non-finite leg) neither throw nor inject `NaN` (R31c: `dlogMatrix`'s inner `!series` guard was dead, `blendBooks` had no `fin`), `stackSnapshot`/`rosterSnapshot` move only when the default stack moves, and **the import law** is enforced over every file (kernel imports nothing; a negative control asserts exactly one file bridges to the engine) |
+| `legacy_hivemind.test.js` | 15 | the **single legacy bridge** (`plugins/learners/legacy-hivemind.js`) is a pass-through over the shipped engine: a real `HiveMind` behind the adapter's `create()` satisfies the `learner` contract, `fit`/`predict`/`diagnostics`/`dumpState` forward correctly, `LEGACY_HIVEMIND_DEFAULTS` pins the compact dimensions + `forceMin`, and the adapter is deterministic under a seeded PRNG |
 | `bench.test.js` | — | not pass/fail: construct / predict / train / broadcast timings and per-step call counters |
 
 `golden.test.js` is the one to run after **any** edit under `src/hivemind/`: if a
@@ -280,7 +282,7 @@ running a single file (see `docs/BUGS.md` #14 and `docs/RUNBOOK.md` §7). The
 focused scripts (`npm run test:locks`, `test:candles`, `test:analysis`) pass a
 file path, which is a valid glob in both regimes.
 
-It mirrors the browser checks with a shared `helpers.js`, in **two styles**: 22
+It mirrors the browser checks with a shared `helpers.js`, in **two styles**: 24
 files import the browser entry's `run()` and assert `failed === 0` **and**
 `total ===` that entry's count in the `RUNBOOK.md` §6 ledger (so a silently
 skipped section cannot pass), and 8 re-declare the same contracts directly with
@@ -300,7 +302,7 @@ fingerprint is compared at 6 significant digits because it is over raw float64
 `predict()` output (the other nine hashes are literal; `hm:postReloadPrediction`
 is the second rounded one, per P2-3). `bench` is the only
 browser entry with no mirror (it prints timings and has no pass/fail contract),
-so a run reports **128 `test()` blocks, not 2585 individual checks**, and takes a few minutes
+so a run reports **130 `test()` blocks, not 2741 individual checks**, and takes a few minutes
 (the `dimensions` sweep dominates). Mirror-injected options must respect the
 entries' contracts: `stateDir` is pure in its label (use `labelledStateDir`) and
 the sql.js shim is imported lazily (and its own CDN import is lazy too, so

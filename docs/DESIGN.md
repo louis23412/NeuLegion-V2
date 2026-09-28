@@ -311,8 +311,9 @@ decision-procedure changes (rationale in `METHOD.md` §10/§11):
 The open, prioritized work is in [`TODO.md`](TODO.md); the consolidated plan and
 priority rationale is in [`ROADMAP.md`](ROADMAP.md).
 
-The design is still frozen; the native gate is **green (128/128 blocks,
-`BUGS.md` #20/#21/#42/#52)**. Round 22 delivered the full ROADMAP P0-P3 programme (run
+The design is still frozen; the native gate is **green (130/130 blocks,
+`BUGS.md` #20/#21/#42/#52; the round-31 V2 layer added the `contracts` +
+`legacy_hivemind` mirrors, browser suite 2741/0, no golden moved)**. Round 22 delivered the full ROADMAP P0-P3 programme (run
 integrity + determinism + the dry-run/preflight harness + the monitor dashboard +
 the legion observer + the walk-forward A/B driver); the only hot-path-adjacent
 golden change was the deliberate `hm:postReloadPrediction` re-freeze (`BUGS.md`

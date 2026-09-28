@@ -102,11 +102,11 @@ function staticImportsOf(entryFile) {
     return out;
 }
 
-// The ledger the two structural counts below are pinned to: 31 browser entries
-// (30 with a pass/fail contract, plus `bench`) and 43 node mirrors (30 mirrors +
+// The ledger the two structural counts below are pinned to: 33 browser entries
+// (32 with a pass/fail contract, plus `bench`) and 45 node mirrors (32 mirrors +
 // the 13 Node-only suites). See RUNBOOK.md §6.
-const BROWSER_ENTRY_LEDGER = 31;
-const NODE_MIRROR_LEDGER = 43;
+const BROWSER_ENTRY_LEDGER = 33;
+const NODE_MIRROR_LEDGER = 45;
 
 test('every pass/fail browser entry has a node mirror', () => {
     const entries = testFiles(entriesDir);

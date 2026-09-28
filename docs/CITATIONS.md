@@ -569,3 +569,23 @@ Hansen–Lunde–Nason); P2's cadence gate is Lo 2002 + AlgoXpert (arXiv 2603.09
 branches, the measured numbers) are in
 [`RUN-ANALYSIS.md`](RUN-ANALYSIS.md) §16.1–§16.6 and
 [`research/round29-README.md`](research/round29-README.md) §8; the frontier they open is `../TODO.md` 94–97.
+
+## Modular architecture (round 31 / V2)
+
+Grounding for the additive V2 contract/registry layer (`src/core/**`, `src/plugins/**`), the
+`CORE_REGISTRY`/`PLUGIN_REGISTRY` blocks in `test/lock-registry.js`, and the
+[`ARCHITECTURE-v2.md`](ARCHITECTURE-v2.md) / [`MIGRATION-V2.md`](MIGRATION-V2.md) plan.
+
+- Parnas. *On the Criteria To Be Used in Decomposing Systems into Modules.* Communications of the
+  ACM 15(12):1053–1058, 1972. (information hiding — a module boundary should hide a *decision that
+  may change*; the anchor for why the contract layer, not another file split, is the fix for this
+  repo's substitutability defect)
+- Fowler. *StranglerFigApplication.* martinfowler.com, 2004. (incremental replacement of a legacy
+  system behind a seam — the V2.0–V2.4 migration strategy: the legacy engine stays untouched while
+  the new layer grows around it, with the single legacy adapter as the seam)
+- The sleeve plugins reuse the *already-listed* finance anchors and add none: the ported weight
+  hygiene and the cap/band chain are López de Prado (AFML ch. 4), the pinned/book-vs-walk-forward
+  reading and the ~2.3-year freeze rule are Pardo (2008) + the round-28/29 walk-forward notes, and
+  the independence/capacity reads are Kish (1965) + Grinold (1989) + Asness–Moskowitz–Pedersen
+  (2013) — each reused from the sections above rather than re-cited.
+- The design rationale note is [`research/core-contracts.md`](research/core-contracts.md).

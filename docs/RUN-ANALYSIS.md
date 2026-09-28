@@ -3687,3 +3687,173 @@ audit probes** (concurrency bought only 1.45×).
 the controller — remove from the roster or re-scope). The **reversal family** is negative on 1h (3c)
 and economically inaccessible on 15m (§16.4) — park pending the maker-fee/queue model (TODO 94).
 Corrected re-runs and the follow-ups are recorded in `TODO.md` 98–101.
+
+---
+
+## 18. The 2026-09-26/27 local run corpus — the K=3/K=6 momentum verdicts, the funding-sleeve coupling, and the 15m reversal re-run
+
+Seven fresh local runs were scored on the operator's machine
+(`/home/gingerninja/Desktop/projects/NeuLegion-v2/`) and are the evidence base for this section. All
+seven share `costBps: 0`, `seed: 1`, `gate: dependence`, `requireReachable: true`, `reuseBase: true`,
+`commonRandomNumbers: true`, `positionPolicy {deadZone 0.05, scale 1}`, and `trials` = the roster
+size `K`. Two of them pass `--carry-files` (the eight `funding_<sym>_8h.jsonl`), so their reports carry
+a non-null `carry` block and a **9-stream** dependence panel; the other five are price-only (8 streams).
+`replication.json` exists in `20260927T004328-seed1` (`--seeds` 1–5).
+
+| run | model | data | `maxBars` | folds (total / per stream) | roster (K) | funding sleeve |
+| --- | --- | --- | ---: | ---: | --- | --- |
+| `20260926T074702-seed1` | `bare` | 8×1h | 600 | 288 / 36 | baseline + `bench-base-rate`,`bench-linear`,`bench-mlp` (4) | no |
+| `20260926T075029-seed1` | `controller` | 8×15m | 2000 | 1032 / 129 | baseline + `sig-reversal`,`-4`,`-vol`,`-xs` (5) | no |
+| `20260926T223716-seed1` | `controller` | 8×1h | 600 | 288 / 36 | baseline + `sig-momentum`,`sig-accel` (3) | **yes** |
+| `20260926T235128-seed1` | `controller` | 8×1h | 600 | 288 / 36 | baseline + `sig-momentum`,`sig-accel` (3) | no |
+| `20260927T004328-seed1` | `controller` | 8×1h | 600 | 288 / 36 | baseline + `sig-momentum`,`sig-accel` (3) | no |
+| `20260927T050628-seed1` | `controller` | 8×1h | 600 | 288 / 36 | baseline + `sig-momentum`,`sig-accel` (3) | **yes** |
+| `20260927T060215-seed1` | `controller` | 8×1h | 600 | 288 / 36 | baseline + 5 momentum arms (6) | no |
+
+### 18.1 The K=3 momentum verdict reproduces §13.5/§15.4 exactly
+
+`20260926T235128-seed1` and `20260927T004328-seed1` (price-only panel, K=3) reproduce the round-27
+Step-4 journal to the last digit: `sig-momentum` net Sharpe **1.0848**, `dsrAdjusted` **0.9487614**;
+`sig-accel` **1.0194**, `dsrAdjusted` **0.9742028** — so `sig-accel` promotes with zero reasons
+(clean audit, `clusterStability` 1.0, breadth 24/36 p 0.0326) and `sig-momentum` fails only the
+adjusted-DSR floor by **0.00124**. Both runs' `folds.jsonl` are **byte-identical** to each other and
+to the two carry runs (SHA-256 prefix `a87a1de7b666c3f9`), and the pooled metrics are identical; the
+only advertised difference is the panel.
+
+### 18.2 Adding the funding sleeve flips the promoted arm — and it moves the *paired* test, not only the DSR
+
+| run | dependence panel | `sig-momentum` adj. DSR | `sig-accel` adj. DSR | promoted |
+| --- | --- | ---: | ---: | --- |
+| `20260926T235128` / `20260927T004328` | 8 price | 0.9487614 ✗ | **0.9742028 ✓** | `sig-accel` |
+| `20260926T223716` / `20260927T050628` | 9 (price + funding sleeve) | **0.9633037 ✓** | 0.9830419 (paired ✗) | **`sig-momentum`** |
+
+The sleeve is meant to buy *breadth* (an independent return stream for the design effect), and it
+does: `sig-momentum`'s effective bars rise **1192 → 1343** (design effect 3.6239 → 3.6199,
+`effectiveStreams` 1.725 → 1.949, `meanPairwiseStreamCorr` 0.5196 → 0.4521), carrying its
+`dsrAdjusted` over 0.95. But the **paired cluster Sharpe difference also moves**:
+`sig-momentum` `1.1995 → 1.0977`, `sig-accel` `1.1341 → 1.0364` (t `1.6969 → 1.6441`, p
+`0.0493 → 0.0546`), which is what makes `sig-accel` fail the magnitude hurdle despite its higher
+adjusted DSR.
+
+**Mechanism.** `walkforward.js#clustersOf(report)` builds the fold-window clusters from
+`report.streamReturns`, and `poolReports` returns `streamReturns = [...priceStreamReturns, ...extra]`
+— i.e. the panel *with* the funding sleeve appended. `pairedPromotionTest` then runs
+`pairedClusterTest({ clustersA: clustersOf(candidate), clustersB: clustersOf(baseline) })`, whose
+concatenated cluster statistic is the Sharpe of the candidate/baseline returns **including the
+sleeve's bars**. The extra sleeve is common to both series, so it does not logically belong in a
+candidate-vs-baseline comparison; whether this coupling is intended is **not settled by the code or
+the tests**. It is recorded here as a triage item, not a confirmed defect: the decision is whether the
+paired magnitude hurdle should run on the price-only panel (the way `pooledMetrics` does) while the
+sleeve enters only the `dependence`/DSR design effect. Note the whole flip sits inside the F-62
+resolution of the estimator (a true design effect = 1 spans 0.644–1.452 at C = 36), so both
+0.9488 and 0.9633 are one noisy realisation apart.
+
+### 18.3 The deflation is monotone in K — the fresh six-arm run confirms §15.4
+
+`20260927T060215-seed1` runs baseline + five momentum arms (K = 6, price-only). `sig-momentum`'s
+`dsrAdjusted` is **0.8742840** — exactly the `K = 6` column of §15.4's multiplicity table — and
+**none** of the six promotes:
+
+| arm | Sharpe | adj. DSR (K=6) | break-even | audit |
+| --- | ---: | ---: | ---: | --- |
+| `sig-momentum` | 1.0848 | 0.8742840 | 14.64 bps | clean |
+| `sig-vol-momentum` | 1.1667 | 0.9172672 | 14.42 bps | clean |
+| `sig-blend-momentum` | 0.7054 | 0.5661679 | 8.62 bps | clean |
+| `sig-network-momentum` | **1.3005** | 0.8654177 | 15.29 bps | **VACUOUS** |
+| `sig-regime-momentum` | 1.0657 | 0.8680898 | 14.06 bps | clean |
+
+### 18.4 Two audits are VACUOUS in production
+
+- `sig-network-momentum` (`20260927T060215`): `audit: VACUOUS`, `reachable 0/288`, **8 look-ahead
+  violations** — and it is the strongest arm by pooled Sharpe (1.3005). This is the production face of
+  a panel arm whose probe cannot reach its input (the cross-sectional `networkMomentum` self-skip and
+  `panelFor` lose the own-stream slot when `streamIndex` is absent), i.e. `BUGS.md` #22's vacuity trap
+  on the evaluation-world side.
+- `bench-base-rate` (`20260926T074702`): `VACUOUS`, `reachable 0/288`, **8 violations** — a base-rate
+  arm reads nothing a candle probe can move.
+
+The fail-safe works (`VACUOUS` ⇒ "candidate failed the lookahead audit" ⇒ cannot promote), but the
+corpus therefore contains no measured version of its highest-Sharpe arm.
+
+### 18.5 The 15m reversal re-run: one genuine, family-wise-significant gross edge — dead at 1.5 bps
+
+`20260926T075029-seed1` (8×15m, `maxBars 2000`, 1032 folds / 129 windows) is the corpus's only
+**powered** run (MDE95 = 0.250 i.i.d. / 0.382 clustered, vs the 1h runs' 0.473 / 1.04):
+
+| arm | Sharpe | adj. DSR | paired Δ (p) | breadth | break-even | turnover |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sig-reversal-4` | 0.3459 | 0.5318 | 0.8413 (**0.0018**) | 87/129 (p≈0) | **1.50 bps** | 3969 |
+| `sig-reversal` | −0.2730 | 0.0089 | 0.2224 (0.233) | 69/129 | −0.68 bps | 6755 |
+| `sig-reversal-vol` | −0.2547 | 0.0128 | 0.2407 (0.223) | 70/129 | −0.59 bps | 6518 |
+| `sig-reversal-xs` | −0.1584 | n/a (DE < 1) | 0.3370 (0.055) | 73/129 | −0.38 bps | 6859 |
+
+`sig-reversal-4` is the **only family-wise-significant arm in the corpus**
+(`familywise: SPA p = 0.0474, Rejects = [sig-reversal-4]`) — a broad, clustered-significant edge
+(87/129 windows) whose break-even is **1.5 bps**, i.e. §16.4's "real and economically inaccessible"
+verdict, confirmed on this basket. `sig-reversal-xs` is the clean production demonstration that
+**cross-sectional demeaning collapses the design effect** (DE **0.361**, effective streams 12.05 of 8,
+effective bars 42 874) while its edge is negative — power is buyable, edge is not.
+
+### 18.6 The bare/benchmark run: no model class beats a linear arm
+
+`20260926T074702-seed1` (`--model=bare`, no training — all four `model` blocks read `not-trained`):
+the baseline reads Sharpe −0.389; `bench-base-rate` −0.106 (VACUOUS); `bench-linear` **+0.360**
+(adj. DSR 0.488, break-even 1.54 bps, turnover 323, the 90/95% MCS member, `SPA p = 0.3247`);
+`bench-mlp` −0.004 at **4× `bench-linear`'s turnover** (1321). Nothing promotes. This is `NL-BENCH`
+(G-A) / §16.2 restated on a fresh run, and it inherits the F-69-style caveat that the ridge arm's
+probability is anchored at 0.5 with a bounded output map.
+
+### 18.7 Replication: the signals are seed-free
+
+`20260927T004328-seed1/replication.json` (seeds 1–5, K = 3, n = 1440): `sig-momentum` and `sig-accel`
+`perSeedMean` are **identical to 15 significant digits across all five seeds** (deterministic
+functions of the data), while the model-backed baseline's vary
+(`−0.0441, +0.5168, −0.1780, −0.0608, +0.5686`). As §13.5 already noted, `--seeds` is a seed
+distribution for the model-backed baseline only.
+
+### 18.8 Cross-run invariants (the good news)
+
+- **Byte-level reproducibility.** The four K=3 runs score identical `folds.jsonl`
+  (SHA-256 prefix `a87a1de7b666c3f9`) and identical pooled metrics; only the panel/dependence/trial
+  block differs.
+- **No runtime errors, warnings or quarantine.** `run.log` carries only `info` progress events in all
+  seven runs; `progress.json` ends `phase: complete` with `events === eventsTotal` spent.
+- **The gate behaves as designed**: it refuses zero-cost-only promotions under cost (§13.5's 2 bps
+  flip), refuses VACUOUS candidates, is monotone in `K`, and deflates by the searched roster.
+- **The signal arms still cost ~600× less than the controller** (per-variant `elapsedMs`: baseline
+  ~3002–3334 s vs signal 4.7–5.5 s).
+
+### 18.9 What this corpus establishes, and what it does not
+
+**Establishes.** (i) The round-27/28 result is reproducible on a fresh machine: the momentum
+promotions are a **roster-size** effect (K=3) that survives no honest multiplicity choice (K=6: none
+promotes). (ii) The funding/carry sleeve is a real independence lever — but as plumbed it changes the
+**paired magnitude hurdle** as well as the DSR design effect, and that alone flips which arm is
+promoted. (iii) The 15m reversal family's real edge is confirmed — and confirmed dead at 1.5 bps.
+(iv) Cross-sectional demeaning collapses the design effect exactly as designed, but does not create
+edge. (v) The vacuity audit fires in production on a panel arm and on the base-rate benchmark.
+
+**Does not establish.** Everything here is the **600-bar (≈25-day) window** on 1h except the 15m run;
+per §13.5 and the report's own `power` block, the 1h runs are **UNDERPOWERED** for a baseline-sized
+effect (variance inflation ~4.9×), so their promote/keep-off verdicts are statements about a 25-day
+regime, not about the arms. And the corpus measures no P2/P4 opt-in blocks
+(`configurationRobust`, `exposureMatched`, `streamSelection`, `turnoverSweep` are all `null`).
+
+### 18.10 Recommended next actions (evidence-backed)
+
+1. **Triage the funding-sleeve/paired-test coupling (§18.2).** Decide whether `pairedPromotionTest`
+   should run on the price-only panel; if so, `clustersOf` must be given the price-only
+   `streamReturns`, while the sleeve keeps feeding `dependence`/`dsrAdjusted`. Then re-score the two
+   carry runs offline from their journals (no re-fit) to see the honest verdict. **This is the one
+   new item the corpus contributes to the gate's semantics.**
+2. **Give the panel arms a reachable audit.** `sig-network-momentum` has the corpus's highest pooled
+   Sharpe and is unmeasured because its probe is vacuous (`BUGS.md` #22 lineage). Fix the
+   own-stream-slot wiring before this arm is ever read as evidence.
+3. **Re-run the verdict at full history (R1).** The 600-bar window is the binding limitation (J1);
+   the signal arms are parameter-free and cheap, so a model-free long-sample score is the cheapest
+   way to turn these verdicts into statements about the data rather than about 25 days.
+4. **Keep scoring the 8×15m reversal basket** — it is the only configuration here that is powered, and
+   it is the only place a family-wise-significant arm appears. `sig-reversal-4` remains a gross edge
+   until a maker/queue model (TODO 94) changes its 1.5 bps break-even.
+5. **Leave the roster at the pruned K=3** until (1)–(3) are done: the K=6 run shows every added
+   momentum arm lowers every `dsrAdjusted` without adding edge.

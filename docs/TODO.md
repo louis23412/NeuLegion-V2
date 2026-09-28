@@ -1737,6 +1737,35 @@ pinned on a bare `HiveMind` (identical predictions **and** identical
       **28 mirror files / 89 `test()` blocks**; browser side unchanged (1664
       checks, 23/23 golden, same 11 hashes except the deliberately re-frozen
       rounded one). **Next gate: re-run `npm test` locally, then P0 item 2.**
+- [x] **Round 31 — the V2 contract/registry layer landed (V2.0–V2.2).** The
+      strangler-fig extraction from `ARCHITECTURE-v2.md` / `PLAN-round31.md` is in,
+      **additively**: `src/core/**` (the frozen contracts, `registry.js`, and the
+      book/risk primitives) + `src/plugins/**` (the `legacy-hivemind` learner, the
+      `carry-flat`/`carry-dispersion`/`cap-band` sleeves, the risk layer, and the
+      `books/` layer). **No legacy module was edited and no golden moved** — the
+      V2 layer is a contract per component, not a re-freeze of the engine
+      (`docs/MIGRATION-V2.md`, `docs/ARCHITECTURE-v2.md`). The `n`-grid fix in the
+      book primitives/sleeves is in and verified. Tests land in both harnesses:
+      `test/browser/entries/contracts.test.js` (**141** checks) + its node mirror,
+      and `legacy_hivemind.test.js` (**15**) + its node mirror; the full browser
+      suite is **2741 / 0** (32 entries). The lab verified the port independently:
+      **CYCLE-066 / F-81** — `experiments/e73_port_verify.js` gates on **all 10
+      checks** (R8 `6.18 / 10× / 46.04`, R7 `1.07 / 8× / 182.59`, OI
+      `0.92 / 198× / 15.22`; ported rows+returns bit-for-bit vs the lab), now folded
+      into `experiments/run_all.js` (**81 steps, 50 gated**) with the artefact in
+      `results/e73_port_verify.json`; the L10-ct register row records it. The lock
+      ledger pins were moved with it (`test/lock-registry.js`: `KNOWN_TESTS` +2,
+      `CORE_MODULES` 27, `CORE_REGISTRY` 8, `PLUGIN_REGISTRY` 7; `README.md` /
+      `RUNBOOK.md` §6 / `LOCKED.md` / `CITATIONS.md` / `MILESTONES.md` re-synced).
+      One **test-only defect fixed**: `test/node/mirrors.test.js` hard-pinned the
+      browser-entry/node-mirror ledgers at 31/43, so adding the two entries would
+      have failed `npm test`; now 33/45 (the guard that keeps a mirror from being
+      forgotten, and the reason it had to be edited in the same change).
+      **Open (not scheduled here):** V2.3/V2.4, the W1/W4/W5/W6 measurement ports,
+      and the shipped-path defects **F-61/F-69/F-70/F-71/F-74/F-76/L10-cs** — all
+      still TODO in `PLAN-round31.md`. **Next gate: `npm test` locally** — the
+      browser suite is green, but the native driver and the two new node mirrors
+      have not been run on this machine.
 ## Next (additive supercharges, each needs proof before promotion)
 
 > **Historical detail log.** The *prioritized* view is "Scope freeze + prioritized

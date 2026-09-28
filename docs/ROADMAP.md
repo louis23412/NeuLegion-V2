@@ -7,6 +7,23 @@ scope freeze that bounds it.
 
 ## Status snapshot (this revision)
 
+- **Round 31 is PARTIALLY IMPLEMENTED (`PLAN-round31.md`) — the pivot; V2.0–V2.2 landed.** The lab
+  evidence (`src/NeuLegion-lab`, **81 findings** / 19 leads / 66 cycles) and the 2026-09-26/27 run
+  corpus (`src/runs`; `RUN-ANALYSIS.md` §18) jointly say: no model class predicts the target, no
+  memory/ensemble mechanism moves the score, and the shipped controller is negative-skill; while the
+  only measured positive returns are **structural** (carry dispersion net@4 +6.86 OOS, corr 0.003;
+  the toptrader fade net@4 +1.14) and live in the lab, not the repo. Round 31 re-scopes NeuLegion as a
+  **portfolio of structural sleeves + a risk layer**, scored over the **full history** by the honest
+  gate, with the hivemind **demoted to a modular, default-off research layer** behind a real promotion
+  bar (a `MemoryBank` plugin contract with per-plugin goldens replaces the whole-engine freeze). The
+  additive V2 contract/registry layer is **in the repo** (`src/core/**`, `src/plugins/**`;
+  `MIGRATION-V2.md`, `ARCHITECTURE-v2.md`) with no legacy module edited and no golden moved — V2.0
+  contracts, V2.1 the ported pure layers, V2.2 sleeves+risk — proven by the `contracts` (141) +
+  `legacy_hivemind` (15) entries in both harnesses (**2741 / 0** browser) and independently by the lab
+  (`CYCLE-066` / **F-81**: `e73_port_verify.js` 10/10). Six workstreams (W1 decision soundness, W2
+  sleeve port, W3 portfolio/risk, W4 model demotion + memory unlock, W5 independence, W6 shipped-path
+  fixes), gates G1–G5, the first bankable positive result at **G5**; V2.3/V2.4 + every W1/W4/W5/W6 port
+  remain open. See [`PLAN-round31.md`](PLAN-round31.md).
 - **Round 30 EXECUTION underway (`MILESTONES.md` M8; `PLAN-round30.md`) — M1–M3 + M7 implemented.**
   Built on the acceptance batch (`RUN-ANALYSIS.md` §17), round 30 (a) prunes the default
   A/B roster from 14 to **`{baseline, sig-momentum, sig-accel}` (`K = 3`)** with every drop's
@@ -73,9 +90,10 @@ scope freeze that bounds it.
   fingerprints literal, `hm:predictions` **and** `hm:postReloadPrediction`
   compared at 6 significant digits ([`BUGS.md`](BUGS.md) #17, #19).
   `engine_portability.test.js` guards it.
-- **Local gate: green.** `npm test` is **128/128 `test()` blocks across 43
+- **Local gate: green.** `npm test` is **130/130 `test()` blocks across 45
   files, 0 failures, ~5.9 min** on the native driver (127/127 at the round-27
   liveness/streaming re-run; round 30 added the `analyze_cli.test.js` #69 block;
+  round 31 added the `contracts.test.js` + `legacy_hivemind.test.js` V2 mirrors;
   [`BUGS.md`](BUGS.md) #42/#52).
   The run exposed exactly one real defect in the new P0-P3 tooling — `preflight`
   counted the sampled candle window's truncated tail line as malformed, so it
@@ -83,12 +101,13 @@ scope freeze that bounds it.
   test hardened to report the real failing check.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
-- **Browser suite**: 2585 checks across the 30 pass/fail entries (31 entries
-  including the non-pass/fail `bench`); 128 `test()` blocks across 43 node files
+- **Browser suite**: 2741 checks across the 32 pass/fail entries (33 entries
+  including the non-pass/fail `bench`); 130 `test()` blocks across 45 node files
   (R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second
   block to it, R27-4b added `controller_invariants.test.js`, round 30 added the
-  #69 spawned-CLI refusal block to `analyze_cli.test.js`, all node-only suites),
+  #69 spawned-CLI refusal block to `analyze_cli.test.js`, round 31 added the V2
+  `contracts.test.js` + `legacy_hivemind.test.js` mirrors, all node-only suites),
   all verified green in the browser harness for this revision (round 23 raised
   `walkforward` 31→48, `analysis` 354→390, `analyze` 47→98, round 24 raised
   `analyze` 98→143, round 27 raised `sanity` 59→60, `core` 42→46, `analysis`
@@ -431,6 +450,54 @@ Research pull on what proved working: [`research/round30-winning-mechanisms.md`]
 correlated bars, no architecture tuning, no reversal-to-taker-cost chase, no post-hoc `K`
 (`PLAN-round30.md` §8).
 
+## Round 31 — the pivot: stop predicting, start allocating (PARTIALLY IMPLEMENTED; `PLAN-round31.md`)
+
+**Deliverable: [`PLAN-round31.md`](PLAN-round31.md).** Status: **partially implemented** — the plain
+plan was written from the end-to-end read of the project, the lab (`src/NeuLegion-lab`, 81 findings /
+19 leads / 66 cycles) and the 2026-09-26/27 run corpus (`src/runs`, `RUN-ANALYSIS.md` §18); the
+**V2.0–V2.2** contract/registry layer has since landed additively (`src/core/**`, `src/plugins/**`; no
+legacy module edited, no golden moved), and the **W1/W4/W5/W6 measurement ports + V2.3/V2.4 remain
+TODO**.
+
+**Direction in one line.** Round 30's own leverage table (`PLAN-round30.md` §3.1) and every model
+result since round 23 say the same thing from two directions: **the learned layer cannot predict, and
+the edge that exists is structural.** Round 31 therefore re-scopes the project — it stops spending
+compute on a hivemind asked to predict the next bar (measured: no class beats the base rate; four
+mechanisms ≈ baseline; the shipped controller is negative-skill/negative-return) and re-scopes
+NeuLegion as a **portfolio of measured structural sleeves** (carry-flat, carry-dispersion, toptrader
+fade, OI-change — all measured positive and independent in the lab) allocated by a **risk layer**,
+scored over the **full history** by the honest gate, with the hivemind demoted to a **modular,
+default-off** research layer behind a real promotion bar.
+
+**Companion: [`ARCHITECTURE-v2.md`](ARCHITECTURE-v2.md) — the V2 blueprint.** It answers the
+operator's follow-up (make the *whole system* modular; a NeuLegionV2 + Lab v2): an audit of which
+components are old vs cutting-edge **proved** designs, a modularity scorecard for every subsystem,
+the V2 contract/registry/per-plugin-golden design, and the strangler-fig migration (V2.0 contracts →
+V2.1 port the pure layers → V2.2 sleeves+risk → V2.3 model plugins → V2.4 lab v2) that folds into
+this round's W1–W6. Verdict: **partial accept** — contract-first extraction, not a blank-slate
+rewrite; the measurement harness and the evidence base are carried over, only the inert model core
+is genuinely rebuilt.
+
+**Six workstreams.** **W1** decision soundness (the lab's R1–R3: a model-free long-sample scorer, a
+`blockStability` window ladder, a default cost block, and gate-resolution reporting) — cheap, no
+promotion, highest EV. **W2** port the structural sleeves as first-class citizens from the lab's
+validated `prototypes/port.js` (R4/R7/R8, plus the pinned cap/band/OI recipes; fix
+`carryOnBarGrid`'s sub-8h mis-scale, F-61). **W3** a risk/portfolio layer (`analysis/portfolio.js` —
+the round-30 `C-BREADTH` slot: cap `1/k`, no-trade band, inverse-vol, the OI clipped-trailing-median
+schedule, the fixed-split joint size). **W4** demote the model and unlock memory as a
+`MemoryBank` **plugin** interface (per-plugin goldens replace the whole-engine freeze), with the only
+winnable job being auxiliary (volatility / regime / sizing — the model must beat EWMA out of sample,
+per L09/F-16). **W5** buy independence (sleeves as panel streams, the demean construction of F-03,
+broader/other-venue baskets, multi-frequency). **W6** fix the shipped-path arithmetic first (F-61,
+F-69, F-70, F-71, F-74, F-76, L10-cs).
+
+**Gates.** G1 decision soundness (verdict-neutral on the retained runs); G2 each sleeve reproduces the
+lab's book to display precision; G3 effective streams ≥ 2.5 of 9 and design effect ≤ 3 → portfolio
+`adjDSR ≥ 0.95`; G4 the model beats the zero-parameter reference OOS at matched exposure or is
+default-off; **G5 the first bankable positive result** — a portfolio with a positive full-history
+net-of-cost Sharpe and ≥ 4/6 positive blocks. Phases: R31 = W1+W6+W4-design; R32 = W2+W3+W5.1–2;
+R33 = W4+W5.3–4 + the decisive run; R34+ = iterate the portfolio, not the model.
+
 ## Round 24 — make a verdict run survivable, then get it
 
 Round 23's N3 attempt died inside its second candidate and took every result with
@@ -569,7 +636,7 @@ the browser harness: **2289 checks, 0 failures** across all 29 pass/fail entries
 (`walkforward` 49 → 62, `analysis` 390 → 437, `analyze` 143 → 158; `locks` 41 and
 `modules` 50 unchanged). No golden fingerprint moved (nothing here is imported by
 the hot path). Full detail in `RUN-ANALYSIS.md` §6. *(Counts as at round 25; the
-current ledger is **2585** — see the status snapshot above.)*
+current ledger is **2741** — see the status snapshot above.)*
 
 - **R25-1 ✅** `analysis/dependence.js` (new, LOCKED-invariant) + `dependenceSummary`
   in `analysis/walkforward.js`. Shipped the delete-one-cluster jackknife over
@@ -1918,7 +1985,7 @@ and `analysis/features.js` are new additive modules proved **inside the existing
 `analysis.test.js` (§AC/§AC-causality) and `walkforward.test.js` (section K)**
 rather than as new entries — a deliberate choice: adding two entries would have
 required a third and fourth node mirror **and** re-syncing both ledger counts
-(`test/node/mirrors.test.js` pins both counts — currently 30 browser entries / 43 mirrors), for
+(`test/node/mirrors.test.js` pins both counts — currently 33 browser entries / 45 mirrors), for
 no extra coverage, since both are pure modules with no worker/DB dependency. Both
 got a `lock-registry.js` entry (status, `proves`, `citations`, note), which is the
 part that can silently drift; their citations reuse existing keys (`leakage2605`/`honesteval2608` for
@@ -2297,12 +2364,12 @@ query-adaptive budget). None are in scope unless the definition of done in
 | Check | Result |
 | --- | --- |
 | Registry total & status split (53 = 17 + 36 + 0 + 0) | ✅ verified programmatically against `lock-registry.js` **at that revision** (current: 60 = 17 + 43 + 0 + 0) |
-| Ledger sum (1995, the round-24b total) vs `RUNBOOK.md` §6 table | ✅ exact match **at that revision**; the current ledger is 2585 |
+| Ledger sum (1995, the round-24b total) vs `RUNBOOK.md` §6 table | ✅ exact match **at that revision**; the current ledger is 2741 |
 | Manifest ↔ registry coverage (22 hivemind + 5 controller bags) | ✅ via `locks.test.js` |
 | Browser entries ↔ node mirrors ↔ `KNOWN_TESTS` (30/39/29) | ✅ via `mirrors.test.js` |
 | Golden fingerprint count (11) across all docs | ✅ consistent |
 | Syntax + relative-import resolution (185 JS files, 437 relative imports) | ✅ 0 errors (re-measured this revision) |
-| Counts in prose (115 blocks, 39 mirrors, 1995 checks) | ✅ synced **at that revision** (current: 128 blocks, 43 mirrors, 2585 checks) |
+| Counts in prose (115 blocks, 39 mirrors, 1995 checks) | ✅ synced **at that revision** (current: 130 blocks, 45 mirrors, 2741 checks) |
 | Exact check count in every wrap-style mirror | ✅ 20 mirrors now `assert.equal(result.total, N)` (was `>=`) |
 | Runner/worker/HTTP path in tests | ✅ **P0-3** delivered (`runner_smoke`, `http_view`, `dryrun`) |
 | Controller fault-isolation / malformed-input coverage | ✅ **P0-1** delivered (`guards`, `worker_pool`) |
@@ -2361,7 +2428,7 @@ query-adaptive budget). None are in scope unless the definition of done in
 - **Hardening must not move a fingerprint.** The P0-1 guards are error-path only;
   if any guard turns out to run on the clean path, it is a deliberate re-freeze,
   not a "cleanup".
-- **Ledger churn.** Ledger counts are (31 browser entries / 43 mirrors / 2585
+- **Ledger churn.** Ledger counts are (33 browser entries / 45 mirrors / 2741
   checks) and `mirrors.test.js` asserts the two layout constants exactly; every
   count in the docs must be re-synced in the same commit. Round 23 avoided adding
   entries by proving the new `analysis/world.js` and `analysis/features.js` inside

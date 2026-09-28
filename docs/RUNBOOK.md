@@ -142,23 +142,23 @@ bash scripts/round30-runs.sh all        # the whole set (hours)
 npm test               # full Node suite (real better-sqlite3 + worker_threads)
 ```
 
-The glob expands to all 43 `test/node/*.test.js` files (`helpers.js` is not a
+The glob expands to all 45 `test/node/*.test.js` files (`helpers.js` is not a
 test file and is excluded).
 
-The Node suite mirrors the browser entries in two styles: **22 mirrors** import
+The Node suite mirrors the browser entries in two styles: **24 mirrors** import
 the browser entry's `run()` and assert `failed === 0` **and**
 `result.total ===` that entry's count in the ledger below (analysis, analyze,
-binarypc, bitweight, candles, dimensions, evolve, golden, guards, homeostasis,
-locks, lsh, modules, multiprobe, multisymbol, observer, price_precision, querymod,
+binarypc, bitweight, candles, contracts, dimensions, evolve, golden, guards, homeostasis,
+legacy_hivemind, locks, lsh, modules, multiprobe, multisymbol, observer, price_precision, querymod,
 sample_weights, surprise, walkforward, controller_invariants — the counts are
-**exact** as of the round-29 ledger, not floors; every
+**exact** as of the round-31/V2 ledger, not floors; every
 number was re-measured in the harness before pinning), and **21 of the remaining files**
 re-declare the same contracts directly with `node:test`
 against the real driver (sanity, core, features, indicators, fetcher,
 consolidation, consolidation_worker, legion — 8) or check the mirror layout and
 invariants the browser harness cannot (the thirteen Node-only suites). The Node-only
 suites are `mirrors.test.js` (every browser entry has a mirror, no orphans, no
-stub mirror files, the ledger counts 31 entries / 43 mirrors, the `test` script
+stub mirror files, the ledger counts 33 entries / 45 mirrors, the `test` script
 passes a glob rather than a directory, and `engines.node` pins the required Node
 floor — `BUGS.md` #14); `engine_portability.test.js` (a single golden pass under
 a simulated last-ulp transcendental drift still satisfies all 23 checks —
@@ -182,8 +182,8 @@ starts no run, and that the seed aggregate is written — the browser entry
 imports `runAnalysis` directly, so the argument-parsing block is otherwise
 untested). `bench` is the only
 browser entry
-without a mirror (it prints timings). So `npm test` reports **128 `test()`
-blocks across 43 files** (44 with `helpers.js`) rather than 2585 checks; a green
+without a mirror (it prints timings). So `npm test` reports **130 `test()`
+blocks across 45 files** (46 with `helpers.js`) rather than 2741 checks; a green
 run — plus `failed === 0` and the ledger count from every wrap-style mirror — is
 the gate. Measured **~5.9 min** at round 22 (`BUGS.md` #21): the `dimensions`
 sweep of both `forceMin` branches dominates (~353 s), then `lsh` (~177 s) and
@@ -212,8 +212,30 @@ wrap-style mirrors assert against. **Expected totals (all must be 0 failures):**
 | `price_precision` | 29 | | `multisymbol` | 28 |
 | `guards` | 65 | | `observer` | 76 |
 | `analyze` | 279 | | `controller_invariants` | 23 |
+| `contracts` | 141 | | `legacy_hivemind` | 15 |
 
-**Total: 2585 checks.** (Round 30 changed two counts: `analyze` 269 → 279 — the pruned-roster pin,
+**Total: 2741 checks.** **(Round 31 / V2.0 added two entries** — `contracts` **136** (the contract
+layer, the primitives' exact vectors, the ported book fixtures and the import law, sections A–J) and
+`legacy_hivemind` **15** (the single legacy bridge is a pass-through over the shipped engine) — so the
+total is **2585 → 2736**; the whole browser suite passes **2736/0** in the sandbox harness, and both
+new entries have exact-count node mirrors.) (Round 31b, the V2 bug/coherence pass, moved `contracts`
+129 → **136**: the fingerprint canonicalisation now quotes/escapes strings and renders functions as
+`[fn]` exactly as `golden.test.js` does, `turnoverSeries`/`ewmaUpdate`/`blendRows` apply the lab's
+finite guard, `report()` echoes `CONTRACT_VERSION`, both book shells phase a `hold` policy on the same
+per-row counter, and the sleeve `returns` uses the builder's clamped start (`from: 0` was an
+off-by-one) — pinned by seven new §C/§D/§E checks (the fingerprint canonicalisation carries two).
+Round 31c, the V2 bug/coherence **re-pass**, moved `contracts` 136 → **141** and the ledger 2736 →
+**2741**: the contract kernel now rejects a non-array `requires`/`optional` (a string was spread into
+its characters, silently declaring methods 'f'/'i'/'t' and rejecting every conforming plugin),
+`dlogMatrix` guards an absent series at the OUTER level so a symbol the source has no data for yields a
+`null` column instead of throwing on `.map`, `firstCommonIndex` and `buildCrossSectionalBook` mask such
+a column exactly like a wholly-missing symbol, and `blendBooks` applies the same `fin` guard as
+`blendRows`/`ewmaUpdate` (an `Infinity` leg was injecting `NaN` into the OI sleeve's 50/50 blend) —
+pinned by five new §A/§D checks. The ported arithmetic is now also differentially-fuzzed against the lab
+modules it came from: the lab's `e73_port_verify.js` grew a randomized half (**250 seeded random panels**,
+groups `fuzzBooks`/`fuzzWeights`/`fuzzMisc`, **zero divergences**), so `e73` reports **10/10** checks and a
+change to any ported primitive now fails the lab's port gate loudly.
+Round 30 changed two counts: `analyze` 269 → 279 — the pruned-roster pin,
 the roster snapshot/registration and present-but-empty-list-flag checks, the cross-sectional
 panel taxonomy checks, and the momentum-upgrade family check; `analysis` 621 → 638 — the
 `SIGUP_CANDIDATES` momentum-upgrade section (§G-H, 636) plus the two §5 critical-mechanics property tests (`dsrAdjusted` is a re-run, not a shrink; promote ⇒ no failed gated hurdle); total 2558 → 2585. The `test/node/analyze.test.js`
@@ -391,9 +413,12 @@ the ledger was **2558** browser checks / **127/127** node blocks at the round-29
 moved `analyze` 269 → 279** (the pruned-roster pin, the roster snapshot/registration, the
 present-but-empty-list-flag guard, the cross-sectional panel taxonomy and the momentum-upgrade
 family) **and `analysis` 621 → 638** (the pre-registered `SIGUP_CANDIDATES` momentum upgrades,
-gate G-H), so the current ledger is
+gate G-H), so the round-30 ledger was
 **2585** browser checks / **128/128** node blocks (round 30 added one node block — the
-`analyze_cli.test.js` `BUGS.md` #69 spawned-CLI refusal — to the 127 the round-29 freeze certified). The same post-implementation pass repaired three
+`analyze_cli.test.js` `BUGS.md` #69 spawned-CLI refusal — to the 127 the round-29 freeze certified).
+**Round 31 / V2.0 then added two entries and two mirrors**, so the current ledger is
+**2741** browser checks / **130/130** node blocks (the 128 above plus one block each for
+`test/node/contracts.test.js` and `test/node/legacy_hivemind.test.js`). The same post-implementation pass repaired three
 stale counts in the `test/lock-registry.js` notes (`guards` 58→65, `observer` 75→76, `analyze`
 245→269); round 30 added the three new `analyze.js` exports — and the five `features.js` upgrade
 exports — to those notes' curated lists.

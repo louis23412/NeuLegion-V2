@@ -39,7 +39,9 @@ needs-local-run, 0 experimental** (round 22 added the run-integrity, observer an
 A/B-driver support modules: `sanitize.js`, `rng.js`, `legion_metrics.js`,
 `alerts.js`, `analyze.js`; round 26 added the analysis layer's `decision.js`,
 `race.js`, `replication.js`, `forecast.js`, `holding.js`, `streams.js` and
-`reality_check.js`).
+`reality_check.js`). The round-31 **V2 layer** is registered in two *separate*
+blocks — `CORE_REGISTRY` (8) and `PLUGIN_REGISTRY` (7) — so the four legacy
+registries' totals above are unchanged; see "V2 core + plugins" below.
 
 ### HiveMind
 
@@ -152,6 +154,36 @@ them behind the default-off `_queryModConfig`.
 | `hivemind/memory/querymod.js` | LOCKED-invariant | lsh | dynamic query modification for binary LSH (Claydon, Connor & Dearle, arXiv 2605.23807) — the query-side companion to data-aware hashing, wired into the locked `_getGlobalLSHCandidates` behind the default-off `_queryModConfig` (`golden.test.js` proves the off-state is byte-identical). Proved: **Theorem 1** (`<c>` maximises `Σ x·u`, and `Σ(<c>·x) = ‖Σx‖ = k‖mean‖` exactly); **Theorem 2** (first-order ACP `½ + Σ x·u/(kπ)` maximised at `<c>`, which also beats the average random direction on the exact Charikar ACP); **Appendix C.1** (`averageCovariance = const − ((Σ x·u)/k)²`, minimised at `±<c>`); **Section 6.4** (the centroid collides with a member of `S` on every direction — zero failures in 200 — while a raw query can collide with none; exact singleton witness plus a non-degenerate majority-failure witness); Charikar's law matched by 4e4 random hyperplanes to `<0.01`; the **denoising law** (the 40-view centroid at σ=0.3 cuts the per-bit error rate several-fold and shrinks with the view count); and the **synthetic regime sweep** (pool recall `0.540→0.789` at 6 bits, gain decaying monotonically to `0.001` at 24 bits). Integration (lsh.test.js section J): the pool is mechanically a **superset** (recall can never fall) and the branch is **live** on the narrow 6-bit index (pool grows for most queries) but a **measured no-op** on the production 107-bit index (`differ=0` — the empty-consensus-bucket regime) |
 | `consolidation_logic.js` | LOCKED-invariant | memory | the pure memory-lifecycle algorithms extracted verbatim from `consolidation_worker.js` (Gaussian distance, content hash, decay, pairwise merge, promotion, proximity graph). `consolidation.test.js` (48 checks) pins them, including a differential test against the original inline copies (300 randomized trials × {decay, merge, promote, hierarchy}, all `Object.is`-identical), and documents two deliberate behaviours: mutually-nearest prototypes emit the same directed edge up to 4× (safe — the insert is `ON CONFLICT … DO NOTHING`, so the edge table is a set), and the pairwise merge is inherently O(n²·d) and order-dependent (the algorithm, not waste). `consolidation_worker.test.js` (18 checks) pins the real worker wiring against an isolated state dir |
 | `candle_quality.js` | LOCKED-invariant | finance | read-time winsorizer for physically-impossible wicks. `candles.test.js` (192 checks) proves it exact on the real LINKUSDT 2020-03-12T10:00 flash print (`low 0.0001` on a ~3.0 bar), idempotent, OHLC-invariant-preserving, and leaving genuine extremes (ADA/LINK 2025-10-10 crash, listing spikes) untouched at the default 0.9 body-fraction threshold, without ever touching open/close/volume/timestamp. Wired into `legion/runner.js` behind `CONFIG.candleWickRepair` |
+
+### V2 core + plugins (`src/core/`, `src/plugins/`, round 31 / M11)
+
+The additive V2 layer: the **contract kernel** + ten contracts, the **registry**, the ported
+**primitives**, and the composition root with the first seven plugins. It is registered in two
+blocks (`CORE_REGISTRY`, 8 entries — all `LOCKED-invariant`; `PLUGIN_REGISTRY`, 7 entries —
+`LIVE`/`UNTESTED`, which are plugin states, not lock levels) and proved by `contracts.test.js`
+(141 checks) and `legacy_hivemind.test.js` (15 checks).
+
+* **The import law is enforced, not aspirational.** `contracts.test.js` §H reads every `.js`
+  under `src/core`/`src/plugins` and asserts: the contract kernel imports **nothing**; `core/**`
+  imports only `core/**`; no plugin imports another plugin; and the **legacy tree never imports
+  `core/`** — the mechanical proof of "zero edits to locked modules" on top of the unchanged
+  goldens. There is a negative control (the kernel's zero imports) and a positive one (exactly
+  one file may bridge to the engine).
+* **Every plugin ships its own proof.** A model plugin is pinned by a fingerprint (the legacy
+  adapter by the engine's own 11 goldens); an analytic plugin by exact reference vectors. Adding
+  a NON-DEFAULT plugin moves no existing proof — `stackSnapshot()` hashes the `defaultStack`
+  plugins only, and a drift test asserts the registry and `DEFAULT_STACK` do not diverge in
+  either direction.
+* **The port is verified end-to-end.** The lab's `e73_port_verify.js` (F-81) drives the repo's
+  ported book arithmetic + sleeves on the lab's real data and reproduces the published books
+  bit-for-bit (R8 `6.18`, R7 `1.07`, OI `0.92`), with `cleanBook` fingerprint-identical to the
+  lab's `prototypes/port.js`; its randomized half additionally requires every ported primitive
+  (`buildFundingBook`, `buildCrossSectionalBook`, `rowRankWeights`/`rowLevelWeights`, `cleanBook`,
+  `turnoverSeries`, `dlogMatrix`, `blendBooks`) to equal the lab function it was ported from on 250
+  seeded random panels (zero divergences), so "the port" is the lab's arithmetic rather than a
+  look-alike that happens to match on one panel.
+* **Nothing is promoted.** The sleeves land `UNTESTED` and `defaultStack: false`; the lab's
+  number says "worth porting", the repo's gate (G2/G5) says "promoted".
 
 ## Golden fingerprints (the bit-exact contract)
 
