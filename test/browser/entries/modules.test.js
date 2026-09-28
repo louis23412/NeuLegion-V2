@@ -33,6 +33,14 @@ import { replayMethods } from '../../../src/hivemind/memory/replay.js';
 import { retrievalMethods } from '../../../src/hivemind/memory/retrieval.js';
 import { consolidationMethods } from '../../../src/hivemind/memory/consolidation.js';
 import { bankMethods } from '../../../src/hivemind/memory/banks.js';
+import {
+    BANK_CONTRACT_METHODS, BANK_IDS, ENGINE_BANK_METHODS, TOURNAMENT_TARGETS,
+    validateBank, assertBank, validateTournament,
+} from '../../../src/hivemind/memory/contract.js';
+import {
+    DEFAULT_STACK, registerBank, hasBank, ids, resolveStack, stackDigest,
+    _clearRegistryForTests,
+} from '../../../src/hivemind/memory/registry.js';
 import { attentionMethods } from '../../../src/hivemind/transformer/attention.js';
 import { forwardMethods } from '../../../src/hivemind/transformer/forward.js';
 import { hiveStateMethods } from '../../../src/hivemind/ensemble/hiveState.js';
@@ -173,6 +181,112 @@ export async function run() {
     threw = false;
     try { installMethods(Dummy, { a () {}, b () {} }, { assertCount: 1 }); } catch { threw = true; }
     check('installMethods throws on assertCount mismatch', threw);
+
+    // ---- W4a (round 46): the MemoryBank plugin contract + registry ---------
+    // DESIGN ONLY: the engine is untouched (banks stay installed method bags).
+    // These checks pin the interface mechanics plus the engine grounding, so
+    // V2.3's binding has a contract that already fits reality.
+    const memBank = () => {
+        const b = { id: 'test-bank', version: '0.1' };
+        for (const m of BANK_CONTRACT_METHODS) b[m] = () => null;
+        return b;
+    };
+    check('W4a: the contract accepts a complete bank and rejects holes',
+        validateBank(memBank()).ok === true &&
+        validateBank(null).ok === false &&
+        validateBank({ id: 'x', version: '1' }).reasons.length === BANK_CONTRACT_METHODS.length &&
+        validateBank({ ...memBank(), id: '' }).reasons.some((r) => r.includes('id')));
+    check('W4a: assertBank throws naming the missing method',
+        (() => {
+            let msg = '';
+            try { assertBank({ id: 'x', version: '1', write () {}, read () {}, decay () {}, merge () {}, consolidate () {} }); } catch (e) { msg = String(e && e.message); }
+            return /contract violation/.test(msg) && /"stats"/.test(msg);
+        })());
+    check('W4a: the default stack is exactly the 4 engine banks in order',
+        Array.isArray(DEFAULT_STACK) && DEFAULT_STACK.length === 4 &&
+        DEFAULT_STACK.join(',') === BANK_IDS.join(',') &&
+        DEFAULT_STACK.join(',') === 'episodic,adaptive,semantic,core');
+    check('W4a: every grounded engine method exists on HiveMind.prototype',
+        (() => {
+            const missing = [];
+            for (const [id, g] of Object.entries(ENGINE_BANK_METHODS)) {
+                if (!BANK_IDS.includes(id)) missing.push(`${id}:unlisted`);
+                for (const m of g.methods) {
+                    if (typeof HiveMind.prototype[m] !== 'function') missing.push(`${id}:${m}`);
+                }
+            }
+            return missing.length === 0;
+        })(),
+        (() => {
+            const missing = [];
+            for (const [id, g] of Object.entries(ENGINE_BANK_METHODS)) {
+                for (const m of g.methods) {
+                    if (typeof HiveMind.prototype[m] !== 'function') missing.push(`${id}:${m}`);
+                }
+            }
+            return missing.join(',');
+        })());
+    check('W4a: the registry validates on entry, refuses duplicates, resolves deterministically',
+        (() => {
+            _clearRegistryForTests();
+            const a = memBank();
+            const c = { ...memBank(), id: 'second', version: '2.0' };
+            registerBank(a);
+            registerBank(c);
+            let dup = false;
+            try { registerBank(memBank()); } catch { dup = true; }
+            let bad = false;
+            try { registerBank({ id: 'broken' }); } catch { bad = true; }
+            let unknown = false;
+            try { resolveStack(['nope']); } catch { unknown = true; }
+            const d1 = stackDigest(['second', 'test-bank']);
+            const d2 = stackDigest(['second', 'test-bank']);
+            const d3 = stackDigest(['test-bank', 'second']);
+            const ok = dup && bad && unknown && hasBank('test-bank') && ids().length === 2 &&
+                d1 === 'second@2.0+test-bank@0.1' && d1 === d2 && d1 !== d3;
+            _clearRegistryForTests();
+            return ok;
+        })());
+    check('W4a: the default stack resolves once its 4 banks register (digest pinned)',
+        (() => {
+            _clearRegistryForTests();
+            for (const id of BANK_IDS) {
+                const b = memBank();
+                b.id = id;
+                b.version = 'engine';
+                registerBank(b);
+            }
+            const digest = stackDigest();
+            const resolved = resolveStack();
+            _clearRegistryForTests();
+            return digest === 'episodic@engine+adaptive@engine+semantic@engine+core@engine' &&
+                resolved.length === 4 && resolved.every((b, i) => b.id === BANK_IDS[i]);
+        })());
+    check('W4a: swapping a non-default plugin changes the digest, never the default',
+        (() => {
+            _clearRegistryForTests();
+            for (const id of BANK_IDS) {
+                const b = memBank();
+                b.id = id;
+                b.version = 'engine';
+                registerBank(b);
+            }
+            const before = stackDigest();
+            const alt = memBank();
+            alt.id = 'ringbuf';
+            alt.version = '9.9';
+            registerBank(alt);
+            const afterDefault = stackDigest();
+            const swapped = stackDigest(['episodic', 'ringbuf', 'semantic', 'core']);
+            _clearRegistryForTests();
+            return before === afterDefault && swapped === 'episodic@engine+ringbuf@9.9+semantic@engine+core@engine';
+        })());
+    check('W4a: the tournament validator gates targets, baselines and alpha',
+        validateTournament({ target: 'realised-vol', baseline: 'ewma' }).ok === true &&
+        validateTournament({ target: 'direction' }).ok === false &&
+        validateTournament({ target: 'regime', baseline: '' }).ok === false &&
+        validateTournament({ target: 'sleeve-pnl', alpha: 2 }).ok === false &&
+        TOURNAMENT_TARGETS.length === 3);
 
     return {
         total: checks.length,

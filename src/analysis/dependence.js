@@ -262,6 +262,12 @@ export function clusterStability({ clustersA, clustersB, statistic, minFraction 
     for (const r of leaveOneOut) if (r.delta < worst.delta) worst = r;
     const positive = leaveOneOut.filter((r) => r.delta > minDelta).length;
     const fractionPositive = positive / leaveOneOut.length;
+    // The documented rule is the AND: enough positive windows AND no collapse
+    // when the worst window is removed (L10-cl — the fraction alone admitted a
+    // candidate whose edge vanishes without its best window). At the shipped
+    // defaults (minFraction 1, minDelta 0) the second conjunct is implied by
+    // the first (fraction 1 of n>=2 means every delta > 0, so worst > 0), so
+    // default reports are byte-identical; only a loosened threshold changes.
     return {
         available: true,
         nClusters: nA,
@@ -272,7 +278,7 @@ export function clusterStability({ clustersA, clustersB, statistic, minFraction 
         leaveOneOut,
         minFraction,
         minDelta,
-        stable: fractionPositive >= minFraction - 1e-12,
+        stable: fractionPositive >= minFraction - 1e-12 && worst.delta > minDelta,
     };
 }
 
@@ -328,6 +334,13 @@ export function signTest({ wins, n, alpha = 0.05 }) {
         return { wins, n, pValue: NaN, alpha };
     }
     const pmf0 = Math.pow(0.5, n);
+    // Fail closed past the exact walk's range (L10-cm): at n >= ~1075, 2^-n
+    // underflows the double range, so pmf0 is exactly 0 and the loop below
+    // would report pValue 0 (certainly significant) for ANY win count — the
+    // unsafe direction. In-range behavior is untouched.
+    if (!(pmf0 > 0)) {
+        return { wins, n, pValue: NaN, alpha, reason: 'n exceeds the exact-walk range (2^-n underflows); use an asymptotic or log-space test' };
+    }
     let pmf = pmf0;
     let tail = 0;
     for (let k = 0; k <= n; k++) {

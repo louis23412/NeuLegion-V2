@@ -77,6 +77,21 @@ function segment(series, foldLength, periodsPerYear) {
     return out;
 }
 
+// A zero-variance (constant) stream carries no information but would still be
+// counted as a full unit of breadth (L10-ca). Detect it on the aligned window
+// so the panel fails closed instead of reporting a spurious effective size.
+function isConstantSeries(s) {
+    if (!Array.isArray(s) || !s.length) return true;
+    let first = null;
+    let seen = false;
+    for (const x of s) {
+        if (!Number.isFinite(x)) continue;
+        if (!seen) { first = x; seen = true; }
+        else if (x !== first) return false;
+    }
+    return true;
+}
+
 // The Kish design effect of a stream panel. `seriesByLabel` maps a stream label to
 // its return series (one value per bar). Streams of different lengths are aligned
 // on their most recent `T = min length` bars — the shared evaluation window. When
@@ -94,6 +109,8 @@ export function designEffectOfStreams(seriesByLabel, { foldLength = null, period
     const T = Number.isInteger(fixedT) && fixedT > 0 ? Math.min(fixedT, ...series.map((s) => s.length)) : Math.min(...series.map((s) => s.length));
     if (T < 3) return { available: false, reason: 'the common window is shorter than three bars' };
     const aligned = series.map((s) => s.slice(-T));
+    const dead = keys.filter((k, i) => isConstantSeries(aligned[i]));
+    if (dead.length) return { available: false, reason: `degenerate: constant stream(s) ${dead.join(',')} carry no breadth (L10-ca)` };
     const K = keys.length;
     // A single stream is the trivial panel: no correlation to measure, design
     // effect 1, effective bars = raw bars. It is `available` so the selector can
@@ -148,10 +165,11 @@ export function designEffectOfStreams(seriesByLabel, { foldLength = null, period
 // ranks every candidate by its marginal contribution, so the caller can keep the
 // first N.
 export function selectStreams({ seriesByLabel, maxStreams = Infinity, minMarginalEfficiency = 0, foldLength = null, periodsPerYear = 252 } = {}) {
+    if (maxStreams !== Infinity && (!Number.isFinite(maxStreams) || maxStreams <= 0)) throw new Error(`selectStreams: maxStreams must be a positive integer or Infinity (got ${maxStreams}) (L10-cb)`);
     const base = designEffectOfStreams(seriesByLabel, { foldLength, periodsPerYear });
     if (!base.available) return { available: false, reason: base.reason };
     const all = base.labels;
-    const limit = Number.isFinite(maxStreams) && maxStreams > 0 ? Math.floor(maxStreams) : all.length;
+    const limit = maxStreams === Infinity ? all.length : Math.floor(maxStreams);
     const chosen = [];
     const remaining = all.slice();
     const curve = [];

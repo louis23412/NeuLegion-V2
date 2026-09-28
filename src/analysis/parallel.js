@@ -17,6 +17,7 @@
 // Validate and normalise a concurrency request. A non-finite / non-positive value
 // means "serial" (1), never "unbounded".
 export const normaliseConcurrency = (value, { max = 64 } = {}) => {
+    if (max !== undefined && (!Number.isFinite(max) || max < 1)) throw new Error(`normaliseConcurrency: max must be a finite value >= 1 (got ${max}) (L10-ce)`);
     if (!Number.isFinite(value) || value <= 1) return 1;
     return Math.min(Math.floor(value), max);
 };
@@ -72,7 +73,8 @@ export const makeFoldExecutor = ({ dispatch }) => {
         if (!reply || !Array.isArray(reply.positions)) {
             throw new Error(`fold executor: malformed reply for ${request && request.variantId}/${request && request.foldIndex}`);
         }
-        const confidence = Array.isArray(reply.confidence) ? reply.confidence : null;
-        return { signals: reply.positions, confidence, stats: reply.stats || null };
+        const confidence = Array.isArray(reply.confidence) ? reply.confidence : (reply.confidence == null ? null : (() => { throw new Error(`fold executor: malformed confidence for ${request && request.variantId}/${request && request.foldIndex} (L10-cf)`); })());
+        const stats = reply.stats == null ? null : (typeof reply.stats === 'object' ? reply.stats : (() => { throw new Error(`fold executor: malformed stats for ${request && request.variantId}/${request && request.foldIndex} (L10-cf)`); })());
+        return { signals: reply.positions, confidence, stats };
     };
 };

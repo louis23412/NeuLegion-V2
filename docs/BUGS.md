@@ -2980,3 +2980,18 @@ raw invariants and the repair behaviour.
 manifest file in one command; `docs/ci/update-candles.yml` is the scheduled
 workflow source (the workspace file API forbids a literal `.github` directory,
 so it must be copied into place).
+
+---
+
+## Found by the round-48 W6 hardening pass — L10-ca/cb/ce/cf/cj/cn, all FIXED
+
+Six latent analysis-layer rows from the lab's F-73/F-75/F-77/F-79 audits, fixed additively with no scored-number move on healthy inputs (all default-identical; verified by the browser `analysis` entry 697 → 707, `locks` + `walkforward` green, goldens untouched):
+
+- **L10-ca** (`streams.js#designEffectOfStreams`): a zero-variance stream was counted as a full unit of effective breadth. Now fails closed as `{available:false, reason:'degenerate: constant stream(s) … (L10-ca)'}`; healthy panels read byte-identical.
+- **L10-cb** (`streams.js#selectStreams`): `maxStreams <= 0` meant "unlimited". Now throws `selectStreams: maxStreams must be a positive integer or Infinity (L10-cb)`.
+- **L10-ce** (`parallel.js#normaliseConcurrency`): `max` was never validated, so `{max:0}` returned a non-positive "normalised" width. Now throws on a non-finite or <1 `max` (L10-ce).
+- **L10-cf** (`parallel.js#makeFoldExecutor`): a non-array `confidence` or non-object `stats` was silently nulled, which would drop the R26-3 raw pre-policy confidence. Now throws a named malformed-reply error (L10-cf); missing fields still map to null.
+- **L10-cj** (`replication.js`): the "IQM" is a rank-slice middle, not the cited Agarwal et al. / rliable mass-quantile filter (witness `[0,0,5,10]` 2.5 vs 1.6667). The shipped function is unchanged (name kept for compatibility); the comment now states the semantics and the additive `rliableIqm` export implements the reference (registered in `test/lock-registry.js`).
+- **L10-cn** (`walkforward.js#restateReportAtPolicy`): the restatement replaced `folds` but carried the original `foldInputs`, mixing bases in `foldConcentration`. Now carries restated inputs (`{...input, signals: sig}`); the cost-only sibling is unaffected (same signals), and the input object is not mutated.
+
+Kernels L10-co/cp/cq/cr deliberately untouched (scored path — a fix would move goldens without a re-freeze decision).

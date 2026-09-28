@@ -24,9 +24,13 @@
 import { mulberry32 } from '../legion/rng.js';
 import { mean } from './performance.js';
 
-// The interquartile mean: sort, drop the lowest and highest quarters, average the
-// middle. With fewer than four values there is no middle to speak of, so it falls
-// back to the plain mean (stated, not silent).
+// The interquartile mean: sort, drop the lowest and highest quarters BY RANK,
+// average the middle. With fewer than four values there is no middle to speak
+// of, so it falls back to the plain mean (stated, not silent).
+// NOTE (L10-cj): this is a rank-slice middle, NOT the cited Agarwal et al.
+// (arXiv 2108.13264) / rliable [q1,q3] mass-quantile filter — see
+// `rliableIqm` below for the reference implementation. The name is kept for
+// backward compatibility; the arithmetic is unchanged.
 export function interquartileMean(values) {
     const v = (Array.isArray(values) ? values : []).filter((x) => Number.isFinite(x));
     if (!v.length) return NaN;
@@ -35,6 +39,29 @@ export function interquartileMean(values) {
     const k = Math.floor(v.length / 4);
     const middle = sorted.slice(k, v.length - k);
     return mean(middle);
+}
+
+// Reference (L10-cj): the Agarwal et al. / rliable interquartile mean — the mean
+// of values falling inside the [q1,q3] mass-quantile interval (linearly
+// interpolated quartiles), not a rank-slice. Additive; `interquartileMean`
+// above is unchanged.
+export function rliableIqm(values) {
+    const v = (Array.isArray(values) ? values : []).filter((x) => Number.isFinite(x));
+    if (!v.length) return NaN;
+    if (v.length < 4) return mean(v);
+    const sorted = [...v].sort((a, b) => a - b);
+    const n = sorted.length;
+    const q = (p) => {
+        const pos = (n - 1) * p;
+        const lo = Math.floor(pos);
+        const hi = Math.ceil(pos);
+        return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+    };
+    const q1 = q(0.25);
+    const q3 = q(0.75);
+    const inside = sorted.filter((x) => x >= q1 && x <= q3);
+    if (!inside.length) return NaN;
+    return mean(inside);
 }
 
 // A stratified bootstrap CI over `strata` (one array per seed). Each replicate
@@ -178,9 +205,15 @@ export function formatSeedReplication({ label, dist, alpha = 0.05 } = {}) {
     if (!dist || !dist.available) return `${label || 'seeds'}: unavailable (${dist ? dist.reason : 'none'})`;
     const f = (x, d = 3) => (Number.isFinite(x) ? x.toFixed(d) : 'n/a');
     const ci = dist.ci && dist.ci.available ? `[${f(dist.ci.lo)}, ${f(dist.ci.hi)}]` : 'n/a';
+    // The printed level is the level the interval was BUILT at (L10-ck): the
+    // formatter's own alpha is only the fallback for a distribution that does
+    // not record one. The shipped path builds and prints at 0.05, so its
+    // lines are byte-identical.
+    const stored = dist.ci && dist.ci.available ? dist.ci.alpha : NaN;
+    const level = Number.isFinite(stored) ? stored : alpha;
     const comp = dist.components && dist.components.available
         ? ` | seed-fraction=${f(dist.components.seedFraction)} fold-fraction=${f(dist.components.foldFraction)}`
         : '';
     return `${label || 'seeds'}: n=${dist.n} over ${dist.seeds.length} seeds mean=${f(dist.mean)} ` +
-        `IQM=${f(dist.iqm)} ${(1 - alpha) * 100}%CI=${ci}${comp}`;
+        `IQM=${f(dist.iqm)} ${(1 - level) * 100}%CI=${ci}${comp}`;
 }

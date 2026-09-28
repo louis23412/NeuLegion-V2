@@ -43,7 +43,7 @@ import {
     resampleCandles, designEffectOfStreams, selectStreams, formatStreamSelection,
 } from '../../../src/analysis/streams.js';
 import {
-    interquartileMean, stratifiedBootstrapCI, varianceComponents,
+    interquartileMean, rliableIqm, stratifiedBootstrapCI, varianceComponents,
     seedDistribution, pairedVarianceRatio, formatSeedReplication,
 } from '../../../src/analysis/replication.js';
 import {
@@ -77,6 +77,7 @@ import {
     acceleration, causalZScore, positionAt, signalForCandidate, SIGNAL_CANDIDATES,
     reversal, reversalWindow, reversalVol, crossSectionalReversal, REVERSAL_CANDIDATES,
     volScaledMomentum, blendedMomentum, networkMomentum, regimeGatedMomentum, SIGUP_CANDIDATES,
+    panelMean, demeanedFn, xsMomentum,
 } from '../../../src/analysis/features.js';
 import {
     parseFundingJsonl, auditFundingSeries, auditFundingProblems, carryReturns,
@@ -4016,6 +4017,244 @@ export async function run() {
                 return halves.gated === false && worst.gated === false && Number.isFinite(halves.value) &&
                     nan.verdict === false && nan.reasons.includes('level');
             })());
+
+    // ---- AN. R45 (lab R5): the cross-sectional demean construction tool -----
+    // The tool, never an arm: panelMean is a masked mean (L10-r), demeanedFn
+    // scores any returns-feature net of its panel, xsMomentum is the F-03
+    // object. K is untouched (no roster change).
+    try {
+        const mkPanel = (rets, idx) => ({ returnsByStream: rets, streamIndex: idx });
+        const mkSeries = (rets, panel) => ({ returns: rets, closes: null, volumes: null, panel });
+        check('R45 (R5): panelMean is the masked finite mean with a 2-live floor',
+            panelMean([0.02, 0.04, 0.06]) === 0.04 &&
+            panelMean([0.02, NaN, 0.06]) === 0.04 &&
+            Number.isNaN(panelMean([0.02, NaN, NaN])) &&
+            Number.isNaN(panelMean([NaN, NaN])) &&
+            Number.isNaN(panelMean('nope')));
+        check('R45 (R5): xsMomentum equals own-minus-panel-mean trailing momentum',
+            (() => {
+                const r0 = [0.01, -0.02, 0.03, -0.01, 0.02, 0.01, -0.03, 0.02, 0.01, 0.02, -0.01, 0.03, 0.02, 0.01, -0.02, 0.01, 0.03, 0.02, 0.01, 0.02];
+                const r1 = r0.map((v) => v * 0.5);
+                const r2 = r0.map((v) => -v * 0.5);
+                const t = 19;
+                const w = 16;
+                const sum = (r) => r.slice(t - w + 1, t + 1).reduce((a, v) => a + v, 0);
+                const expected = sum(r0) - (sum(r0) + sum(r1) + sum(r2)) / 3;
+                const got = xsMomentum(mkSeries(r0, mkPanel([r0, r1, r2], 0)), t, { window: w });
+                return Math.abs(got - expected) < 1e-12;
+            })());
+        check('R45 (R5): demeanedFn wraps any returns-feature (vol-scaled momentum)',
+            (() => {
+                const r0 = [0.02, -0.01, 0.015, -0.005, 0.01, 0.02, -0.015, 0.01, 0.005, 0.02, -0.01, 0.015, 0.01, 0.005, -0.01, 0.02, 0.015, 0.01, 0.005, 0.01];
+                const r1 = r0.map((v) => v * 0.4 + 0.001);
+                const t = 19;
+                const wrapped = demeanedFn(volScaledMomentum)(mkSeries(r0, mkPanel([r0, r1], 0)), t, { window: 8 });
+                const m0 = volScaledMomentum(mkSeries(r0, null), t, { window: 8 });
+                const m1 = volScaledMomentum(mkSeries(r1, null), t, { window: 8 });
+                return Number.isFinite(wrapped) && Math.abs(wrapped - (m0 - (m0 + m1) / 2)) < 1e-12;
+            })());
+        check('R45 (R5): absent symbols are excluded, never zero-filled (L10-r)',
+            (() => {
+                const r0 = [0.01, 0.02, -0.01, 0.03, 0.02, 0.01, -0.02, 0.01, 0.03, 0.02, 0.01, -0.01, 0.02, 0.03, 0.01, 0.02, 0.01, 0.03, 0.02, 0.01];
+                const r1 = [0.005, 0.01, -0.005, 0.015, 0.01, 0.005, -0.01, 0.005, 0.015, 0.01, 0.005, -0.005, 0.01, 0.015, 0.005, 0.01, 0.005, 0.015, 0.01, 0.005];
+                const t = 19;
+                const w = 16;
+                const full = xsMomentum(mkSeries(r0, mkPanel([r0, r1, r0.map((v) => v * 0.3)], 0)), t, { window: w });
+                const short = new Array(20).fill(NaN);
+                const masked = xsMomentum(mkSeries(r0, mkPanel([r0, r1, short], 0)), t, { window: w });
+                const sum = (r) => r.slice(t - w + 1, t + 1).reduce((a, v) => a + v, 0);
+                const expectMasked = sum(r0) - (sum(r0) + sum(r1)) / 2;
+                return Number.isFinite(full) && Math.abs(masked - expectMasked) < 1e-12 && Math.abs(masked - full) > 1e-9;
+            })());
+        check('R45 (R5): no panel, bad index, or thin cross-section abstains (NaN)',
+            (() => {
+                const r = new Array(20).fill(0.01);
+                const s = mkSeries(r, mkPanel([r, r.map((v) => v * 2)], 0));
+                return Number.isNaN(xsMomentum(mkSeries(r, null), 19)) &&
+                    Number.isNaN(xsMomentum(mkSeries(r, mkPanel([r, r], 5)), 19)) &&
+                    Number.isNaN(xsMomentum(mkSeries(r, mkPanel([r, new Array(20).fill(NaN)], 0)), 19)) &&
+                    Number.isNaN(xsMomentum(mkSeries(r, mkPanel([r], 0)), 19));
+            })());
+        check('R45 (R5): demeanedFn requires a function and the demeaned book is dollar-neutral',
+            (() => {
+                let threw = false;
+                try { demeanedFn(null); } catch { threw = true; }
+                const rs = [
+                    [0.01, -0.02, 0.03, 0.01, 0.02, -0.01, 0.02, 0.01, -0.03, 0.02, 0.01, 0.02, -0.01, 0.03, 0.02, 0.01, -0.02, 0.01, 0.03, 0.02],
+                    [0.02, -0.01, 0.01, 0.02, -0.02, 0.01, -0.01, 0.02, 0.01, -0.02, 0.02, 0.01, 0.02, -0.01, 0.01, 0.02, -0.01, 0.02, 0.01, -0.02],
+                    [-0.01, 0.02, -0.02, -0.01, 0.01, 0.02, -0.02, -0.01, 0.02, -0.01, -0.02, -0.01, 0.01, -0.02, -0.01, 0.01, 0.02, -0.01, -0.02, 0.01],
+                ];
+                const panel = mkPanel(rs, 0);
+                const raws = rs.map((r, i) => xsMomentum(mkSeries(r, mkPanel(rs, i)), 19, { window: 16 }));
+                return threw && raws.every(Number.isFinite) && Math.abs(raws[0] + raws[1] + raws[2]) < 1e-12;
+            })());
+        check('R45 (R5): the demean is causal — a strict-future shock moves nothing at t',
+            (() => {
+                const base = [0.01, -0.02, 0.03, -0.01, 0.02, 0.01, -0.03, 0.02, 0.01, 0.02, -0.01, 0.03, 0.02, 0.01, -0.02, 0.01, 0.03, 0.02, 0.01, 0.02, 0.01, -0.01, 0.02, 0.01];
+                const mk = (arr) => {
+                    const rs = [arr.slice(), arr.map((v) => v * 0.5), arr.map((v) => -v * 0.3)];
+                    return rs.map((r, i) => mkSeries(r, mkPanel(rs, i)));
+                };
+                const t = 15;
+                const before = mk(base).map((s) => xsMomentum(s, t, { window: 8 }));
+                const shocked = base.slice();
+                shocked[20] = 0.5;
+                shocked[22] = -0.5;
+                const after = mk(shocked).map((s) => xsMomentum(s, t, { window: 8 }));
+                return before.every((v, i) => v === after[i]);
+            })());
+        check('R45 (R5): demeaned positions flow through the standard pipeline (finite, clamped)',
+            (() => {
+                const rs = [
+                    [0.01, -0.02, 0.03, -0.01, 0.02, 0.01, -0.03, 0.02, 0.01, 0.02, -0.01, 0.03, 0.02, 0.01, -0.02, 0.01, 0.03, 0.02, 0.01, 0.02, 0.01, -0.01, 0.02, 0.01, 0.02, -0.02, 0.01, 0.03, -0.01, 0.02, 0.01, 0.02, -0.01, 0.01, 0.02, -0.02, 0.03, 0.01, -0.01, 0.02],
+                    [0.005, -0.01, 0.015, -0.005, 0.01, 0.005, -0.015, 0.01, 0.005, 0.01, -0.005, 0.015, 0.01, 0.005, -0.01, 0.005, 0.015, 0.01, 0.005, 0.01, 0.005, -0.005, 0.01, 0.005, 0.01, -0.01, 0.005, 0.015, -0.005, 0.01, 0.005, 0.01, -0.005, 0.005, 0.01, -0.01, 0.015, 0.005, -0.005, 0.01],
+                ];
+                const cand = { fn: xsMomentum, window: 16 };
+                const pos0 = positionAt(cand, mkSeries(rs[0], mkPanel(rs, 0)), 39);
+                const pos1 = positionAt(cand, mkSeries(rs[1], mkPanel(rs, 1)), 39);
+                return Number.isFinite(pos0) && Number.isFinite(pos1) && Math.abs(pos0) <= 1 && Math.abs(pos1) <= 1;
+            })());
+    } catch (e) {
+        check('R45 R5 demean-tool checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    // ---- AO. R47 (W6): three claim-true fixes, all default-identical --------
+    // L10-cl (stability AND), L10-ck (printed CI level), L10-cm (sign-test
+    // fail-closed past 2^-n underflow). Each changes behavior only where the
+    // old code contradicted its own contract; shipped defaults read byte-identical.
+    try {
+        const meanStat = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+        check('R47 (L10-cl): the e70 witness is unstable under the documented AND',
+            (() => {
+                const s = clusterStability({
+                    clustersA: [[-0.5], [-0.5], [0.7]], clustersB: [[0], [0], [0]],
+                    statistic: meanStat, minFraction: 0.5,
+                });
+                return s.available === true && Math.abs(s.fractionPositive - 2 / 3) < 1e-12 &&
+                    s.worstDelta === -0.5 && s.stable === false;
+            })());
+        check('R47 (L10-cl): defaults are unchanged (uniform stable, fragile fragile)',
+            (() => {
+                const uni = clusterStability({
+                    clustersA: [[1, 1], [1, 1], [1, 1], [1, 1]], clustersB: [[0, 0], [0, 0], [0, 0], [0, 0]],
+                    statistic: meanStat,
+                });
+                const frag = clusterStability({
+                    clustersA: [[0], [10], [0], [0]], clustersB: [[0], [0], [0], [0]],
+                    statistic: meanStat,
+                });
+                return uni.available && uni.stable && uni.worstDelta === 1 &&
+                    frag.available && !frag.stable && frag.worstDelta === 0;
+            })());
+        check('R47 (L10-ck): the printed level is the level the interval was built at',
+            (() => {
+                const perSeed = [
+                    { seed: 1, values: [0.1, 0.2, 0.15, 0.3] },
+                    { seed: 2, values: [0.2, 0.1, 0.25, 0.15] },
+                ];
+                const d90 = seedDistribution({ perSeed, nBoot: 200, alpha: 0.10, seed: 7 });
+                const d95 = seedDistribution({ perSeed, nBoot: 200, alpha: 0.05, seed: 7 });
+                const t90 = formatSeedReplication({ label: 's', dist: d90 });
+                const t95 = formatSeedReplication({ label: 's', dist: d95 });
+                return d90.available && d95.available &&
+                    /90(\.00000000000001)?%CI/.test(t90) && !t90.includes('95%') &&
+                    t95.includes('95%') && !/90(\.00000000000001)?%/.test(t95);
+            })());
+        check('R47 (L10-cm): the sign test fails closed past the exact-walk range',
+            (() => {
+                const big = signTest({ wins: 1000, n: 2000 });
+                const balanced = signTest({ wins: 1000, n: 2000 });
+                void balanced;
+                const small = signTest({ wins: 5, n: 5 });
+                return Number.isNaN(big.pValue) && big.significant === undefined &&
+                    typeof big.reason === 'string' && small.pValue === 1 / 32;
+            })());
+        check('R47 (W6): the fraction half still governs at non-default thresholds',
+            (() => {
+                const s = clusterStability({
+                    clustersA: [[0.3], [0.3], [-0.4], [-0.4]], clustersB: [[0], [0], [0], [0]],
+                    statistic: meanStat, minFraction: 0.9, minDelta: 0,
+                });
+                return s.available && Math.abs(s.fractionPositive - 0.5) < 1e-12 && s.stable === false;
+            })());
+        check('R47 (W6): the delta half rejects what the fraction half accepts',
+            (() => {
+                const s = clusterStability({
+                    clustersA: [[0.04], [0.04], [0.04], [0.16]], clustersB: [[0], [0], [0], [0]],
+                    statistic: meanStat, minFraction: 0.5, minDelta: 0.05,
+                });
+                return s.available && s.fractionPositive === 0.75 && Math.abs(s.worstDelta - 0.04) < 1e-12 && s.stable === false;
+            })());
+    } catch (e) {
+        check('R47 W6 claim-true fix checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    // ---- AP. R48 (W6): analysis-layer hardening, all default-identical ----
+    // L10-ca (constant stream fails closed), L10-cb (maxStreams validated),
+    // L10-ce (concurrency max validated), L10-cf (fold executor fail-closed),
+    // L10-cj (rank-slice IQM named + rliable reference), L10-cn (policy
+    // restatement carries restated signals). Healthy panels read byte-identical.
+    try {
+        const mkTrend = (n, f) => { const a = []; let x = 0; for (let i = 0; i < n; i++) { x += f(i); a.push(x); } return a; };
+        const sA = mkTrend(60, (i) => Math.sin(i * 0.3) + 0.1 * Math.sin(i * 1.7));
+        const sB = mkTrend(60, (i) => Math.cos(i * 0.23) + 0.1 * Math.sin(i * 2.1));
+        check('R48 (L10-ca): a constant stream fails closed with its label', (() => {
+            const r = designEffectOfStreams({ a: sA, b: sA.map(() => 5) });
+            return r.available === false && typeof r.reason === 'string' && /L10-ca/.test(r.reason) && /b/.test(r.reason);
+        })());
+        check('R48 (L10-ca): a healthy two-stream panel is unchanged', (() => {
+            const r = designEffectOfStreams({ a: sA, b: sB });
+            return r.available === true && r.K === 2 && Number.isFinite(r.designEffect) && Number.isFinite(r.effectiveBars);
+        })());
+        check('R48 (L10-cb): a non-positive maxStreams throws instead of going unlimited', (() => {
+            let bad = 0;
+            for (const m of [0, -2, NaN]) { try { selectStreams({ seriesByLabel: { a: sA, b: sB }, maxStreams: m }); } catch (e) { if (/L10-cb/.test(e.message)) bad++; } }
+            return bad === 3;
+        })());
+        check('R48 (L10-ce): a non-positive concurrency max throws', (() => {
+            let bad = 0;
+            for (const m of [0, -1, NaN, Infinity + 1]) { try { normaliseConcurrency(4, { max: m }); } catch (e) { if (/L10-ce/.test(e.message)) bad++; } }
+            void bad;
+            let nanThrows = false;
+            try { normaliseConcurrency(4, { max: NaN }); } catch (e) { nanThrows = /L10-ce/.test(e.message); }
+            return normaliseConcurrency(4, { max: 64 }) === 4 && normaliseConcurrency(0) === 1 && nanThrows;
+        })());
+        check('R48 (L10-cf): a non-array confidence throws instead of nulling', await (async () => {
+            const ex = makeFoldExecutor({ dispatch: async () => ({ positions: [1, 0], confidence: 5, stats: {} }) });
+            try { await ex({ variantId: 'v', foldIndex: 0 }); return false; }
+            catch (e) { return /L10-cf/.test(e.message); }
+        })());
+        check('R48 (L10-cf): a non-object stats throws instead of nulling', await (async () => {
+            const ex = makeFoldExecutor({ dispatch: async () => ({ positions: [1], confidence: [0.5], stats: 7 }) });
+            try { await ex({ variantId: 'v', foldIndex: 0 }); return false; }
+            catch (e) { return /L10-cf/.test(e.message); }
+        })());
+        check('R48 (L10-cf): healthy replies still pass through', await (async () => {
+            const ex = makeFoldExecutor({ dispatch: async () => ({ positions: [1, 0], confidence: [0.5, -0.5], stats: { n: 2 } }) });
+            const r = await ex({ variantId: 'v', foldIndex: 0 });
+            return r.signals.length === 2 && r.confidence.length === 2 && r.stats.n === 2;
+        })());
+        check('R48 (L10-cj): the shipped IQM is unchanged and the reference differs on the witness', (() => {
+            return Math.abs(interquartileMean([1, 2, 3, 4]) - 2.5) < 1e-12 &&
+                Math.abs(rliableIqm([0, 0, 5, 10]) - 5 / 3) < 1e-9 &&
+                Math.abs(rliableIqm([1, 2, 3, 4]) - 2.5) < 1e-12;
+        })());
+        check('R48 (L10-cn): a policy restatement carries restated signals', (() => {
+            const rep = {
+                foldInputs: [{ returns: [0.01, 0.02, -0.01], signals: [1, 1, 1], confidence: [0.9, 0.9, 0.9] }],
+                folds: [{ metrics: {} }], trials: 1,
+            };
+            const rs = restateReportAtPolicy(rep, { deadZone: 0.999 });
+            return !!rs && rs.foldInputs[0].signals.every((x) => x === 0) && rep.foldInputs[0].signals[0] === 1;
+        })());
+        check('R48 (W6): single-stream degenerate fails closed, single healthy stays trivial', (() => {
+            const dead = designEffectOfStreams({ a: sA.map(() => 2) });
+            const solo = designEffectOfStreams({ a: sA });
+            return dead.available === false && solo.available === true && solo.designEffect === 1;
+        })());
+    } catch (e) {
+        check('R48 W6 hardening checks completed', false, e && e.stack ? e.stack : String(e));
+    }
     } catch (e) {
         check('R35 W6 fix checks completed', false, e && e.stack ? e.stack : String(e));
     }

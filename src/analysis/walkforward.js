@@ -1516,6 +1516,7 @@ export function restateReportAtPolicy(report, policy = {}, { costBps = 0, period
     const effectiveTrials = Number.isFinite(trials) ? trials : (Number.isFinite(report.trials) ? report.trials : 1);
     const perFold = [];
     const positions = [];
+    const restatedFoldInputs = [];
     const pooled = [];
     const pooledGross = [];
     const streamReturns = [];
@@ -1537,6 +1538,7 @@ export function restateReportAtPolicy(report, policy = {}, { costBps = 0, period
             metrics: backtestMetrics({ returns: input.returns, signals: sig, costBps, periodsPerYear, trials: effectiveTrials }),
         });
         positions.push(sig);
+        restatedFoldInputs.push({ ...input, signals: sig });
         for (const r of bt.returns) pooled.push(r);
         for (const r of bt.gross) pooledGross.push(r);
         if (streamRemaining <= 0) {
@@ -1581,7 +1583,9 @@ export function restateReportAtPolicy(report, policy = {}, { costBps = 0, period
         priceStreamFoldLengths: report.streamFoldLengths ? priceFoldLengths : (report.priceStreamFoldLengths || null),
         // P2: carry the journal forward so a restated report can itself be restated
         // (chained cadence/policy/exposure sweeps) without re-reading the run.
-        foldInputs: report.foldInputs,
+        // L10-cn: the carried inputs carry the RESTATED signals, so a
+        // policy-restated report handed to foldConcentration mixes no bases.
+        foldInputs: restatedFoldInputs,
         aggregate: aggregateFolds(perFold),
         dependence,
         extraPanelStreams: report.extraPanelStreams || null,

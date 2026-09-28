@@ -104,10 +104,10 @@ scope freeze that bounds it.
   test hardened to report the real failing check.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
-- **Browser suite**: 2843 checks across the 32 pass/fail entries (33 entries
+- **Browser suite**: 2865 checks across the 32 pass/fail entries (33 entries
   including the non-pass/fail `bench`); 132 `test()` blocks across 45 node files
-  (round 44 adds the `--sleeve` spawn block to `analyze_cli.test.js` — pending
-  the operator's native confirmation; R26-12 added `checkpoint_throttle.test.js`, R26-4 added
+  (round 44 adds the `--sleeve` spawn block to `analyze_cli.test.js` — confirmed
+  green natively 2026-09-29, 132/132; R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second
   block to it, R27-4b added `controller_invariants.test.js`, round 30 added the
   #69 spawned-CLI refusal block to `analyze_cli.test.js`, round 31 added the V2

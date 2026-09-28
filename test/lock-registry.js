@@ -234,7 +234,7 @@ export const ANALYSIS_MODULES = Object.freeze({
         'resampleCandles', 'designEffectOfStreams', 'selectStreams', 'formatStreamSelection',
     ],
     'replication.js': [
-        'interquartileMean', 'stratifiedBootstrapCI', 'varianceComponents',
+        'interquartileMean', 'rliableIqm', 'stratifiedBootstrapCI', 'varianceComponents',
         'seedDistribution', 'pairedVarianceRatio', 'formatSeedReplication',
     ],
     'forecast.js': [
@@ -280,6 +280,8 @@ export const ANALYSIS_MODULES = Object.freeze({
         'reversal', 'reversalWindow', 'reversalVol', 'crossSectionalReversal', 'REVERSAL_CANDIDATES',
         // Round 30 (C-SIGUP / C-REGIME, gate G-H): the opt-in momentum upgrades.
         'volScaledMomentum', 'blendedMomentum', 'networkMomentum', 'regimeGatedMomentum', 'SIGUP_CANDIDATES',
+        // Round 45 (lab R5): the cross-sectional demean construction tool (never a roster arm).
+        'panelMean', 'demeanedFn', 'xsMomentum',
     ],
     'overfitting.js': [
         'DEFAULT_PBO_CONFIG', 'cscvBlocks', 'cscvSplit', 'relativeRank',

@@ -237,6 +237,71 @@ export function crossSectionalReversal(series, t) {
     return -(mine - sum / n);
 }
 
+// ---- cross-sectional demean as a construction tool (round 45, lab R5) ------
+//
+// F-03: demeaning a signal across the basket collapses the panel's design
+// effect (4.92 -> 0.39-0.60, effective streams 1.47 -> 14-19) without
+// manufacturing edge (every demeaned momentum arm reads |Sharpe| <= 0.033 —
+// F-07 — so this ports the TOOL, never a roster arm; K is untouched).
+//
+// `demeanedFn` scores ANY returns-computable feature net of the panel: the
+// stream's own raw minus the masked cross-sectional mean of the same raw on
+// every stream. Sibling streams are read through returns-only views (their
+// closes/volumes are null, so a feature needing another stream's closes
+// abstains there via the existing guards and is masked out — L10-r: absent
+// symbols are excluded, never zero-filled). Fewer than 2 live values, a
+// missing panel, or a missing streamIndex abstains (NaN), never throws.
+// Point-in-time and causal: every read is at an index <= t, so the lab's
+// perturbation audit applies unchanged.
+//
+// `xsMomentum` is the measured F-03 object (trailing momentum net of the
+// panel mean), following the `crossSectionalReversal` precedent above.
+
+// Masked cross-sectional mean: finite values only (L10-r); fewer than 2 live
+// values is not a cross-section (NaN).
+export function panelMean(valuesByStream) {
+    if (!Array.isArray(valuesByStream)) return NaN;
+    let sum = 0;
+    let n = 0;
+    for (const v of valuesByStream) {
+        if (Number.isFinite(v)) { sum += v; n += 1; }
+    }
+    return n >= 2 ? sum / n : NaN;
+}
+
+// Any point-in-time feature scored net of its own panel cross-section.
+export function demeanedFn(fn) {
+    if (typeof fn !== 'function') throw new Error('demeanedFn: a feature function is required');
+    return (series, t, params) => {
+        const p = series ? series.panel : null;
+        if (!p || !Array.isArray(p.returnsByStream)) return NaN;
+        const k = p.returnsByStream.length;
+        if (!Number.isInteger(p.streamIndex) || p.streamIndex < 0 || p.streamIndex >= k) return NaN;
+        const raws = new Array(k);
+        for (let i = 0; i < k; i++) {
+            if (i === p.streamIndex) {
+                raws[i] = fn(series, t, params);
+            } else {
+                const rs = p.returnsByStream[i];
+                if (!rs) { raws[i] = NaN; continue; }
+                raws[i] = fn({ returns: rs, closes: null, volumes: null, panel: null }, t, params);
+            }
+        }
+        const mine = raws[p.streamIndex];
+        if (!Number.isFinite(mine)) return NaN;
+        const m = panelMean(raws);
+        if (!Number.isFinite(m)) return NaN;
+        return mine - m;
+    };
+}
+
+// Trailing momentum net of the panel mean (the F-03 object): a bet on this
+// stream's RELATIVE trend, approximately dollar-neutral across the basket by
+// construction, reduced to a position by the standard z-score + clamp pipeline.
+export function xsMomentum(series, t, { window = 16 } = {}) {
+    return demeanedFn(momentum)(series, t, { window });
+}
+
 // ---- momentum upgrades (round 30, C-SIGUP / C-REGIME, gate G-H) ------------
 //
 // The research note (`docs/research/round30-winning-mechanisms.md` §1.2) fixes the
