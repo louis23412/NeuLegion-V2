@@ -57,6 +57,9 @@ import {
     rangeBarVariance, rangeRealizedVolatility, yangZhangVariance, yangZhangRealizedVolatility,
     fitHarVolForecast, predictHarVolForecast, tournamentHarVolForecast,
     tournamentHarVolForecastAcrossSplits, tournamentHarVolPanel, expandingVolForecasts,
+    fitCombineWeights, inverseMseWeights, fitLassoCombineWeights, predictCombine,
+    tournamentCombineVolForecast, tournamentCombineVolForecastAcrossSplits,
+    tournamentCombineVolPanel, applyVolTargetScaling,
 } from '../../../src/analysis/forecast.js';
 import {
     foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision,
@@ -4954,6 +4957,255 @@ export async function run() {
         })());
     } catch (e) {
         check('R60 W4c expanding-forecast checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+    try {
+        check('R64 (W4c-y): OLS combination is exact on a hand case', (() => {
+            const f = fitCombineWeights([1, 0, 1, 0], [[1, 0, 1, 0], [0, 1, 0, 1]]);
+            if (!f.available) return false;
+            return Math.abs(f.weights[0] - 1) < 1e-9 && Math.abs(f.weights[1]) < 1e-9 &&
+                f.intercept === 0 && f.hasIntercept === false && f.rows === 4;
+        })());
+        check('R64 (W4c-y): OLS combination fails closed on singular and malformed input', (() => {
+            const a = fitCombineWeights([1, 2, 3, 4], [[1, 2, 3, 4], [1, 2, 3, 4]]);
+            const b = fitCombineWeights([1, 2, 3], [[1, 2, 3], [1, 2]]);
+            const c = fitCombineWeights([1, 2, 3], []);
+            return a.available === false && /singular/.test(a.reason) &&
+                b.available === false && c.available === false;
+        })());
+        check('R64 (W4c-y): inverse-MSE weights match the hand ratio and sum to one', (() => {
+            const f = inverseMseWeights([0, 0, 0, 0], [[1, 1, 1, 1], [2, 2, 2, 2]]);
+            if (!f.available) return false;
+            return Math.abs(f.weights[0] - 0.8) < 1e-12 && Math.abs(f.weights[1] - 0.2) < 1e-12 &&
+                Math.abs(f.weights[0] + f.weights[1] - 1) < 1e-12 &&
+                Math.abs(f.mses[0] - 1) < 1e-12 && Math.abs(f.mses[1] - 4) < 1e-12;
+        })());
+        check('R64 (W4c-y): inverse-MSE refuses an exact column', (() => {
+            const f = inverseMseWeights([1, 2, 3], [[1, 2, 3], [2, 3, 4]]);
+            return f.available === false && /exact/.test(f.reason);
+        })());
+        check('R64 (W4c-y): lasso with zero penalty recovers OLS, heavy penalty zeroes out', (() => {
+            const actual = [1, 0, 1, 0, 1, 0, 1, 0];
+            const cols = [[1, 0, 1, 0, 1, 0, 1, 0], [0, 1, 0, 1, 0, 1, 0, 1]];
+            const ols = fitCombineWeights(actual, cols);
+            const lz = fitLassoCombineWeights(actual, cols, { l1: 0, iters: 2000 });
+            const lh = fitLassoCombineWeights(actual, cols, { l1: 10, iters: 50 });
+            const bad = fitLassoCombineWeights(actual, cols, { l1: -1 });
+            if (!ols.available || !lz.available || !lh.available) return false;
+            return Math.abs(lz.weights[0] - ols.weights[0]) < 1e-6 &&
+                Math.abs(lz.weights[1] - ols.weights[1]) < 1e-6 &&
+                lh.weights[0] === 0 && lh.weights[1] === 0 && bad.available === false;
+        })());
+        check('R64 (W4c-y): predictCombine dots exactly and NaNs on bad input', (() => {
+            const v = predictCombine([1, 2, 3], [0.5, 0.25, 0.25]);
+            return Math.abs(v - 1.75) < 1e-12 &&
+                Number.isNaN(predictCombine([1, 2], [0.5])) &&
+                Number.isNaN(predictCombine([1, NaN], [0.5, 0.5])) &&
+                Number.isNaN(predictCombine([], []));
+        })());
+        check('R64 (W4c-y): seven-way tournament names a winner with consistent flags', (() => {
+            const vols = [];
+            for (let i = 0; i < 200; i++) vols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+            const t = tournamentCombineVolForecast(vols, { split: 0.5 });
+            if (!t.available) return false;
+            const ids = ['ewma', 'ar', 'har', 'eq', 'inv', 'ols', 'lasso'];
+            return ids.includes(t.winner) && ids.includes(t.bestCombine) &&
+                ids.every((k) => Number.isFinite(t.skills[k]) && Number.isFinite(t.mses[k])) &&
+                Math.abs(t.weights.eq[0] + t.weights.eq[1] + t.weights.eq[2] - 1) < 1e-12 &&
+                Math.abs(t.weights.inv[0] + t.weights.inv[1] + t.weights.inv[2] - 1) < 1e-12 &&
+                t.weightTrainN + t.weightTestN === t.testN &&
+                (t.beatsHar === (t.bestCombineSkill > t.skills.har));
+        })());
+        check('R64 (W4c-y): combination tournament fails closed on short series', (() => {
+            const t = tournamentCombineVolForecast([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], { split: 0.5 });
+            return t.available === false;
+        })());
+        check('R64 (W4c-y): combination across-splits counts sum to the grid', (() => {
+            const vols = [];
+            for (let i = 0; i < 200; i++) vols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+            const t = tournamentCombineVolForecastAcrossSplits(vols, { splits: [0.4, 0.5, 0.6] });
+            if (!t.available) return false;
+            const sum = Object.values(t.wins).reduce((a, b) => a + b, 0);
+            return t.perSplit.length === 3 && sum === 3 &&
+                t.combineWins === t.wins.eq + t.wins.inv + t.wins.ols + t.wins.lasso &&
+                Math.abs(t.combineWinFraction - t.combineWins / 3) < 1e-12 &&
+                Math.abs(t.harWinFraction - t.wins.har / 3) < 1e-12;
+        })());
+        check('R64 (W4c-y): combination panel reads unanimity off the counts and names failures', (() => {
+            const vols = [];
+            for (let i = 0; i < 200; i++) vols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+            const t = tournamentCombineVolPanel({ a: vols, b: vols.map((x) => x + 0.5) }, { splits: [0.5] });
+            if (!t.available) return false;
+            const bad = tournamentCombineVolPanel({ ok: vols, bad: [1, 2, 3] }, { splits: [0.5] });
+            return t.streams === 2 &&
+                t.unanimousCombine === (t.combineMajority === 2) &&
+                t.unanimousHar === (t.harMajority === 2) &&
+                Math.abs(t.combineMajorityFraction - t.combineMajority / 2) < 1e-12 &&
+                bad.available === false && /bad/.test(bad.reason);
+        })());
+    } catch (e) {
+        check('R64 W4c combination checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+    try {
+        check('R65 (W4c-z): vol-target scaling matches the hand arithmetic', (() => {
+            const t = applyVolTargetScaling([0.01, -0.02, 0.03], [0.01, 0.02, 0.01], { target: 0.02, cap: 4 });
+            if (!t.available) return false;
+            return t.scored === 3 && t.skipped === 0 &&
+                Math.abs(t.scales[0] - 2) < 1e-12 && Math.abs(t.scales[1] - 1) < 1e-12 &&
+                Math.abs(t.scales[2] - 2) < 1e-12 &&
+                Math.abs(t.scaled[0] - 0.02) < 1e-12 && Math.abs(t.scaled[1] + 0.02) < 1e-12 &&
+                Math.abs(t.scaled[2] - 0.06) < 1e-12 &&
+                t.index[0] === 0 && t.index[2] === 2 && t.n === 3;
+        })());
+        check('R65 (W4c-z): the cap binds instead of exploding', (() => {
+            const t = applyVolTargetScaling([0.01], [0.001], { target: 0.02, cap: 4 });
+            if (!t.available) return false;
+            return Math.abs(t.scales[0] - 4) < 1e-12 && Math.abs(t.scaled[0] - 0.04) < 1e-12;
+        })());
+        check('R65 (W4c-z): dead vols are skipped, never Inf', (() => {
+            const t = applyVolTargetScaling([0.01, 0.02, 0.03, 0.04], [0.01, 0, -0.01, NaN], { target: 0.02 });
+            if (!t.available) return false;
+            return t.scored === 1 && t.skipped === 3 && t.index[0] === 0 &&
+                t.scales.every((s) => Number.isFinite(s)) && t.scaled.every((s) => Number.isFinite(s));
+        })());
+        check('R65 (W4c-z): malformed input fails closed', (() => {
+            const a = applyVolTargetScaling([0.01], [0.01, 0.02], { target: 0.02 });
+            const b = applyVolTargetScaling([0.01], [0.01], { target: 0 });
+            const c = applyVolTargetScaling([0.01], [0.01], { target: -1 });
+            const d = applyVolTargetScaling([0.01], [0.01], { target: 0.02, cap: 0 });
+            const e = applyVolTargetScaling([0.01], [0.01], { target: [0.02, 0.03] });
+            const f = applyVolTargetScaling([], [], { target: 0.02 });
+            return a.available === false && b.available === false && c.available === false &&
+                d.available === false && e.available === false && f.available === false;
+        })());
+        check('R65 (W4c-z): no scorable bar is unavailable, not empty', (() => {
+            const t = applyVolTargetScaling([0.01, 0.02], [0, -1], { target: 0.02 });
+            return t.available === false && /scorable/.test(t.reason);
+        })());
+        check('R65 (W4c-z): array targets scale per bar', (() => {
+            const t = applyVolTargetScaling([0.01, 0.04], [0.01, 0.02], { target: [0.02, 0.02], cap: 4 });
+            if (!t.available) return false;
+            return Math.abs(t.scales[0] - 2) < 1e-12 && Math.abs(t.scales[1] - 1) < 1e-12 &&
+                Math.abs(t.scaled[0] - 0.02) < 1e-12 && Math.abs(t.scaled[1] - 0.04) < 1e-12;
+        })());
+        check('R65 (W4c-z): a dead array-target bar is skipped', (() => {
+            const t = applyVolTargetScaling([0.01, 0.04], [0.01, 0.02], { target: [0.02, 0] });
+            if (!t.available) return false;
+            return t.scored === 1 && t.skipped === 1 && t.index[0] === 0;
+        })());
+        check('R65 (W4c-z): scaling is deterministic and leverage-bounded', (() => {
+            const rets = [];
+            const vols = [];
+            for (let i = 0; i < 120; i++) {
+                rets.push(0.01 * Math.sin(i / 7));
+                vols.push(0.005 + 0.002 * (1 + Math.sin(i / 11)));
+            }
+            const a = applyVolTargetScaling(rets, vols, { target: 0.01, cap: 3 });
+            const b = applyVolTargetScaling(rets, vols, { target: 0.01, cap: 3 });
+            if (!a.available || !b.available) return false;
+            return JSON.stringify(a) === JSON.stringify(b) &&
+                a.scored + a.skipped === a.n &&
+                a.scaled.every((s, i) => Math.abs(s) <= 3 * Math.abs(rets[a.index[i]]) + 1e-15);
+        })());
+        check('R65 (W4c-z): a NaN return never propagates', (() => {
+            const t = applyVolTargetScaling([0.01, NaN, 0.03], [0.01, 0.01, 0.01], { target: 0.02 });
+            if (!t.available) return false;
+            return t.scored === 2 && t.skipped === 1 && t.scaled.every((s) => Number.isFinite(s));
+        })());
+        check('R65 (W4c-z): scaling equals a manual causal loop', (() => {
+            const rets = [];
+            const vols = [];
+            for (let i = 0; i < 60; i++) {
+                rets.push(0.005 * Math.cos(i / 5));
+                vols.push(0.004 + 0.001 * ((i * 13) % 5));
+            }
+            const t = applyVolTargetScaling(rets, vols, { target: 0.008, cap: 2.5 });
+            if (!t.available) return false;
+            for (let i = 0; i < t.scored; i++) {
+                const g = t.index[i];
+                const want = Math.min(2.5, 0.008 / vols[g]) * rets[g];
+                if (Math.abs(t.scaled[i] - want) > 1e-15) return false;
+            }
+            return true;
+        })());
+    } catch (e) {
+        check('R65 W4c sizing checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+    try {
+        const yvols = [];
+        for (let i = 0; i < 200; i++) yvols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+        check('R66 (W4c-yq): QLIKE second skill is available with an argmax winner', (() => {
+            const t = tournamentCombineVolForecast(yvols, { split: 0.5 });
+            if (!t.available || !t.qlike.available) return false;
+            const ids = ['ewma', 'ar', 'har', 'eq', 'inv', 'ols', 'lasso'];
+            if (!(t.qlike.n >= 2 && t.qlike.n <= t.weightTestN)) return false;
+            if (!ids.every((k) => Number.isFinite(t.qlike.skills[k]))) return false;
+            let want = ids[0];
+            for (const k of ids) if (t.qlike.skills[k] > t.qlike.skills[want]) want = k;
+            return t.qlike.winner === want && ids.includes(t.qlike.winner);
+        })());
+        check('R66 (W4c-yq): QLIKE combine flags are consistent', (() => {
+            const t = tournamentCombineVolForecast(yvols, { split: 0.5 });
+            if (!t.available || !t.qlike.available) return false;
+            const q = t.qlike;
+            const best = Math.max(q.skills.eq, q.skills.inv, q.skills.ols, q.skills.lasso);
+            return Math.abs(q.bestCombineSkill - best) < 1e-15 &&
+                (q.beatsHar === (q.bestCombineSkill > q.skills.har));
+        })());
+        check('R66 (W4c-yq): the QLIKE block is deterministic', (() => {
+            const a = tournamentCombineVolForecast(yvols, { split: 0.5 });
+            const b = tournamentCombineVolForecast(yvols, { split: 0.5 });
+            if (!a.available || !b.available) return false;
+            return JSON.stringify(a.qlike) === JSON.stringify(b.qlike);
+        })());
+        check('R66 (W4c-yq): across-splits QLIKE counts reconcile', (() => {
+            const t = tournamentCombineVolForecastAcrossSplits(yvols, { splits: [0.4, 0.5, 0.6] });
+            if (!t.available) return false;
+            const sum = Object.values(t.qlikeWins).reduce((a, b) => a + b, 0);
+            return t.qlikeDecided + t.qlikeAbstained === 3 && sum === t.qlikeDecided &&
+                t.qlikeCombineWins === t.qlikeWins.eq + t.qlikeWins.inv + t.qlikeWins.ols + t.qlikeWins.lasso &&
+                Math.abs(t.qlikeCombineWinFraction - t.qlikeCombineWins / 3) < 1e-12;
+        })());
+        check('R66 (W4c-yq): panel QLIKE majorities read off the counts', (() => {
+            const t = tournamentCombineVolPanel({ a: yvols, b: yvols.map((x) => x + 0.5) }, { splits: [0.5] });
+            if (!t.available) return false;
+            return t.unanimousQlikeCombine === (t.qlikeCombineMajority === 2) &&
+                Math.abs(t.qlikeCombineMajorityFraction - t.qlikeCombineMajority / 2) < 1e-12 &&
+                Math.abs(t.qlikeHarMajorityFraction - t.qlikeHarMajority / 2) < 1e-12;
+        })());
+        check('R66 (W4c-yq): panel names the failing stream on the QLIKE path', (() => {
+            const t = tournamentCombineVolPanel({ ok: yvols, bad: [1, 2, 3] }, { splits: [0.5] });
+            return t.available === false && /bad/.test(t.reason);
+        })());
+        check('R66 (W4c-yq): per-split QLIKE skills echo exactly when decided', (() => {
+            const t = tournamentCombineVolForecastAcrossSplits(yvols, { splits: [0.4, 0.5, 0.6] });
+            if (!t.available) return false;
+            const ids = ['ewma', 'ar', 'har', 'eq', 'inv', 'ols', 'lasso'];
+            return t.perSplit.every((p) =>
+                (p.qlikeWinner === null && p.qlikeSkills === null) ||
+                (ids.includes(p.qlikeWinner) && ids.every((k) => Number.isFinite(p.qlikeSkills[k]))));
+        })());
+        check('R66 (W4c-yq): MSE and QLIKE both name a valid winner', (() => {
+            const t = tournamentCombineVolForecast(yvols, { split: 0.5 });
+            if (!t.available || !t.qlike.available) return false;
+            const ids = ['ewma', 'ar', 'har', 'eq', 'inv', 'ols', 'lasso'];
+            return ids.includes(t.winner) && ids.includes(t.qlike.winner);
+        })());
+        check('R66 (W4c-yq): the lasso penalty is scale-free', (() => {
+            const actual = [0.001, 0.002, 0.0015, 0.003, 0.0025, 0.0012, 0.0028, 0.0019];
+            const cols = [
+                [0.0011, 0.0019, 0.0016, 0.0029, 0.0024, 0.0013, 0.0027, 0.002],
+                [0.0009, 0.0021, 0.0014, 0.0031, 0.0026, 0.0011, 0.0029, 0.0018],
+            ];
+            const a = fitLassoCombineWeights(actual, cols, { l1: 0.05, iters: 500 });
+            const big = actual.map((x) => x * 1000);
+            const bigCols = cols.map((c) => c.map((x) => x * 1000));
+            const b = fitLassoCombineWeights(big, bigCols, { l1: 0.05, iters: 500 });
+            if (!a.available || !b.available) return false;
+            return a.weights.every((w, j) => Math.abs(w - b.weights[j]) < 1e-9) &&
+                a.weights.some((w) => Math.abs(w) > 1e-6);
+        })());
+    } catch (e) {
+        check('R66 W4c QLIKE checks completed', false, e && e.stack ? e.stack : String(e));
     }
     } catch (e) {
         check('R35 W6 fix checks completed', false, e && e.stack ? e.stack : String(e));

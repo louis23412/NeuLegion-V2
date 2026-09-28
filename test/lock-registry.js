@@ -249,6 +249,9 @@ export const ANALYSIS_MODULES = Object.freeze({
         'rangeBarVariance', 'rangeRealizedVolatility', 'yangZhangVariance', 'yangZhangRealizedVolatility',
         'fitHarVolForecast', 'predictHarVolForecast', 'tournamentHarVolForecast',
         'tournamentHarVolForecastAcrossSplits', 'tournamentHarVolPanel', 'expandingVolForecasts',
+        'fitCombineWeights', 'inverseMseWeights', 'fitLassoCombineWeights', 'predictCombine',
+        'tournamentCombineVolForecast', 'tournamentCombineVolForecastAcrossSplits',
+        'tournamentCombineVolPanel', 'applyVolTargetScaling',
     ],
     'decision.js': [
         'foldConcentration', 'confidencePersistence', 'nextRunPlan',

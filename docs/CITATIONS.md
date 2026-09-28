@@ -157,6 +157,18 @@ venue/year so they remain findable.
 - *What Survives Honest Evaluation? Leakage-Safe, Search-Aware Assessment of LLM-Driven Trading Strategy Discovery.* arXiv 2608.27734. (a leaky Sharpe-35 oracle **survives** DSR/PBO — statistical correction is not a substitute for a structural look-ahead guardrail)
 - *AlgoXpert Alpha Research Framework: A Rigorous IS/WFA/OOS Protocol for Mitigating Overfitting in Quantitative Strategies.* arXiv 2603.09219.
 - *The GT-Score: A Robust Objective Function for Reducing Overfitting in Data-Driven Trading Strategies.* arXiv 2602.00080.
+
+## Volatility forecasting (W4b/W4c)
+
+- Corsi. *A Simple Approximate Long-Memory Model of Realized Volatility.* Journal of Financial Econometrics 7(2):172–196, 2009. (the HAR-RV daily/weekly/monthly cascade; `analysis/forecast.js` `fitHarVolForecast`, nests AR(1) as its daily leg)
+- Parkinson. *The Extreme Value Method for Estimating the Variance of the Rate of Return.* Journal of Business 53(1):61–65, 1980. (high-low range variance; `rangeBarVariance`)
+- Garman & Klass. *On the Estimation of Security Price Volatilities from Historical Data.* Journal of Business 53(1):67–78, 1980. (open-high-low-close efficiency gain; `rangeBarVariance`)
+- Rogers & Satchell. *Estimating Variance from High, Low and Closing Prices.* Annals of Applied Probability 1(4):504–512, 1991. (drift-robust range variance; `rangeBarVariance`)
+- Yang & Zhang. *Drift-Independent Volatility Estimation Based on High, Low, Open, and Close Prices.* Journal of Business 73(3):477–492, 2000. (overnight + open-close + Rogers-Satchell blend; `yangZhangVariance`)
+- Bates & Granger. *The Combination of Forecasts.* Operational Research Quarterly 20(4):451–468, 1969. (a combination of rival forecasts usually beats every rival; `tournamentCombineVolForecast`)
+- Timmermann. *Forecast Combinations.* Handbook of Economic Forecasting, vol. 1, ch. 4, 2006. (estimated weights add estimation error, so the equal-weight average is the reference to beat — the combination puzzle; the `eq` arm)
+- Patton. *Volatility Forecast Comparison Using Imperfect Volatility Proxies.* Journal of Econometrics 160(1):246–256, 2011. (QLIKE as the robust second skill beside MSE; `volForecastQlike`)
+- Audrino & Knaus. *Lasso-based forecast combinations for forecasting realized variances.* arXiv 1610.02653, 2016. (lasso-regularised combinations win on realized-variance panels — the combination hedges parsimony risk; `fitLassoCombineWeights`)
 - *Regime-Conditional Distributional Comparison of Trading Strategies: A GAMLSS/ZAGA Framework.* arXiv 2606.31251.
 - *Spurious Predictability in Financial Machine Learning.* arXiv 2604.15531.
 - *Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade.* arXiv 2608.23808. (independent 2026 production study — 359,062 backtest records — whose robustness grade composes **DSR + PBO + SPA + MinTRL**, the same four-test battery this project ships)
