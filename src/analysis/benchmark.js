@@ -102,7 +102,10 @@ export function predictRidge(model, x) {
     let logit = 0;
     for (let j = 0; j < model.d; j++) logit += model.w[j] * z[j];
     logit += model.w[model.d];
-    return sigmoid(logit);
+    const base = sigmoid(logit);
+    if (!Number.isFinite(model.ybar)) return base;
+    const p = base + model.ybar - 0.5;
+    return p < 0 ? 0 : p > 1 ? 1 : p;
 }
 
 // ---------------------------------------------------------------------------

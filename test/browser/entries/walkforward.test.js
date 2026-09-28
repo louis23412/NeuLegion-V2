@@ -19,11 +19,12 @@
 
 import HiveMind from '../../../src/hivemind/hiveMind.js';
 import { walkForwardSplit } from '../../../src/analysis/splits.js';
-import { walkForwardEvaluate, promoteDecision, walkForwardSearch, formatReport, auditNoLookahead, sharpeStandardError, minimumDetectableSharpe, barsToDetect, poolReports, dependenceSummary, clustersOf, pairedPromotionTest, restateReportAtCost, costLadder, familyCorrelation, DEPENDENCE_GATE_READER, blockStability, scoreSignalFullHistory, poolSignalFullHistory, buildFullHistoryBlock } from '../../../src/analysis/walkforward.js';
+import { walkForwardEvaluate, promoteDecision, walkForwardSearch, formatReport, auditNoLookahead, sharpeStandardError, minimumDetectableSharpe, barsToDetect, poolReports, dependenceSummary, clustersOf, pairedPromotionTest, restateReportAtCost, restateReportAtPolicy, costLadder, familyCorrelation, DEPENDENCE_GATE_READER, blockStability, scoreSignalFullHistory, poolSignalFullHistory, buildFullHistoryBlock } from '../../../src/analysis/walkforward.js';
 import { makeCandleViewFor, shockCandles, shockFactor, worldFromCandles, DEFAULT_SHOCK } from '../../../src/analysis/world.js';
 import { SIGNAL_CANDIDATES } from '../../../src/analysis/features.js';
 import { purgedCVBacktest, strategyReturns } from '../../../src/analysis/backtest.js';
 import { sharpeRatio } from '../../../src/analysis/performance.js';
+import { turnoverSweep } from '../../../src/analysis/holding.js';
 import { CANDLE_MANIFEST } from '../../../src/candles_audit.js';
 
 const FEATURE_LEN = 12;
@@ -605,8 +606,7 @@ export async function run(options = {}) {
                         d.gate.minDsrAdjusted === (cand25.pooledMetrics.dsrAdjusted == null ? 'not-needed' : 'applied') &&
                         base25.dependence.adjustmentNeeded === (base25.dependence.designEffect > 1);
                 })());
-            check('(9) and SKIPPED (never failed) on a single-stream report, with the gate saying which',
-                (() => {
+            check('(9) and SKIPPED (never failed) on a single-stream report, with the gate saying which',                (() => {
                     const d = promoteDecision(single25, ev25(streams25[0], candSig25), { requireCleanAudit: false, requireSharpeDiff: true, requireBreadth: true, minDsrAdjusted: 0.95 });
                     return d.gate.requireSharpeDiff === 'skipped-no-panel' && d.gate.requireBreadth === 'skipped-no-panel' &&
                         d.gate.minDsrAdjusted === 'skipped-no-panel' && d.reasons.every((r) => !/unavailable/.test(r));
@@ -626,6 +626,24 @@ export async function run(options = {}) {
                 !formatReport(single25, { label: 'wf-one' }).includes('adjusted: DSR=') &&
                 !formatReport(single25, { label: 'wf-one' }).includes('power*:') &&
                 single25.pooledMetrics.dsrAdjusted === null);
+            check('F-76: restateReportAtPolicy carries the scored cost and the lookahead audit (the sweep hurdle is applicable)',
+                (() => {
+                    const r0 = restateReportAtPolicy(base25, { deadZone: 0, scale: 1 }, { costBps: 25 });
+                    if (!r0 || r0.costBps !== 25) return false;
+                    if (JSON.stringify(r0.audit) !== JSON.stringify(base25.audit)) return false;
+                    const bad = { ...base25, audit: { clean: false, violations: [1] } };
+                    const d = promoteDecision(bad, cand25, { requireCleanAudit: true });
+                    return d.reasons.some((x) => /lookahead audit/.test(x));
+                })());
+            check('F-76: turnoverSweep threads costBps (rows at 25bps differ from rows at 0)',
+                (() => {
+                    const mk = (costBps) => turnoverSweep({ baseline: base25, candidates: [{ ...cand25, id: 'cand' }], costBps, deadZones: [0], scales: [1], holdings: [null] });
+                    const s0 = mk(0);
+                    const s25 = mk(25);
+                    if (!s0.available || !s25.available) return false;
+                    return s0.rows[0].costBps === 0 && s25.rows[0].costBps === 25 &&
+                        s0.rows[0].netSharpe !== s25.rows[0].netSharpe;
+                })());
             check('(9) the per-report paired line renders when a test is attached, and reads n/a without a panel',
                 formatReport({ ...cand25, promotionTest: pairedPromotionTest(base25, cand25) }, { label: 'x' }).includes('paired: dSharpe=') &&
                 formatReport({ ...single25, promotionTest: pairedPromotionTest(single25, single25) }, { label: 'x' }).includes('paired: n/a'));

@@ -79,11 +79,15 @@ import {
 } from '../../../src/analysis/features.js';
 import {
     parseFundingJsonl, auditFundingSeries, auditFundingProblems, carryReturns,
-    carryOnBarGrid, carryPanelStream, pooledCarry, correlation,
+    carryOnBarGrid, carryPanelStream, pooledCarry, correlation, observedFundingIntervalMs,
 } from '../../../src/analysis/carry.js';
 import {
     cscvBlocks, cscvSplit, relativeRank, oosOnIsRegression, probabilityOfBacktestOverfitting,
 } from '../../../src/analysis/overfitting.js';
+import {
+    clipWeights, bandWeights, cleanBook, cleanForSleeve, SLEEVE_SPECS, MIN_TRAIN_PERIODS,
+    inverseVolWeights, volTargetScale, clippedTrailingMedianSchedule, fixedSplitJointSize,
+} from '../../../src/analysis/portfolio.js';
 import {
     benchmarkSeries, relativePerformance, stationaryBlockIndices,
     whiteRealityCheck, hansenSpa, consistentRecentring,
@@ -303,6 +307,32 @@ export async function run() {
     check('strategy totalCost exact', close(sr.cost.reduce((a, b) => a + b, 0), 0.001, 1e-12));
     check('maxDrawdown exact', close(maxDrawdown(equityCurve([0.1, -0.5, 0.25])), 0.5, 1e-12), `${maxDrawdown(equityCurve([0.1, -0.5, 0.25]))}`);
     check('hitRate excludes flat bars', close(hitRate([0, 0.01, -0.02, 0, 0.03]), 2 / 3, 1e-12), `${hitRate([0, 0.01, -0.02, 0, 0.03])}`);
+    check('F-70: hitRate with positions counts zero-return in-market bars and skips flat exiting bars',
+        hitRate([0, 0.05, -0.02], [1, 1, 1]) === 1 / 3 && hitRate([0.01, 0, -0.5], [1, 0, 1]) === 0.5);
+        check('W3: clipWeights clips and holds with no renormalisation (cap 1/k is structural)',
+            JSON.stringify(clipWeights([[0.5, -0.2], [0.1, 0.05]], 0.125)) === '[[0.125,-0.125],[0.1,0.05]]' &&
+            clipWeights([[1, 2]], null)[0][1] === 2);
+        check('W3: bandWeights holds until the target moves more than eps (time-stateful only)',
+            JSON.stringify(bandWeights([[0.1, 0.1], [0.11, 0.2], [0.2, 0.21]], 0.05)) === '[[0.1,0.1],[0.1,0.2],[0.2,0.2]]' &&
+            bandWeights([[1]], null)[0][0] === 1);
+        check('W3: cleanBook is cap-then-band and the sleeve specs pin the lab recipes',
+            MIN_TRAIN_PERIODS === 2555 && SLEEVE_SPECS.R8.cap === 0.125 && SLEEVE_SPECS.R7.bandEps === null &&
+            SLEEVE_SPECS.OI.bandEps === 0.03 &&
+            JSON.stringify(cleanBook([[0.5], [0.51]], { cap: 0.125, bandEps: 0.05 })) === '[[0.125],[0.125]]' &&
+            JSON.stringify(cleanForSleeve([[0.5], [0.9]], 'R8')) !== JSON.stringify([[0.5], [0.9]]));
+        check('W3: inverseVolWeights splits by 1/vol and zeroes degenerate streams',
+            (() => {
+                const w = inverseVolWeights([[0.01, -0.01, 0.01, -0.01], [0.02, -0.02, 0.02, -0.02], [1, 1, 1, 1]]);
+                return Math.abs(w[0] + w[1] + w[2] - 1) < 1e-12 && w[0] > w[1] && w[2] === 0;
+            })());
+        check('W3: volTargetScale is target/realised-vol and the OI schedule clips the trailing median',
+            volTargetScale([0.01, -0.01, 0.01, -0.01], 0.1) > 0 &&
+            Number.isNaN(volTargetScale([1, 1, 1], 0.1)) &&
+            clippedTrailingMedianSchedule([10, 12, 11, 13, 12], { lookback: 5, f: 0.05 }) === 0.05 * 12 &&
+            clippedTrailingMedianSchedule([], {}) === 0);
+        check('W3: fixedSplitJointSize is the fixed-mix bound (never the LP-optimal schedule)',
+            fixedSplitJointSize([20, 10], [0.5, 0.5]) === 15 &&
+            Number.isNaN(fixedSplitJointSize([20], [0.5, 0.5])));
 
     // ---- P. Backtest engine: it must not bless noise ------------------------
     // Deterministic zero-mean-ish return series.
@@ -2136,6 +2166,28 @@ export async function run() {
             close(correlation([1, 2, 3, 4], [4, 3, 2, 1]), -1, 1e-12) &&
             Number.isNaN(correlation([1, 1, 1], [1, 2, 3])) &&
             JSON.stringify(pooledCarry([[1, 2], [3, 4]])) === '[2,3]' && pooledCarry([]).length === 0);
+        check('F-61: carryOnBarGrid divides by the observed funding interval, not the 8h default',
+            (() => {
+                const t0 = Date.parse('2024-01-01T00:00:00Z');
+                const bars = Array.from({ length: 8 }, (_, i) => t0 + i * 3_600_000);
+                const mk = (stepH, n) => Array.from({ length: n }, (_, i) => ({ timestamp: t0 + i * stepH * 3_600_000, fundingRate: 0.0001 }));
+                const sum = (s) => s.reduce((a, b) => a + b, 0);
+                const s8 = sum(carryOnBarGrid(bars, mk(8, 1)));
+                const s4 = sum(carryOnBarGrid(bars, mk(4, 2)));
+                const s2 = sum(carryOnBarGrid(bars, mk(2, 4)));
+                const s1 = sum(carryOnBarGrid(bars, mk(1, 8)));
+                return close(s8, 0.0001, 1e-15) && close(s4, 0.0002, 1e-12) && close(s2, 0.0004, 1e-12) && close(s1, 0.0008, 1e-12);
+            })());
+        check('F-61: observedFundingIntervalMs is the median step and the audit flags an interval change',
+            (() => {
+                const t0 = Date.parse('2024-01-01T00:00:00Z');
+                const rows2h = Array.from({ length: 99 }, (_, i) => ({ timestamp: t0 + i * 2 * 3_600_000, fundingRate: 0.0001 }));
+                if (observedFundingIntervalMs(rows2h) !== 2 * 3_600_000) return false;
+                if (observedFundingIntervalMs([{ timestamp: t0, fundingRate: 1 }]) !== null) return false;
+                const audit = auditFundingSeries(rows2h, { now: t0 + 100 * 2 * 3_600_000 });
+                if (audit.medianIntervalMs !== 2 * 3_600_000 || audit.gridMs !== 28_800_000) return false;
+                return auditFundingProblems(audit, { label: 'sol' }).some((p) => p.includes('differs from'));
+            })());
         const p4Ret = (k) => Array.from({ length: 40 }, (_, i) => Math.sin(i * 0.6 + k) * 0.01);
         const p4FoldMetrics = (ret) => ({
             turnover: 1, tradeCount: ret.length, totalCost: 0, nonZeroFraction: 1,
@@ -3111,6 +3163,13 @@ export async function run() {
             makeBenchmarkForecaster('linear').kind === 'linear' &&
             makeBenchmarkForecaster('mlp').kind === 'mlp' &&
             (() => { try { makeBenchmarkForecaster('tsfm'); return false; } catch { return true; } })());
+        check('F-69: predictRidge restores the training base rate (constant-y reads the prior, not 0.5)',
+            (() => {
+                const X1 = [[0], [1], [2], [3]];
+                const m1 = fitRidge(X1, [1, 1, 1, 1], { lambda: 1e-3 });
+                const p1 = X1.map((x) => predictRidge(m1, x));
+                return p1.every((p) => p === 1) && m1.ybar === 1;
+            })());
 
         // P1: a benchmark arm shares the controller's calibration group, so its DM
         // test against the baseline is defined (unlike a signal's z-score).

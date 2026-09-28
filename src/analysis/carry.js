@@ -101,12 +101,14 @@ export function auditFundingSeries(rows, { gridMs = FUNDING_GRID_MS, maxAbsRate 
     }
     return {
         count,
+        gridMs,
         first: count ? rows[0].timestamp : null,
         last: count ? rows[count - 1].timestamp : null,
         spanDays: count > 1 ? (rows[count - 1].timestamp - rows[0].timestamp) / 86_400_000 : 0,
         intervalHistogram,
         offGrid,
         missingPeriods,
+        medianIntervalMs: observedFundingIntervalMs(rows),
         extremeRates,
         zeroRates,
         unclosed,
@@ -127,7 +129,27 @@ export function auditFundingProblems(report, { label = 'funding', maxOffGridFrac
         problems.push(`${label}: ${report.offGrid} off-grid step(s) (${(100 * report.offGrid / (report.count - 1)).toFixed(2)}% > ${(maxOffGridFraction * 100).toFixed(1)}%)`);
     }
     if (report.missingPeriods) problems.push(`${label}: ${report.missingPeriods} missing funding period(s)`);
+    if (Number.isFinite(report.medianIntervalMs) && Number.isFinite(report.gridMs) &&
+        Math.abs(report.medianIntervalMs - report.gridMs) > GRID_TOLERANCE_MS) {
+        problems.push(`${label}: funding interval ${(report.medianIntervalMs / 3_600_000).toFixed(2)}h differs from ${(report.gridMs / 3_600_000).toFixed(2)}h grid (bar-grid join must use the observed interval)`);
+    }
     return problems;
+}
+
+// Median positive funding step, or null when fewer than two comparable rows.
+// The observed interval — not the default grid — is what the bar-grid join must
+// divide by (F-61: sub-8h funding was understated up to 8x by the default).
+export function observedFundingIntervalMs(rows) {
+    if (!Array.isArray(rows) || rows.length < 2) return null;
+    const dts = [];
+    for (let i = 1; i < rows.length; i++) {
+        const dt = toMs(rows[i].timestamp) - toMs(rows[i - 1].timestamp);
+        if (Number.isFinite(dt) && dt > 0) dts.push(dt);
+    }
+    if (!dts.length) return null;
+    dts.sort((a, b) => a - b);
+    const mid = Math.floor(dts.length / 2);
+    return dts.length % 2 ? dts[mid] : (dts[mid - 1] + dts[mid]) / 2;
 }
 
 // The carry return earned by the delta-neutral book over one funding period.
@@ -144,14 +166,17 @@ export function carryReturns(rows, { signFlip = false } = {}) {
 // no closed period yet earns 0.
 export function carryOnBarGrid(barTimestamps, rows, { gridMs = FUNDING_GRID_MS, signFlip = false } = {}) {
     if (!Array.isArray(barTimestamps) || !Array.isArray(rows) || rows.length === 0) return barTimestamps.map(() => 0);
-    const perBar = gridMs;                              // bars are finer than the grid
+    const observed = observedFundingIntervalMs(rows);
+    const perPeriod = Number.isFinite(observed) && observed > 0 ? observed : gridMs;
     const out = new Array(barTimestamps.length).fill(0);
-    // The number of bars in a funding period for THIS grid: infer it from the bar
-    // spacing (a 15m grid -> 32 bars in an 8h period).
+    // The number of bars in one OBSERVED funding period for this bar grid: infer
+    // it from the bar spacing (a 1h grid on 8h funding -> 8 bars per period; on
+    // 2h funding -> 2). The old code divided by the default 8h grid always, so
+    // sub-8h funding was understated by gridMs/observed (up to 8x).
     let barsPerPeriod = 0;
     if (barTimestamps.length > 1) {
         const step = toMs(barTimestamps[1]) - toMs(barTimestamps[0]);
-        if (step > 0) barsPerPeriod = Math.max(1, Math.round(perBar / step));
+        if (step > 0) barsPerPeriod = Math.max(1, Math.round(perPeriod / step));
     }
     if (!(barsPerPeriod > 0)) barsPerPeriod = 1;
     // Normalise both sides to epoch ms before comparing (see `toMs`).

@@ -45,6 +45,7 @@ import * as decisionMod from '../../../src/analysis/decision.js';
 import * as raceMod from '../../../src/analysis/race.js';
 import * as benchmarkMod from '../../../src/analysis/benchmark.js';
 import * as carryMod from '../../../src/analysis/carry.js';
+import * as portfolioMod from '../../../src/analysis/portfolio.js';
 import * as pricePrecisionMod from '../../../src/price_precision.js';
 import * as surpriseMod from '../../../src/hivemind/memory/surprise.js';
 import * as sampleWeightsMod from '../../../src/hivemind/training/sample_weights.js';
@@ -82,6 +83,7 @@ const ANALYSIS_IMPORTS = {
     'race.js': raceMod,
     'benchmark.js': benchmarkMod,
     'carry.js': carryMod,
+    'portfolio.js': portfolioMod,
 };
 
 const SUPPORT_IMPORTS = {

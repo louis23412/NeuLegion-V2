@@ -69,9 +69,20 @@ export function maxDrawdown(equityOrReturns, { fromReturns = null } = {}) {
     return mdd;
 }
 
-// Fraction of in-market bars with a positive net return. Bars with no position
-// are excluded (they are neither hits nor misses).
-export function hitRate(strategyReturnSeries) {
+// Fraction of in-market bars with a positive net return. With a positions
+// series, bars with no position are excluded (they are neither hits nor
+// misses) — even when their net return is nonzero (fees) or zero while
+// in-market. Without positions the legacy zero-return skip applies.
+export function hitRate(strategyReturnSeries, positions = null) {
+    if (Array.isArray(positions) && positions.length === strategyReturnSeries.length) {
+        let n = 0; let hits = 0;
+        for (let i = 0; i < strategyReturnSeries.length; i++) {
+            if (positions[i] === 0) continue;
+            n++;
+            if (strategyReturnSeries[i] > 0) hits++;
+        }
+        return n === 0 ? NaN : hits / n;
+    }
     let n = 0; let hits = 0;
     for (const r of strategyReturnSeries) {
         if (r === 0) continue;
@@ -150,7 +161,7 @@ export function backtestMetrics({
         minTrackRecordLength: mtrl,
         minTrackRecordLengthStatus: mtrlStatus,
         maxDrawdown: maxDrawdown(equityCurve(net)),
-        hitRate: hitRate(net),
+        hitRate: hitRate(net, pos),
         turnover: bt.turnover,
         tradeCount: tradeCount(pos),
         totalCost: bt.cost.reduce((a, b) => a + b, 0),

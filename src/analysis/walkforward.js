@@ -1581,6 +1581,7 @@ export function restateReportAtPolicy(report, policy = {}, { costBps = 0, period
         panelMismatchReason: report.panelMismatchReason || null,
         dependenceWithoutExtras,
         power: powerSummary(pooledMetrics.netSharpe, pooled.length, periodsPerYear, dependence),
+        audit: report.audit || null,
     };
 }
 

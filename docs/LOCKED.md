@@ -82,7 +82,7 @@ registries' totals above are unchanged; see "V2 core + plugins" below.
 ### Analysis supercharges (`src/analysis/`)
 
 Registered separately (they are not bags of either class). All `LOCKED-invariant`,
-proven by `analysis.test.js` (638 checks) with exact reference vectors (the harness additionally
+proven by `analysis.test.js` (648 checks) with exact reference vectors (the harness additionally
 has a real-candle end-to-end run in `walkforward.test.js`, 63 checks, whose
 section K is the round-23 audit-vacuity guard, while `analysis.test.js` §AC pins
 the world and signal-family arithmetic). They never import from

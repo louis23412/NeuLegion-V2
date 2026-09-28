@@ -75,7 +75,7 @@ property pinned by a dedicated test; **needs-local-run** = native dependency
 | Candle data integrity + quality | `candles_audit.js`, `candle_quality.js`, `candle_fetcher.js`, `funding_fetcher.js` | **invariant** | `candles.test.js` (192), `fetcher.test.js` (111) |
 | Price precision | `price_precision.js` | **invariant** | `price_precision.test.js` (29), `multisymbol.test.js` (28) |
 | Consolidation algorithms | `consolidation_logic.js`, `consolidation_worker.js` | **invariant** | `consolidation.test.js` (48), `consolidation_worker.test.js` (18) |
-| Analysis supercharges | `analysis/*` (21 modules: including `world.js` — the audited candle view — `features.js` — the causal signal family — `dependence.js`/`decision.js` — the round-25/26 gate and report — `forecast.js`/`race.js`, and the round-29 `benchmark.js`/`carry.js`) | **invariant** | `analysis.test.js` (638), `walkforward.test.js` (63) |
+| Analysis supercharges | `analysis/*` (21 modules: including `world.js` — the audited candle view — `features.js` — the causal signal family — `dependence.js`/`decision.js` — the round-25/26 gate and report — `forecast.js`/`race.js`, and the round-29 `benchmark.js`/`carry.js`) | **invariant** | `analysis.test.js` (648), `walkforward.test.js` (85) |
 | LSH support modules | `memory/multiprobe.js`, `memory/binarypc.js`, `memory/bitweight.js`, `memory/querymod.js` | **invariant** (default-off; golden no-op) | their own entries + `lsh.test.js` section J + `golden.test.js` |
 
 Registry totals: **60 entries — 17 bit-exact, 43 invariant, 0 needs-local-run,

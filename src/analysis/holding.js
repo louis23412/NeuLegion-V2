@@ -63,10 +63,10 @@ export function turnoverSweep({
 
     const rows = [];
     for (const policy of policies) {
-        const base = restateReportAtPolicy(baseline, policy, { periodsPerYear, trials });
+        const base = restateReportAtPolicy(baseline, policy, { costBps, periodsPerYear, trials });
         if (!base) return { available: false, reason: 'baseline restatement unavailable' };
         for (const candidate of candidates) {
-            const c = restateReportAtPolicy(candidate, policy, { periodsPerYear, trials });
+            const c = restateReportAtPolicy(candidate, policy, { costBps, periodsPerYear, trials });
             if (!c) return { available: false, reason: `candidate ${candidate.id} restatement unavailable` };
             const decision = promoteDecision(base, c, decisionOptions);
             rows.push({
