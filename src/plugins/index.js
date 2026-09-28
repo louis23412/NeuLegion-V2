@@ -22,6 +22,9 @@
 
 import { registerPlugin } from '../core/registry.js';
 import { legacyHivemindLearner } from './learners/legacy-hivemind.js';
+import { baseRateLearner } from './learners/base-rate.js';
+import { ridgeLearner } from './learners/ridge.js';
+import { mlpLearner } from './learners/mlp.js';
 import { carryDispersionSleeve } from './sleeves/carry-dispersion.js';
 import { toptraderFadeSleeve } from './sleeves/toptrader-fade.js';
 import { oiChangeSleeve } from './sleeves/oi-change.js';
@@ -33,6 +36,9 @@ import { fixedSplitBook } from './books/fixed-split.js';
 // UNTESTED lands, and only the repo's own gate promotes.
 export const DEFAULT_STACK = Object.freeze([
     { kind: 'learner', plugin: legacyHivemindLearner, state: 'LIVE', defaultStack: true },
+    { kind: 'learner', plugin: baseRateLearner, state: 'UNTESTED', defaultStack: false },
+    { kind: 'learner', plugin: ridgeLearner, state: 'UNTESTED', defaultStack: false },
+    { kind: 'learner', plugin: mlpLearner, state: 'UNTESTED', defaultStack: false },
     { kind: 'risk', plugin: capBandRisk, state: 'LIVE', defaultStack: false },
     { kind: 'sleeve', plugin: carryDispersionSleeve, state: 'UNTESTED', defaultStack: false },
     { kind: 'sleeve', plugin: toptraderFadeSleeve, state: 'UNTESTED', defaultStack: false },

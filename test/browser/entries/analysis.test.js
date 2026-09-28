@@ -54,6 +54,9 @@ import {
     tournamentVolModel, tournamentVolPanel, volForecastQlike,
     tournamentVolModelAcrossSplits, decideVolPromotion, fitRidgeArVolForecast,
     tournamentVolLadder,
+    rangeBarVariance, rangeRealizedVolatility, yangZhangVariance, yangZhangRealizedVolatility,
+    fitHarVolForecast, predictHarVolForecast, tournamentHarVolForecast,
+    tournamentHarVolForecastAcrossSplits, tournamentHarVolPanel, expandingVolForecasts,
 } from '../../../src/analysis/forecast.js';
 import {
     foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision,
@@ -4730,6 +4733,227 @@ export async function run() {
         })());
     } catch (e) {
         check('R57 W4b window-ladder checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+    try {
+        const bar = { o: 100, h: 110, l: 90, c: 100 };
+        const u = Math.log(1.1);
+        const d = Math.log(0.9);
+        check('R58 (W4c): parkinson matches its closed form', (() => {
+            const r = rangeBarVariance(bar, { estimator: 'parkinson' });
+            return r.available === true && Math.abs(r.variance - ((u - d) * (u - d)) / (4 * Math.log(2))) < 1e-15;
+        })());
+        check('R58 (W4c): cc equals the squared log return', (() => {
+            const r = rangeBarVariance({ o: 100, h: 105, l: 95, c: 103 }, { estimator: 'cc' });
+            const cl = Math.log(1.03);
+            return r.available === true && Math.abs(r.variance - cl * cl) < 1e-15;
+        })());
+        check('R58 (W4c): garman-klass and rogers-satchell match closed forms', (() => {
+            const g = rangeBarVariance(bar, { estimator: 'garman-klass' });
+            const s = rangeBarVariance(bar, { estimator: 'rogers-satchell' });
+            const gk = 0.5 * (u - d) * (u - d);
+            const rs = u * u + d * d;
+            return g.available === true && s.available === true &&
+                Math.abs(g.variance - gk) < 1e-15 && Math.abs(s.variance - rs) < 1e-15;
+        })());
+        check('R58 (W4c): reads array bars and rejects bad bars or estimators', (() => {
+            const a = rangeBarVariance([100, 110, 90, 100], { estimator: 'parkinson' });
+            const b = rangeBarVariance(bar, { estimator: 'nope' });
+            const c = rangeBarVariance({ o: 100, h: 99, l: 90, c: 100 }, { estimator: 'parkinson' });
+            const e = rangeBarVariance({ o: -1, h: 110, l: 90, c: 100 }, { estimator: 'cc' });
+            return a.available === true && b.available === false && c.available === false && e.available === false;
+        })());
+        check('R58 (W4c): range vols are window RMS with length n-window+1', (() => {
+            const ohlc = [];
+            for (let i = 0; i < 10; i++) ohlc.push({ o: 100 + i, h: 102 + i, l: 98 + i, c: 101 + i });
+            const v = rangeRealizedVolatility(ohlc, 4, { estimator: 'parkinson' });
+            if (v.length !== 7 || v.some((x) => !Number.isFinite(x) || x < 0)) return false;
+            const r0 = rangeBarVariance(ohlc[0], { estimator: 'parkinson' }).variance;
+            const r1 = rangeBarVariance(ohlc[1], { estimator: 'parkinson' }).variance;
+            const r2 = rangeBarVariance(ohlc[2], { estimator: 'parkinson' }).variance;
+            const r3 = rangeBarVariance(ohlc[3], { estimator: 'parkinson' }).variance;
+            return Math.abs(v[0] - Math.sqrt((r0 + r1 + r2 + r3) / 4)) < 1e-12;
+        })());
+        check('R58 (W4c): range vols fail closed on short or dirty input', (() => {
+            const ohlc = [];
+            for (let i = 0; i < 6; i++) ohlc.push([100 + i, 102 + i, 98 + i, 101 + i]);
+            const s = rangeRealizedVolatility(ohlc, 8);
+            const dirty = ohlc.slice();
+            dirty[2] = [100, 90, 98, 101];
+            const q = rangeRealizedVolatility(dirty, 2);
+            return Array.isArray(s) && s.length === 0 && Array.isArray(q) && q.length === 0;
+        })());
+        check('R58 (W4c): yang-zhang carries its k and nonnegative variance', (() => {
+            const ohlc = [];
+            for (let i = 0; i < 12; i++) ohlc.push({ o: 100 + i, h: 103 + i, l: 99 + i, c: 100.5 + i });
+            const z = yangZhangVariance(ohlc);
+            const k = 0.34 / (1.34 + 13 / 11);
+            return z.available === true && z.n === 12 && Math.abs(z.k - k) < 1e-15 &&
+                Number.isFinite(z.overnight) && Number.isFinite(z.openClose) &&
+                Number.isFinite(z.rs) && z.variance >= 0;
+        })());
+        check('R58 (W4c): yang-zhang fails closed under 3 bars', (() => {
+            const z = yangZhangVariance([{ o: 1, h: 2, l: 0.5, c: 1.5 }, { o: 1.5, h: 2, l: 1, c: 1.8 }]);
+            return z.available === false;
+        })());
+        check('R58 (W4c): yang-zhang rolling matches length and stays finite', (() => {
+            const ohlc = [];
+            for (let i = 0; i < 20; i++) ohlc.push({ o: 100 + i, h: 103 + i, l: 99 + i, c: 100.5 + i });
+            const v = yangZhangRealizedVolatility(ohlc, 5);
+            const w = yangZhangRealizedVolatility(ohlc, 2);
+            return v.length === 16 && v.every((x) => Number.isFinite(x) && x >= 0) && w.length === 0;
+        })());
+        check('R58 (W4c): HAR fits a 4-vector and rejects bad horizons', (() => {
+            const vols = [];
+            for (let i = 0; i < 60; i++) vols.push(1 + 0.1 * Math.sin(i / 3) + 0.01 * i);
+            const f = fitHarVolForecast(vols, { daily: 1, weekly: 5, monthly: 22 });
+            const bad = fitHarVolForecast(vols, { daily: 6, weekly: 5, monthly: 22 });
+            const short = fitHarVolForecast([1, 2, 3], { daily: 1, weekly: 2, monthly: 3 });
+            return f.available === true && f.coef.length === 4 && f.rows === 38 && f.daily === 1 &&
+                bad.available === false && short.available === false;
+        })());
+        check('R58 (W4c): HAR prediction is the manual dot product', (() => {
+            const vols = [];
+            for (let i = 0; i < 60; i++) vols.push(1 + 0.1 * Math.sin(i / 3) + 0.01 * i);
+            const f = fitHarVolForecast(vols, { daily: 1, weekly: 5, monthly: 22 });
+            if (!f.available) return false;
+            const hist = vols.slice(20, 42);
+            const m1 = hist[hist.length - 1];
+            let m5 = 0;
+            for (let i = hist.length - 5; i < hist.length; i++) m5 += hist[i];
+            m5 /= 5;
+            let m22 = 0;
+            for (let i = hist.length - 22; i < hist.length; i++) m22 += hist[i];
+            m22 /= 22;
+            const want = f.coef[0] + f.coef[1] * m1 + f.coef[2] * m5 + f.coef[3] * m22;
+            const p = predictHarVolForecast(f, hist);
+            const nan = predictHarVolForecast(f, hist.slice(0, 10));
+            return Math.abs(p - want) < 1e-12 && Number.isNaN(nan);
+        })());
+        check('R58 (W4c): HAR tournament names a winner with full skill rows', (() => {
+            const vols = [];
+            for (let i = 0; i < 120; i++) vols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+            const t = tournamentHarVolForecast(vols, { split: 0.5, har: { daily: 1, weekly: 5, monthly: 22 } });
+            if (!t.available) return false;
+            return ['ewma', 'ar', 'har'].includes(t.winner) && t.testN > 0 &&
+                Number.isFinite(t.harSkill) && Number.isFinite(t.arSkill) &&
+                Number.isFinite(t.mseHar) && t.harCoef.length === 4 &&
+                (t.beatsAr === (t.harSkill > t.arSkill));
+        })());
+        check('R58 (W4c): HAR tournament fails closed on short series', (() => {
+            const t = tournamentHarVolForecast([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], { split: 0.5 });
+            return t.available === false;
+        })());
+        check('R58 (W4c): HAR across-splits counts sum to the grid', (() => {
+            const vols = [];
+            for (let i = 0; i < 150; i++) vols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+            const t = tournamentHarVolForecastAcrossSplits(vols, { splits: [0.4, 0.5, 0.6] });
+            if (!t.available) return false;
+            return t.perSplit.length === 3 &&
+                t.harWins + t.arWins + t.ewmaWins === 3 &&
+                Math.abs(t.harWinFraction - t.harWins / 3) < 1e-12 &&
+                Math.abs(t.arWinFraction - t.arWins / 3) < 1e-12;
+        })());
+        check('R58 (W4c): HAR panel reads unanimity off the counts', (() => {
+            const vols = [];
+            for (let i = 0; i < 150; i++) vols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+            const t = tournamentHarVolPanel({ a: vols, b: vols.map((x) => x + 0.5) }, { splits: [0.5] });
+            if (!t.available) return false;
+            return t.streams === 2 &&
+                t.unanimousHar === (t.harMajority === 2) &&
+                Math.abs(t.harMajorityFraction - t.harMajority / 2) < 1e-12 &&
+                Math.abs(t.arMajorityFraction - t.arMajority / 2) < 1e-12;
+        })());
+        check('R58 (W4c): HAR panel names the failing stream', (() => {
+            const vols = [];
+            for (let i = 0; i < 150; i++) vols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+            const t = tournamentHarVolPanel({ ok: vols, bad: [1, 2, 3] }, { splits: [0.5] });
+            return t.available === false && /bad/.test(t.reason);
+        })());
+    } catch (e) {
+        check('R58 W4c range+HAR checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+    try {
+        const xvols = [];
+        for (let i = 0; i < 150; i++) xvols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+        check('R60 (W4c-x): expanding series are aligned to the refit grid', (() => {
+            const t = expandingVolForecasts(xvols, { minTrain: 30, step: 5 });
+            if (!t.available) return false;
+            const grids = [];
+            for (let g = 30; g < 150; g += 5) grids.push(g);
+            return t.points === grids.length && t.actual.length === grids.length &&
+                t.ewma.length === grids.length && t.ar.length === grids.length &&
+                t.har.length === grids.length && t.baseline.length === grids.length &&
+                grids.every((g, i) => t.actual[i] === xvols[g]);
+        })());
+        check('R60 (W4c-x): expanding baseline is the causal train mean', (() => {
+            const t = expandingVolForecasts(xvols, { minTrain: 30, step: 5 });
+            if (!t.available) return false;
+            let mean = 0;
+            for (let i = 0; i < 30; i++) mean += xvols[i];
+            mean /= 30;
+            return Math.abs(t.baseline[0] - mean) < 1e-12;
+        })());
+        check('R60 (W4c-x): expanding ewma reads the shared ewma path', (() => {
+            const t = expandingVolForecasts(xvols, { minTrain: 30, step: 5, lambda: 0.5 });
+            if (!t.available) return false;
+            const full = ewmaVolForecast(xvols, { lambda: 0.5 });
+            return Math.abs(t.ewma[0] - full[30]) < 1e-12 && Math.abs(t.ewma[3] - full[45]) < 1e-12;
+        })());
+        check('R60 (W4c-x): expanding ar matches a manual refit at the first grid point', (() => {
+            const t = expandingVolForecasts(xvols, { minTrain: 30, step: 5, order: 2 });
+            if (!t.available) return false;
+            const fit = fitArVolForecast(xvols.slice(0, 30), { order: 2 });
+            if (!fit.available) return false;
+            const want = predictArVolForecast(fit, xvols.slice(28, 30));
+            return Math.abs(t.ar[0] - want) < 1e-12;
+        })());
+        check('R60 (W4c-x): expanding har matches a manual refit at the first grid point', (() => {
+            const t = expandingVolForecasts(xvols, { minTrain: 30, step: 5 });
+            if (!t.available) return false;
+            const fit = fitHarVolForecast(xvols.slice(0, 30), { daily: 1, weekly: 5, monthly: 22 });
+            if (!fit.available) return false;
+            const want = predictHarVolForecast(fit, xvols.slice(8, 30));
+            return Math.abs(t.har[0] - want) < 1e-12;
+        })());
+        check('R60 (W4c-x): expanding names a winner with consistent flags', (() => {
+            const t = expandingVolForecasts(xvols, { minTrain: 30, step: 5 });
+            if (!t.available) return false;
+            return ['ewma', 'ar', 'har'].includes(t.winner) &&
+                (t.beatsAr === (t.harSkill > t.arSkill)) &&
+                Number.isFinite(t.harSkill) && Number.isFinite(t.arSkill) &&
+                Number.isFinite(t.mseHar) && t.points > 0;
+        })());
+        check('R60 (W4c-x): expanding echoes custom horizons and step', (() => {
+            const t = expandingVolForecasts(xvols, { minTrain: 40, step: 7, har: { daily: 2, weekly: 6, monthly: 20 } });
+            if (!t.available) return false;
+            const grids = [];
+            for (let g = 40; g < 150; g += 7) grids.push(g);
+            return t.daily === 2 && t.weekly === 6 && t.monthly === 20 &&
+                t.step === 7 && t.points === grids.length;
+        })());
+        check('R60 (W4c-x): expanding fails closed on bad grids and input', (() => {
+            const a = expandingVolForecasts([1, 2, 3], { minTrain: 30 });
+            const b = expandingVolForecasts(xvols, { minTrain: 10 });
+            const c = expandingVolForecasts(xvols, { minTrain: 30, step: 0 });
+            const dirty = xvols.slice();
+            dirty[50] = NaN;
+            const d = expandingVolForecasts(dirty, { minTrain: 30 });
+            const e = expandingVolForecasts(xvols, { minTrain: 149 });
+            return a.available === false && b.available === false && c.available === false &&
+                d.available === false && e.available === false;
+        })());
+        check('R60 (W4c-x): expanding needs minTrain beyond the longest lag', (() => {
+            const t = expandingVolForecasts(xvols, { minTrain: 22, har: { daily: 1, weekly: 5, monthly: 22 } });
+            return t.available === false && /lag/.test(t.reason);
+        })());
+        check('R60 (W4c-x): every expanding series stays finite', (() => {
+            const t = expandingVolForecasts(xvols, { minTrain: 30, step: 3 });
+            if (!t.available) return false;
+            const all = [...t.actual, ...t.ewma, ...t.ar, ...t.har, ...t.baseline];
+            return all.every((x) => Number.isFinite(x));
+        })());
+    } catch (e) {
+        check('R60 W4c expanding-forecast checks completed', false, e && e.stack ? e.stack : String(e));
     }
     } catch (e) {
         check('R35 W6 fix checks completed', false, e && e.stack ? e.stack : String(e));

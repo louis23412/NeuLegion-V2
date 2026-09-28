@@ -29,6 +29,8 @@
 //   K. THE SLEEVE COMPOSITION the driver-side sleeve -> book -> risk -> gate chain
 //                            (sleeve weights through the pinned risk spec, scored
 //                            by the gate's own arithmetic + A2/A18 readouts).
+//   L. THE SECOND LEARNER    the V2.3 base-rate plugin: contract, registry slot,
+//                            exact signed-prior arithmetic, registry instantiation.
 //
 // Section H is the modulariy guarantee made mechanical; sections D/E are the port's
 // arithmetic (the lab's `e73_port_verify.js` re-derives the same numbers from the
@@ -100,6 +102,10 @@ import { capBandRisk, CAP_BAND_SPECS } from '../../../src/plugins/risk/cap-band.
 import { singleBook } from '../../../src/plugins/books/single.js';
 import { fixedSplitBook, commonTimeIndexes } from '../../../src/plugins/books/fixed-split.js';
 import { legacyHivemindLearner, LEGACY_HIVEMIND_DEFAULTS } from '../../../src/plugins/learners/legacy-hivemind.js';
+import { baseRateLearner, BASE_RATE_DEFAULTS, isBaseRate } from '../../../src/plugins/learners/base-rate.js';
+import { ridgeLearner, RIDGE_DEFAULTS, isRidge } from '../../../src/plugins/learners/ridge.js';
+import { mlpLearner, MLP_DEFAULTS, isMlp } from '../../../src/plugins/learners/mlp.js';
+import { fitRidge, predictRidge, fitMLP, predictMLP } from '../../../src/analysis/benchmark.js';
 import { DEFAULT_STACK, PLUGIN_IDS, installDefaultStack } from '../../../src/plugins/index.js';
 import { SLEEVE_IDS, resolveSleeve, scoreSleeve, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport } from '../../../src/sleeve_score.js';
 import { bookReturns, bookTurnover, scoreBook, scoreBookReturns } from '../../../src/analysis/portfolio.js';
@@ -137,6 +143,9 @@ import * as primitivesIndexMod from '../../../src/core/primitives/index.js';
 import * as registryMod from '../../../src/core/registry.js';
 import * as pluginsIndexMod from '../../../src/plugins/index.js';
 import * as legacyMod from '../../../src/plugins/learners/legacy-hivemind.js';
+import * as baseRateMod from '../../../src/plugins/learners/base-rate.js';
+import * as ridgeMod from '../../../src/plugins/learners/ridge.js';
+import * as mlpMod from '../../../src/plugins/learners/mlp.js';
 import * as carryMod from '../../../src/plugins/sleeves/carry-dispersion.js';
 import * as fadeMod from '../../../src/plugins/sleeves/toptrader-fade.js';
 import * as oiMod from '../../../src/plugins/sleeves/oi-change.js';
@@ -166,6 +175,9 @@ const CORE_IMPORTS = {
     'registry.js': registryMod,
     'plugins/index.js': pluginsIndexMod,
     'plugins/learners/legacy-hivemind.js': legacyMod,
+    'plugins/learners/base-rate.js': baseRateMod,
+    'plugins/learners/ridge.js': ridgeMod,
+    'plugins/learners/mlp.js': mlpMod,
     'plugins/sleeves/carry-dispersion.js': carryMod,
     'plugins/sleeves/toptrader-fade.js': fadeMod,
     'plugins/sleeves/oi-change.js': oiMod,
@@ -201,6 +213,9 @@ const LAW_FILES = [
     'src/core/registry.js',
     'src/plugins/index.js',
     'src/plugins/learners/legacy-hivemind.js',
+    'src/plugins/learners/base-rate.js',
+    'src/plugins/learners/ridge.js',
+    'src/plugins/learners/mlp.js',
     'src/plugins/sleeves/carry-dispersion.js',
     'src/plugins/sleeves/toptrader-fade.js',
     'src/plugins/sleeves/oi-change.js',
@@ -628,7 +643,7 @@ export async function run(options = {}) {
     // ---- G. the composition root --------------------------------------------
     resetRegistry();
     const installed = installDefaultStack({ replace: true });
-    check('G: installDefaultStack registers every declared plugin', deepEqual(installed, [...PLUGIN_IDS]) && installed.length === 7);
+    check('G: installDefaultStack registers every declared plugin', deepEqual(installed, [...PLUGIN_IDS]) && installed.length === 10);
     check('G: the default roster is exactly the legacy learner',
         deepEqual([...activeRoster('learner')], ['legacy-hivemind']) &&
         ['sleeve', 'book', 'risk'].every((kind) => activeRoster(kind).length === 0));
@@ -640,7 +655,7 @@ export async function run(options = {}) {
         deepEqual([...ids('sleeve')], ['carry-dispersion', 'oi-change', 'toptrader-fade']) &&
         deepEqual([...ids('book')], ['fixed-split', 'single']) &&
         deepEqual([...ids('risk')], ['cap-band']) &&
-        deepEqual([...ids('learner')], ['legacy-hivemind']));
+        deepEqual([...ids('learner')], ['base-rate', 'legacy-hivemind', 'mlp', 'ridge']));
     check('G: the legacy adapter is a learner factory with the engine defaults',
         (() => {
             const entry = resolve('learner', 'legacy-hivemind');
@@ -989,6 +1004,224 @@ export async function run(options = {}) {
                 ],
             });
             return threw && noCommon.buckets === 0 && noCommon.fRate.length === 0;
+        })());
+
+    // ---- L. the second learner (V2.3) ----------------------------------------
+    check('L: base-rate validates as a learner plugin beside the legacy adapter',
+        validatePlugin(CONTRACTS.learner, baseRateLearner).ok === true &&
+        validatePlugin(CONTRACTS.learner, legacyHivemindLearner).ok === true &&
+        isBaseRate(baseRateLearner) === true && isBaseRate(legacyHivemindLearner) === false);
+    check('L: base-rate resolves MODEL, UNTESTED and off the default roster',
+        (() => {
+            const entry = resolve('learner', 'base-rate');
+            return entry.capability === CAPABILITIES.MODEL && entry.defaultStack === false &&
+                stateOf('learner', 'base-rate') === 'UNTESTED' &&
+                deepEqual([...activeRoster('learner')], ['legacy-hivemind']);
+        })());
+    check('L: a fresh base-rate instance predicts 0 (the 0.5 prior in signed form)',
+        baseRateLearner.create().predict([0.1, -0.2]) === 0);
+    check('L: fit then predict is the exact signed base rate',
+        (() => {
+            const m = baseRateLearner.create();
+            m.fit(null, 1); m.fit(null, 1); m.fit(null, 0);
+            return Math.abs(m.predict(null) - (2 * (2 / 3) - 1)) < 1e-15;
+        })());
+    check('L: sample weights scale the counts and diagnostics reports them',
+        (() => {
+            const m = baseRateLearner.create();
+            m.fit(null, 1, 2); m.fit(null, 0, 1);
+            const d = m.diagnostics();
+            return Math.abs(m.predict(null) - (2 * (2 / 3) - 1)) < 1e-15 &&
+                d.n === 3 && d.positives === 2 && Math.abs(d.p - 2 / 3) < 1e-15;
+        })());
+    check('L: non-finite targets and non-positive weights are ignored without throwing',
+        (() => {
+            const m = baseRateLearner.create();
+            const w0 = m.fit(null, NaN);
+            const w1 = m.fit(null, 1, 0);
+            const w2 = m.fit(null, 1, -2);
+            m.fit(null, 1);
+            return w0 === 0 && w1 === 0 && w2 === 0 && m.predict(null) === 1;
+        })());
+    check('L: unanimous labels saturate at exactly +1 and -1',
+        (() => {
+            const a = baseRateLearner.create();
+            a.fit(null, 1); a.fit(null, 1);
+            const b = baseRateLearner.create();
+            b.fit(null, 0); b.fit(null, 0);
+            return a.predict(null) === 1 && b.predict(null) === -1;
+        })());
+    check('L: instances own independent state',
+        (() => {
+            const a = baseRateLearner.create();
+            const b = baseRateLearner.create();
+            a.fit(null, 1);
+            return a.predict(null) === 1 && b.predict(null) === 0;
+        })());
+    check('L: the registry instantiates base-rate with no options and it predicts',
+        (() => {
+            const m = instantiate('learner', 'base-rate');
+            return typeof m.fit === 'function' && m.predict(null) === 0;
+        })());
+    check('L: the factory carries frozen defaults and a non-legacy flag',
+        baseRateLearner.defaults === BASE_RATE_DEFAULTS && baseRateLearner.legacy === false &&
+        legacyHivemindLearner.legacy === true);
+
+    // ---- M. the third learner (V2.3): ridge ----------------------------------
+    const mX = [[0.5, -0.3], [1.2, 0.4], [-0.7, 0.9], [0.1, 0.2], [-1.1, -0.5], [0.8, 0.8]];
+    const mY = [1, 1, 0, 1, 0, 1];
+    check('M: ridge validates as a learner plugin and the roster still sits on legacy',
+        validatePlugin(CONTRACTS.learner, ridgeLearner).ok === true &&
+        isRidge(ridgeLearner) === true && isRidge(baseRateLearner) === false &&
+        deepEqual([...activeRoster('learner')], ['legacy-hivemind']) &&
+        stateOf('learner', 'ridge') === 'UNTESTED');
+    check('M: a fresh ridge instance predicts 0 and carries its defaults',
+        ridgeLearner.create().predict([0.1, 0.2]) === 0 &&
+        ridgeLearner.defaults === RIDGE_DEFAULTS && ridgeLearner.defaults.lambda === 1e-2 &&
+        ridgeLearner.defaults.standardise === true && ridgeLearner.legacy === false);
+    check('M: ridge reproduces the benchmark closed form bit-exactly',
+        (() => {
+            const ref = fitRidge(mX, mY, { lambda: 1e-2, standardise: true });
+            const m = ridgeLearner.create({ lambda: 1e-2, standardise: true });
+            for (let i = 0; i < mX.length; i++) m.fit(mX[i], mY[i]);
+            return mX.every((x) => m.predict(x) === 2 * predictRidge(ref, x) - 1);
+        })());
+    check('M: ridge matches the benchmark with standardisation off too',
+        (() => {
+            const ref = fitRidge(mX, mY, { lambda: 0.5, standardise: false });
+            const m = ridgeLearner.create({ lambda: 0.5, standardise: false });
+            for (let i = 0; i < mX.length; i++) m.fit(mX[i], mY[i]);
+            return mX.every((x) => m.predict(x) === 2 * predictRidge(ref, x) - 1);
+        })());
+    check('M: unit weights reproduce the unweighted fit exactly',
+        (() => {
+            const a = ridgeLearner.create();
+            const b = ridgeLearner.create();
+            for (let i = 0; i < mX.length; i++) { a.fit(mX[i], mY[i]); b.fit(mX[i], mY[i], 1); }
+            return mX.every((x) => a.predict(x) === b.predict(x));
+        })());
+    check('M: double weight equals a duplicated row',
+        (() => {
+            const a = ridgeLearner.create();
+            const b = ridgeLearner.create();
+            for (let i = 0; i < mX.length; i++) a.fit(mX[i], mY[i], 2);
+            for (let i = 0; i < mX.length; i++) { b.fit(mX[i], mY[i]); b.fit(mX[i], mY[i]); }
+            return mX.every((x) => Math.abs(a.predict(x) - b.predict(x)) < 1e-12);
+        })());
+    check('M: non-finite rows and bad weights are ignored without throwing',
+        (() => {
+            const m = ridgeLearner.create();
+            const n0 = m.fit([NaN, 0], 1);
+            const n1 = m.fit([0.1, 0.2], NaN);
+            const n2 = m.fit([0.1, 0.2], 1, 0);
+            const n3 = m.fit('nope', 1);
+            for (let i = 0; i < mX.length; i++) m.fit(mX[i], mY[i]);
+            return n0 === 0 && n1 === 0 && n2 === 0 && n3 === 0 && m.diagnostics().n === 6;
+        })());
+    check('M: ragged rows are ignored and a bad lambda throws its own guard',
+        (() => {
+            const m = ridgeLearner.create();
+            m.fit([0.1, 0.2], 1);
+            const n = m.fit([0.1], 1);
+            let threw = false;
+            try { ridgeLearner.create({ lambda: -1 }); } catch (e) { threw = /lambda/.test(e.message); }
+            return n === 1 && m.diagnostics().dim === 2 && threw;
+        })());
+    check('M: ridge confidences stay inside [-1, 1] and instances are independent',
+        (() => {
+            const a = ridgeLearner.create();
+            const b = ridgeLearner.create();
+            for (let i = 0; i < mX.length; i++) a.fit(mX[i], mY[i]);
+            const pa = mX.map((x) => a.predict(x));
+            return pa.every((p) => p >= -1 && p <= 1) && b.predict(mX[0]) === 0 &&
+                a.diagnostics().n === 6 && b.diagnostics().n === 0;
+        })());
+    check('M: the registry instantiates ridge with options and it predicts',
+        (() => {
+            const m = instantiate('learner', 'ridge', { lambda: 0.1 });
+            for (let i = 0; i < mX.length; i++) m.fit(mX[i], mY[i]);
+            return Number.isFinite(m.predict(mX[0]));
+        })());
+
+    // ---- N. the fourth learner (V2.3): mlp -----------------------------------
+    const nX = [[0.5, -0.3], [1.2, 0.4], [-0.7, 0.9], [0.1, 0.2], [-1.1, -0.5], [0.8, 0.8], [0.3, 0.3], [-0.4, 0.6]];
+    const nY = [1, 1, 0, 1, 0, 1, 1, 0];
+    const nOpts = { hidden: 3, epochs: 10, lr: 0.1, seed: 7, batch: 0, l2: 1e-5, standardise: true };
+    check('N: mlp validates as a learner plugin and the roster still sits on legacy',
+        validatePlugin(CONTRACTS.learner, mlpLearner).ok === true &&
+        isMlp(mlpLearner) === true && isMlp(ridgeLearner) === false &&
+        deepEqual([...activeRoster('learner')], ['legacy-hivemind']) &&
+        stateOf('learner', 'mlp') === 'UNTESTED');
+    check('N: a fresh mlp instance predicts 0 and carries its defaults',
+        mlpLearner.create().predict([0.1, 0.2]) === 0 &&
+        mlpLearner.defaults === MLP_DEFAULTS && mlpLearner.defaults.hidden === 8 &&
+        mlpLearner.defaults.epochs === 200 && mlpLearner.legacy === false);
+    check('N: mlp reproduces the benchmark SGD bit-exactly',
+        (() => {
+            const ref = fitMLP(nX, nY, nOpts);
+            const m = mlpLearner.create(nOpts);
+            for (let i = 0; i < nX.length; i++) m.fit(nX[i], nY[i]);
+            return nX.every((x) => m.predict(x) === 2 * predictMLP(ref, x) - 1);
+        })());
+    check('N: mlp matches the benchmark unstandardised and mini-batched too',
+        (() => {
+            const opts = { hidden: 2, epochs: 6, lr: 0.05, seed: 3, batch: 3, l2: 0, standardise: false };
+            const ref = fitMLP(nX, nY, opts);
+            const m = mlpLearner.create(opts);
+            for (let i = 0; i < nX.length; i++) m.fit(nX[i], nY[i]);
+            return nX.every((x) => m.predict(x) === 2 * predictMLP(ref, x) - 1);
+        })());
+    check('N: same rows and seed refit identically; a new seed differs honestly',
+        (() => {
+            const a = mlpLearner.create(nOpts);
+            const b = mlpLearner.create(nOpts);
+            for (let i = 0; i < nX.length; i++) { a.fit(nX[i], nY[i]); b.fit(nX[i], nY[i]); }
+            const same = nX.every((x) => a.predict(x) === b.predict(x));
+            const c = mlpLearner.create({ ...nOpts, seed: 8 });
+            for (let i = 0; i < nX.length; i++) c.fit(nX[i], nY[i]);
+            return same && nX.some((x) => c.predict(x) !== a.predict(x));
+        })());
+    check('N: non-unit weights are refused without throwing, junk rows ignored',
+        (() => {
+            const m = mlpLearner.create({ hidden: 2, epochs: 2 });
+            const n0 = m.fit([0.1, 0.2], 1, 2);
+            const n1 = m.fit([NaN, 0.2], 1);
+            const n2 = m.fit([0.1], 1);
+            for (let i = 0; i < nX.length; i++) m.fit(nX[i], nY[i]);
+            return n0 === 0 && n1 === 0 && n2 === 0 && m.diagnostics().n === 8;
+        })());
+    check('N: bad hyperparameters throw their own guards',
+        (() => {
+            const bad = [{ hidden: 0 }, { epochs: 0 }, { lr: -1 }, { l2: -1 }];
+            return bad.every((o) => {
+                try { mlpLearner.create(o); return false; } catch (e) { return /mlp needs/.test(e.message); }
+            });
+        })());
+    check('N: mlp confidences stay inside [-1, 1] and instances are independent',
+        (() => {
+            const a = mlpLearner.create(nOpts);
+            const b = mlpLearner.create(nOpts);
+            for (let i = 0; i < nX.length; i++) a.fit(nX[i], nY[i]);
+            const pa = nX.map((x) => a.predict(x));
+            return pa.every((p) => p >= -1 && p <= 1) && b.predict(nX[0]) === 0 &&
+                a.diagnostics().n === 8 && b.diagnostics().n === 0;
+        })());
+    check('N: diagnostics names the shape and the registry instantiates with options',
+        (() => {
+            const m = mlpLearner.create({ hidden: 4, epochs: 3, seed: 11 });
+            for (let i = 0; i < nX.length; i++) m.fit(nX[i], nY[i]);
+            const d = m.diagnostics();
+            const r = instantiate('learner', 'mlp', { hidden: 2, epochs: 2, seed: 5 });
+            for (let i = 0; i < nX.length; i++) r.fit(nX[i], nY[i]);
+            return d.n === 8 && d.dim === 2 && d.hidden === 4 && d.epochs === 3 && d.seed === 11 &&
+                Number.isFinite(r.predict(nX[0]));
+        })());
+    check('N: an all-one train saturates high and an all-zero train saturates low',
+        (() => {
+            const a = mlpLearner.create({ hidden: 2, epochs: 50, seed: 1 });
+            const b = mlpLearner.create({ hidden: 2, epochs: 50, seed: 1 });
+            for (let i = 0; i < nX.length; i++) { a.fit(nX[i], 1); b.fit(nX[i], 0); }
+            return a.predict(nX[0]) > 0.5 && b.predict(nX[0]) < -0.5;
         })());
 
     const failed = checks.filter((c) => !c.pass);
