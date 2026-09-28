@@ -214,6 +214,8 @@ export const ANALYSIS_MODULES = Object.freeze({
     'walkforward.js': [
         'barReturns', 'logReturns', 'probToPosition', 'isCausalFold', 'aggregateFolds',
         'foldWinFraction', 'auditNoLookahead', 'walkForwardEvaluate', 'walkForwardEvaluateAsync', 'promoteDecision',
+        // Round 32 (lab R2): the window-robustness statistic + opt-in gate hurdle.
+        'blockStability',
         'formatReport', 'familywiseSearch', 'walkForwardSearch',
         'sharpeStandardError', 'minimumDetectableSharpe', 'barsToDetect', 'UNDERPOWERED_MDE', 'poolReports',
         'dependenceSummary', 'clustersOf', 'pairedPromotionTest', 'restateReportAtCost', 'costLadder',

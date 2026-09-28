@@ -201,6 +201,42 @@ export function aggregateFolds(perFold, key = 'netSharpe') {
     };
 }
 
+// Round 32 (lab R2, F-01/J2): window robustness as a pure statistic. Split the
+// scored series into `blocks` disjoint TRAILING windows (the leading
+// `n - blocks*size` bars are unused, exactly like the lab), score each window's
+// Sharpe, and report the per-window Sharpes, the positive fraction and the
+// min/max. Ported from the lab's `e2_arm_sweep.js#blockStability` (same layout,
+// same non-finite→0 mean convention, same default k=6); the only addition is
+// the `periodsPerYear` parameter, which defaults to the lab's PERIODS_PER_YEAR
+// (252), so the repo's numbers match the lab's on the same input. The gate
+// reads `positiveFraction`: `accel-16` is 6/6 positive while `mom-48` is 5/6
+// with a sign flip between windows — the cheap statistic that catches J1 at
+// the source. A degenerate input (empty panel, `blocks` < 1, or a series too
+// short to form one bar per block) returns the NaN shape rather than a
+// fabricated fraction.
+export function blockStability(netByStream, blocks = 6, { periodsPerYear = 252 } = {}) {
+    const k = Number.isInteger(blocks) ? blocks : Math.floor(blocks);
+    const bad = !Array.isArray(netByStream) || netByStream.length === 0 || !Number.isFinite(k) || k < 1;
+    const n = bad ? 0 : netByStream[0] ? netByStream[0].length : 0;
+    const size = bad ? 0 : Math.floor(n / k);
+    if (bad || !Number.isFinite(n) || n < 1 || size < 1) {
+        return { blocks: bad ? blocks : k, blockSharpes: [], positiveFraction: NaN, min: NaN, max: NaN };
+    }
+    const perBlockMean = [];
+    for (let b = 0; b < k; b++) {
+        const from = n - (k - b) * size;
+        const vals = netByStream.map((s) => sharpeRatio(s.slice(from, from + size), { periodsPerYear }));
+        perBlockMean.push(vals.reduce((a, x) => a + (Number.isFinite(x) ? x : 0), 0) / vals.length);
+    }
+    return {
+        blocks: k,
+        blockSharpes: perBlockMean,
+        positiveFraction: perBlockMean.filter((v) => v > 0).length / perBlockMean.length,
+        min: Math.min(...perBlockMean),
+        max: Math.max(...perBlockMean),
+    };
+}
+
 // Fraction of folds on which the candidate's metric strictly beats the
 // baseline's (paired by fold index). The "did it win almost everywhere, or just
 // on average?" guard.
@@ -371,6 +407,9 @@ export function walkForwardEvaluate({
     // Reuse the scored pass as the audit's base pass (one less refit per fold; the
     // verdict is provably unchanged — see `auditNoLookahead`).
     auditReuseBase = false,
+    // Round 32 (lab R2): how many trailing windows the window-robustness
+    // statistic splits the scored series into. Reporting only.
+    blockWindows = 6,
     // Optional reporting hook (round 24): every scored fold and every audit pass is
     // forwarded here (`{t:'fold'...}` / `{t:'pass', stage:'base'|'probe'...}`) so a
     // long run can stream a fold journal and report live progress. No arithmetic.
@@ -419,6 +458,11 @@ export function walkForwardEvaluate({
         foldLengths: folds.map((f) => f.test.length),
         aggregate,
         audit: auditResult,
+        // Round 32 (lab R2): the window-robustness readout over this stream's
+        // own scored bars. A single stream has no cross-stream panel, but its
+        // edge can still be one window's luck — so the statistic is computed
+        // here too, over the one series.
+        blockStability: blockStability([cv.pooledReturns], blockWindows, { periodsPerYear }),
         power: powerSummary(cv.pooledMetrics.netSharpe, cv.pooledBars, periodsPerYear),
         probed: viewFor != null,
     };
@@ -436,6 +480,8 @@ export async function walkForwardEvaluateAsync({
     audit = true, requireCausal = true,
     viewFor = null, probe = 1e3, requireReachable = false, auditProbesPerFold = 0,
     confidenceForFold = null, auditReuseBase = false, onEvent = null, concurrency = 1,
+    // Round 32 (lab R2): trailing-window count for the window-robustness readout.
+    blockWindows = 6,
 }) {
     if (!Array.isArray(folds) || folds.length === 0) {
         throw new Error('walkForwardEvaluateAsync: folds required (use walkForwardSplit / purgedKFoldSplit)');
@@ -485,6 +531,9 @@ export async function walkForwardEvaluateAsync({
         foldLengths: folds.map((f) => f.test.length),
         aggregate,
         audit: auditResult,
+        // Round 32 (lab R2): the window-robustness readout over this run's own
+        // scored bars (the async twin scores the identical arithmetic).
+        blockStability: blockStability([cv.pooledReturns], blockWindows, { periodsPerYear }),
         power: powerSummary(cv.pooledMetrics.netSharpe, cv.pooledBars, periodsPerYear),
         probed: viewFor != null,
     };
@@ -672,7 +721,7 @@ export function clustersOf(report, { periodsPerYear = 252 } = {}) {
 // stream uses — so a merged report and a single-stream report are directly
 // comparable. A single report is returned untouched (no re-pooling), so the
 // one-stream path stays byte-identical.
-export function poolReports(reports, { periodsPerYear = 252, trials = 1, extraPanelStreams = null } = {}) {
+export function poolReports(reports, { periodsPerYear = 252, trials = 1, extraPanelStreams = null, blockWindows = 6 } = {}) {
     if (!Array.isArray(reports) || reports.length === 0) {
         throw new Error('poolReports: at least one report is required');
     }
@@ -747,6 +796,11 @@ export function poolReports(reports, { periodsPerYear = 252, trials = 1, extraPa
         foldLengths: reports.flatMap((r) => r.foldLengths || []),
         aggregate: aggregateFolds(perFold),
         dependence,
+        // Round 32 (lab R2): the window-robustness readout over the PRICE-ONLY
+        // panel. The extra sleeve streams enter `dependence` but never this
+        // statistic: it scores the priced series the verdict is about (the
+        // L10-cs lesson — panel extensions must not move price tests).
+        blockStability: blockStability(priceStreamReturns, blockWindows, { periodsPerYear }),
         // Round 29 -> 30 (P4): the extra (carry/funding) panel streams that were
         // folded into `dependence`, plus the PRICE-ONLY dependence so a reader can
         // see exactly what adding the sleeve did. `panelMismatch` is true when a
@@ -857,6 +911,11 @@ export function promoteDecision(baseline, candidate, {
     requireClusterStability = false,
     minStableFraction = 1,
     minDsrAdjusted = null,
+    // Round 32 (lab R2): the window-robustness hurdle — the candidate's edge
+    // must be positive in at least this fraction of the trailing windows.
+    // Default-off (`null`), so every default verdict is byte-identical to
+    // round 31; set it (e.g. 5/6) to make J1-window luck fail the gate.
+    minBlockPositiveFraction = null,
     alpha = 0.05,
     periodsPerYear = 252,
 } = {}) {
@@ -943,7 +1002,7 @@ export function promoteDecision(baseline, candidate, {
     // report has no cross-stream panel, so there is nothing to estimate a design
     // effect or a paired test from. `gate` records which happened per hurdle, so
     // a report can never claim a gate it did not actually apply.
-    const gate = { minDsrAdjusted: 'off', requireSharpeDiff: 'off', requireBreadth: 'off', requireClusterStability: 'off' };
+    const gate = { minDsrAdjusted: 'off', requireSharpeDiff: 'off', requireBreadth: 'off', requireClusterStability: 'off', blockStability: 'off' };
     const hasPanel = (r) => !!(r && Array.isArray(r.streamReturns) && r.streamReturns.length >= 2
         && r.dependence && r.dependence.available);
     const panel = hasPanel(baseline) && hasPanel(candidate);
@@ -1031,6 +1090,24 @@ export function promoteDecision(baseline, candidate, {
             } else {
                 pass('clusterStability', promotionTest.stability.fractionPositive, promotionTest.stability.minFraction, 'fractionPositive >= minFraction');
             }
+        }
+    }
+    // Round 32 (lab R2): window robustness — the edge must be positive in at
+    // least `minBlockPositiveFraction` of the trailing windows. Unlike the
+    // cluster hurdles this needs no cross-stream panel (a single stream is
+    // scored over its own windows), so the only skip is a report that predates
+    // the statistic. Default-off: `minBlockPositiveFraction == null` leaves
+    // every default verdict byte-identical.
+    if (minBlockPositiveFraction != null) {
+        const bs = candidate.blockStability;
+        if (bs && Number.isFinite(bs.positiveFraction)) {
+            gate.blockStability = 'applied';
+            if (!(bs.positiveFraction >= minBlockPositiveFraction)) {
+                fail('blockStability', bs.positiveFraction, minBlockPositiveFraction, 'positiveFraction >= minBlockPositiveFraction',
+                    `block stability ${bs.positiveFraction} < ${minBlockPositiveFraction} (edge positive in too few of ${bs.blocks} trailing windows)`);
+            } else pass('blockStability', bs.positiveFraction, minBlockPositiveFraction, 'positiveFraction >= minBlockPositiveFraction');
+        } else {
+            gate.blockStability = 'skipped-no-panel';
         }
     }
     if (maxSearchP != null || requireSearchReject) {
@@ -1958,6 +2035,14 @@ export function formatReport(report, { label = 'candidate', search = null, promo
         `  folds:  mean=${fm(a.mean)} median=${fm(a.median)} std=${fm(a.std)} positive=${fm(a.positiveFraction)}`,
         `  audit:  ${audit}`,
     ];
+    // Round 32 (lab R2): the window-robustness readout — per-window Sharpes
+    // over the trailing blocks, so a one-window edge is visible at a glance.
+    // Absent only on reports built before the statistic existed.
+    if (report.blockStability && Number.isInteger(report.blockStability.blocks)) {
+        const bs = report.blockStability;
+        lines.push(`  blocks: k=${bs.blocks} positive=${fm(bs.positiveFraction)} min=${fm(bs.min)} max=${fm(bs.max)}` +
+            ` [${(bs.blockSharpes || []).map((v) => fm(v)).join(',')}]`);
+    }
     // Round 25: the design-effect-adjusted PSR/DSR (only present on a pooled
     // multi-stream report, where the design effect can be estimated).
     if (Number.isFinite(m.dsrAdjusted)) {

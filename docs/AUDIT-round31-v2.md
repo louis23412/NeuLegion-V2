@@ -37,7 +37,7 @@ history the arms read ≈0.11 Sharpe (a factor-exposure book), and *no* amount o
 correction manufactures an edge out of a null. So W5 cannot be "the only lever that raises every
 arm's DSR at once" *before* W1 has re-measured the arms on the full history. Worse, W5-as-stated
 could *promote a beta book*: §18.5 is explicit that the only family-wise-significant arm in the
-corpus (`sig-reversal-4`, SPA p=0.0474) has break-even **1.5 bps**, and the demeaning experiment
+corpus (`sig-reversal-4`, family SPA p=0.4382, arm StepM p=0.0474) has break-even **1.5 bps**, and the demeaning experiment
 (`sig-reversal-xs`, DE 0.361, 12.05 effective streams of 8) shows **"power is buyable, edge is
 not."** The plan's own corpus is the counter-example to the plan's priority order.
 
@@ -291,7 +291,7 @@ from the README.
 | **S2** | `clipWeights` + `bandWeights` + `cleanBook` + OI schedule + fixed-split joint sizing | lab F-52/F-53/F-58/F-59, F-42/F-43/F-44; `port.js` reproduces 5/5 books |
 | **S3** | causal z-score → clamp → turnover policy | `analysis/features.js`, `analysis/holding.js` |
 | **S4** | memory-support math + a *single* index read path | `memory/{surprise,multiprobe,binarypc,bitweight,querymod}.js` are pure and config-resolved |
-| **S5** | 15m reversal + a maker/queue model | `sig-reversal-4` SPA p=0.0474, break-even 1.5 bps; the edge is real, the cost kills it |
+| **S5** | 15m reversal + a maker/queue model | `sig-reversal-4` family SPA p=0.4382 (arm StepM p=0.0474), break-even 1.5 bps; the edge is real, the cost kills it |
 | **S6** | cross-sectional demeaning + genuinely-neutral sleeves | `sig-reversal-xs` DE 0.361 / 12.05 effective streams — power is buyable for a neutral edge |
 | **S7** | the gate's own pieces | DSR/PBO/SPA/StepM/jackknife/deff compose cleanly; independently re-validated |
 

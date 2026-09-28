@@ -90,17 +90,17 @@ production feeds it a fixed window, so the controller's trade bookkeeping saw
 ancient candles and trained on mislabelled trades. Do not size or interpret a run
 until #33 is fixed. If you change anything
 under `src/`, run the full browser suite before and after
-(**2585 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
+(**2753 checks**: `sanity` 60, `core` 46, `indicators` 75, `features` 11,
 `consolidation` 48, `consolidation_worker` 18, `fetcher` 111,
 `golden` 23 (bit-exactness), `modules` 51 (assembly), `legion` 57,
 `candles` 192, `locks` 41, `analysis` 638, `price_precision` 29,
 `multisymbol` 28, `lsh` 75 (the round-28 section K retrieval-liveness checks), `surprise` 32, `sample_weights` 57,
 `homeostasis` 30, `evolve` 36, `multiprobe` 77, `binarypc` 39,
-`bitweight` 69, `querymod` 51, `walkforward` 63,
+`bitweight` 69, `querymod` 51, `walkforward` 74,
 `dimensions` 185, `guards` 65 (run integrity), `observer` 76 (legion health),
 `controller_invariants` 23 (R27-4b controller contracts, plus the R28 measured-span /
 emitted-stream checks in §D),
-`analyze` 279 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26, R27-1 liveness / R27-2 broadcast-liveness / R27-5 forecast-kind grouping / variant taxonomy after round 27, the round-28 weighting-configuration / measured-gate / inert-reason / active-pair checks, and the round-29 P1 benchmark runner / `--carry-files` / `extraPanelStreams` wiring, plus the round-4 P2 driver wiring and the round-5 fold-dispatch contract checks, and the round-30 pruned-roster / register-contract / #69 / #70 panel-taxonomy / momentum-upgrade checks)) — plus `golden` on
+`analyze` 280 (the A/B driver, controller-backed after round 23; run-integrity sections O/P/Q after round 24, R after round 24b, L2/N dependence-aware after round 25, R26-0 window-contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 seed replication/CRN, R26-14 forecast comparison (proper scores + DM + Model Confidence Set) and R26-8 decision-grade report after round 26, R27-1 liveness / R27-2 broadcast-liveness / R27-5 forecast-kind grouping / variant taxonomy after round 27, the round-28 weighting-configuration / measured-gate / inert-reason / active-pair checks, and the round-29 P1 benchmark runner / `--carry-files` / `extraPanelStreams` wiring, plus the round-4 P2 driver wiring and the round-5 fold-dispatch contract checks, and the round-30 pruned-roster / register-contract / #69 / #70 panel-taxonomy / momentum-upgrade checks, and the round-32 ladder-netSharpe line)) — plus `golden` on
 its own after any `hivemind/` edit, `multisymbol` after any change to the
 controller's trade/target arithmetic, `lsh` after any change to the memory index,
 `surprise` after any change to the memory write path, `sample_weights` after

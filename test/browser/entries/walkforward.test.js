@@ -19,7 +19,7 @@
 
 import HiveMind from '../../../src/hivemind/hiveMind.js';
 import { walkForwardSplit } from '../../../src/analysis/splits.js';
-import { walkForwardEvaluate, promoteDecision, walkForwardSearch, formatReport, auditNoLookahead, sharpeStandardError, minimumDetectableSharpe, barsToDetect, poolReports, dependenceSummary, clustersOf, pairedPromotionTest, restateReportAtCost, costLadder, familyCorrelation, DEPENDENCE_GATE_READER } from '../../../src/analysis/walkforward.js';
+import { walkForwardEvaluate, promoteDecision, walkForwardSearch, formatReport, auditNoLookahead, sharpeStandardError, minimumDetectableSharpe, barsToDetect, poolReports, dependenceSummary, clustersOf, pairedPromotionTest, restateReportAtCost, costLadder, familyCorrelation, DEPENDENCE_GATE_READER, blockStability } from '../../../src/analysis/walkforward.js';
 import { makeCandleViewFor, shockCandles, shockFactor, worldFromCandles, DEFAULT_SHOCK } from '../../../src/analysis/world.js';
 import { CANDLE_MANIFEST } from '../../../src/candles_audit.js';
 
@@ -333,8 +333,8 @@ export async function run(options = {}) {
             JSON.stringify({ dsrPromotes, fwRejects }));
         const hLine = formatReport(hBase, { label: 'wf-h', search });
         check('the real report renders the search-corrected line (SPA p + StepM reject set + window grid)',
-            hLine.split('\n').length === 8 && hLine.includes('search: SPA p=') && hLine.includes('StepM rejects=[') && hLine.includes('groups=9x9x9') && hLine.includes('breakEven='),
-            hLine.split('\n')[7]);
+            hLine.split('\n').length === 9 && hLine.includes('search: SPA p=') && hLine.includes('StepM rejects=[') && hLine.includes('groups=9x9x9') && hLine.includes('breakEven=') && hLine.includes('blocks: k='),
+            hLine.split('\n')[8]);
     } catch (e) {
         check('family-wise A/B completed', false, e.stack);
     }
@@ -385,7 +385,7 @@ export async function run(options = {}) {
         check('longer-grid A/B: the two rules still agree on every candidate',
             iDsr.every((p, i) => p === iFw[i]), JSON.stringify({ dsrPromotes: iDsr, fwRejects: iFw }));
         const iLine = formatReport(iBase, { label: 'wf-i', search: iSearch });
-        check('longer-grid report renders the search-corrected line', iLine.split('\n').length === 8 && iLine.includes('search: SPA p='), iLine.split('\n')[7]);
+        check('longer-grid report renders the search-corrected line', iLine.split('\n').length === 9 && iLine.includes('search: SPA p=') && iLine.includes('blocks: k='), iLine.split('\n')[8]);
     } catch (e) {
         check('longer-grid family-wise A/B completed', false, e.stack);
     }
@@ -633,6 +633,114 @@ export async function run(options = {}) {
                 dependenceSummary({ streamReturns: [[1, 2, 3, 4], [1, 2, 3]] }).available === false &&
                 dependenceSummary({ streamReturns: [[1, 2, 3, 4], [1, 2, 3, 5]] }).available === false &&
                 typeof DEPENDENCE_GATE_READER === 'string' && DEPENDENCE_GATE_READER.includes('dsrAdjusted'));
+            check('(10) blockStability scores exact hand-computed windows (positive, flat, negative blocks)',
+                (() => {
+                    const s = [3, 1, 1, 1, 1, 1, 1, 1, -3, -1, -1, -1];
+                    const bs = blockStability([s], 3, { periodsPerYear: 1 });
+                    return bs.blocks === 3 && bs.blockSharpes.length === 3 &&
+                        bs.blockSharpes[0] === 1.5 && bs.blockSharpes[1] === 0 && bs.blockSharpes[2] === -1.5 &&
+                        bs.positiveFraction === 1 / 3 && bs.min === -1.5 && bs.max === 1.5;
+                })());
+            check('(10) annualisation rescales the windows but cannot move the verdict (scale-invariant positive fraction)',
+                (() => {
+                    const s = [3, 1, 1, 1, 1, 1, 1, 1, -3, -1, -1, -1];
+                    const bs = blockStability([s], 3);
+                    return bs.positiveFraction === 1 / 3 && bs.min < 0 && bs.max > 0 &&
+                        Math.abs(bs.blockSharpes[0] - 1.5 * Math.sqrt(252)) < 1e-9 &&
+                        Math.abs(bs.blockSharpes[2] + 1.5 * Math.sqrt(252)) < 1e-9;
+                })());
+            check('(10) block windows average across streams, stream by stream',
+                (() => {
+                    const s = [3, 1, 1, 1, 1, 1, 1, 1, -3, -1, -1, -1];
+                    const bs = blockStability([s, new Array(12).fill(0)], 3, { periodsPerYear: 1 });
+                    return bs.blockSharpes[0] === 0.75 && bs.blockSharpes[1] === 0 && bs.blockSharpes[2] === -0.75 &&
+                        bs.positiveFraction === 1 / 3;
+                })());
+            check('(10) only trailing windows score: a leading remainder is never read',
+                (() => {
+                    const s = [3, 1, 1, 1, 1, 1, 1, 1, -3, -1, -1, -1];
+                    const bs = blockStability([[99, 99, ...s]], 3, { periodsPerYear: 1 });
+                    return bs.blockSharpes.length === 3 && bs.blockSharpes[0] === 1.5 &&
+                        bs.blockSharpes[1] === 0 && bs.blockSharpes[2] === -1.5;
+                })());
+            check('(10) a degenerate input returns the NaN shape, never a fabricated fraction',
+                (() => {
+                    const a = blockStability([], 6);
+                    const b = blockStability([[1, 2, 3]], 0);
+                    const c = blockStability([[1, 2, 3]], 6);
+                    const d = blockStability(null, 6);
+                    return [a, b, c, d].every((x) => x.blockSharpes.length === 0 && Number.isNaN(x.positiveFraction) &&
+                        Number.isNaN(x.min) && Number.isNaN(x.max));
+                })());
+            check('(10) the lab J1 separation ports: an all-positive arm reads 6/6, a sign-flip arm 5/6 with a negative min',
+                (() => {
+                    const p = [3, 1, 1, 1];
+                    const n = [-3, -1, -1, -1];
+                    const accel = blockStability([[...p, ...p, ...p, ...p, ...p, ...p]], 6, { periodsPerYear: 1 });
+                    const momflip = blockStability([[...p, ...p, ...p, ...p, ...p, ...n]], 6, { periodsPerYear: 1 });
+                    return accel.positiveFraction === 1 && accel.min === 1.5 &&
+                        momflip.positiveFraction === 5 / 6 && momflip.min === -1.5 && momflip.max === 1.5;
+                })());
+            const bsReturns = Array.from({ length: 48 }, (_, i) => 0.001 * (1 + 0.5 * Math.sin(i)));
+            const bsFolds = [0, 1, 2].map((f) => {
+                const ts = 20 + f * 5;
+                return { train: Array.from({ length: ts }, (_, i) => i), test: Array.from({ length: 5 }, (_, i) => ts + i) };
+            });
+            const bsLong = walkForwardEvaluate({
+                returns: bsReturns, folds: bsFolds, signalForFold: (train, test) => new Array(test.length).fill(1),
+                costBps: 0, audit: false,
+            });
+            const bsFlat = walkForwardEvaluate({
+                returns: bsReturns, folds: bsFolds, signalForFold: (train, test) => new Array(test.length).fill(0),
+                costBps: 0, audit: false,
+            });
+            check('(10) walkForwardEvaluate carries the readout on a single stream, with an overridable window count',
+                bsLong.blockStability && bsLong.blockStability.blocks === 6 &&
+                Number.isFinite(bsLong.blockStability.positiveFraction) &&
+                walkForwardEvaluate({
+                    returns: bsReturns, folds: bsFolds, signalForFold: (train, test) => new Array(test.length).fill(1),
+                    costBps: 0, audit: false, blockWindows: 4,
+                }).blockStability.blocks === 4);
+            check('(10) poolReports scores the price-only panel: an extra sleeve stream cannot move the windows',
+                (() => {
+                    const pooled = poolReports([bsLong, bsLong]);
+                    const len = pooled.streamReturns[0].length;
+                    const extra = Array.from({ length: len }, (_, i) => (i % 2 ? 0.001 : -0.001));
+                    const pooledX = poolReports([bsLong, bsLong], { extraPanelStreams: [extra] });
+                    return pooledX.blockStability.blocks === pooled.blockStability.blocks &&
+                        pooledX.blockStability.positiveFraction === pooled.blockStability.positiveFraction &&
+                        pooledX.blockStability.blockSharpes.every((v, i) => v === pooled.blockStability.blockSharpes[i]);
+                })());
+            check('(10) the report renders the window line',
+                formatReport(bsLong, { label: 'bs' }).includes('blocks: k=6 positive='));
+            check('(10) the hurdle is default-off: an absent option and an explicit null decide identically',
+                (() => {
+                    const d0 = promoteDecision(bsFlat, bsLong, { requireCleanAudit: false });
+                    const dNull = promoteDecision(bsFlat, bsLong, { requireCleanAudit: false, minBlockPositiveFraction: null });
+                    return d0.gate.blockStability === 'off' && dNull.gate.blockStability === 'off' &&
+                        d0.promote === dNull.promote && d0.reasons.length === dNull.reasons.length;
+                })());
+            check('(10) the opt-in hurdle applies: it passes at 0 and blocks promotion exactly below the line',
+                (() => {
+                    const mkRep = (pf) => ({
+                        aggregate: { mean: 1 },
+                        pooledMetrics: { dsr: 2 },
+                        folds: [],
+                        audit: { clean: true },
+                        blockStability: { blocks: 6, blockSharpes: [], positiveFraction: pf, min: 0, max: 1 },
+                    });
+                    const base = mkRep(1);
+                    const flip = mkRep(5 / 6);
+                    const dHi = promoteDecision(base, flip, { requireCleanAudit: false, minBlockPositiveFraction: 1 });
+                    const hHi = dHi.hurdles.find((h) => h.hurdle === 'blockStability');
+                    const dLo = promoteDecision(base, flip, { requireCleanAudit: false, minBlockPositiveFraction: 0 });
+                    const hLo = dLo.hurdles.find((h) => h.hurdle === 'blockStability');
+                    const dOk = promoteDecision(base, mkRep(1), { requireCleanAudit: false, minBlockPositiveFraction: 1 });
+                    return dHi.gate.blockStability === 'applied' && !!hHi && hHi.gated === true && hHi.failed === true &&
+                        dHi.promote === false && dHi.reasons.join(';').includes('block stability') &&
+                        !!hLo && hLo.failed === false && dLo.promote === true &&
+                        dOk.promote === true;
+                })());
         }
     }
 

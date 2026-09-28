@@ -115,7 +115,9 @@ the audit view; the primitive is proved now so the runtime cannot silently skip 
 mirrors (the first also supplies the recursive listing that makes the import-law file set
 complete; the second runs the adapter against real `better-sqlite3`). **Not runnable in
 this environment:** the native node suites (13 of them) — run `npm test` locally
-(`docs/round29-TESTING.md` §1).
+(`docs/round29-TESTING.md` §1). **Cleared 2026-09-28:** the operator's native `npm test`
+is **130/130 blocks, 0 failures** (both V2 mirrors included). **Round 32** (the lab R2 port)
+moved the browser suite 2741 → **2753** (`walkforward` 63 → 74, `analyze` 279 → 280; no golden moved, no node-block change).
 
 ## 8. Next work units
 

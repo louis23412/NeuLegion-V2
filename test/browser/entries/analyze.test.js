@@ -1079,6 +1079,17 @@ export async function run() {
         check('the run summary renders the gate, the cost ladder, the family diagnostic and the paired line',
             rep.summary.includes('gate:   dependence') && rep.summary.includes('cost-ladder +0bps:') &&
             rep.summary.includes('family: excessCorr=') && rep.summary.includes('paired: n/a ('));
+        check('round 32 (lab R3): every ladder line names each candidate netSharpe, exactly matching the machine rows',
+            (() => {
+                if (!rep.costLadder || !rep.costLadder.available) return false;
+                const lines = rep.summary.split('\n');
+                return [0, 2, 5, 10].every((b) => {
+                    const row = rep.costLadder.rows.find((r) => r.costBps === b);
+                    const line = lines.find((l) => l.startsWith(`cost-ladder +${b}bps:`));
+                    return row && line && line.includes('netSharpe=[') &&
+                        row.candidates.every((c) => line.includes(`${c.id} ${Number.isFinite(c.netSharpe) ? c.netSharpe.toFixed(4) : String(c.netSharpe)}`));
+                });
+            })());
         // R26-2: the per-variant model block (readiness + label base rate + skill).
         // This is what makes a keep-off verdict readable as "no edge" vs "no model".
         check('R26-2: the report carries a per-variant model block (trained, base rate, skill, status)',

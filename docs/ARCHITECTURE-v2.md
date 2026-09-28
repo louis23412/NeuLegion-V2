@@ -5,7 +5,7 @@
 `CITATIONS.md`, `src/README.md`, `research/*`), the lab (`src/NeuLegion-lab`, F-01…F-81, 66 cycles,
 19 leads) and `PLAN-round31.md`. **Implemented since:** the V2.0 contract/registry layer, the V2.1
 primitive port and the V2.2 sleeves/risk/books plugins (`MIGRATION-V2.md` — full browser suite
-**2741/0**, `golden` 23/0 unmoved, zero edits to any pre-existing (legacy) locked module — the V2
+**2753/0** (2741 at the V2 landing + the 12-check round-32 R2/R3 ports), `golden` 23/0 unmoved, zero edits to any pre-existing (legacy) locked module — the V2
 modules' own bug/coherence passes are RUNBOOK §6 R31b/R31c, and they too moved no golden; the port is verified
 bit-for-bit on the lab's real data by `e73_port_verify.js`, lab F-81). **Not started:** V2.3 (model plugins) and
 V2.4 (lab v2). This document answers three questions the

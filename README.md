@@ -302,7 +302,7 @@ fingerprint is compared at 6 significant digits because it is over raw float64
 `predict()` output (the other nine hashes are literal; `hm:postReloadPrediction`
 is the second rounded one, per P2-3). `bench` is the only
 browser entry with no mirror (it prints timings and has no pass/fail contract),
-so a run reports **130 `test()` blocks, not 2741 individual checks**, and takes a few minutes
+so a run reports **130 `test()` blocks, not 2753 individual checks**, and takes a few minutes
 (the `dimensions` sweep dominates). Mirror-injected options must respect the
 entries' contracts: `stateDir` is pure in its label (use `labelledStateDir`) and
 the sql.js shim is imported lazily (and its own CDN import is lazy too, so

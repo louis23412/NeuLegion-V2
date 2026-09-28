@@ -19,11 +19,12 @@ scope freeze that bounds it.
   additive V2 contract/registry layer is **in the repo** (`src/core/**`, `src/plugins/**`;
   `MIGRATION-V2.md`, `ARCHITECTURE-v2.md`) with no legacy module edited and no golden moved — V2.0
   contracts, V2.1 the ported pure layers, V2.2 sleeves+risk — proven by the `contracts` (141) +
-  `legacy_hivemind` (15) entries in both harnesses (**2741 / 0** browser) and independently by the lab
+  `legacy_hivemind` (15) entries in both harnesses (**2753 / 0** browser; round 32 added the 12-check and independently by the lab
   (`CYCLE-066` / **F-81**: `e73_port_verify.js` 10/10). Six workstreams (W1 decision soundness, W2
   sleeve port, W3 portfolio/risk, W4 model demotion + memory unlock, W5 independence, W6 shipped-path
-  fixes), gates G1–G5, the first bankable positive result at **G5**; V2.3/V2.4 + every W1/W4/W5/W6 port
-  remain open. See [`PLAN-round31.md`](PLAN-round31.md).
+  fixes), gates G1–G5, the first bankable positive result at **G5**; V2.3/V2.4 + the W1 (R1/R3),
+  W4/W5/W6 ports remain open — **W1/R2 (`blockStability`) and W1/R3 (ladder netSharpes) are ported in round 32** (default-off gate
+  hurdle, ledger **2753**). See [`PLAN-round31.md`](PLAN-round31.md).
 - **Round 30 EXECUTION underway (`MILESTONES.md` M8; `PLAN-round30.md`) — M1–M3 + M7 implemented.**
   Built on the acceptance batch (`RUN-ANALYSIS.md` §17), round 30 (a) prunes the default
   A/B roster from 14 to **`{baseline, sig-momentum, sig-accel}` (`K = 3`)** with every drop's
@@ -91,7 +92,8 @@ scope freeze that bounds it.
   compared at 6 significant digits ([`BUGS.md`](BUGS.md) #17, #19).
   `engine_portability.test.js` guards it.
 - **Local gate: green.** `npm test` is **130/130 `test()` blocks across 45
-  files, 0 failures, ~5.9 min** on the native driver (127/127 at the round-27
+  files, 0 failures, ~6.0 min** on the native driver — **re-confirmed 2026-09-28
+  on the operator's machine (130/130, 0 failures, 363 s)** (127/127 at the round-27
   liveness/streaming re-run; round 30 added the `analyze_cli.test.js` #69 block;
   round 31 added the `contracts.test.js` + `legacy_hivemind.test.js` V2 mirrors;
   [`BUGS.md`](BUGS.md) #42/#52).
@@ -101,7 +103,7 @@ scope freeze that bounds it.
   test hardened to report the real failing check.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
-- **Browser suite**: 2741 checks across the 32 pass/fail entries (33 entries
+- **Browser suite**: 2753 checks across the 32 pass/fail entries (33 entries
   including the non-pass/fail `bench`); 130 `test()` blocks across 45 node files
   (R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second
@@ -636,7 +638,7 @@ the browser harness: **2289 checks, 0 failures** across all 29 pass/fail entries
 (`walkforward` 49 → 62, `analysis` 390 → 437, `analyze` 143 → 158; `locks` 41 and
 `modules` 50 unchanged). No golden fingerprint moved (nothing here is imported by
 the hot path). Full detail in `RUN-ANALYSIS.md` §6. *(Counts as at round 25; the
-current ledger is **2741** — see the status snapshot above.)*
+current ledger is **2753** — see the status snapshot above.)*
 
 - **R25-1 ✅** `analysis/dependence.js` (new, LOCKED-invariant) + `dependenceSummary`
   in `analysis/walkforward.js`. Shipped the delete-one-cluster jackknife over

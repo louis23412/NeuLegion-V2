@@ -154,8 +154,15 @@ The lab's `FOLD-BACK` R1–R3, ported as one small round:
 2. **`blockStability`** — split the scored series into k disjoint windows, report each window's
    Sharpe, the positive fraction and the min/max; add it to `pooledMetrics`/the decision block and
    make it a gate input. This is the cheap statistic that catches J1 at the source.
+   **Status (round 32): PORTED.** `analysis/walkforward.js#blockStability` (from the lab's
+   `e2_arm_sweep.js`, same layout/k=6), wired into all three report builders over the price-only
+   panel, rendered as the `blocks:` line, and available as the default-off `minBlockPositiveFraction`
+   gate hurdle (`walkforward` 63 → 74 checks, ledger 2741 → 2753 with the R3 line below). R1 remains open.
 3. **The cost block by default** — full-history break-even and `netSharpe` at 5 and 10 bps, not only
    the ladder at the run's single `costBps`.
+   **Status (round 32): reporting half PORTED.** The ladder already restated every candidate at
+   [0, 2, 5, 10] bps; the rendered lines now name each candidate's net Sharpe (`analyze` 279 → 280).
+   The full-history half belongs to R1 below.
 4. **Gate fragility (F-62).** Report the subsampling/block CIs (the repo already ships
    `subsamplingSpa`/`subsamplingStepM`, `neweyWestSE`, `politisWhiteBlockLength`) beside the
    jackknife, and require the verdict to be stable across the block ladder. A verdict inside the

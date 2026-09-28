@@ -1430,7 +1430,7 @@ const finalizeAB = ({
                     available: false,
                     reason: 'candidate is not active (inert / duplicate / not-applicable / skipped): it is excluded from K and the family-wise search',
                 },
-                gate: { minDsrAdjusted: 'off', requireSharpeDiff: 'off', requireBreadth: 'off', requireClusterStability: 'off' },
+                gate: { minDsrAdjusted: 'off', requireSharpeDiff: 'off', requireBreadth: 'off', requireClusterStability: 'off', blockStability: 'off' },
                 inactive: true,
             });
         }
@@ -1755,8 +1755,12 @@ export function formatAnalysis(result, extra = {}) {
     if (cl && cl.available && Array.isArray(cl.rows)) {
         for (const row of cl.rows) {
             const promo = row.candidates.filter((c) => c.promote).map((c) => c.id);
+            // Round 32 (lab R3): name every candidate's restated net Sharpe on the
+            // line itself, so the 5/10 bps verdict is readable without opening the
+            // machine-readable rows (a promotes-only line hides a cost death).
+            const nets = row.candidates.map((c) => `${c.id} ${f4(c.netSharpe)}`).join(', ');
             lines.push(`cost-ladder +${row.costBps}bps: baseline Sharpe=${f4(row.baseline.netSharpe)} DSR=${f4(row.baseline.dsr)}` +
-                ` | promotes=[${promo.length ? promo.join(',') : 'none'}]`);
+                ` | promotes=[${promo.length ? promo.join(',') : 'none'}] | netSharpe=[${nets}]`);
         }
     }
     // Round 26 (R26-5): the turnover attack. One line per candidate naming the

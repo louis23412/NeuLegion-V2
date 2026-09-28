@@ -3788,11 +3788,15 @@ corpus therefore contains no measured version of its highest-Sharpe arm.
 | `sig-reversal-xs` | −0.1584 | n/a (DE < 1) | 0.3370 (0.055) | 73/129 | −0.38 bps | 6859 |
 
 `sig-reversal-4` is the **only family-wise-significant arm in the corpus**
-(`familywise: SPA p = 0.0474, Rejects = [sig-reversal-4]`) — a broad, clustered-significant edge
+(`familywise: SPA p = 0.4382, Rejects = [sig-reversal-4]`; the rejected arm's StepM step p is 0.0474) — a broad, clustered-significant edge
 (87/129 windows) whose break-even is **1.5 bps**, i.e. §16.4's "real and economically inaccessible"
 verdict, confirmed on this basket. `sig-reversal-xs` is the clean production demonstration that
 **cross-sectional demeaning collapses the design effect** (DE **0.361**, effective streams 12.05 of 8,
-effective bars 42 874) while its edge is negative — power is buyable, edge is not.
+effective bars 42 874) while its edge is negative — power is buyable, edge is not. Note on the two p-values:
+the family `spaPValue` (0.4382) comes from `subsamplingSpa` with the default `consistent:false`
+recentring, while the arm's StepM step p (0.0474) uses Hansen's consistent recentring — they are
+different tests (`familywiseSearch` in `analysis/walkforward.js`), so both numbers are legitimate and
+only the old "SPA p = 0.0474" label was wrong. No LOCKED code changes.
 
 ### 18.6 The bare/benchmark run: no model class beats a linear arm
 

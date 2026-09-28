@@ -1748,7 +1748,7 @@ pinned on a bare `HiveMind` (identical predictions **and** identical
       book primitives/sleeves is in and verified. Tests land in both harnesses:
       `test/browser/entries/contracts.test.js` (**141** checks) + its node mirror,
       and `legacy_hivemind.test.js` (**15**) + its node mirror; the full browser
-      suite is **2741 / 0** (32 entries). The lab verified the port independently:
+      suite is **2753 / 0** (32 entries; round 32 added the 12-check R2/R3 ports). The lab verified the port independently:
       **CYCLE-066 / F-81** — `experiments/e73_port_verify.js` gates on **all 10
       checks** (R8 `6.18 / 10× / 46.04`, R7 `1.07 / 8× / 182.59`, OI
       `0.92 / 198× / 15.22`; ported rows+returns bit-for-bit vs the lab), now folded
@@ -1763,9 +1763,13 @@ pinned on a bare `HiveMind` (identical predictions **and** identical
       forgotten, and the reason it had to be edited in the same change).
       **Open (not scheduled here):** V2.3/V2.4, the W1/W4/W5/W6 measurement ports,
       and the shipped-path defects **F-61/F-69/F-70/F-71/F-74/F-76/L10-cs** — all
-      still TODO in `PLAN-round31.md`. **Next gate: `npm test` locally** — the
-      browser suite is green, but the native driver and the two new node mirrors
-      have not been run on this machine.
+      still TODO in `PLAN-round31.md`. **Gate CLEARED (2026-09-28):** `npm test`
+      on the operator's native driver is **130/130 `test()` blocks across 45
+      files, 0 failures (~363 s)**, including the `contracts` (141/0) and
+      `legacy_hivemind` (15/0) V2 mirrors, the bit-identical native `golden`
+      lock, and the 6-check `mirrors` structural gate — so V2.0–V2.2 are green on
+      the native driver, not just the browser harness. (The lab gate is not part
+      of `npm test`; run it with `src/NeuLegion-lab/run_lab.mjs`.)
 ## Next (additive supercharges, each needs proof before promotion)
 
 > **Historical detail log.** The *prioritized* view is "Scope freeze + prioritized
@@ -2010,7 +2014,10 @@ The browser suite runs headless via esbuild-wasm + sql.js shims; the Node suite
 uses real `better-sqlite3` and real `worker_threads`. The local gate has run and
 is **green: 115 tests, 115 pass, 0 fail at round 22** (`docs/BUGS.md` #20/#21;
 89/89 at round 21, #18), including the full `test/node/*.test.js` mirror set and
-the P0-P3 tooling suites. On that basis:
+the P0-P3 tooling suites. **Re-confirmed green at round 31 (2026-09-28): `npm
+test` = 130/130 `test()` blocks across 45 files, 0 failures, ~363 s**, so the V2
+`contracts`/`legacy_hivemind` mirrors and the `mirrors` structural gate are green
+on the native driver too. On that basis:
 
 - `controllerDatabase`, `controllerAccuracy`, `controllerTrade` were promoted
   `NEEDS-LOCAL-RUN → LOCKED-invariant` and recorded in `docs/LOCKED.md`.
