@@ -50,6 +50,10 @@ import {
     forecastPairs, brierBinIndex, brierScore, logScore, brierDecomposition, brierLosses,
     bootstrapMeans, dieboldMariano, modelConfidenceSet, forecastComparison, formatForecast,
     realizedVolatility, ewmaVolForecast, volForecastSkill,
+    fitArVolForecast, predictArVolForecast, tournamentVolForecast, tournamentVolForecastAcrossSplits,
+    tournamentVolModel, tournamentVolPanel, volForecastQlike,
+    tournamentVolModelAcrossSplits, decideVolPromotion, fitRidgeArVolForecast,
+    tournamentVolLadder,
 } from '../../../src/analysis/forecast.js';
 import {
     foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision,
@@ -4309,6 +4313,423 @@ export async function run() {
         })());
     } catch (e) {
         check('R49 W4b vol-forecast checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    try {
+        check('R50 (W4b-t): AR(1) is exact on a hand-solved ramp', (() => {
+            const fit = fitArVolForecast([1, 2, 3, 4, 5, 6], { order: 1 });
+            if (!fit.available) return false;
+            const p = predictArVolForecast(fit, [6]);
+            return Math.abs(fit.coef[1] - 1) < 1e-9 && Math.abs(p - 7) < 1e-9;
+        })());
+        check('R50 (W4b-t): AR fit fails closed on short or singular trains', (() => {
+            const s = fitArVolForecast([1, 2], { order: 1 });
+            const c = fitArVolForecast([2, 2, 2, 2, 2], { order: 1 });
+            const b = fitArVolForecast([1, 2, 3], { order: 0 });
+            return s.available === false && c.available === false && b.available === false;
+        })());
+        check('R50 (W4b-t): AR prediction is causal in its history', (() => {
+            const fit = fitArVolForecast([1, 1, 2, 3, 5, 8, 13, 21, 34, 55], { order: 2 });
+            if (!fit.available) return false;
+            const a = predictArVolForecast(fit, [34, 55]);
+            return Number.isFinite(a) && Number.isNaN(predictArVolForecast(fit, [55])) && Number.isNaN(predictArVolForecast(fit, [34, Infinity]));
+        })());
+        check('R50 (W4b-t): tournament split contract holds', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+            const t = tournamentVolForecast(vols, { split: 0.5, lambda: 0.5, order: 1 });
+            return t.available === true && t.n === 12 && t.trainN === 6 && t.testN === 6;
+        })());
+        check('R50 (W4b-t): tournament EWMA skill is positive on trending vol', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+            const t = tournamentVolForecast(vols, { split: 0.5, lambda: 0.5, order: 1 });
+            return t.available === true && t.ewmaSkill > 0 && Number.isFinite(t.arSkill);
+        })());
+        check('R50 (W4b-t): tournament winner names the higher skill', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+            const t = tournamentVolForecast(vols, { split: 0.5, lambda: 0.5, order: 1 });
+            if (!t.available) return false;
+            return (t.winner === 'ar') === (t.arSkill > t.ewmaSkill) && t.beatsEwma === (t.arSkill > t.ewmaSkill);
+        })());
+        check('R50 (W4b-t): tournament fails closed on degenerate input', (() => {
+            const s = tournamentVolForecast([1, 2, 3], {});
+            const d = tournamentVolForecast([1, 1, 1, 1, 1, 1, 1, 1], {});
+            const n = tournamentVolForecast([1, 2, 3, 4, 5, NaN, 7, 8], {});
+            return s.available === false && d.available === false && n.available === false;
+        })());
+        check('R50 (W4b-t): tournament AR reads train only', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+            const a = tournamentVolForecast(vols, { split: 0.5, lambda: 0.5, order: 1 });
+            const pert = vols.slice(); pert[11] = 999;
+            const b = tournamentVolForecast(pert, { split: 0.5, lambda: 0.5, order: 1 });
+            if (!a.available || !b.available) return false;
+            return Math.abs(a.coef[0] - b.coef[0]) < 1e-12 && Math.abs(a.coef[1] - b.coef[1]) < 1e-12;
+        })());
+        check('R50 (W4b-t): tournament baseline is the train mean', (() => {
+            const vols = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];
+            const t = tournamentVolForecast(vols, { split: 0.5, lambda: 0.5, order: 1 });
+            if (!t.available) return false;
+            const trainMean = (2 + 4 + 6 + 8 + 10 + 12) / 6;
+            const mse = [14, 16, 18, 20, 22, 24].reduce((s, x) => s + (x - trainMean) ** 2, 0) / 6;
+            return Math.abs(t.mseBaseline - mse) < 1e-9;
+        })());
+        check('R50 (W4b-t): AR(2) fits a two-lag hand case', (() => {
+            const vols = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
+            const fit = fitArVolForecast(vols, { order: 2 });
+            if (!fit.available || fit.coef.length !== 3) return false;
+            const p = predictArVolForecast(fit, [34, 55]);
+            return Number.isFinite(p) && Math.abs(p - 89) < 3;
+        })());
+    } catch (e) {
+        check('R50 W4b tournament checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    try {
+        check('R51 (W4b-s): across-splits reports every split', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+            const t = tournamentVolForecastAcrossSplits(vols, { splits: [0.4, 0.5, 0.6] });
+            return t.available === true && t.perSplit.length === 3 && t.perSplit.every((p) => Number.isFinite(p.ewmaSkill) && Number.isFinite(p.arSkill));
+        })());
+        check('R51 (W4b-s): win fraction counts the AR wins', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+            const t = tournamentVolForecastAcrossSplits(vols, { splits: [0.4, 0.5, 0.6] });
+            if (!t.available) return false;
+            return t.arWins + t.ewmaWins === 3 && Math.abs(t.arWinFraction - t.arWins / 3) < 1e-12;
+        })());
+        check('R51 (W4b-s): EWMA positive flag reads the splits', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+            const t = tournamentVolForecastAcrossSplits(vols, { splits: [0.4, 0.5, 0.6] });
+            if (!t.available) return false;
+            return t.ewmaAlwaysPositive === t.perSplit.every((p) => p.ewmaSkill > 0);
+        })());
+        check('R51 (W4b-s): per-split winners match the single-split runs', (() => {
+            const vols = [2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15];
+            const t = tournamentVolForecastAcrossSplits(vols, { splits: [0.35, 0.65] });
+            if (!t.available) return false;
+            const a = tournamentVolForecast(vols, { split: 0.35 });
+            const b = tournamentVolForecast(vols, { split: 0.65 });
+            return t.perSplit[0].winner === a.winner && t.perSplit[1].winner === b.winner &&
+                Math.abs(t.perSplit[0].arSkill - a.arSkill) < 1e-12;
+        })());
+        check('R51 (W4b-s): default splits are five points', (() => {
+            const vols = [];
+            for (let i = 1; i <= 20; i++) vols.push(i);
+            const t = tournamentVolForecastAcrossSplits(vols, {});
+            return t.available === true && t.splits.length === 5 && t.perSplit.length === 5;
+        })());
+        check('R51 (W4b-s): fails closed on bad splits', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+            const e = tournamentVolForecastAcrossSplits(vols, { splits: [] });
+            const o = tournamentVolForecastAcrossSplits(vols, { splits: [0.5, 1.5] });
+            const s = tournamentVolForecastAcrossSplits([1, 2, 3], { splits: [0.5] });
+            return e.available === false && o.available === false && s.available === false;
+        })());
+        check('R51 (W4b-s): echoes lambda and order', (() => {
+            const vols = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144];
+            const t = tournamentVolForecastAcrossSplits(vols, { splits: [0.5], lambda: 0.5, order: 2 });
+            return t.available === true && t.lambda === 0.5 && t.order === 2;
+        })());
+        check('R51 (W4b-s): AR win is not a single-split artefact on trending vol', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+            const t = tournamentVolForecastAcrossSplits(vols, { splits: [0.3, 0.5, 0.7] });
+            return t.available === true && t.arWins >= 2;
+        })());
+    } catch (e) {
+        check('R51 W4b split-robustness checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    try {
+        const handActual = [1, 2, 3, 4];
+        const handBase = [0, 0, 0, 0];
+        check('R52 (W4b-m): perfect model wins the three-way', (() => {
+            const t = tournamentVolModel(handActual, { ewma: [0, 0, 0, 0], ar: [0.5, 1.5, 2.5, 3.5], model: [1, 2, 3, 4], baseline: handBase });
+            return t.available === true && t.winner === 'model' && t.modelBeatsReferences === true && t.skillModel === 1;
+        })());
+        check('R52 (W4b-m): references win when the model hurts', (() => {
+            const t = tournamentVolModel(handActual, { ewma: [1, 2, 3, 4], ar: [1, 2, 3, 4], model: [9, 9, 9, 9], baseline: handBase });
+            return t.available === true && t.winner !== 'model' && t.modelBeatsReferences === false && t.skillModel < 0;
+        })());
+        check('R52 (W4b-m): default baseline is the actual mean', (() => {
+            const t = tournamentVolModel([2, 4, 6, 8], { ewma: [2, 4, 6, 8], ar: [5, 5, 5, 5], model: [5, 5, 5, 5] });
+            return t.available === true && t.winner === 'ewma' && t.skillEwma === 1;
+        })());
+        check('R52 (W4b-m): tie prefers the references', (() => {
+            const t = tournamentVolModel(handActual, { ewma: [1, 2, 3, 4], ar: [1, 2, 3, 4], model: [1, 2, 3, 4], baseline: handBase });
+            return t.available === true && t.winner !== 'model' && t.modelBeatsReferences === false;
+        })());
+        check('R52 (W4b-m): fails closed on length mismatch', (() => {
+            const t = tournamentVolModel([1, 2, 3], { ewma: [1, 2], ar: [1, 2, 3], model: [1, 2, 3] });
+            return t.available === false;
+        })());
+        check('R52 (W4b-m): fails closed on non-finite input', (() => {
+            const a = tournamentVolModel([1, NaN, 3], { ewma: [1, 2, 3], ar: [1, 2, 3], model: [1, 2, 3] });
+            const b = tournamentVolModel([1, 2, 3], { ewma: [1, 2, 3], ar: [1, 2, 3], model: [1, 2, Infinity] });
+            return a.available === false && b.available === false;
+        })());
+        check('R52 (W4b-m): fails closed on empty or missing slots', (() => {
+            const e = tournamentVolModel([], { ewma: [], ar: [], model: [] });
+            const m = tournamentVolModel([1, 2], { ewma: [1, 2], ar: [1, 2] });
+            return e.available === false && m.available === false;
+        })());
+        check('R52 (W4b-m): skills match the pairwise helper', (() => {
+            const actual = [3, 1, 4, 1, 5, 9, 2, 6];
+            const mean = 31 / 8;
+            const base = new Array(8).fill(mean);
+            const ewma = [2, 2, 3, 2, 4, 8, 3, 5];
+            const ar = [3, 1, 4, 1, 5, 9, 2, 7];
+            const model = [3, 1, 4, 2, 5, 9, 2, 6];
+            const t = tournamentVolModel(actual, { ewma, ar, model });
+            const se = volForecastSkill(actual, ewma, base);
+            const sm = volForecastSkill(actual, model, base);
+            return t.available === true && Math.abs(t.skillEwma - se.skill) < 1e-12 && Math.abs(t.skillModel - sm.skill) < 1e-12;
+        })());
+    } catch (e) {
+        check('R52 W4b model-slot checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    try {
+        const ramp = (a) => { const v = []; for (let i = 1; i <= 16; i++) v.push(i * a); return v; };
+        check('R53 (W4b-p): panel counts unanimous AR on ramps', (() => {
+            const t = tournamentVolPanel({ a: ramp(1), b: ramp(2) }, { splits: [0.4, 0.5, 0.6] });
+            return t.available === true && t.streams === 2 && t.unanimousAr === true && t.arMajority === 2;
+        })());
+        check('R53 (W4b-p): panel fractions are exact counts', (() => {
+            const t = tournamentVolPanel({ a: ramp(1), b: ramp(0.5) }, { splits: [0.5] });
+            if (!t.available) return false;
+            return Math.abs(t.arMajorityFraction - t.arMajority / 2) < 1e-12 && t.splits.length === 1;
+        })());
+        check('R53 (W4b-p): per-stream cells match the single calls', (() => {
+            const vols = { a: ramp(1) };
+            const t = tournamentVolPanel(vols, { splits: [0.35, 0.65] });
+            const s = tournamentVolForecastAcrossSplits(ramp(1), { splits: [0.35, 0.65] });
+            if (!t.available || !s.available) return false;
+            return Math.abs(t.perStream.a.perSplit[0].arSkill - s.perSplit[0].arSkill) < 1e-12 &&
+                t.perStream.a.winner === undefined && t.perStream.a.arWins === s.arWins;
+        })());
+        check('R53 (W4b-p): echoes lambda and order', (() => {
+            const t = tournamentVolPanel({ a: ramp(1) }, { splits: [0.5], lambda: 0.5, order: 1 });
+            return t.available === true && t.lambda === 0.5 && t.order === 1;
+        })());
+        check('R53 (W4b-p): names the failing stream', (() => {
+            const t = tournamentVolPanel({ good: ramp(1), short: [1, 2] }, { splits: [0.5] });
+            return t.available === false && /short/.test(t.reason);
+        })());
+        check('R53 (W4b-p): fails closed on empty or non-object input', (() => {
+            const e = tournamentVolPanel({}, { splits: [0.5] });
+            const a = tournamentVolPanel([[1, 2, 3]], { splits: [0.5] });
+            const n = tournamentVolPanel(null, { splits: [0.5] });
+            return e.available === false && a.available === false && n.available === false;
+        })());
+        check('R53 (W4b-p): unanimous flags read the counts', (() => {
+            const t = tournamentVolPanel({ a: ramp(1), b: ramp(3) }, { splits: [0.4, 0.6] });
+            if (!t.available) return false;
+            return t.unanimousAr === (t.arMajority === 2) && t.unanimousEwma === (t.ewmaClean === 2);
+        })());
+        check('R53 (W4b-p): single stream panel works', (() => {
+            const t = tournamentVolPanel({ solo: ramp(1) }, { splits: [0.5] });
+            return t.available === true && t.streams === 1 && t.arMajorityFraction >= 0;
+        })());
+    } catch (e) {
+        check('R53 W4b panel-view checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    try {
+        check('R54 (W4b-q): perfect forecast reads zero QLIKE', (() => {
+            const q = volForecastQlike([1, 2, 3], [1, 2, 3], [2, 2, 2]);
+            return q.available === true && q.qlikeForecast === 0 && q.skill === 1;
+        })());
+        check('R54 (W4b-q): QLIKE matches the hand value', (() => {
+            const q = volForecastQlike([1, 1], [2, 2], [3, 3]);
+            return q.available === true && Math.abs(q.qlikeForecast - (2 - Math.log(2) - 1)) < 1e-12;
+        })());
+        check('R54 (W4b-q): skill is negative when the forecast hurts', (() => {
+            const q = volForecastQlike([1, 1, 1], [4, 4, 4], [2, 2, 2]);
+            return q.available === true && q.skill < 0 && Math.abs(q.skill - (1 - (4 - Math.log(4) - 1) / (2 - Math.log(2) - 1))) < 1e-9;
+        })());
+        check('R54 (W4b-q): over-prediction is penalized more than under-prediction', (() => {
+            const over = volForecastQlike([1], [2], [0.5]);
+            const under = volForecastQlike([1], [0.5], [2]);
+            return over.available === true && under.available === true && over.qlikeForecast > under.qlikeForecast;
+        })());
+        check('R54 (W4b-q): skips non-positive pairs', (() => {
+            const q = volForecastQlike([1, 0, 2], [1, 5, 2], [2, 2, 2]);
+            return q.available === true && q.qlikeForecast === 0;
+        })());
+        check('R54 (W4b-q): fails closed on degenerate baselines', (() => {
+            const p = volForecastQlike([1, 1], [1, 1], [1, 1]);
+            const e = volForecastQlike([], [], []);
+            const z = volForecastQlike([0, 0], [1, 1], [2, 2]);
+            return p.available === false && e.available === false && z.available === false;
+        })());
+        check('R54 (W4b-q): fails closed on non-finite input', (() => {
+            const q = volForecastQlike([1, NaN], [1, 1], [2, 2]);
+            return q.available === true && q.qlikeForecast === 0;
+        })());
+        check('R54 (W4b-q): EWMA beats flat on trending vol under QLIKE too', (() => {
+            const vols = [1, 2, 3, 4, 5, 6, 7, 8];
+            const f = ewmaVolForecast(vols, { lambda: 0.5 });
+            const flat = vols.map(() => 4.5);
+            const q = volForecastQlike(vols.slice(1), f.slice(1), flat.slice(1));
+            return q.available === true && q.skill > 0;
+        })());
+    } catch (e) {
+        check('R54 W4b QLIKE checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    try {
+        const fib = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987];
+        const persistFn = (train, hist) => hist[hist.length - 1];
+        check('R55 (W4b-g): persistence parks against AR across splits', (() => {
+            const t = tournamentVolModelAcrossSplits(fib, { splits: [0.4, 0.5, 0.6], modelFn: persistFn });
+            return t.available === true && t.perSplit.length === 3 && t.modelWins === 0;
+        })());
+        check('R55 (W4b-g): per-split cells carry all three skills', (() => {
+            const t = tournamentVolModelAcrossSplits(fib, { splits: [0.5], modelFn: persistFn });
+            if (!t.available) return false;
+            const c = t.perSplit[0];
+            return Number.isFinite(c.skillEwma) && Number.isFinite(c.skillAr) && Number.isFinite(c.skillModel);
+        })());
+        check('R55 (W4b-g): perfect model promotes unanimously', (() => {
+            const vols = fib;
+            const truth = (train, hist) => vols[vols.indexOf(hist[hist.length - 1]) + 1];
+            const t = tournamentVolModelAcrossSplits(vols, { splits: [0.4, 0.6], modelFn: truth });
+            return t.available === true && t.modelWinFraction === 1;
+        })());
+        check('R55 (W4b-g): decideVolPromotion promotes the perfect model', (() => {
+            const vols = fib;
+            const truth = (train, hist) => vols[vols.indexOf(hist[hist.length - 1]) + 1];
+            const t = tournamentVolModelAcrossSplits(vols, { splits: [0.4, 0.6], modelFn: truth });
+            const d = decideVolPromotion(t, { minModelMajority: 0.6 });
+            return d.decision === 'promote' && /2\/2/.test(d.reasons[0]);
+        })());
+        check('R55 (W4b-g): decideVolPromotion parks persistence', (() => {
+            const t = tournamentVolModelAcrossSplits(fib, { splits: [0.4, 0.5, 0.6], modelFn: persistFn });
+            const d = decideVolPromotion(t, { minModelMajority: 0.6 });
+            return d.decision === 'park' && /0\/3/.test(d.reasons[0]);
+        })());
+        check('R55 (W4b-g): decision threshold counts splits', (() => {
+            const fake = { available: true, perSplit: [{}, {}, {}, {}, {}], modelWins: 3 };
+            const loose = decideVolPromotion(fake, { minModelMajority: 0.6 });
+            const strict = decideVolPromotion(fake, { minModelMajority: 0.8 });
+            return loose.decision === 'promote' && strict.decision === 'park';
+        })());
+        check('R55 (W4b-g): fails closed without a model function', (() => {
+            const t = tournamentVolModelAcrossSplits(fib, { splits: [0.5] });
+            return t.available === false;
+        })());
+        check('R55 (W4b-g): fails closed when the model throws or NaNs', (() => {
+            const boom = tournamentVolModelAcrossSplits(fib, { splits: [0.5], modelFn: () => { throw new Error('nope'); } });
+            const nan = tournamentVolModelAcrossSplits([1, 2, 3, 4, 5, 6, 7, 8], { splits: [0.5], modelFn: () => NaN });
+            return boom.available === false && nan.available === false;
+        })());
+        check('R55 (W4b-g): park on unavailable or bad threshold', (() => {
+            const a = decideVolPromotion({ available: false }, {});
+            const b = decideVolPromotion({ available: true, perSplit: [{}], modelWins: 1 }, { minModelMajority: 7 });
+            return a.decision === 'park' && b.decision === 'park';
+        })());
+        check('R55 (W4b-g): model seat sees train only', (() => {
+            let sawTest = false;
+            const vols = fib;
+            const spy = (train, hist) => { if (train.length !== 8) sawTest = true; return hist[hist.length - 1]; };
+            const t = tournamentVolModelAcrossSplits(vols, { splits: [0.5], modelFn: spy });
+            return t.available === true && sawTest === false;
+        })());
+    } catch (e) {
+        check('R55 W4b gate-harness checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    try {
+        const ramp6 = [1, 2, 3, 4, 5, 6];
+        check('R56 (W4b-r): l2=0 equals the OLS fit exactly', (() => {
+            const a = fitArVolForecast(ramp6, { order: 1 });
+            const b = fitRidgeArVolForecast(ramp6, { order: 1, l2: 0 });
+            return a.available && b.available && Math.abs(a.coef[0] - b.coef[0]) < 1e-15 && Math.abs(a.coef[1] - b.coef[1]) < 1e-15;
+        })());
+        check('R56 (W4b-r): penalty shrinks the slope monotonically', (() => {
+            const lo = fitRidgeArVolForecast(ramp6, { order: 1, l2: 0.1 });
+            const hi = fitRidgeArVolForecast(ramp6, { order: 1, l2: 10 });
+            return lo.available && hi.available && Math.abs(hi.coef[1]) < Math.abs(lo.coef[1]) && lo.coef[1] > 0;
+        })());
+        check('R56 (W4b-r): heavy penalty approaches the target mean', (() => {
+            const t = fitRidgeArVolForecast(ramp6, { order: 1, l2: 1e9 });
+            return t.available && Math.abs(t.coef[1]) < 1e-6 && Math.abs(t.coef[0] - 4) < 1e-3;
+        })());
+        check('R56 (W4b-r): ridge prediction plugs into the shared predictor', (() => {
+            const t = fitRidgeArVolForecast(ramp6, { order: 1, l2: 1 });
+            if (!t.available) return false;
+            const p = predictArVolForecast(t, [6]);
+            return Number.isFinite(p) && Math.abs(p - (t.coef[0] + t.coef[1] * 6)) < 1e-12;
+        })());
+        check('R56 (W4b-r): rejects negative or non-finite l2', (() => {
+            const n = fitRidgeArVolForecast(ramp6, { order: 1, l2: -1 });
+            const f = fitRidgeArVolForecast(ramp6, { order: 1, l2: NaN });
+            return n.available === false && f.available === false;
+        })());
+        check('R56 (W4b-r): fails closed on short trains like OLS', (() => {
+            const s = fitRidgeArVolForecast([1, 2], { order: 1, l2: 1 });
+            return s.available === false;
+        })());
+        check('R56 (W4b-r): order-2 ridge matches OLS at l2=0', (() => {
+            const vols = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
+            const a = fitArVolForecast(vols, { order: 2 });
+            const b = fitRidgeArVolForecast(vols, { order: 2, l2: 0 });
+            return a.available && b.available && a.coef.every((c, i) => Math.abs(c - b.coef[i]) < 1e-12);
+        })());
+        check('R56 (W4b-r): fit carries its penalty and row count', (() => {
+            const t = fitRidgeArVolForecast(ramp6, { order: 1, l2: 2 });
+            return t.available === true && t.l2 === 2 && t.rows === 5 && t.order === 1;
+        })());
+    } catch (e) {
+        check('R56 W4b ridge-AR checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+
+    try {
+        const rets = [0.01, -0.02, 0.015, -0.005, 0.03, -0.01, 0.02, 0.005, -0.025, 0.012, 0.008, -0.015, 0.022, -0.008, 0.017, -0.012, 0.009, 0.014, -0.02, 0.011];
+        check('R57 (W4b-w): ladder reports every window', (() => {
+            const t = tournamentVolLadder(rets, { windows: [2, 4], splits: [0.4, 0.6] });
+            return t.available === true && t.windows.length === 2 && Object.keys(t.perWindow).length === 2;
+        })());
+        check('R57 (W4b-w): per-window cells match the single calls', (() => {
+            const t = tournamentVolLadder(rets, { windows: [3], splits: [0.5] });
+            const v = realizedVolatility(rets, 3);
+            const s = tournamentVolForecastAcrossSplits(v, { splits: [0.5] });
+            if (!t.available || !s.available) return false;
+            return Math.abs(t.perWindow[3].arWinFraction - s.arWinFraction) < 1e-12;
+        })());
+        check('R57 (W4b-w): unanimity flags read the counts', (() => {
+            const t = tournamentVolLadder(rets, { windows: [2, 4], splits: [0.4, 0.6] });
+            if (!t.available) return false;
+            return t.unanimousAr === (t.arClean === 2) && Math.abs(t.arCleanFraction - t.arClean / 2) < 1e-12;
+        })());
+        check('R57 (W4b-w): echoes lambda and order', (() => {
+            const t = tournamentVolLadder(rets, { windows: [2], splits: [0.5], lambda: 0.5, order: 1 });
+            return t.available === true && t.lambda === 0.5 && t.order === 1;
+        })());
+        check('R57 (W4b-w): names the failing window', (() => {
+            const rets = [];
+            for (let i = 0; i < 60; i++) rets.push(((i * 37) % 11 - 5) / 1000);
+            const t = tournamentVolLadder(rets, { windows: [2, 100], splits: [0.5] });
+            return t.available === false && /100/.test(t.reason);
+        })());
+        check('R57 (W4b-w): fails closed on bad windows or input', (() => {
+            const e = tournamentVolLadder(rets, { windows: [] });
+            const f = tournamentVolLadder(rets, { windows: [1.5] });
+            const s = tournamentVolLadder([0.01], { windows: [2] });
+            const n = tournamentVolLadder([0.01, NaN, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07], { windows: [2] });
+            return e.available === false && f.available === false && s.available === false && n.available === false;
+        })());
+        check('R57 (W4b-w): default ladder is three windows', (() => {
+            const big = [];
+            for (let i = 0; i < 200; i++) big.push(((i * 37) % 11) - 5);
+            const t = tournamentVolLadder(big.map((x) => x / 1000), {});
+            return t.available === true && t.windows.length === 3 && t.windows.join(',') === '12,24,48';
+        })());
+        check('R57 (W4b-w): ladder input is returns, not vols', (() => {
+            const t = tournamentVolLadder(rets, { windows: [2], splits: [0.5] });
+            const v = realizedVolatility(rets, 2);
+            return t.available === true && t.n === rets.length && v.length === rets.length - 1;
+        })());
+    } catch (e) {
+        check('R57 W4b window-ladder checks completed', false, e && e.stack ? e.stack : String(e));
     }
     } catch (e) {
         check('R35 W6 fix checks completed', false, e && e.stack ? e.stack : String(e));

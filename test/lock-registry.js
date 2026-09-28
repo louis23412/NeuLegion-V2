@@ -242,6 +242,8 @@ export const ANALYSIS_MODULES = Object.freeze({
         'brierLosses', 'bootstrapMeans', 'dieboldMariano', 'modelConfidenceSet',
         'forecastComparison', 'formatForecast',
         'realizedVolatility', 'ewmaVolForecast', 'volForecastSkill',
+        'fitArVolForecast', 'predictArVolForecast', 'tournamentVolForecast', 'tournamentVolForecastAcrossSplits', 'tournamentVolModel', 'tournamentVolPanel', 'volForecastQlike',
+        'tournamentVolModelAcrossSplits', 'decideVolPromotion', 'fitRidgeArVolForecast', 'tournamentVolLadder',
     ],
     'decision.js': [
         'foldConcentration', 'confidencePersistence', 'nextRunPlan',
