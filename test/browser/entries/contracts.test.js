@@ -109,7 +109,7 @@ import { mlpLearner, MLP_DEFAULTS, isMlp } from '../../../src/plugins/learners/m
 import { fitRidge, predictRidge, fitMLP, predictMLP } from '../../../src/analysis/benchmark.js';
 import { applyVolTargetScaling } from '../../../src/analysis/forecast.js';
 import { DEFAULT_STACK, PLUGIN_IDS, installDefaultStack } from '../../../src/plugins/index.js';
-import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, drawdownGovernor, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport, sleeveDsr, dsrReport, SLEEVE_DSR_BLOCKS, SLEEVE_DSR_TRIALS, sleeveYearly, yearlyReport } from '../../../src/sleeve_score.js';
+import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, drawdownGovernor, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport, sleeveDsr, dsrReport, SLEEVE_DSR_BLOCKS, SLEEVE_DSR_TRIALS, sleeveYearly, yearlyReport, sleeveFirstLast, firstLastReport } from '../../../src/sleeve_score.js';
 import { bookReturns, bookTurnover, scoreBook, scoreBookReturns } from '../../../src/analysis/portfolio.js';
 
 // The lock register's V2 section (`test/lock-registry.js`) and the module-by-module
@@ -1749,6 +1749,72 @@ export async function run(options = {}) {
                 p.years.length === 2 && JSON.parse(JSON.stringify(p)).years.length === 2 &&
                 t.available === true && t.years[0].netSharpe === null && t.slope === null &&
                 q.available === false && typeof q.reason === 'string' && q.slope === null && q.years.length === 0;
+        })());
+
+    // ---- U. formal first-vs-last comparison (round 77, TODO 105) ---------------
+    // The decay attestation's formal comparison: the scored book split into
+    // calendar halves (the stress split), each with a Lo (2002) SE and 95%
+    // interval, plus the second-minus-first difference — descriptive, never
+    // gating, with the i.i.d. intervals stated as understated beside the
+    // cluster-robust DSR.
+    check('U: sleeveFirstLast fails closed on short, non-finite, empty and non-array books',
+        (() => {
+            const short = sleeveFirstLast({ net: [0.01, 0.02, 0.03] });
+            const nan = sleeveFirstLast({ net: [0.01, 0.02, NaN, 0.04] });
+            const empty = sleeveFirstLast({ net: [] });
+            const junk = sleeveFirstLast({ net: 'nope' });
+            return [short, nan, empty, junk].every((x) => x.available === false && typeof x.reason === 'string' &&
+                x.first === null && x.diff === null && x.seDiff === null);
+        })());
+    check('U: sleeveFirstLast halves match the stress split with Lo intervals (hand-computed)',
+        (() => {
+            const a = sleeveFirstLast({ net: tNet });
+            const b = sleeveFirstLast({ net: tNet });
+            return a.available === true && a.reason === null &&
+                a.first.n === 10 && a.second.n === 10 &&
+                near(a.first.perBarSharpe, 0.4743416, 1e-6) &&
+                Math.abs(a.second.perBarSharpe) < 1e-12 &&
+                near(a.first.se, 1 / 3, 1e-12) && near(a.second.se, 1 / 3, 1e-12) &&
+                near(a.diff, -a.first.perBarSharpe, 1e-12) &&
+                near(a.seDiff, Math.sqrt(2) / 3, 1e-12) &&
+                near(a.ciLow, a.diff - 1.96 * a.seDiff, 1e-12) &&
+                near(a.ciHigh, a.diff + 1.96 * a.seDiff, 1e-12) &&
+                near(a.first.ciLow, a.first.perBarSharpe - 1.96 * a.first.se, 1e-12) &&
+                deepEqual(a, b);
+        })());
+    check('U: a flat book compares 0 to 0 with the i.i.d. interval, never NaN',
+        (() => {
+            const f = sleeveFirstLast({ net: new Array(20).fill(0) });
+            return f.available === true &&
+                f.first.perBarSharpe === 0 && f.second.perBarSharpe === 0 &&
+                near(f.first.se, 1 / 3, 1e-12) && near(f.second.se, 1 / 3, 1e-12) &&
+                f.diff === 0 && near(f.seDiff, Math.sqrt(2) / 3, 1e-12);
+        })());
+    check('U: the flat report carries the first-last block over the scored bars and prints it',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4 });
+            const text = formatSleeveReport(r);
+            return r.available === true && r.firstLast.available === true &&
+                r.firstLast.first.n + r.firstLast.second.n === r.dsr.bars &&
+                Number.isFinite(r.firstLast.diff) && Number.isFinite(r.firstLast.seDiff) &&
+                text.includes('first-last ');
+        })());
+    check('U: the sized leg carries its own reported-only first-last block',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4, sizingTarget: 'adaptive' });
+            return r.available === true && r.sized && r.sized.available === true &&
+                r.sized.firstLast && r.sized.firstLast.available === true &&
+                r.sized.firstLast.first.n + r.sized.firstLast.second.n === r.dsr.bars;
+        })());
+    check('U: firstLastReport projects JSON-safe blocks and names the unscored case',
+        (() => {
+            const p = firstLastReport(sleeveFirstLast({ net: tNet }));
+            const q = firstLastReport(sleeveFirstLast({ net: [0.01] }));
+            return p.available === true && p.reason === null &&
+                p.first.n === 10 && p.second.n === 10 &&
+                JSON.parse(JSON.stringify(p)).first.n === 10 &&
+                q.available === false && typeof q.reason === 'string' &&
+                q.first === null && q.diff === null && q.seDiff === null;
         })());
 
     const failed = checks.filter((c) => !c.pass);

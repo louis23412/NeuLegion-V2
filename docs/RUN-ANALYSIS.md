@@ -4010,3 +4010,90 @@ bash scripts/sleeve-runs.sh base  # expect a `yearly per-bar Sharpe … (slope �
 
 Upload: the new `state/runs/<runId>-sleeve/report.json` (one file). The browser harness already ran
 `contracts` 243/243 against this exact code.
+
+## 21. Round 77 — the operator yearly block + the formal first-vs-last comparison (2026-09-29)
+
+### 21.1 The operator run read (`20260929T111926-seed1-sleeve`, flat, 4 bps)
+
+Round 76's native confirmation landed exactly as predicted, and it carries the
+first real yearly readout of the decay attestation's evidence:
+
+| quantity | value |
+| --- | --- |
+| book | 6606 buckets × 8 streams, net 11.26 / neutral 11.60, turnover 10.01/yr, break-even 42.88 bps |
+| null-basis / marked | 52.15 % / 43.9 % |
+| DSR | deflated **1.0000** (DE 32.63, 202/6605 effective bars, trials=1) — the round-75 prediction, exact |
+| yearly per-bar Sharpe | 2020 **+0.66** (327 bars) / 2021 +0.49 / 2022 +0.55 / 2023 +0.34 / 2024 +0.30 / 2025 +0.14 / 2026 **+0.11** (800 bars); slope **−0.09/yr** (7y) |
+| G5 | false on (**decay,unseen**) — the machine side is done; what remains is operator-owned by design |
+
+Three readings. (1) The DSR knob now scores on real data exactly as designed —
+`level/blocks/dsr/neutral/capacity` all pass on the machine side. (2) The decay
+is confirmed on unseen-by-construction calendar splits: monotonic-ish decline
+from +0.66 to +0.11, and 2026 is still positive — decay, not death. (3) The
+yearly block is now the input TODO 105 was waiting for: the formal comparison
+lands this round, and the lab cross-check (e109) is written against these exact
+numbers.
+
+### 21.2 The round-77 change: `sleeveFirstLast`, the formal comparison
+
+`src/sleeve_score.js#sleeveFirstLast` splits the scored book into calendar
+halves at `floor(T/2)` — the same split `stressHalves` reads, so each per-half
+Sharpe matches the stress readout exactly — and attaches a per-half Lo (2002)
+SE with 95% interval plus the second-minus-first difference with its combined
+SE. Descriptive, deliberately NOT a test: the halves are serially dependent, so
+the i.i.d. intervals understate the honest uncertainty (the DSR's
+cluster-robust SE beside it is the honest one), and the G5 `decay` knob stays a
+human attestation — the same status as the round-76 slope. Wired into
+`runSleeveReport` (flat + reported-only sized legs) with a `first-last`
+summary line (`Δ ± 1.96·se`). Pinned by six §U checks (`contracts` 243 → 249,
+node mirror re-pinned, ledger 3106); the hand-computed fixture reuses the §T
+`tNet` vector (first half 0.4743416, second 0, SEs exactly 1/3 each, Δ SE
+√2/3). The shipped-bytes logic (U1/U2/U3/U6 shapes) was executed in-session
+against the real `performance.js` — all pass; U4/U5 follow the §T report
+pattern additively. No golden moves — additive code plus additive report keys
+again.
+
+Predicted effect on §21.1's book: a `first-last per-bar Sharpe +0.47 → +0.20
+(Δ −0.27 ± …)` line — the formal face of the halves the attestation already
+reads — with G5 still false on (decay,unseen).
+
+### 21.3 Lab cross-check e109 + finding F-120
+
+`experiments/e109_yearly_crosscheck.js` (registered in `run_all.js`) does both
+halves of the TODO 105 proposal: (a) port-verify — the lab re-derives the
+operator yearly block through the repo's own `runSleeveReport` on the same
+shipped texts and requires per-year bars exact, per-bar Sharpe within 1e-9,
+slope within 1e-12 (same code, same data — drift fails loudly); (b) decay
+shape — the yearly series on the lab's INDEPENDENT honest book
+(`e3#loadCarryBook`, equal-weight delta-neutral, full ext-mark history) must
+show the same DIRECTION (negative slope, last-two below first-two). Measured
+in-session through a faithful replication of that pipeline: honest yearly
+means 2020 +0.17 / 2021 +0.31 / 2022 −0.00 / 2023 +0.17 / 2024 +0.32 / 2025
++0.13 / 2026 +0.06, slope −0.013/yr, last-two 0.097 < first-two 0.241 — same
+direction on a different book, different marks, different weighting, so the
+decay is not a calendar-grouping artefact. Recorded as lab F-120 (provisional
+until the operator's e109 run pins it — the replication is not the experiment).
+
+### 21.4 Research sync (sweep 2026-09w)
+
+Two queries (`funding rate`, 15; `sharpe ratio` + `multiple testing`, 3), 4
+noted: 2609.05433 (perp = PV of benchmark flow discounted at the funding rate —
+theoretical grounding for TODO 95's spot-leg pricing / TODO 104's sized-leg
+G5), 2605.11263 (Ethena's delta-neutral funding harvest = a live instance of
+the honest book; control framing cousin to the drawdown governor), 2510.02986
+(FR-LUX: costs inside the reward, low-turnover trust region — independent
+support for the cost-ladder discipline), 2311.10685 (EB mining 136k strategies;
+predictability concentrates pre-2004 — supports the trials=1 upper-bound
+honesty and the UNSEEN.md guardrail). Rest tangential.
+
+### 21.5 Exact operator commands
+
+```bash
+npm test                                             # full native gate — expect 132/132 (mirror asserts the 249 ledger)
+bash scripts/sleeve-runs.sh base                     # expect the new `first-last per-bar Sharpe … (Δ … ± …)` line beside dsr/yearly; G5 still (decay,unseen)
+node src/NeuLegion-lab/run_lab.mjs e109_yearly_crosscheck.js   # expect 5/5 (yearly port-verify + honest-book decay direction)
+```
+
+Upload: the new `state/runs/<runId>-sleeve/report.json` plus the e109 result
+(`results/e109_yearly_crosscheck.json` or the `--out` file). Nothing else is
+needed — the shipped-bytes checks already ran green in-session.

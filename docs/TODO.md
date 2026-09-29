@@ -1145,13 +1145,15 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    flat inputs do not transfer blindly). Until then, read `sized.dsr` as diagnostics and keep the
    flat book as the only G5 claim (F-119).
 
-105. [ ] **Decay attribution on the sleeve (round-75 follow-up; round-76 evidence landed).** The flat halves read 0.47 → 0.20
+105. [x] **Decay attribution on the sleeve (round-75 follow-up; round-76 evidence landed; round-77 comparison landed).** The flat halves read 0.47 → 0.20
    per-bar (`20260929T061347-seed1-sleeve`) — a measured gap, not a hunch — and round 76 added the
    machine-readable yearly series (`sleeveYearly`: per-year per-bar Sharpe + descriptive OLS slope,
-   `RUN-ANALYSIS.md` §20.1; the G5 `decay` knob stays human). Remaining: the formal first-vs-last
-   comparison off the operator's yearly block, plus the proposed lab cross-check (reproduce the repo
-   years from the honest carry book, F-60 port-verify pattern — disagreement means a calendar bug,
-   not a signal).
+   `RUN-ANALYSIS.md` §20.1; the G5 `decay` knob stays human). The operator's `20260929T111926` run
+   supplied the first real yearly readout (2020 +0.66 → 2026 +0.11, slope −0.09/yr, §21.1), and round 77
+   added the formal first-vs-last comparison (`sleeveFirstLast`: stress-split halves with Lo SEs +
+   95% intervals + the second-minus-first Δ, descriptive, never gating; six §U checks, ledger 249/3106).
+   The lab cross-check is written (e109: port-verify of the operator block + honest-book decay direction,
+   lab F-120 measured in-session provisional) but its operator run is still pending (item 108).
 
 106. [ ] **Unseen-data protocol (round-75 follow-up; round-76 procedure written).** Defined in
    `docs/UNSEEN.md`: unseen = every byte post-dates the spec freeze with no feedback (following
@@ -1163,6 +1165,14 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
 107. [ ] **`analyze.js` split (deferred; high-risk).** 3600+ lines. Split only with a byte-exact shim
    + lock-registry rows à la R74's `walkforward.js` split — no behavioral need this round, so this
    waits for a round that touches the driver anyway.
+
+108. [ ] **Round-77 operator runs (gate the round).** `npm test` (expect 132/132 — the node mirror
+   asserts the 249-contracts ledger), `bash scripts/sleeve-runs.sh base` (expect the new
+   `first-last per-bar Sharpe … (Δ … ± …)` line beside dsr/yearly, G5 still false on (decay,unseen)),
+   and `node src/NeuLegion-lab/run_lab.mjs e109_yearly_crosscheck.js` (expect 5/5 — the yearly
+   port-verify plus the honest-book decay direction that F-120 provisionally records). Upload the new
+   `state/runs/<runId>-sleeve/report.json` plus the e109 result. Until these run, the §U/U4-U5 and e109
+   checks are code-reviewed + shipped-bytes-verified, not natively gated. Detail: `RUN-ANALYSIS.md` §21.5.
 
 **Round-29 research sweep (2026-09-24):** five grounding notes —
 `docs/research/round29-model-class.md`, `round29-crypto-edges.md`,

@@ -348,6 +348,57 @@ export function yearlyReport(y) {
     };
 }
 
+// The formal first-vs-last comparison (round 77, TODO 105): the scored book
+// split into calendar halves at floor(T/2) — the same split `stressHalves`
+// reads, so each per-half Sharpe matches the stress readout exactly — with a
+// per-half Lo (2002) standard error and 95% interval, plus the second-minus-
+// first difference with its combined SE. Descriptive, deliberately NOT a test:
+// the halves are serially dependent, so the i.i.d. intervals understate the
+// honest uncertainty (the DSR's cluster-robust SE beside it is the honest
+// one), and the G5 `decay` knob stays a human attestation. This is the
+// evidence the attestation reads: whether the second half sits below the
+// first, and by how much with what (understated) precision.
+export function sleeveFirstLast({ net } = {}) {
+    const fail = (reason) => ({ available: false, reason, first: null, second: null, diff: null, seDiff: null, ciLow: null, ciHigh: null });
+    if (!Array.isArray(net)) return fail('the book series is not an array');
+    if (net.length < 4) return fail(`the book has ${net.length} bars — fewer than two bars per half`);
+    for (const v of net) if (!Number.isFinite(v)) return fail('the scored book series is not finite');
+    const h = Math.floor(net.length / 2);
+    const half = (a) => {
+        const perBarSharpe = sharpeRatio(a, { periodsPerYear: 1 });
+        const sk = skewness(a);
+        const ku = kurtosis(a);
+        const se = sharpeStandardError({ sharpe: perBarSharpe, n: a.length, skew: sk, kurtosis: ku });
+        if (!Number.isFinite(perBarSharpe) || !Number.isFinite(se)) return null;
+        return {
+            n: a.length, perBarSharpe, skew: sk, kurtosis: ku, se,
+            ciLow: perBarSharpe - 1.96 * se, ciHigh: perBarSharpe + 1.96 * se,
+        };
+    };
+    const first = half(net.slice(0, h));
+    const second = half(net.slice(h));
+    if (!first || !second) return fail('a half-book Sharpe interval is not finite');
+    const diff = second.perBarSharpe - first.perBarSharpe;
+    const seDiff = Math.sqrt(first.se * first.se + second.se * second.se);
+    if (!Number.isFinite(seDiff)) return fail('the half-difference standard error is not finite');
+    return {
+        available: true, first, second, diff, seDiff,
+        ciLow: diff - 1.96 * seDiff, ciHigh: diff + 1.96 * seDiff, reason: null,
+    };
+}
+
+// The JSON-safe projection of a `sleeveFirstLast` result for the report artifact.
+export function firstLastReport(f) {
+    if (!f || f.available !== true) {
+        return { available: false, first: null, second: null, diff: null, seDiff: null, ciLow: null, ciHigh: null, reason: (f && f.reason) || 'unscored' };
+    }
+    const proj = (x) => ({ n: x.n, perBarSharpe: x.perBarSharpe, se: x.se, ciLow: x.ciLow, ciHigh: x.ciHigh });
+    return {
+        available: true, first: proj(f.first), second: proj(f.second),
+        diff: f.diff, seDiff: f.seDiff, ciLow: f.ciLow, ciHigh: f.ciHigh, reason: null,
+    };
+}
+
 // The JSON-safe projection of a `sleeveDsr` result for the report artifact.
 export function dsrReport(d) {
     if (!d || d.available !== true) {
@@ -403,6 +454,7 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
         stress: scored.stress, worstBlock: scored.worstBlock,
         dsr: dsrReport(dsr),
         yearly: yearlyReport(sleeveYearly({ net: scored.net, times: view.times.slice(1) })),
+        firstLast: firstLastReport(sleeveFirstLast({ net: scored.net })),
         g5verdict: g5.verdict, g5reasons: g5.reasons,
         g5knobs: g5.knobs.map((k) => ({ knob: k.knob, pass: k.pass, note: k.note })),
     };
@@ -426,6 +478,7 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
                 stress: sized.stress, worstBlock: sized.worstBlock,
                 dsr: dsrReport(sleeveDsr({ net: sized.net })),
                 yearly: yearlyReport(sleeveYearly({ net: sized.net, times: view.times.slice(1) })),
+                firstLast: firstLastReport(sleeveFirstLast({ net: sized.net })),
             };
         } else {
             rep.sized = { available: false, reason: sized.reason };
@@ -450,6 +503,12 @@ export function formatSleeveReport(r) {
         return `yearly per-bar Sharpe ${first.year} ${s(first.netSharpe)} → ${last.year} ${s(last.netSharpe)}` +
             ` (slope ${y.slope == null ? 'n/a' : s(y.slope) + '/yr'}, ${y.years.length}y)`;
     };
+    const firstLastLine = (f) => {
+        if (!f || f.available !== true) return 'first-last unscored';
+        const s = (v) => (Number.isFinite(v) ? (v >= 0 ? '+' : '') + v.toFixed(2) : 'n/a');
+        return `first-last per-bar Sharpe ${s(f.first.perBarSharpe)} → ${s(f.second.perBarSharpe)}` +
+            ` (Δ ${s(f.diff)} ± ${(1.96 * f.seDiff).toFixed(2)})`;
+    };
     const attest = (r.g5reasons || []).filter((x) => x === 'decay' || x === 'unseen');
     const lines = [
         `[sleeve] ${r.sleeveId} @${r.costBps}bps over ${r.buckets} buckets x ${r.streams} streams`,
@@ -457,6 +516,7 @@ export function formatSleeveReport(r) {
         `  null-basis ${(100 * r.nullBasisFraction).toFixed(2)}%, marked ${(100 * r.markedFraction).toFixed(1)}%`,
         `  ${dsrLine(r.dsr)}`,
         `  ${yearlyLine(r.yearly)}`,
+        `  ${firstLastLine(r.firstLast)}`,
         `  G5 verdict ${r.g5verdict} (${r.g5reasons.join(',')})${attest.length ? ` — the operator run owns ${attest.join('/')}` : ''}`,
     ];
     if (r.sized) {
