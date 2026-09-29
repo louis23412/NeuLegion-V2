@@ -529,12 +529,52 @@ test('the analyze CLI scores a structural sleeve with --sleeve (round 44, W2)', 
         assert.equal(report.result.available, true, `the sleeve book is unavailable: ${report.result.reason}`);
         assert.equal(report.result.buckets, 40, 'the sleeve book covers the wrong grid');
 
-        // Refusals: empty id, unknown id, missing funding files.
+        // Round 69 (--sleeve-sizing): the same book sized through the vol-target
+        // risk policy — the sized leg lands in the summary and both artifacts.
+        const sizedRes = spawnSync(process.execPath, [
+            analyzePath,
+            '--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`,
+            '--cost-bps=4', '--sleeve-sizing=0.01',
+        ], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: path.join(root, 'state-sized') },
+        });
+        assert.equal(sizedRes.status, 0, `the sized sleeve run exited ${sizedRes.status}:\n${sizedRes.stderr}`);
+        assert.match(sizedRes.stdout, /sized @0\.01\/bar \(w24,/, 'the summary does not print the sized leg');
+        const sizedRunDir = path.join(root, 'state-sized', 'runs', fs.readdirSync(path.join(root, 'state-sized', 'runs'))[0]);
+        const sizedManifest = JSON.parse(fs.readFileSync(path.join(sizedRunDir, 'run.json'), 'utf8'));
+        const sizedReport = JSON.parse(fs.readFileSync(path.join(sizedRunDir, 'report.json'), 'utf8'));
+        assert.deepEqual(sizedManifest.sizing, { target: 0.01, window: 24 }, 'run.json does not record the sizing');
+        assert.equal(sizedReport.result.sized.available, true, `the sized book is unavailable: ${sizedReport.result.sized && sizedReport.result.sized.reason}`);
+        assert.equal(sizedReport.result.sized.skipped + sizedReport.result.sized.scoredBars, 39, 'the sized book covers the wrong span');
+
+        // Round 70 (adaptive): the trailing-mean target — the F-115 payoff mode.
+        const adaptRes = spawnSync(process.execPath, [
+            analyzePath,
+            '--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`,
+            '--cost-bps=4', '--sleeve-sizing=adaptive',
+        ], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: path.join(root, 'state-adaptive') },
+        });
+        assert.equal(adaptRes.status, 0, `the adaptive sleeve run exited ${adaptRes.status}:\n${adaptRes.stderr}`);
+        assert.match(adaptRes.stdout, /sized @adaptive\/bar \(w24,/, 'the summary does not print the adaptive leg');
+        const adaptRunDir = path.join(root, 'state-adaptive', 'runs', fs.readdirSync(path.join(root, 'state-adaptive', 'runs'))[0]);
+        const adaptReport = JSON.parse(fs.readFileSync(path.join(adaptRunDir, 'report.json'), 'utf8'));
+        assert.equal(adaptReport.result.sized.available, true, `the adaptive book is unavailable: ${adaptReport.result.sized && adaptReport.result.sized.reason}`);
+        assert.equal(adaptReport.result.sizing.target, 'adaptive', 'report.json does not record the adaptive target');
+
+        // Refusals: empty id, unknown id, missing funding files, empty sizing,
+        // window-without-sizing.
         for (const [flags, re] of [
             [['--sleeve='], /--sleeve= is present but empty/],
             [['--sleeve'], /--sleeve= is present but empty/],
             [['--sleeve=nope', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`], /unknown --sleeve/],
             [['--sleeve=carry-dispersion', `--files=${c0},${c1}`], /needs --carry-files/],
+            [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-sizing='], /--sleeve-sizing is present but empty/],
+            [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-sizing-window=12'], /--sleeve-sizing-window needs --sleeve-sizing/],
         ]) {
             const bad = spawnSync(process.execPath, [analyzePath, ...flags], {
                 cwd: projectRoot,

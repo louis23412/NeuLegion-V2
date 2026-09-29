@@ -42,7 +42,7 @@ import { SIGNAL_CANDIDATES, REVERSAL_CANDIDATES, SIGUP_CANDIDATES, signalForCand
 import { makeBenchmarkForecaster, BENCHMARK_KINDS } from './analysis/benchmark.js';
 import { CANDLE_MANIFEST } from './candles_audit.js';
 import { parseFundingJsonl, auditFundingSeries, auditFundingProblems, carryPanelStream, pooledCarry, correlation } from './analysis/carry.js';
-import { runSleeveReport, formatSleeveReport, SLEEVE_IDS } from './sleeve_score.js';
+import { runSleeveReport, formatSleeveReport, parseSleeveSizing, SLEEVE_IDS } from './sleeve_score.js';
 import { makeRunId, createRunDirectory, writeJson, writeJsonAtomic, writeReport, appendLog, appendJsonl } from './observer/report.js';
 import { configFingerprint } from './legion/sanitize.js';
 import { DEFAULT_ROSTER_IDS, LINEAGE_BRANCHES, uncoveredVariantIds, DROPPED_VARIANT_IDS } from './lineage.js';
@@ -2141,7 +2141,8 @@ export const makeNodeFoldDispatcher = ({ url, spawn = null, timeoutMs = null } =
 // the report instead of throwing, so the artifact always says what ran.
 export async function runSleeveAnalysis({
     sleeve = 'carry-dispersion', carryFiles = null, files = null, symbols = null,
-    file = CONFIG.file, costBps = 0, readFile = (f) => fs.readFileSync(f, 'utf8'),
+    file = CONFIG.file, costBps = 0, sizingTarget = null, sizingWindow = 24,
+    readFile = (f) => fs.readFileSync(f, 'utf8'),
 } = {}) {
     if (!carryFiles || !carryFiles.length) {
         throw new Error('analyze: --sleeve needs --carry-files (funding JSONL per stream, positionally matched to the candle inputs)');
@@ -2149,8 +2150,8 @@ export async function runSleeveAnalysis({
     const inputs = files && files.length ? files : (symbols && symbols.length ? resolveSymbolFiles(symbols) : [file]);
     const fundingTexts = carryFiles.map((f) => readFile(f));
     const candleTexts = inputs.map((f) => readFile(f));
-    const result = runSleeveReport({ sleeveId: sleeve, fundingTexts, candleTexts, costBps });
-    return { inputs, carryFiles, sleeve, costBps, result, summary: formatSleeveReport(result) };
+    const result = runSleeveReport({ sleeveId: sleeve, fundingTexts, candleTexts, costBps, sizingTarget, sizingWindow });
+    return { inputs, carryFiles, sleeve, costBps, sizingTarget, sizingWindow, result, summary: formatSleeveReport(result) };
 }
 
 // Run the A/B against real candle data. Loads the model lazily so importing this
@@ -3330,6 +3331,19 @@ export const ANALYZE_USAGE = [
     '                           only carry-dispersion runs on shipped data — the',
     '                           positioning sleeves report available:false; a present-but-',
     '                           empty value is an error — BUGS.md #69)',
+    '  --sleeve-sizing=<vol|adaptive>',
+    '                           ALSO score the sleeve book sized to a per-bar vol',
+    '                           target through the vol-target risk policy (round 69;',
+    '                           causal trailing-RMS vols, skipped bars run flat, the',
+    '                           target is caller-supplied, never banked — pick it at',
+    '                           the book\'s own vol scale (the report prints bookVol;',
+    '                           a target far above it just levers to the 4x cap;',
+    '                           `adaptive` re-estimates the target causally as the',
+    '                           trailing mean vol — the F-115/F-117 payoff mode;',
+    '                           a present-but-empty value is an error — BUGS.md #69)',
+    '  --sleeve-sizing-window=<n>',
+    '                           trailing-RMS window in bars for --sleeve-sizing',
+    '                           (default 24; needs --sleeve-sizing)',
     '  --cadences=a,b,c         re-score every active candidate on each fold-grid cadence',
     '                           (P2 fixed-position restatement, no model) and report the',
     '                           majority-pass + catastrophic-veto verdict across the grid',
@@ -3560,17 +3574,27 @@ if (isMain) {
             if (!carryFilesList || !carryFilesList.length) throw new Error('analyze: --sleeve needs --carry-files (funding JSONL per stream, positionally matched to the candle inputs)');
             const sleeveSymbols = symbols && symbols.length === 1 && symbols[0] === 'all' ? CANDLE_MANIFEST.map((e) => e.symbol) : symbols;
             const sleeveCost = num('cost-bps', 0);
+            // Round 69: the opt-in sized leg — the scored book through the
+            // vol-target risk plugin (the W4c-z/F-115 payoff, now callable).
+            // A present-but-empty --sleeve-sizing is refused (BUGS.md #69);
+            // --sleeve-sizing-window without --sleeve-sizing is refused too.
+            const sizingGiven = flagGiven('sleeve-sizing');
+            const sizingRaw = argOf('sleeve-sizing');
+            if (sizingGiven && (sizingRaw == null || !String(sizingRaw).trim())) throw new Error('analyze: --sleeve-sizing is present but empty (a positive per-bar vol target is required — BUGS.md #69)');
+            if (flagGiven('sleeve-sizing-window') && !sizingGiven) throw new Error('analyze: --sleeve-sizing-window needs --sleeve-sizing');
+            const sizingOpt = parseSleeveSizing({ sizing: sizingGiven ? sizingRaw : null, window: argOf('sleeve-sizing-window') });
             const sleeveT0 = performance.now();
             const startedAt = Date.now();
             const sleeveOut = await runSleeveAnalysis({
                 sleeve: sleeveId, carryFiles: carryFilesList, files: filesList,
                 symbols: sleeveSymbols, costBps: sleeveCost,
+                sizingTarget: sizingOpt.sized ? sizingOpt.target : null, sizingWindow: sizingOpt.window,
             });
             const durationMs = performance.now() - sleeveT0;
             const runId = `${makeRunId({ seed: num('seed', 1), startedAt })}-sleeve`;
             const runDir = createRunDirectory(CONFIG.stateFolder, runId);
-            writeJson(runDir, 'run.json', { runId, mode: 'sleeve', sleeve: sleeveId, startedAt, costBps: sleeveCost, inputs: sleeveOut.inputs, carryFiles: carryFilesList });
-            writeReport(runDir, { mode: 'sleeve', sleeve: sleeveId, costBps: sleeveCost, durationMs, inputs: sleeveOut.inputs, carryFiles: carryFilesList, result: sleeveOut.result });
+            writeJson(runDir, 'run.json', { runId, mode: 'sleeve', sleeve: sleeveId, startedAt, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, inputs: sleeveOut.inputs, carryFiles: carryFilesList });
+            writeReport(runDir, { mode: 'sleeve', sleeve: sleeveId, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, durationMs, inputs: sleeveOut.inputs, carryFiles: carryFilesList, result: sleeveOut.result });
             console.log(sleeveOut.summary);
             console.log(`\nsleeve report at ${path.join(runDir, 'report.json')} (${durationMs.toFixed(0)}ms)`);
         } else if (seedList) {

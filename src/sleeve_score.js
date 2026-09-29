@@ -17,6 +17,7 @@ import { toptraderFadeSleeve } from './plugins/sleeves/toptrader-fade.js';
 import { oiChangeSleeve } from './plugins/sleeves/oi-change.js';
 import { singleBook } from './plugins/books/single.js';
 import { capBandRisk } from './plugins/risk/cap-band.js';
+import { volTargetRisk } from './plugins/risk/vol-target.js';
 import { scoreBookReturns, scoreG5, stressHalves, worstBlock } from './analysis/portfolio.js';
 import { factorNeutralSharpe } from './analysis/dependence.js';
 import { parseFundingJsonl } from './analysis/carry.js';
@@ -210,7 +211,7 @@ export function parseSleeveInputs({ fundingTexts, candleTexts, gridMs = 28_800_0
     };
 }
 
-export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps = 4, gridMs = 28_800_000, barMs = 3_600_000 } = {}) {
+export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps = 4, gridMs = 28_800_000, barMs = 3_600_000, sizingTarget = null, sizingWindow = SIZED_SLEEVE_DEFAULTS.window } = {}) {
     if (!SLEEVE_IDS.includes(sleeveId)) {
         return { sleeveId, available: false, reason: `unknown sleeve "${String(sleeveId)}" (known: ${SLEEVE_IDS.join(', ')})`, costBps };
     }
@@ -238,7 +239,7 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
         net: scored.net, costBps, blocks: 6, dsrAdjusted: null,
         neutralSharpe: fn.neutral, decayDocumented: false, unseenData: false,
     });
-    return {
+    const rep = {
         sleeveId, available: true, costBps,
         streams: parsed.streams, buckets: parsed.buckets,
         nullBasisFraction: parsed.nullBasisFraction, markedFraction: parsed.markedFraction,
@@ -251,6 +252,30 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
         g5verdict: g5.verdict, g5reasons: g5.reasons,
         g5knobs: g5.knobs.map((k) => ({ knob: k.knob, pass: k.pass, note: k.note })),
     };
+    const sizing = parseSleeveSizing({ sizing: sizingTarget, window: sizingWindow });
+    if (sizing.sized) {
+        const sized = scoreSleeveSized(sleeveId, view, {
+            costBps, target: sizing.target, window: sizing.window, panel,
+        });
+        rep.sizing = { target: sizing.target, window: sizing.window };
+        if (sized.available) {
+            rep.sized = {
+                available: true,
+                target: sizing.target, window: sizing.window,
+                baseNetAnnual: sized.baseNetSharpe * Math.sqrt(365 * 3),
+                netAnnual: sized.netSharpe * Math.sqrt(365 * 3),
+                neutralAnnual: sized.neutralSharpe * Math.sqrt(365 * 3),
+                turnoverAnnual: sized.turnover * (365 * 3) / sized.net.length,
+                breakEvenCostBps: sized.breakEvenCostBps,
+                skipped: sized.skipped, scoredBars: sized.scoredBars,
+                bookVolMean: sized.bookVolMean,
+                stress: sized.stress, worstBlock: sized.worstBlock,
+            };
+        } else {
+            rep.sized = { available: false, reason: sized.reason };
+        }
+    }
+    return rep;
 }
 
 export function formatSleeveReport(r) {
@@ -258,10 +283,135 @@ export function formatSleeveReport(r) {
         return `[sleeve] ${r && r.sleeveId ? r.sleeveId : 'unknown'}: unavailable — ${r && r.reason ? r.reason : 'no reason'}`;
     }
     const f2 = (v) => (Number.isFinite(v) ? v.toFixed(2) : 'n/a');
-    return [
+    const lines = [
         `[sleeve] ${r.sleeveId} @${r.costBps}bps over ${r.buckets} buckets x ${r.streams} streams`,
         `  net ${f2(r.netAnnual)} / neutral ${f2(r.neutralAnnual)} (raw ${f2(r.rawAnnual)}), turnover ${f2(r.turnoverAnnual)}/yr, break-even ${f2(r.breakEvenCostBps)} bps`,
         `  null-basis ${(100 * r.nullBasisFraction).toFixed(2)}%, marked ${(100 * r.markedFraction).toFixed(1)}%`,
         `  G5 verdict ${r.g5verdict} (${r.g5reasons.join(',')}) — the operator run owns dsr/decay/unseen`,
-    ].join('\n');
+    ];
+    if (r.sized) {
+        lines.push(r.sized.available === true
+            ? `  sized @${r.sized.target}/bar (w${r.sized.window}, bookVol ${r.sized.bookVolMean.toExponential(2)}): net ${f2(r.sized.netAnnual)} (base ${f2(r.sized.baseNetAnnual)}), turnover ${f2(r.sized.turnoverAnnual)}/yr, break-even ${f2(r.sized.breakEvenCostBps)} bps, skipped ${r.sized.skipped}/${r.sized.skipped + r.sized.scoredBars}`
+            : `  sized unavailable — ${r.sized.reason}`);
+    }
+    return lines.join('\n');
+}
+
+// The `--sleeve-sizing` composition (round 69): the scored sleeve book, sized
+// through the vol-target risk plugin behind the driver seam.
+//
+// Sizing is a risk result (F-16/F-106/F-112/F-115): the vol forecast is a
+// causal trailing RMS of the sleeve's own gross book (strictly-before-t, the
+// e105 convention, default window 24 eight-hour bars); the TARGET is
+// caller-supplied (a measurement the operator chooses per run, never banked —
+// the plugin takes it as input for the same reason). Skipped bars (no history
+// yet, dead vol) run flat — scale 0 on both the return and the weight row —
+// so the re-score's turnover prices the exposure actually traded and
+// `scoreBookReturns` keeps the gate's own arithmetic untouched. Open-loop
+// vol-targeting is documented to spike turnover/leverage under estimation
+// error (Devanathan et al. 2026, `voltarget2603`); the registered per-sleeve
+// cap (4x) is the guard, and a feedback-control sizing rule is the recorded
+// follow-up, not this round.
+export const SIZED_SLEEVE_DEFAULTS = Object.freeze({ window: 24 });
+
+export function trailingBookVol(gross, { window = SIZED_SLEEVE_DEFAULTS.window } = {}) {
+    if (!Array.isArray(gross)) return null;
+    const w = Number(window);
+    if (!Number.isInteger(w) || !(w > 0)) throw new Error('trailingBookVol: window must be a positive integer');
+    const out = new Array(gross.length);
+    for (let t = 0; t < gross.length; t++) {
+        let sumSq = 0;
+        let n = 0;
+        for (let k = Math.max(0, t - w); k < t; k++) {
+            const r = gross[k];
+            if (!Number.isFinite(r)) continue;
+            sumSq += r * r;
+            n++;
+        }
+        out[t] = n ? Math.sqrt(sumSq / n) : NaN;
+    }
+    return out;
+}
+
+// The pure `--sleeve-sizing` option parser (pinned by §P, called by the CLI):
+// absent means the default unsized report (byte-identical path); present is a
+// positive per-bar vol target or the string `adaptive` (any case) for the
+// trailing-mean target (the F-115/F-117 convention: the target re-estimated
+// causally at ≈ book vol, mean scale ≈ 1 — a scalar far above book vol just
+// levers to the cap, F-116). The window defaults to 24.
+export function parseSleeveSizing({ sizing, window } = {}) {
+    if (sizing == null) return { sized: false, target: null, window: SIZED_SLEEVE_DEFAULTS.window };
+    const w = window == null ? SIZED_SLEEVE_DEFAULTS.window : Number(window);
+    if (!Number.isInteger(w) || !(w > 0)) {
+        throw new Error(`analyze: --sleeve-sizing-window must be a positive integer (got "${String(window)}")`);
+    }
+    if (typeof sizing === 'string' && sizing.trim().toLowerCase() === 'adaptive') {
+        return { sized: true, target: 'adaptive', window: w };
+    }
+    const target = Number(sizing);
+    if (!Number.isFinite(target) || !(target > 0)) {
+        throw new Error(`analyze: --sleeve-sizing needs a positive per-bar vol target or "adaptive" (got "${String(sizing)}" — BUGS.md #69)`);
+    }
+    return { sized: true, target, window: w };
+}
+
+// The adaptive target series (round 70): the expanding causal mean of the
+// vol forecast — targets[t] reads only vols[0..t], each of which reads only
+// returns strictly before its bar, so the whole chain is causal. A bar with
+// no finite-positive vol history yet carries NaN, which the plugin skips
+// (never an infinite scale). This is the e105 convention with the lab's
+// WARMUP span choice removed: the mean runs over every scored bar, not over
+// bars past an arbitrary cutoff.
+export function adaptiveTargets(vols) {
+    if (!Array.isArray(vols)) return null;
+    const out = new Array(vols.length);
+    let sum = 0;
+    let n = 0;
+    for (let t = 0; t < vols.length; t++) {
+        const v = vols[t];
+        if (Number.isFinite(v) && v > 0) { sum += v; n++; }
+        out[t] = n ? sum / n : NaN;
+    }
+    return out;
+}
+
+export function scoreSleeveSized(sleeveId, view, { costBps = 0, target, window = SIZED_SLEEVE_DEFAULTS.window, panel = null } = {}) {
+    const adaptive = target === 'adaptive';
+    const t = adaptive ? NaN : Number(target);
+    if (!adaptive && (!Number.isFinite(t) || !(t > 0))) {
+        return { sleeveId, available: false, reason: 'sizing needs a positive per-bar vol target or "adaptive"', costBps };
+    }
+    const base = scoreSleeve(sleeveId, view, { costBps });
+    if (!base.available) return { ...base, sizing: null };
+    const vols = trailingBookVol(base.gross, { window });
+    const targets = adaptive ? adaptiveTargets(vols) : t;
+    const sized = volTargetRisk.sizingForSleeve(base.gross, vols, sleeveId, targets);
+    if (!sized.available) return { sleeveId, available: false, reason: sized.reason, costBps };
+    const byIndex = new Map(sized.index.map((bar, i) => [bar, sized.scales[i]]));
+    const scales = base.gross.map((_, bar) => (byIndex.has(bar) ? byIndex.get(bar) : 0));
+    const scaledGross = base.gross.map((r, bar) => scales[bar] * r);
+    const scaledWeights = base.weightRows.map((row, bar) => row.map((w) => scales[bar] * w));
+    const rescored = scoreBookReturns(scaledGross, scaledWeights, { costBps });
+    if (!rescored) {
+        return { sleeveId, available: false, reason: 'the sized sleeve book did not score', costBps };
+    }
+    const fn = Array.isArray(panel) && panel.length
+        ? factorNeutralSharpe(rescored.net, panel)
+        : { raw: rescored.netSharpe, neutral: NaN, residual: null };
+    let bookVolSum = 0;
+    for (const bar of sized.index) bookVolSum += vols[bar];
+    return {
+        sleeveId, available: true, costBps, target: adaptive ? 'adaptive' : t, window,
+        baseNetSharpe: base.netSharpe, baseTurnover: base.turnover,
+        baseBreakEvenCostBps: base.breakEvenCostBps,
+        skipped: sized.skipped, scoredBars: sized.scored,
+        bookVolMean: bookVolSum / sized.scored,
+        gross: rescored.gross, net: rescored.net,
+        grossSharpe: rescored.grossSharpe, netSharpe: rescored.netSharpe,
+        turnover: rescored.turnover, turnoverPerYear: rescored.turnoverPerYear,
+        breakEvenCostBps: rescored.breakEvenCostBps,
+        rawSharpe: fn.raw, neutralSharpe: fn.neutral,
+        panelStreams: Array.isArray(panel) ? panel.length : 0,
+        stress: stressHalves(rescored.net), worstBlock: worstBlock(rescored.net),
+    };
 }

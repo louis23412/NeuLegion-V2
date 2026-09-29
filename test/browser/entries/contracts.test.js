@@ -109,7 +109,7 @@ import { mlpLearner, MLP_DEFAULTS, isMlp } from '../../../src/plugins/learners/m
 import { fitRidge, predictRidge, fitMLP, predictMLP } from '../../../src/analysis/benchmark.js';
 import { applyVolTargetScaling } from '../../../src/analysis/forecast.js';
 import { DEFAULT_STACK, PLUGIN_IDS, installDefaultStack } from '../../../src/plugins/index.js';
-import { SLEEVE_IDS, resolveSleeve, scoreSleeve, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport } from '../../../src/sleeve_score.js';
+import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport } from '../../../src/sleeve_score.js';
 import { bookReturns, bookTurnover, scoreBook, scoreBookReturns } from '../../../src/analysis/portfolio.js';
 
 // The lock register's V2 section (`test/lock-registry.js`) and the module-by-module
@@ -1328,6 +1328,191 @@ export async function run(options = {}) {
         DEFAULT_STACK.some((e) => e.kind === 'risk' && e.plugin === volTargetRisk &&
             e.state === 'UNTESTED' && e.defaultStack === false) &&
         PLUGIN_IDS.includes('risk:vol-target'));
+
+    // ---- P. the sized sleeve book (round 69, --sleeve-sizing) ----------------
+    // The scored sleeve book through the vol-target risk policy behind the
+    // driver seam: causal trailing-RMS vols, a caller-supplied target, skipped
+    // bars flat, re-scored by the gate's own arithmetic.
+    check('P: trailingBookVol is the causal strictly-before-t RMS with a NaN warmup',
+        (() => {
+            const v = trailingBookVol([0.03, -0.04, 0.0, 0.05], { window: 2 });
+            const rms = (a) => Math.sqrt(a.reduce((s, x) => s + x * x, 0) / a.length);
+            return Number.isNaN(v[0]) && near(v[1], 0.03, 1e-15) &&
+                near(v[2], rms([0.03, -0.04]), 1e-15) && near(v[3], rms([-0.04, 0.0]), 1e-15);
+        })());
+    check('P: trailingBookVol reads nothing at or after t and rejects a bad window',
+        (() => {
+            const a = trailingBookVol([0.01, 0.02, 0.03, 0.04], { window: 10 });
+            const b = trailingBookVol([0.01, 0.02, -0.99, -0.99], { window: 10 });
+            let threw = false;
+            try { trailingBookVol([0.01], { window: 0 }); } catch { threw = true; }
+            return a.length === 4 && Number.isNaN(a[0]) && Number.isNaN(b[0]) && a[1] === b[1] &&
+                a[1] === 0.01 && trailingBookVol('nope') === null && threw === true &&
+                SIZED_SLEEVE_DEFAULTS.window === 24;
+        })());
+    check('P: parseSleeveSizing is absent-by-default and strict when present',
+        (() => {
+            const d = parseSleeveSizing({});
+            const s = parseSleeveSizing({ sizing: '0.01' });
+            const bad = ['', '0', '-0.01', 'NaN', 'abc'].map((v) => {
+                try { parseSleeveSizing({ sizing: v }); return false; } catch { return true; }
+            });
+            let badWindow = false;
+            try { parseSleeveSizing({ sizing: 0.01, window: '0' }); } catch { badWindow = true; }
+            return d.sized === false && d.target === null && d.window === 24 &&
+                s.sized === true && s.target === 0.01 && s.window === 24 &&
+                bad.every(Boolean) && badWindow === true;
+        })());
+    check('P: the sized carry sleeve is available with a finite Sharpe and one warmup skip',
+        (() => {
+            const s = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 0.02, window: 24 });
+            return s.available === true && Number.isFinite(s.netSharpe) &&
+                s.target === 0.02 && s.window === 24 && s.skipped === 1 &&
+                s.scoredBars + s.skipped === s.net.length &&
+                s.gross.length === s.net.length && Number.isFinite(s.breakEvenCostBps) &&
+                Number.isNaN(s.neutralSharpe) && s.panelStreams === 0 &&
+                Number.isFinite(s.stress.first) && Number.isFinite(s.stress.min);
+        })());
+    check('P: the sized book is exactly the plugin sizing composed with flat skips',
+        (() => {
+            const s = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 0.02, window: 3 });
+            const base = scoreSleeve('carry-dispersion', kCarryView, { costBps: 0 });
+            const vols = trailingBookVol(base.gross, { window: 3 });
+            const via = volTargetRisk.sizingForSleeve(base.gross, vols, 'carry-dispersion', 0.02);
+            const scales = base.gross.map((_, bar) => {
+                const i = via.index.indexOf(bar);
+                return i < 0 ? 0 : via.scales[i];
+            });
+            const eg = base.gross.map((r, bar) => scales[bar] * r);
+            const ew = base.weightRows.map((row, bar) => row.map((w) => scales[bar] * w));
+            const rescored = scoreBookReturns(eg, ew, { costBps: 0 });
+            return via.available && deepEqual(s.net, rescored.net) &&
+                near(s.turnover, rescored.turnover, 1e-15) &&
+                scales.every((x) => Math.abs(x) <= 4 + 1e-12);
+        })());
+    check('P: sizing is deterministic and cost-monotone on the sized leg',
+        (() => {
+            const a = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 0.02 });
+            const b = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 0.02 });
+            const c = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 10, target: 0.02 });
+            return JSON.stringify(a) === JSON.stringify(b) && c.available === true &&
+                c.netSharpe <= a.netSharpe + 1e-12;
+        })());
+    check('P: sizing guards fail closed (bad target, unknown sleeve, un-runnable view)',
+        (() => {
+            const bad = scoreSleeveSized('carry-dispersion', kCarryView, { target: 0 });
+            let threw = false;
+            try { scoreSleeveSized('nope', kCarryView, { target: 0.02 }); } catch (e) { threw = /known:/.test(e.message); }
+            const empty = scoreSleeveSized('toptrader-fade', { topLS: [null, null], spotRet: [], times: [] }, { target: 0.02 });
+            return bad.available === false && typeof bad.reason === 'string' && threw === true &&
+                empty.available === false && empty.sizing === null;
+        })());
+    check('P: the default report carries no sized block (the unsized path is untouched)',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4 });
+            const text = formatSleeveReport(r);
+            return r.available === true && !('sized' in r) && !('sizing' in r) && !text.includes('sized');
+        })());
+    check('P: the sized report attaches the sized block and prints it',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4, sizingTarget: 0.01 });
+            const text = formatSleeveReport(r);
+            return r.available === true && r.sized && r.sized.available === true &&
+                r.sizing.target === 0.01 && r.sizing.window === 24 &&
+                Number.isFinite(r.sized.netAnnual) && Number.isFinite(r.sized.baseNetAnnual) &&
+                r.sized.skipped + r.sized.scoredBars === 39 &&
+                Number.isFinite(r.sized.worstBlock) &&
+                r.sized.bookVolMean > 0 && Number.isFinite(r.sized.bookVolMean) &&
+                text.includes('sized @0.01/bar (w24,') && text.includes('bookVol');
+        })());
+    check('P: a degenerate sizing target degrades to an unavailable sized block, never a throw',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4, sizingTarget: 1e-9, sizingWindow: 1 });
+            return r.available === true && typeof r.sized === 'object';
+        })());
+
+    // ---- Q. adaptive sizing (round 70, F-117) --------------------------------
+    // The trailing-mean target (the F-115 convention) as a first-class CLI
+    // mode: the target re-estimated causally at ≈ book vol, so the book sizes
+    // around scale 1 instead of levering to the cap (F-116).
+    check('Q: adaptiveTargets is the causal expanding mean with a NaN start',
+        (() => {
+            const t = adaptiveTargets([NaN, 0.02, 0.04, NaN, 0, -1, 0.06]);
+            return t.length === 7 && Number.isNaN(t[0]) && t[1] === 0.02 && t[2] === 0.03 &&
+                t[3] === 0.03 && t[4] === 0.03 && t[5] === 0.03 &&
+                near(t[6], (0.02 + 0.04 + 0.06) / 3, 1e-15) && adaptiveTargets('nope') === null;
+        })());
+    check('Q: adaptive targets read nothing at or after t (prefix identity)',
+        (() => {
+            const full = adaptiveTargets([0.01, 0.03, 0.02, 0.05, 0.04]);
+            const pre = adaptiveTargets([0.01, 0.03, 0.02]);
+            return deepEqual(full.slice(0, 3), pre) &&
+                adaptiveTargets([0, -1, NaN]).every((x) => Number.isNaN(x));
+        })());
+    check('Q: parseSleeveSizing accepts adaptive in any case and still guards the window',
+        (() => {
+            const a = parseSleeveSizing({ sizing: 'adaptive' });
+            const b = parseSleeveSizing({ sizing: 'ADAPTIVE', window: 12 });
+            let badWindow = false;
+            try { parseSleeveSizing({ sizing: 'adaptive', window: 0 }); } catch { badWindow = true; }
+            return a.sized === true && a.target === 'adaptive' && a.window === 24 &&
+                b.target === 'adaptive' && b.window === 12 && badWindow === true;
+        })());
+    check('Q: the adaptive carry sleeve is available with the warmup skipped',
+        (() => {
+            const s = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'adaptive', window: 24 });
+            return s.available === true && s.target === 'adaptive' && Number.isFinite(s.netSharpe) &&
+                s.skipped >= 1 && s.scoredBars + s.skipped === s.net.length &&
+                s.bookVolMean > 0 && Number.isFinite(s.stress.min);
+        })());
+    check('Q: the adaptive book is exactly the plugin sizing on the expanding-mean targets',
+        (() => {
+            const s = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'adaptive', window: 3 });
+            const base = scoreSleeve('carry-dispersion', kCarryView, { costBps: 0 });
+            const vols = trailingBookVol(base.gross, { window: 3 });
+            const via = volTargetRisk.sizingForSleeve(base.gross, vols, 'carry-dispersion', adaptiveTargets(vols));
+            return via.available && deepEqual(s.net, scoreBookReturns(
+                base.gross.map((r, bar) => { const i = via.index.indexOf(bar); return (i < 0 ? 0 : via.scales[i]) * r; }),
+                base.weightRows.map((row, bar) => { const i = via.index.indexOf(bar); const sc = i < 0 ? 0 : via.scales[i]; return row.map((w) => sc * w); }),
+                { costBps: 0 }).net);
+        })());
+    check('Q: adaptive sizing is deterministic and cost-monotone',
+        (() => {
+            const a = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'adaptive' });
+            const b = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'adaptive' });
+            const c = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 10, target: 'adaptive' });
+            return JSON.stringify(a) === JSON.stringify(b) && c.available === true &&
+                c.netSharpe <= a.netSharpe + 1e-12;
+        })());
+    check('Q: adaptive sizing degrades fail-closed on an un-runnable view',
+        (() => {
+            const e = scoreSleeveSized('toptrader-fade', { topLS: [null, null], spotRet: [], times: [] }, { target: 'adaptive' });
+            return e.available === false && e.sizing === null && typeof e.reason === 'string';
+        })());
+    check('Q: adaptive sizing carries the factor-neutral readout beside a panel',
+        (() => {
+            const s = scoreSleeveSized('carry-dispersion', kCarryView, {
+                costBps: 0, target: 'adaptive',
+                panel: [[0.01, 0.02, 0.01, -0.01, 0.02], [0.02, 0.01, -0.02, 0.01, 0.01]],
+            });
+            return s.available === true && s.panelStreams === 2 && Number.isFinite(s.neutralSharpe);
+        })());
+    check('Q: the adaptive report attaches the adaptive block and prints it',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4, sizingTarget: 'adaptive' });
+            const text = formatSleeveReport(r);
+            return r.available === true && r.sized && r.sized.available === true &&
+                r.sizing.target === 'adaptive' && r.sized.target === 'adaptive' &&
+                r.sized.skipped + r.sized.scoredBars === 39 &&
+                text.includes('sized @adaptive/bar (w24,') && text.includes('bookVol');
+        })());
+    check('Q: the scalar leg is untouched by the adaptive refactor',
+        (() => {
+            const s = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 0.02, window: 24 });
+            const p = parseSleeveSizing({ sizing: 0.02 });
+            return s.available === true && s.target === 0.02 && s.skipped === 1 &&
+                p.sized === true && p.target === 0.02;
+        })());
 
     const failed = checks.filter((c) => !c.pass);
     return { total: checks.length, failed: failed.length, failures: failed, checks };
