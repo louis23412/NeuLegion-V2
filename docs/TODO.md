@@ -1145,16 +1145,20 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    flat inputs do not transfer blindly). Until then, read `sized.dsr` as diagnostics and keep the
    flat book as the only G5 claim (F-119).
 
-105. [ ] **Decay attribution on the sleeve (round-75 follow-up).** The flat halves read 0.47 → 0.20
-   per-bar (`20260929T061347-seed1-sleeve`) — a measured gap, not a hunch. Next: a per-year /
-   per-block Sharpe series on the honest book plus a first-vs-last formal comparison, recorded
-   beside the operator-owned decay attestation (which stays human either way).
+105. [ ] **Decay attribution on the sleeve (round-75 follow-up; round-76 evidence landed).** The flat halves read 0.47 → 0.20
+   per-bar (`20260929T061347-seed1-sleeve`) — a measured gap, not a hunch — and round 76 added the
+   machine-readable yearly series (`sleeveYearly`: per-year per-bar Sharpe + descriptive OLS slope,
+   `RUN-ANALYSIS.md` §20.1; the G5 `decay` knob stays human). Remaining: the formal first-vs-last
+   comparison off the operator's yearly block, plus the proposed lab cross-check (reproduce the repo
+   years from the honest carry book, F-60 port-verify pattern — disagreement means a calendar bug,
+   not a signal).
 
-106. [ ] **Unseen-data protocol (round-75 follow-up).** Define what counts as unseen for the shipped
-   funding/candle files (frozen spec + scored-on-unseen), following sweep 2026-09u's 2608.27734
-   frame: leakage-safety must be structural (registry-validated tools / import law / no-lookahead
-   audit), because a leaky oracle at Sharpe 35 survives DSR and PBO outright — statistics cannot
-   substitute for the construction guardrail. The attestation stays human either way.
+106. [ ] **Unseen-data protocol (round-75 follow-up; round-76 procedure written).** Defined in
+   `docs/UNSEEN.md`: unseen = every byte post-dates the spec freeze with no feedback (following
+   sweep 2026-09u's 2608.27734 frame — statistics cannot substitute for the construction guardrail),
+   shipped files disqualified forever, five-step freeze → wait → pre-register → run-once → sign.
+   Remaining: execute it when ≥ ~1 fresh year post-freeze exists. The attestation stays human either
+   way.
 
 107. [ ] **`analyze.js` split (deferred; high-risk).** 3600+ lines. Split only with a byte-exact shim
    + lock-registry rows à la R74's `walkforward.js` split — no behavioral need this round, so this

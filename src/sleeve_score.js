@@ -292,6 +292,62 @@ export function sleeveDsr({ net, blocks = SLEEVE_DSR_BLOCKS, trials = SLEEVE_DSR
     };
 }
 
+// The yearly decay attribution (round 76, TODO 105): the scored book grouped by
+// calendar year of the EARNING bucket (`buildFundingBook` earns legs[i] under
+// weights set at i-1, so bar t of a (B-1)-bar book labels at `times[t+1]` — the
+// caller passes exactly that; any length mismatch fail-closes, never trims).
+// Per year: bar count + per-bar Sharpe (the `scoreBookReturns` convention; a
+// sub-2-bar year is unmeasurable, `netSharpe: null`, never a fabricated 0).
+// `slope` is the OLS slope of measurable yearly Sharpes on calendar year —
+// descriptive, deliberately NOT a test: a p-value on ~8 yearly Sharpes would be
+// theater, and the G5 `decay` knob stays a human attestation either way. This
+// is the evidence the attestation reads, beside `stressHalves`/`worstBlock`.
+export function sleeveYearly({ net, times } = {}) {
+    const fail = (reason) => ({ available: false, reason, years: [], slope: null });
+    if (!Array.isArray(net) || !Array.isArray(times)) return fail('the book series and its bar times are required');
+    if (net.length === 0) return fail('no scored bars');
+    if (times.length !== net.length) {
+        return fail(`the bar times (${times.length}) do not match the scored bars (${net.length})`);
+    }
+    for (const v of net) if (!Number.isFinite(v)) return fail('the scored book series is not finite');
+    for (const t of times) if (!Number.isFinite(t)) return fail('a bar time is not finite');
+    const byYear = new Map();
+    for (let i = 0; i < net.length; i++) {
+        const year = new Date(times[i]).getUTCFullYear();
+        if (!Number.isInteger(year)) return fail('a bar time does not parse to a year');
+        if (!byYear.has(year)) byYear.set(year, []);
+        byYear.get(year).push(net[i]);
+    }
+    const years = [...byYear.keys()].sort((a, b) => a - b).map((year) => {
+        const bars = byYear.get(year);
+        return { year, bars: bars.length, netSharpe: bars.length >= 2 ? sharpeRatio(bars, { periodsPerYear: 1 }) : null };
+    });
+    const fit = years.filter((y) => Number.isFinite(y.netSharpe));
+    let slope = null;
+    if (fit.length >= 2) {
+        const n = fit.length;
+        let sx = 0, sy = 0;
+        for (const y of fit) { sx += y.year; sy += y.netSharpe; }
+        const mx = sx / n, my = sy / n;
+        let num = 0, den = 0;
+        for (const y of fit) { num += (y.year - mx) * (y.netSharpe - my); den += (y.year - mx) * (y.year - mx); }
+        slope = den > 0 ? num / den : null;
+    }
+    if (slope !== null && !Number.isFinite(slope)) return fail('the yearly slope is not finite');
+    return { available: true, years, slope, reason: null };
+}
+
+// The JSON-safe projection of a `sleeveYearly` result for the report artifact.
+export function yearlyReport(y) {
+    if (!y || y.available !== true) {
+        return { available: false, slope: null, years: [], reason: (y && y.reason) || 'unscored' };
+    }
+    return {
+        available: true, slope: y.slope, reason: null,
+        years: y.years.map((r) => ({ year: r.year, bars: r.bars, netSharpe: r.netSharpe })),
+    };
+}
+
 // The JSON-safe projection of a `sleeveDsr` result for the report artifact.
 export function dsrReport(d) {
     if (!d || d.available !== true) {
@@ -346,6 +402,7 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
         rawAnnual: fn.raw * Math.sqrt(365 * 3),
         stress: scored.stress, worstBlock: scored.worstBlock,
         dsr: dsrReport(dsr),
+        yearly: yearlyReport(sleeveYearly({ net: scored.net, times: view.times.slice(1) })),
         g5verdict: g5.verdict, g5reasons: g5.reasons,
         g5knobs: g5.knobs.map((k) => ({ knob: k.knob, pass: k.pass, note: k.note })),
     };
@@ -368,6 +425,7 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
                 bookVolMean: sized.bookVolMean,
                 stress: sized.stress, worstBlock: sized.worstBlock,
                 dsr: dsrReport(sleeveDsr({ net: sized.net })),
+                yearly: yearlyReport(sleeveYearly({ net: sized.net, times: view.times.slice(1) })),
             };
         } else {
             rep.sized = { available: false, reason: sized.reason };
@@ -385,12 +443,20 @@ export function formatSleeveReport(r) {
     const dsrLine = (d) => d && d.available === true
         ? `dsr ${d.mode} ${f4(d.dsrAdjusted)} (DE ${f2(d.designEffect)}, ${d.effectiveBars}/${d.bars} effective bars, trials=${d.trials})`
         : 'dsr unscored';
+    const yearlyLine = (y) => {
+        if (!y || y.available !== true || !y.years.length) return 'yearly unscored';
+        const first = y.years[0], last = y.years[y.years.length - 1];
+        const s = (v) => (Number.isFinite(v) ? (v >= 0 ? '+' : '') + v.toFixed(2) : 'n/a');
+        return `yearly per-bar Sharpe ${first.year} ${s(first.netSharpe)} → ${last.year} ${s(last.netSharpe)}` +
+            ` (slope ${y.slope == null ? 'n/a' : s(y.slope) + '/yr'}, ${y.years.length}y)`;
+    };
     const attest = (r.g5reasons || []).filter((x) => x === 'decay' || x === 'unseen');
     const lines = [
         `[sleeve] ${r.sleeveId} @${r.costBps}bps over ${r.buckets} buckets x ${r.streams} streams`,
         `  net ${f2(r.netAnnual)} / neutral ${f2(r.neutralAnnual)} (raw ${f2(r.rawAnnual)}), turnover ${f2(r.turnoverAnnual)}/yr, break-even ${f2(r.breakEvenCostBps)} bps`,
         `  null-basis ${(100 * r.nullBasisFraction).toFixed(2)}%, marked ${(100 * r.markedFraction).toFixed(1)}%`,
         `  ${dsrLine(r.dsr)}`,
+        `  ${yearlyLine(r.yearly)}`,
         `  G5 verdict ${r.g5verdict} (${r.g5reasons.join(',')})${attest.length ? ` — the operator run owns ${attest.join('/')}` : ''}`,
     ];
     if (r.sized) {

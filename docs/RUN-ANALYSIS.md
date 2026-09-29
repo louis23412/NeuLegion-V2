@@ -3949,3 +3949,64 @@ bash scripts/sleeve-runs.sh base  # confirm: a `dsr …` summary line, G5 verdic
 
 Upload: the new `state/runs/<runId>-sleeve/report.json` (one file). Nothing else is needed — the
 browser harness already ran `contracts` 237/237 and `analyze` 289/289 against this exact code.
+
+## 20. Round 76 — yearly decay attribution + the unseen protocol (2026-09-29)
+
+Round 75's native confirmation landed exactly as predicted (`20260929T102653-seed1-sleeve`:
+`dsr deflated 1.0000 (DE 32.63, 202/6605 effective bars, trials=1)`, G5 false on (decay,unseen) —
+`npm test` 132/132 green). The machine side of the flat-book G5 is now done (level/blocks/dsr/
+neutral/capacity all pass); what remains is operator-owned by design. So round 76 builds the
+evidence the decay attestation reads, and writes down what the unseen attestation requires.
+
+### 20.1 `sleeveYearly`: the book by calendar year
+
+`src/sleeve_score.js#sleeveYearly` groups the scored book by calendar year of the EARNING bucket
+(`buildFundingBook` earns legs[i] under weights set at i−1, so bar t labels at `times[t+1]` — the
+caller passes exactly that; any length mismatch fail-closes, never trims). Per year: bar count +
+per-bar Sharpe (the `scoreBookReturns` convention; a sub-2-bar year is unmeasurable, never a
+fabricated 0), plus an OLS slope over measurable years that is descriptive, deliberately NOT a
+test — a p-value on ~8 yearly Sharpes would be theater. Wired into `runSleeveReport` (flat + sized
+reported-only legs) with a `yearly … → … (slope …/yr)` summary line. The G5 `decay` knob stays
+human; this is what it reads, beside `stressHalves`/`worstBlock`. Pinned by six §T checks
+(`contracts` 237 → 243, node mirror re-pinned, ledger 3100); the fixture wiring proves the
+earning-bucket alignment on real-shaped data (yearly bars sum to `dsr.bars`). No golden moves —
+additive code plus additive report keys again.
+
+### 20.2 `docs/UNSEEN.md`: the signing procedure for the last knob
+
+Defines unseen (every byte post-dates the spec freeze; no number read off it fed back — including
+"we only picked the window"), disqualifies the shipped files forever (seen by construction, however
+sliced), and gives the five-step signing procedure: freeze → wait (≥ ~1095 fresh 8h bars) →
+pre-register the exact command + pass criterion → run once → sign with run id + window + pointer.
+Status OPEN — no unseen run has happened. Sweep 2026-09v's 2604.07880 is filed here: ex-post return
+filtering embedding future information is exactly the failure mode the procedure guards against.
+
+### 20.3 Research sync (sweep 2026-09v)
+
+Decay-literature queries mostly hit off-domain territory (particle-physics "anomaly decay", RL
+"return predictability", 178-title physics pile on `ti:anomaly AND ti:decay` — all recorded as
+abandoned, not triaged). The factor-zoo set (7) triaged: 1 noted (2604.07880, above), rest
+tangential. No code grounding this round; the decay work is grounded in the project's own
+dependence/DSR backbone instead.
+
+### 20.4 Recommended next actions
+
+1. **Operator: `npm test` + `bash scripts/sleeve-runs.sh base`** — expect 132/132 and a new
+   `yearly …` summary line (first real yearly readout: per-year Sharpes 2019→2026 + slope).
+   Upload the new `report.json` — its `yearly` block is the input to TODO 105's formal comparison.
+2. **TODO 105 (formal first-vs-last comparison)** using the operator's yearly block: a two-sample
+   comparison on the project's existing machinery (halves already 0.47 → 0.20 per-bar).
+3. **Lab cross-check (proposed e109):** reproduce the repo yearly series from the lab's honest
+   carry book independently (F-60 port-verify pattern) — if the lab years disagree with the repo
+   years, the port has a calendar bug, not a signal.
+4. **Execute `UNSEEN.md` §2 when the data window allows** (needs ≥ ~1 fresh year post-freeze).
+
+### 20.5 Exact operator commands
+
+```bash
+npm test                          # full native gate — expect 132/132 (mirror asserts the 243 ledger)
+bash scripts/sleeve-runs.sh base  # expect a `yearly per-bar Sharpe … (slope …/yr)` line beside the dsr line
+```
+
+Upload: the new `state/runs/<runId>-sleeve/report.json` (one file). The browser harness already ran
+`contracts` 243/243 against this exact code.

@@ -109,7 +109,7 @@ import { mlpLearner, MLP_DEFAULTS, isMlp } from '../../../src/plugins/learners/m
 import { fitRidge, predictRidge, fitMLP, predictMLP } from '../../../src/analysis/benchmark.js';
 import { applyVolTargetScaling } from '../../../src/analysis/forecast.js';
 import { DEFAULT_STACK, PLUGIN_IDS, installDefaultStack } from '../../../src/plugins/index.js';
-import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, drawdownGovernor, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport, sleeveDsr, dsrReport, SLEEVE_DSR_BLOCKS, SLEEVE_DSR_TRIALS } from '../../../src/sleeve_score.js';
+import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, drawdownGovernor, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport, sleeveDsr, dsrReport, SLEEVE_DSR_BLOCKS, SLEEVE_DSR_TRIALS, sleeveYearly, yearlyReport } from '../../../src/sleeve_score.js';
 import { bookReturns, bookTurnover, scoreBook, scoreBookReturns } from '../../../src/analysis/portfolio.js';
 
 // The lock register's V2 section (`test/lock-registry.js`) and the module-by-module
@@ -1680,6 +1680,75 @@ export async function run(options = {}) {
             return two.available === true && two.clusters === 2 &&
                 two.designEffect !== six.designEffect &&
                 deepEqual(one, six);
+        })());
+
+    // ---- T. yearly decay attribution (round 76, TODO 105) ---------------------
+    // The evidence the operator-owned decay attestation reads: the scored book
+    // grouped by calendar year of the earning bucket, with a descriptive OLS
+    // slope — deliberately not a test, and the G5 `decay` knob stays human.
+    const tNet = [];
+    const tTimes = [];
+    for (let i = 0; i < 5; i++) { tNet.push(0.03, -0.01); tTimes.push(Date.UTC(2023, 0, 1) + (2 * i) * 28_800_000, Date.UTC(2023, 0, 1) + (2 * i + 1) * 28_800_000); }
+    for (let i = 0; i < 5; i++) { tNet.push(0.01, -0.01); tTimes.push(Date.UTC(2024, 0, 1) + (2 * i) * 28_800_000, Date.UTC(2024, 0, 1) + (2 * i + 1) * 28_800_000); }
+    check('T: sleeveYearly fails closed on mismatched, non-finite, empty and non-array inputs',
+        (() => {
+            const mm = sleeveYearly({ net: [0.01, 0.02], times: [Date.UTC(2024, 0, 1)] });
+            const nan = sleeveYearly({ net: [0.01, NaN], times: [Date.UTC(2024, 0, 1), Date.UTC(2024, 0, 2)] });
+            const badT = sleeveYearly({ net: [0.01, 0.02], times: [Date.UTC(2024, 0, 1), NaN] });
+            const empty = sleeveYearly({ net: [], times: [] });
+            const junk = sleeveYearly({ net: 'nope', times: [] });
+            return [mm, nan, badT, empty, junk].every((x) => x.available === false && typeof x.reason === 'string' && x.slope === null);
+        })());
+    check('T: sleeveYearly groups by earning-bucket year with a descriptive slope (hand-computed)',
+        (() => {
+            const a = sleeveYearly({ net: tNet, times: tTimes });
+            const b = sleeveYearly({ net: tNet, times: tTimes });
+            return a.available === true && a.years.length === 2 &&
+                a.years[0].year === 2023 && a.years[0].bars === 10 &&
+                near(a.years[0].netSharpe, 0.4743416, 1e-6) &&
+                a.years[1].year === 2024 && a.years[1].bars === 10 &&
+                Math.abs(a.years[1].netSharpe) < 1e-12 &&
+                near(a.slope, -a.years[0].netSharpe, 1e-12) && deepEqual(a, b);
+        })());
+    check('T: a single year leaves the slope null, and a sub-2-bar year is unmeasurable, never zero',
+        (() => {
+            const one = sleeveYearly({ net: tNet.slice(0, 10), times: tTimes.slice(0, 10) });
+            const thin = sleeveYearly({
+                net: [0.05, 0.02, -0.02, 0.02, -0.02, 0.02, -0.02],
+                times: [Date.UTC(2023, 5, 1), Date.UTC(2024, 0, 1), Date.UTC(2024, 0, 2), Date.UTC(2024, 0, 3), Date.UTC(2024, 0, 4), Date.UTC(2024, 0, 5), Date.UTC(2024, 0, 6)],
+            });
+            return one.available === true && one.years.length === 1 && one.slope === null &&
+                thin.available === true && thin.years[0].netSharpe === null &&
+                thin.years[1].bars === 6 && thin.slope === null;
+        })());
+    check('T: the flat report carries the yearly block over the scored bars and prints it',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4 });
+            const text = formatSleeveReport(r);
+            const bars = r.yearly.years.reduce((a, y) => a + y.bars, 0);
+            const sorted = r.yearly.years.every((y, i, a) => i === 0 || a[i - 1].year < y.year);
+            return r.available === true && r.yearly.available === true &&
+                bars === r.dsr.bars && sorted &&
+                (r.yearly.slope === null || Number.isFinite(r.yearly.slope)) &&
+                text.includes('yearly ');
+        })());
+    check('T: the sized leg carries its own reported-only yearly block',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4, sizingTarget: 'adaptive' });
+            return r.available === true && r.sized && r.sized.available === true &&
+                r.sized.yearly && r.sized.yearly.available === true &&
+                r.sized.yearly.years.reduce((a, y) => a + y.bars, 0) === r.dsr.bars;
+        })());
+    check('T: yearlyReport projects JSON-safe blocks and names the unscored case',
+        (() => {
+            const y = sleeveYearly({ net: tNet, times: tTimes });
+            const p = yearlyReport(y);
+            const t = yearlyReport(sleeveYearly({ net: [0.01], times: [Date.UTC(2024, 0, 1)] }));
+            const q = yearlyReport(sleeveYearly({ net: [0.01], times: [] }));
+            return p.available === true && p.reason === null &&
+                p.years.length === 2 && JSON.parse(JSON.stringify(p)).years.length === 2 &&
+                t.available === true && t.years[0].netSharpe === null && t.slope === null &&
+                q.available === false && typeof q.reason === 'string' && q.slope === null && q.years.length === 0;
         })());
 
     const failed = checks.filter((c) => !c.pass);
