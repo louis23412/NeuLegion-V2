@@ -32,6 +32,13 @@ import * as labelsMod from '../../../src/analysis/labels.js';
 import * as uniquenessMod from '../../../src/analysis/uniqueness.js';
 import * as backtestMod from '../../../src/analysis/backtest.js';
 import * as walkforwardMod from '../../../src/analysis/walkforward.js';
+import * as walkforwardReturnsMod from '../../../src/analysis/walkforward/returns.js';
+import * as walkforwardFoldsMod from '../../../src/analysis/walkforward/folds.js';
+import * as walkforwardAuditMod from '../../../src/analysis/walkforward/audit.js';
+import * as walkforwardPowerMod from '../../../src/analysis/walkforward/power.js';
+import * as walkforwardReportMod from '../../../src/analysis/walkforward/report.js';
+import * as walkforwardRestateMod from '../../../src/analysis/walkforward/restate.js';
+import * as walkforwardSearchMod from '../../../src/analysis/walkforward/search.js';
 import * as overfittingMod from '../../../src/analysis/overfitting.js';
 import * as realityCheckMod from '../../../src/analysis/reality_check.js';
 import * as dependenceMod from '../../../src/analysis/dependence.js';
@@ -76,6 +83,13 @@ const ANALYSIS_IMPORTS = {
     'uniqueness.js': uniquenessMod,
     'backtest.js': backtestMod,
     'walkforward.js': walkforwardMod,
+    'walkforward/returns.js': walkforwardReturnsMod,
+    'walkforward/folds.js': walkforwardFoldsMod,
+    'walkforward/audit.js': walkforwardAuditMod,
+    'walkforward/power.js': walkforwardPowerMod,
+    'walkforward/report.js': walkforwardReportMod,
+    'walkforward/restate.js': walkforwardRestateMod,
+    'walkforward/search.js': walkforwardSearchMod,
     'overfitting.js': overfittingMod,
     'reality_check.js': realityCheckMod,
     'dependence.js': dependenceMod,

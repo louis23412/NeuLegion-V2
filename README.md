@@ -76,6 +76,8 @@ local gate is `npm test`.
 scripts/
   round30-runs.sh          the A/B verdict + round-30 operator run set (defines and
                            checks the 15m/funding file lists; see "Acceptance runs")
+  sleeve-runs.sh           the real-data carry-dispersion sleeve set — base, adaptive,
+                           drawdown sizing (defines and checks the 8 funding files)
 src/
   README.md                module map: what every file owns, technique, test
   mainController.js        13-line entry -> legion/runner.js#processCandles
@@ -189,6 +191,17 @@ bash scripts/round30-runs.sh            # prints the stage list
 bash scripts/round30-runs.sh p3         # §3c P3 reversal on the 15m basket
 bash scripts/round30-runs.sh verdict    # §3e the pruned (K=3) verdict run
 bash scripts/round30-runs.sh all        # the whole set
+```
+
+The real-data carry-dispersion sleeve runs (base + adaptive/drawdown sizing) are scripted the same
+way, since the 8-file funding list must never be retyped (a `<same 8>` placeholder is read by bash
+as a redirection):
+
+```
+bash scripts/sleeve-runs.sh base        # flat sleeve at --cost-bps=4
+bash scripts/sleeve-runs.sh adaptive    # + --sleeve-sizing=adaptive
+bash scripts/sleeve-runs.sh drawdown    # + --sleeve-sizing=drawdown (F-118)
+bash scripts/sleeve-runs.sh all         # all three in order
 ```
 
 Each run writes `state/runs/<runId>/`; `docs/round29-TESTING.md` §3–§5 is the full command

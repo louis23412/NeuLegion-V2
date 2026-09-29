@@ -566,6 +566,25 @@ test('the analyze CLI scores a structural sleeve with --sleeve (round 44, W2)', 
         assert.equal(adaptReport.result.sized.available, true, `the adaptive book is unavailable: ${adaptReport.result.sized && adaptReport.result.sized.reason}`);
         assert.equal(adaptReport.result.sizing.target, 'adaptive', 'report.json does not record the adaptive target');
 
+        // Round 73 (drawdown): the adaptive target closed through the trailing
+        // drawdown governor — the F-118 feedback mode.
+        const drawnRes = spawnSync(process.execPath, [
+            analyzePath,
+            '--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`,
+            '--cost-bps=4', '--sleeve-sizing=drawdown',
+        ], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: path.join(root, 'state-drawdown') },
+        });
+        assert.equal(drawnRes.status, 0, `the drawdown sleeve run exited ${drawnRes.status}:\n${drawnRes.stderr}`);
+        assert.match(drawnRes.stdout, /sized @drawdown\/bar \(w24,/, 'the summary does not print the drawdown leg');
+        const drawnRunDir = path.join(root, 'state-drawdown', 'runs', fs.readdirSync(path.join(root, 'state-drawdown', 'runs'))[0]);
+        const drawnReport = JSON.parse(fs.readFileSync(path.join(drawnRunDir, 'report.json'), 'utf8'));
+        assert.equal(drawnReport.result.sized.available, true, `the drawdown book is unavailable: ${drawnReport.result.sized && drawnReport.result.sized.reason}`);
+        assert.equal(drawnReport.result.sizing.target, 'drawdown', 'report.json does not record the drawdown target');
+        assert.equal(drawnReport.result.sized.target, 'drawdown', 'the sized block does not record the drawdown target');
+
         // Refusals: empty id, unknown id, missing funding files, empty sizing,
         // window-without-sizing.
         for (const [flags, re] of [

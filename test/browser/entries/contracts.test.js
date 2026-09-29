@@ -109,7 +109,7 @@ import { mlpLearner, MLP_DEFAULTS, isMlp } from '../../../src/plugins/learners/m
 import { fitRidge, predictRidge, fitMLP, predictMLP } from '../../../src/analysis/benchmark.js';
 import { applyVolTargetScaling } from '../../../src/analysis/forecast.js';
 import { DEFAULT_STACK, PLUGIN_IDS, installDefaultStack } from '../../../src/plugins/index.js';
-import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport } from '../../../src/sleeve_score.js';
+import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, drawdownGovernor, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport } from '../../../src/sleeve_score.js';
 import { bookReturns, bookTurnover, scoreBook, scoreBookReturns } from '../../../src/analysis/portfolio.js';
 
 // The lock register's V2 section (`test/lock-registry.js`) and the module-by-module
@@ -1512,6 +1512,108 @@ export async function run(options = {}) {
             const p = parseSleeveSizing({ sizing: 0.02 });
             return s.available === true && s.target === 0.02 && s.skipped === 1 &&
                 p.sized === true && p.target === 0.02;
+        })());
+
+    // ---- R. drawdown-governed sizing (round 73, F-118) ----------------------
+    // The feedback-control follow-up: the adaptive target times a causal
+    // trailing-drawdown governor (1 at the peak, 0 past a 5% drawdown), so a
+    // sagging book de-sizes before the cap binds. The restart/brake lab arms
+    // stay lab-side until they are cost-accounted.
+    check('R: drawdownGovernor is 1 at or above the trailing peak',
+        (() => {
+            const g = drawdownGovernor([0.01, 0.02, 0.0, 0.03]);
+            const dip = drawdownGovernor([0.01, 0.02, -0.005, 0.03]);
+            return g.length === 4 && g.every((x) => x === 1) && drawdownGovernor('nope') === null &&
+                SIZED_SLEEVE_DEFAULTS.ddCap === 0.05 && dip[3] < 1 && dip[3] > 0.85;
+        })());
+    check('R: the governor ramps linearly to 0 through a 5% slide (hand-computed)',
+        (() => {
+            const g = drawdownGovernor([0, 0, 0, -0.02, -0.02, -0.02, -0.02]);
+            return g.slice(0, 4).every((x) => x === 1) && near(g[4], 0.6, 1e-12) &&
+                near(g[5], 1 - 0.0396 / 0.05, 1e-12) && g[6] === 0;
+        })());
+    check('R: the governor reads nothing at or after t and rejects a bad cap',
+        (() => {
+            const a = drawdownGovernor([0.01, 0.02, 0.03, 0.04]);
+            const b = drawdownGovernor([0.01, 0.02, -0.99, -0.99]);
+            const half = drawdownGovernor([0.01, 0.02]);
+            let threw = false;
+            try { drawdownGovernor([0.01], { cap: 0 }); } catch { threw = true; }
+            return a.length === 4 && a.every((x) => x === 1) && half.every((x, t) => x === a[t]) &&
+                b.every((x) => x >= 0 && x <= 1) && threw === true;
+        })());
+    check('R: parseSleeveSizing accepts drawdown in any case and still guards the window',
+        (() => {
+            const a = parseSleeveSizing({ sizing: 'drawdown' });
+            const b = parseSleeveSizing({ sizing: ' DRAWDOWN ', window: 12 });
+            let badWindow = false;
+            try { parseSleeveSizing({ sizing: 'drawdown', window: 0 }); } catch { badWindow = true; }
+            let junk = false;
+            try { parseSleeveSizing({ sizing: 'downdraw' }); } catch { junk = true; }
+            return a.sized === true && a.target === 'drawdown' && a.window === 24 &&
+                b.target === 'drawdown' && b.window === 12 && badWindow === true && junk === true;
+        })());
+    check('R: the drawdown carry sleeve is available with the same scored set as adaptive',
+        (() => {
+            const s = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'drawdown', window: 24 });
+            const a = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'adaptive', window: 24 });
+            return s.available === true && s.target === 'drawdown' && Number.isFinite(s.netSharpe) &&
+                s.scoredBars === a.scoredBars && s.skipped === a.skipped &&
+                s.gross.length === s.net.length && Number.isFinite(s.bookVolMean);
+        })());
+    check('R: the drawdown book is exactly the plugin sizing on governor-scaled adaptive targets',
+        (() => {
+            const s = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'drawdown', window: 3 });
+            const base = scoreSleeve('carry-dispersion', kCarryView, { costBps: 0 });
+            const vols = trailingBookVol(base.gross, { window: 3 });
+            const tgts = adaptiveTargets(vols).map((x, i) => x * drawdownGovernor(base.gross)[i]);
+            const via = volTargetRisk.sizingForSleeve(base.gross, vols, 'carry-dispersion', tgts);
+            const scales = base.gross.map((_, bar) => {
+                const i = via.index.indexOf(bar);
+                return i < 0 ? 0 : via.scales[i];
+            });
+            const eg = base.gross.map((r, bar) => scales[bar] * r);
+            const ew = base.weightRows.map((row, bar) => row.map((w) => scales[bar] * w));
+            const rescored = scoreBookReturns(eg, ew, { costBps: 0 });
+            return via.available && deepEqual(s.net, rescored.net) &&
+                near(s.turnover, rescored.turnover, 1e-15) &&
+                scales.every((x) => Math.abs(x) <= 4 + 1e-12);
+        })());
+    check('R: drawdown sizing is deterministic and cost-monotone',
+        (() => {
+            const a = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'drawdown' });
+            const b = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'drawdown' });
+            const c = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 10, target: 'drawdown' });
+            return JSON.stringify(a) === JSON.stringify(b) && c.available === true &&
+                c.netSharpe <= a.netSharpe + 1e-12;
+        })());
+    check('R: the governor never levers above the adaptive scale it multiplies',
+        (() => {
+            const base = scoreSleeve('carry-dispersion', kCarryView, { costBps: 0 });
+            const vols = trailingBookVol(base.gross, { window: 3 });
+            const gov = drawdownGovernor(base.gross);
+            const a = volTargetRisk.sizingForSleeve(base.gross, vols, 'carry-dispersion', adaptiveTargets(vols));
+            const d = volTargetRisk.sizingForSleeve(base.gross, vols, 'carry-dispersion',
+                adaptiveTargets(vols).map((x, i) => x * gov[i]));
+            const byA = new Map(a.index.map((bar, i) => [bar, a.scales[i]]));
+            return d.scales.every((s, i) => s <= byA.get(d.index[i]) + 1e-12) &&
+                gov.every((x) => x >= 0 && x <= 1);
+        })());
+    check('R: the drawdown report attaches the drawdown block and prints it',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4, sizingTarget: 'drawdown' });
+            const text = formatSleeveReport(r);
+            return r.available === true && r.sized && r.sized.available === true &&
+                r.sizing.target === 'drawdown' && r.sized.target === 'drawdown' &&
+                r.sized.skipped + r.sized.scoredBars === 39 &&
+                text.includes('sized @drawdown/bar (w24,') && text.includes('bookVol');
+        })());
+    check('R: scalar and adaptive legs are untouched by the drawdown wiring',
+        (() => {
+            const s = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 0.02, window: 24 });
+            const a = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'adaptive', window: 24 });
+            return s.available === true && s.target === 0.02 && s.skipped === 1 &&
+                a.available === true && a.target === 'adaptive';
         })());
 
     const failed = checks.filter((c) => !c.pass);

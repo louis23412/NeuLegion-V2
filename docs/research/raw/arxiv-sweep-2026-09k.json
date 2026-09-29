@@ -1,101 +1,713 @@
 {
-  "generatedAt": "2026-09-19T13:01:57.468Z",
-  "note": "Round 14 literature refresh (broad relevance-query sweep, sortBy=relevance). Target: the data-aware-hashing front now WIRED into `memory/lsh.js#_refreshLshHyperplanes` (behind the default-off `_pcaHashConfig`) and the recorded section-I finding that only the HIGH-variance principal directions should be aligned (the low-variance tail is noise). Headline: 1501.01062 (Andoni-Indyk-Laarhoven — OPTIMAL data-dependent hashing beats the best data-independent LSH for every c>1, the optimality grounding for the whole direction), 1205.2930 (Density Sensitive Hashing — data-adaptive directions), 1605.09784 (DrusillaHash — data-selected projection bases) and 2009.08591 (weighted Hamming distance — bits are not equally reliable). Scaling: 0809.2274 (randomised PCA) and 1508.04535 (bit-scalable hashing). Fresh 2026 theory: 2609.07681 (recall scaling laws via hashing) and 2602.19259 (sketch/ANN limits).",
-  "purpose": "Ground and evolve docs/research/lsh-ann.md and docs/TODO.md item 2 after Round 14 wired the PCA-aligned hyperplane refresh.",
+  "generatedAt": "2026-09-29T04:48:54.241Z",
+  "note": "Round 72 literature refresh (date-sorted sweep) grounding the sizing/control program: vol-managed/timing, online forecast combination, perp funding carry, drawdown control. Triage: 12 entries annotated (2 already cited, 9 new registry keys, 1 noted alternative).",
+  "purpose": "Ground the e108 feedback-sizing experiment and the --sleeve-sizing follow-ups; extend docs/CITATIONS.md.",
   "queries": [
     {
-      "file": "data-dependent-hashing-ann",
-      "query": "all:data dependent hashing approximate nearest neighbor"
+      "file": "vol_managed",
+      "query": "arXiv Query: search_query=all:\"volatility targeting\" OR all:\"volatility managed\"&amp;id_list=&amp;start=0&amp;max_results=20"
     },
     {
-      "file": "learning-data-dependent-hash",
-      "query": "all:locality sensitive hashing recall learning"
+      "file": "vol_timing",
+      "query": "arXiv Query: search_query=all:\"volatility timing\" OR all:\"managed portfolio\"&amp;id_list=&amp;start=0&amp;max_results=20"
     },
     {
-      "file": "pca-binary-code-hashing",
-      "query": "all:principal component analysis hashing binary code"
+      "file": "combine",
+      "query": "arXiv Query: search_query=all:\"forecast combination\"&amp;id_list=&amp;start=0&amp;max_results=20"
     },
     {
-      "file": "random-projection-variance",
-      "query": "all:random projection hash variance explained"
+      "file": "carry",
+      "query": "arXiv Query: search_query=all:\"funding rate\" AND all:crypto&amp;id_list=&amp;start=0&amp;max_results=20"
     },
     {
-      "file": "bit-balance-hashing",
-      "query": "all:bit balance learning to hash retrieval"
-    },
-    {
-      "file": "marchenko-pastur-pca",
-      "query": "all:Marchenko Pastur eigenvalue signal noise PCA denoising"
-    },
-    {
-      "file": "weighted-hamming-binary",
-      "query": "all:balanced binary code hamming distance search"
+      "file": "dd_control",
+      "query": "arXiv Query: search_query=all:\"drawdown control\" OR all:\"CPPI\"&amp;id_list=&amp;start=0&amp;max_results=20"
     }
   ],
   "entries": [
     {
-      "id": "1501.01062",
-      "title": "Optimal Data-Dependent Hashing for Approximate Near Neighbors",
-      "published": "2015-01-06",
-      "category": "cs.DS",
-      "summary": "We show an optimal data-dependent hashing scheme for the approximate near neighbor problem. For an $n$-point data set in a $d$-dimensional space our data structure achieves query time $O(d n^{ρ+o(1)})$ and space $O(n^{1+ρ+o(1)} + dn)$, where $ρ=\\tfrac{1}{2c^2-1}$ for the Euclidean space and approximation $c&gt;1$. For the Hamming space, we obtain an exponent of $ρ=\\tfrac{1}{2c-1}$. Our result completes the direction set forth in [AINR14] who gave a proof-of-concept that data-dependent hashing can outperform classical Locality Sensitive Hashing (LSH). In contrast to [AINR14], the new bound is not only optimal, but in fact improves over the best (optimal) LSH data structures [IM98,AI06] for all approximation factors $c&gt;1$. From the technical perspective, we proceed by decomposing an arbitrary dataset into several subsets that are, in a certain sense, pseudo-random.",
-      "why": "The theoretical capstone for data-aware hashing: an OPTIMAL data-dependent scheme beats the best data-independent LSH for every approximation factor c > 1 (rho = 1/(2c^2-1) Euclidean, 1/(2c-1) Hamming). Grounds the whole \"learn the hash from the data\" direction that `memory/binarypc.js` + `_refreshLshHyperplanes` implement."
+      "id": "2608.28397v1",
+      "title": "Market-Informed Valuation of GMMB Riders with Surrender Options under a Heston Stochastic-Local Volatility Model",
+      "published": "2026-08-28",
+      "category": "q-fin.CP",
+      "summary": "We develop a market-informed valuation framework for guaranteed minimum maturity benefit (GMMB) riders with rational surrender under the Heston stochastic-local volatility (SLV) model. The guarantee is written on the fee-deducted account value and is considered both in its terminal-only form and in the presence of early surrender rights. The Heston SLV specification combines stochastic volatility with a leverage function calibrated to a prescribed local-volatility surface. The leverage surface is obtained through a forward Markovian-projection equation so that, at the model level, the SLV dynamics are constrained to the same one-dimensional marginals as the corresponding local-volatility (LV) model. The latter is used only as a one-factor benchmark, allowing us to isolate the effect of stochastic volatility on continuation values and surrender decisions while preserving the same option-calibrated local-volatility target. We derive the associated backward pricing equations and propose a hybrid tree/finite-difference algorithm for the SLV model with a calibrated leverage function. Synthetic experiments and a market-informed case study show that SLV and LV valuations are numerically close for terminal-only guarantees, as expected from the common marginal target, whereas materially larger differences can arise once surrender is allowed. These differences are reflected in guarantee values, fair insurance fees and volatility-dependent surrender regions. The results indicate that ma",
+      "query": "vol_managed",
+      "why": ""
     },
     {
-      "id": "1605.09784",
-      "title": "Fast approximate furthest neighbors with data-dependent hashing",
-      "published": "2016-05-31",
-      "category": "cs.DS",
-      "summary": "We present a novel hashing strategy for approximate furthest neighbor search that selects projection bases using the data distribution. This strategy leads to an algorithm, which we call DrusillaHash, that is able to outperform existing approximate furthest neighbor strategies. Our strategy is motivated by an empirical study of the behavior of the furthest neighbor search problem, which lends intuition for where our algorithm is most useful. We also present a variant of the algorithm that gives an absolute approximation guarantee; to our knowledge, this is the first such approximate furthest neighbor hashing approach to give such a guarantee. Performance studies indicate that DrusillaHash can achieve comparable levels of approximation to other algorithms while giving up to an order of magnitude speedup. An implementation is available in the mlpack machine learning library (found at http://www.mlpack.org).",
-      "why": "DrusillaHash: projection bases SELECTED FROM THE DATA DISTRIBUTION for approximate search — the same data-aware-basis principle, for furthest-neighbour search."
+      "id": "2608.14171v1",
+      "title": "Spillover-Informed Network Architecture for Global Volatility Forecasting",
+      "published": "2026-08-14",
+      "category": "stat.AP",
+      "summary": "Spillover of volatility shocks across borders during turbulent periods makes accurate equity market volatility forecasts especially critical for risk management, derivatives pricing, and regulatory capital. In this paper, we examine whether volatility forecasts improve when models incorporate information on how markets are connected, and whether the choice of connection measure matters. Using daily data on 29 equity indices from every major region over 2015-2025, we let each market's forecast draw on the recent volatility of the markets linked to it, with the strength of each link set either by geography, return correlation, or the Diebold-Yilmaz (DY) spillover network estimated from the data. The spillover-informed forecasting model achieved an approximately 13\\% reduction in out-of-sample QLIKE loss relative to the standard Heterogeneous AutoRegressive benchmark ($p&lt;0.001$) and attained the highest model confidence set $p$-value among the models considered. Several benchmark models that do not explicitly incorporate cross-market structure were excluded from the 90\\% model confidence set. The greatest improvements were observed during periods of elevated market stress: the COVID-19 crash, the Russian invasion of Ukraine, and the $2025$ US tariff shock, spillover-informed forecasts achieved approximately 21\\% lower QLIKE loss than an otherwise identical network-blind model ($p = 0.018$), with no significant performance loss during calm periods. The advantage is economicall",
+      "query": "vol_managed",
+      "why": "NEW citation spillvol2608: Diebold-Yilmaz spillover network cuts OOS QLIKE ~13% vs HAR — the cross-stream network vol-forecast direction (follow-up)."
     },
     {
-      "id": "2602.19259",
-      "title": "Quantum Sketches, Hashing, and Approximate Nearest Neighbors",
-      "published": "2026-02-22",
-      "category": "quant-ph",
-      "summary": "Motivated by Johnson--Lindenstrauss dimension reduction, amplitude encoding, and the view of measurements as hash-like primitives, one might hope to compress an $n$-point approximate nearest neighbor (ANN) data structure into $O(\\log n)$ qubits. We rule out this possibility in a broad quantum sketch model, the dataset $P$ is encoded as an $m$-qubit state $ρ_P$, and each query is answered by an arbitrary query-dependent measurement on a fresh copy of $ρ_P$. For every approximation factor $c\\ge 1$ and constant success probability $p&gt;1/2$, we exhibit $n$-point instances in Hamming space $\\{0,1\\}^d$ with $d=Θ(\\log n)$ for which any such sketch requires $m=Ω(n)$ qubits, via a reduction to quantum random access codes and Nayak's lower bound. These memory lower bounds coexist with potential quantum query-time gains and in candidate-scanning abstractions of hashing-based ANN, amplitude amplification yields a quadratic reduction in candidate checks, which is essentially optimal by Grover/BBBV-type bounds.",
-      "why": "Quantum sketches/hashing and ANN (2026): defines the limits of sketch-based ANN, recorded as the theoretical boundary of the random-sketch family."
+      "id": "2605.24285v1",
+      "title": "Memory, Roughness, and Information Persistence in Financial Markets: A Structural Approach to Volatility Forecasting",
+      "published": "2026-05-22",
+      "category": "q-fin.ST",
+      "summary": "This paper studies the joint role of long-memory dynamics,rough-volatility behavior, and persistence-based forecasting features in equity volatility modeling. We combine semiparametric long-memory estimation, rough-volatility diagnostics, and structured forecasting regressions to examine whether persistence measures contain economically meaningful forecasting information beyond conventional volatility predictors. Using a panel of 115 S&amp;P500 constituents from November 2001 through April 2026, we document that volatility proxies exhibit substantial long-memory behavior and locally rough dynamics. The cross-sectional mean Geweke-Porter-Hudak estimate of the memory parameter is $\\hat{d} = 0.226$, while the corresponding local-Whittle estimate is $\\hat{d} = 0.440$, with statistical significance observed across nearly the entire panel. Rolling estimates of persistence rise substantially during the global financial crisis and the COVID period and display a positive contemporaneous association with the VIX. We then examine whether persistence-related features improve out-of-sample volatility forecasts beyond standard HAR and HAR-X benchmarks. Incorporating cross-sectional persistence aggregates, sectoral persistence measures, and persistence-by-stress interaction terms produces moderate but statistically significant forecasting improvements, particularly at longer horizons and during stress regimes. Forecast gains are strongest during periods of elevated market volatility and in ",
+      "query": "vol_managed",
+      "why": "NEW citation roughvol2605: long memory d~0.23-0.44 with rough local dynamics — persistence framing for the trailing-RMS/EWMA/HAR menu."
     },
     {
-      "id": "2609.07681",
-      "title": "On the Recall Scaling Laws in Mamba: A Theoretical and Mechanistic Study via Hashing",
+      "id": "2605.09123v1",
+      "title": "The Engineering of Skew: A Path-Dependent Framework for Asymmetric Volatility Management",
+      "published": "2026-05-09",
+      "category": "q-fin.PM",
+      "summary": "Volatility is the language in which finance often describes risk, but it is not the language in which institutions experience risk. Allocators live through drawdowns, liquidity needs, spending rules, rebalance decisions, board oversight, and the interval between a prior high-water mark and full recovery. This paper develops a path-dependent framework for asymmetric volatility management. The arithmetic of recovery is nonlinear: after a drawdown of depth $D$, the required gain is $R=\\frac{1}{1-D}-1$. Lower volatility can improve geometric compounding through the familiar small-return approximation $g \\approx μ-\\frac{1}{2}σ^2$, but symmetric de-risking can also impair recovery if it sacrifices too much upside participation. The relevant design problem is therefore not volatility reduction in isolation; it is conditional exposure shaping. Skew engineering is defined here as the portfolio construction discipline of reducing harmful downside participation more than productive upside participation, controlling submergence, and preserving enough recovery participation to sustain compounding under adverse regimes. The resulting Recovery-Efficiency Protocol links drawdown depth, time underwater, recovery burden reduction, and rebound participation into an allocator-facing reporting discipline. Machine learning and AI methods are framed as tools for conditional estimation, regime mapping, robustness testing, and model-risk governance, not as market prediction.",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2603.23480v1",
+      "title": "Stablecoins as Dry Powder: A Copula-Based Risk Analysis of Cryptocurrency Markets",
+      "published": "2026-03-24",
+      "category": "cs.CE",
+      "summary": "Stablecoins serve as the fundamental infrastructure for Decentralised Finance (DeFi), acting as the primary bridge between fiat currencies and the digital asset ecosystem. While peg stability is well-documented, the structural role stablecoins play in transmitting systemic risk to the broader market remains under-explored. This study uses copula-based approaches to quantify the transmission of volatility and activity from stablecoin to cryptocurrency markets. We demonstrate in-sample causality across daily, weekly, and monthly horizons. Furthermore, we show that incorporating stablecoin factors significantly reduces Mean Squared Error in cryptocurrency forecasting. Specifically, we link stablecoin volume and upside volatility to broader market volatility, indicating its role as dry powder. Finally, we establish economic value by demonstrating reduced risk in a cryptocurrency volatility targeting model when stablecoin factors are employed.",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2603.01298v2",
+      "title": "Single-Asset Adaptive Leveraged Volatility Control",
+      "published": "2026-03-01",
+      "category": "q-fin.PM",
+      "summary": "This paper introduces a methodology for constructing a market index composed of a liquid risky asset and a liquid risk-free asset that achieves a fixed target volatility. Existing volatility-targeting strategies typically scale portfolio exposure inversely with a variance forecast, but such open-loop approaches suffer from high turnover, leverage spikes, and sensitivity to estimation error -- issues that limit practical adoption in index construction. We propose a proportional-control approach for setting the index weights that explicitly corrects tracking error through feedback. The method requires only a few interpretable parameters, making it transparent and practical for index construction. We demonstrate in simulation that this approach is more effective at consistently achieving the target volatility than the open-loop alternative.",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2512.12420v1",
+      "title": "Deep Hedging with Reinforcement Learning: A Practical Framework for Option Risk Management",
+      "published": "2025-12-13",
+      "category": "q-fin.PM",
+      "summary": "We present a reinforcement-learning (RL) framework for dynamic hedging of equity index option exposures under realistic transaction costs and position limits. We hedge a normalized option-implied equity exposure (one unit of underlying delta, offset via SPY) by trading the underlying index ETF, using the option surface and macro variables only as state information and not as a direct pricing engine. Building on the \"deep hedging\" paradigm of Buehler et al. (2019), we design a leak-free environment, a cost-aware reward function, and a lightweight stochastic actor-critic agent trained on daily end-of-day panel data constructed from SPX/SPY implied volatility term structure, skew, realized volatility, and macro rate context. On a fixed train/validation/test split, the learned policy improves risk-adjusted performance versus no-hedge, momentum, and volatility-targeting baselines (higher point-estimate Sharpe); only the GAE policy's test-sample Sharpe is statistically distinguishable from zero, although confidence intervals overlap with a long-SPY benchmark so we stop short of claiming formal dominance. Turnover remains controlled and the policy is robust to doubled transaction costs. The modular codebase, comprising a data pipeline, simulator, and training scripts, is engineered for extensibility to multi-asset overlays, alternative objectives (e.g., drawdown or CVaR), and intraday data. From a portfolio management perspective, the learned overlay is designed to sit on top of an ",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2511.08571v1",
+      "title": "Forecast-to-Fill: Benchmark-Neutral Alpha and Billion-Dollar Capacity in Gold Futures (2015-2025)",
+      "published": "2025-11-11",
+      "category": "q-fin.TR",
+      "summary": "We test whether simple, interpretable state variables-trend and momentum-can generate durable out-of-sample alpha in one of the world's most liquid assets, gold. Using a rolling 10-year training and 6-month testing walk-forward from 2015 to 2025 (2,793 trading days), we convert a smoothed trend-momentum regime signal into volatility-targeted, friction-aware positions through fractional, impact-adjusted Kelly sizing and ATR-based exits. Out of sample, the strategy delivers a Sharpe ratio of 2.88 and a maximum drawdown of 0.52 percent, net of 0.7 basis-point linear cost and a square-root impact term (gamma = 0.02). A regression on spot-gold returns yields a 43 percent annualized return (CAGR approximately 43 percent) and a 37 percent alpha (Sharpe = 2.88, IR = 2.09) at a 15 percent volatility target with beta approximately 0.03, confirming benchmark-neutral performance. Bootstrap confidence intervals ([2.49, 3.27]) and SPA tests (p = 0.000) confirm statistical significance and robustness to latency, reversal, and cost stress. We conclude that forecast-to-fill engineering-linking transparent signals to executable trades with explicit risk, cost, and impact control-can transform modest predictability into allocator-grade, billion-dollar-scalable alpha.",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2510.19271v2",
+      "title": "Managing Portfolios Across the Return Distribution",
+      "published": "2025-10-22",
+      "category": "q-fin.GN",
+      "summary": "We develop a dynamic portfolio-choice framework in which investors target the region of the payoff distribution that the portfolio is designed to improve. Out of sample, the estimated policies form an ordered frontier: the policy focused on the downside delivers the strongest left-tail protection and the highest Sharpe ratio, while the policy focused on the upper quantile earns the highest mean return. The gains over volatility-managed portfolios are concentrated in periods when downside-tail dispersion is high. Evidence from fund flows in income, growth and downside protection products supports the interpretation of the quantile index as a reduced-form mandate measure.",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2503.16878v3",
+      "title": "A central limit theorem and its application to the limiting distribution of volatility target index",
+      "published": "2025-03-21",
+      "category": "math.PR",
+      "summary": "We study the limiting distribution of a volatility target index as the discretisation time step converges to zero. Two limit theorems (a strong law of large numbers and a central limit theorem) are established, and as an application, the exact limiting distribution is derived. We demonstrate that the volatility of the limiting distribution is consistently larger than the target volatility, and converges to the target volatility as the observation-window parameter $λ$ in the definition of the realised variance converges to 1. Besides the exact formula for the drift and the volatility of the limiting distribution, their upper and lower bounds are derived. As a corollary of the exact limiting distribution, we obtain a vega conversion formula which converts the rho1 sensitivity of a financial derivative on the limiting diffusion to the vega sensitivity of the same financial derivative on the underlying of the volatility target index.",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2502.17011v2",
+      "title": "Predicting Liquidity-Aware Bond Yields using Causal GANs and Deep Reinforcement Learning with LLM Evaluation",
+      "published": "2025-02-24",
+      "category": "q-fin.CP",
+      "summary": "Financial bond yield forecasting is challenging due to data scarcity, nonlinear macroeconomic dependencies, and evolving market conditions. In this paper, we propose a novel framework that leverages Causal Generative Adversarial Networks (CausalGANs) and Soft Actor-Critic (SAC) reinforcement learning (RL) to generate high-fidelity synthetic bond yield data for four major bond categories (AAA, BAA, US10Y, Junk). By incorporating 12 key macroeconomic variables, we ensure statistical fidelity by preserving essential market properties. To transform this market dependent synthetic data into actionable insights, we employ a finetuned Large Language Model (LLM) Qwen2.5-7B that generates trading signals (BUY/HOLD/SELL), risk assessments, and volatility projections. We use automated, human and LLM evaluations, all of which demonstrate that our framework improves forecasting performance over existing methods, with statistical validation via predictive accuracy, MAE evaluation(0.103%), profit/loss evaluation (60% profit rate), LLM evaluation (3.37/5) and expert assessments scoring 4.67 out of 5. The reinforcement learning-enhanced synthetic data generation achieves the least Mean Absolute Error of 0.103, demonstrating its effectiveness in replicating real-world bond market dynamics. We not only enhance data-driven trading strategies but also provides a scalable, high-fidelity synthetic financial data pipeline for risk &amp; volatility management and investment decision-making. This work",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2412.07787v1",
+      "title": "Anomaly Detection in California Electricity Price Forecasting: Enhancing Accuracy and Reliability Using Principal Component Analysis",
+      "published": "2024-11-25",
+      "category": "econ.EM",
+      "summary": "Accurate and reliable electricity price forecasting has significant practical implications for grid management, renewable energy integration, power system planning, and price volatility management. This study focuses on enhancing electricity price forecasting in California's grid, addressing challenges from complex generation data and heteroskedasticity. Utilizing principal component analysis (PCA), we analyze CAISO's hourly electricity prices and demand from 2016-2021 to improve day-ahead forecasting accuracy. Initially, we apply traditional outlier analysis with the interquartile range method, followed by robust PCA (RPCA) for more effective outlier elimination. This approach improves data symmetry and reduces skewness. We then construct multiple linear regression models using both raw and PCA-transformed features. The model with transformed features, refined through traditional and SAS Sparse Matrix outlier removal methods, shows superior forecasting performance. The SAS Sparse Matrix method, in particular, significantly enhances model accuracy. Our findings demonstrate that PCA-based methods are key in advancing electricity price forecasting, supporting renewable integration and grid management in day-ahead markets. Keywords: Electricity price forecasting, principal component analysis (PCA), power system planning, heteroskedasticity, renewable energy integration.",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2212.07288v2",
+      "title": "Flexible variational approximations for stochastic volatility-managed portfolios",
+      "published": "2022-12-14",
+      "category": "econ.EM",
+      "summary": "This paper investigates volatility-managed portfolios through a variational Bayes approach that smooths stochastic volatility forecasts. Our algorithm exhibits competitive performance relative to established methods both in terms of inferential accuracy and computational efficiency. Analyzing equity factors and characteristic-based portfolios, we show that smoothing reduces excess leverage and turnover, significantly improving risk-adjusted returns after transaction costs. Importantly, our smoothed stochastic volatility method achieves positive net performance while avoiding extreme negative outcomes, a combination no competing approach attains. We demonstrate that superior forecasting accuracy does not guarantee superior portfolio performance, revealing a fundamental trade-off between model precision and economic utility.",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2204.02757v2",
+      "title": "Risk budget portfolios with convex Non-negative Matrix Factorization",
+      "published": "2022-04-06",
+      "category": "q-fin.PM",
+      "summary": "We propose a portfolio allocation method based on risk factor budgeting using convex Nonnegative Matrix Factorization (NMF). Unlike classical factor analysis, PCA, or ICA, NMF ensures positive factor loadings to obtain interpretable long-only portfolios. As the NMF factors represent separate sources of risk, they have a quasi-diagonal correlation matrix, promoting diversified portfolio allocations. We evaluate our method in the context of volatility targeting on two long-only global portfolios of cryptocurrencies and traditional assets. Our method outperforms classical portfolio allocations regarding diversification and presents a better risk profile than hierarchical risk parity (HRP). We assess the robustness of our findings using Monte Carlo simulation.",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2104.10483v2",
+      "title": "Adaptive learning for financial markets mixing model-based and model-free RL for volatility targeting",
+      "published": "2021-04-19",
+      "category": "cs.LG",
+      "summary": "Model-Free Reinforcement Learning has achieved meaningful results in stable environments but, to this day, it remains problematic in regime changing environments like financial markets. In contrast, model-based RL is able to capture some fundamental and dynamical concepts of the environment but suffer from cognitive bias. In this work, we propose to combine the best of the two techniques by selecting various model-based approaches thanks to Model-Free Deep Reinforcement Learning. Using not only past performance and volatility, we include additional contextual information such as macro and risk appetite signals to account for implicit regime changes. We also adapt traditional RL methods to real-life situations by considering only past data for the training sets. Hence, we cannot use future information in our training data set as implied by K-fold cross validation. Building on traditional statistical methods, we use the traditional \"walk-forward analysis\", which is defined by successive training and testing based on expanding periods, to assert the robustness of the resulting agent. Finally, we present the concept of statistical difference's significance based on a two-tailed T-test, to highlight the ways in which our models differ from more traditional ones. Our experimental results show that our approach outperforms traditional financial baseline portfolio models such as the Markowitz model in almost all evaluation metrics commonly used in financial mathematics, namely net pe",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2011.10747v4",
+      "title": "Continuous-Time Risk Contribution of the Terminal Variance and its Related Risk Budgeting Problem",
+      "published": "2020-11-21",
+      "category": "q-fin.MF",
+      "summary": "To achieve robustness of risk across different assets, risk parity investing rules, a particular state of risk contributions, have grown in popularity over the previous few decades. To generalize the concept of risk contribution from the simple covariance matrix case to the continuous-time case in which the terminal variance of wealth is used as the risk measure, we characterize risk contributions and marginal risk contributions on various assets as predictable processes using the Gateaux differential and Doleans measure. Meanwhile, the risk contributions we extend here have the aggregation property, namely that total risk can be represented as the aggregation of those among different assets and $(t,ω)$. Subsequently, as an inverse target -- allocating risk, the risk budgeting problem of how to obtain policies whose risk contributions coincide with pre-given risk budgets in the continuous-time case is also explored in this paper. These policies are solutions to stochastic convex optimizations parametrized by the pre-given risk budgets. Moreover, single-period risk budgeting policies are explained as the projection of risk budgeting policies in continuous-time cases. On the application side, volatility-managed portfolios in [Moreira and Muir,2017] can be obtained by risk budgeting optimization; similarly to previous findings, continuous-time mean-variance allocation in [Zhou and Li, 2000] appears to be concentrated in terms of risk contribution.",
+      "query": "vol_managed",
+      "why": ""
+    },
+    {
+      "id": "2609.04569v1",
+      "title": "Quantum Circuit Learning for Volatility Modeling: Multifractal Analysis of Realized Volatility Time Series",
+      "published": "2026-09-03",
+      "category": "q-fin.CP",
+      "summary": "Herein, we propose a quantum circuit learning framework for modeling the realized volatility (RV) of Bitcoin and investigate the statistical properties of the predicted time series through multifractal analysis. Unlike conventional GARCH-type models, which require a pre-specified functional form for the volatility process, a parameterized quantum circuit directly approximates the volatility function from empirical data, eliminating the need for explicit model selection. Using five-minute Bitcoin price data, we construct daily RV, train a single-qubit parameterized quantum circuit, and generate a long synthetic time series from the optimized quantum circuit. Multifractal Detrended Fluctuation Analysis is applied to calculate the generalized Hurst exponent $h(q)$, the singularity spectrum $f(α)$, and the multifractal scaling exponent $τ(q)$. The predicted return series exhibits $h(2)\\approx 0.5$, consistent with near-random dynamics, and both the predicted and the empirical return series display multifractality that partially persists after random shuffling. The increment series of RV shows pronounced anti-persistence with $h(2)\\approx 0.05$--$0.1$, consistent with the rough volatility hypothesis. These results demonstrate that a simple single-qubit parameterized quantum circuit captures qualitatively some observed properties in Bitcoin volatility dynamics.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2608.26553v1",
+      "title": "Tight differencing in spectral density estimation with centrosymmetric kernels",
+      "published": "2026-08-27",
+      "category": "stat.ME",
+      "summary": "Mean-robust estimation of spectral density and long-run variance is crucial for many statistical inference procedures. However, existing methods often degrade when serially dependent data exhibit volatile, time-varying trends, or sudden jumps, particularly in small samples. While differencing and kernel averaging are standard tools for achieving mean robustness and consistency, they are not inherently compatible. Combining them can compromise optimality. Specifically, tight differencing, an operation of taking small-lag differences to enhance local de-trending, introduces strong correlations that distort the high-order properties of kernel-averaged estimators. To resolve this incompatibility, we introduce a novel class of centrosymmetric kernels explicitly designed to integrate with tight differencing. We demonstrate that the optimal tight difference sequence for serially dependent data differs from classical sequences designed for independent data. Notably, these proposed optimal sequences are data-independent and can be applied directly without pre-fitting. Finally, the proposed estimators are demonstrated to be useful across various statistical inference tasks, including tests for stationarity and white noise.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2608.15369v1",
+      "title": "AudioTQ: A Data-Oblivious 6-Bit CPU Audio Codec via Randomized Hadamard Rotation and Lloyd-Max Quantization",
+      "published": "2026-08-15",
+      "category": "cs.SD",
+      "summary": "Lossy audio compression algorithms traditionally rely on psychoacoustic modeling and frequency-domain representations (e.g., MP3, AAC, and Opus) to discard information that is imperceptible to the human auditory system. While highly effective, these approaches are computationally complex and domain-specific. In this paper, we present the design and mathematical formulation of AudioTQ, a data-oblivious lossy audio codec that operates directly in the time domain. Inspired by Large Language Model (LLM) weight quantization techniques (specifically the TurboQuant framework), AudioTQ uniformizes volatile time-domain amplitudes into a predictable standard normal distribution using an orthonormal, randomized Fast Walsh-Hadamard Transform (FWHT) rotation. This enables coordinate-wise scalar quantization using an offline-trained, MSE-optimal 6-bit Lloyd-Max quantizer, augmented by a 1-bit Quantized Joint Least-Squares (QJL) residual correction layer. The resulting 7-bit virtual indices are packed into native 8-bit containers, aligning with standard CPU register boundaries to ensure real-time single-threaded execution without hardware parallel accelerators. We detail the bitwise reconstruction of 24-bit studio stems, analyze the butterfly network of the FWHT, derive the mathematical failure modes under sparse inputs, and present benchmarks showing up to 74.4% physical size reduction alongside a Signal-to-Quantization-Noise Ratio (SQNR) of ~30 dB.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2608.07363v1",
+      "title": "QFCQT: A Chaotically Gated Quantformer Framework for Volatile Time-Series Forecasting",
+      "published": "2026-08-07",
+      "category": "cs.AI",
+      "summary": "Forecasting non-stationary time series remains difficult due to long-range dependencies, local volatility bursts, structural shifts, and nonlinear oscillatory behaviors. Although Transformer-based forecasters are effective for modeling long-term temporal dependencies, their feed-forward blocks typically rely on smooth static activations that are insufficiently sensitive to abrupt regime changes. Motivated by quantitative Transformer designs and oscillator-based nonlinear activations, we propose QFCQT, short for Quantum-Fractal-inspired Chaotically Gated Quantformer, for robust forecasting under complex volatile dynamics. Here, \"quantum-fractal-inspired\" denotes a computational analogy based on soft oscillator superposition and multi-scale nonlinear responses, rather than a formal quantum-mechanical or fractal-theoretic derivation. QFCQT consists of three main components: (1) a Quantformer-style numerical encoder that directly processes multivariate inputs via linear embedding; (2) a learnable Lee-oscillator activation module that maps scalar pre-activations to dynamic oscillatory responses and summarizes them through Max-over-Time pooling; and (3) a smooth-chaotic gated fusion mechanism that adaptively balances conventional smooth activations and chaos-sensitive responses. Furthermore, instead of using a single fixed oscillator, QFCQT employs a soft superposition of eight parameterized Lee oscillator families to adaptively capture different nonlinear response patterns across ",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2606.16051v1",
+      "title": "Hidden Degradation Costs in Energy-Cost-Only HEMS Optimisation: Study on Battery and PV Sensitivity",
+      "published": "2026-06-14",
+      "category": "cs.NI",
+      "summary": "Residential battery energy storage systems (BESS) are increasingly deployed alongside photovoltaic (PV) generation to reduce household energy costs under volatile time-of-use (TOU) tariffs. Model predictive control (MPC) is a widely adopted optimisation strategy for home energy management systems (HEMS), typically formulated to minimise net energy cost, subject to physical and operational constraints. However, battery degradation is rarely embedded in the optimisation objective, meaning its cost is unquantified and aggressive; high-cycle-count strategies could incur significant losses once deployed to physical systems. This paper presents a receding-horizon mixed-integer linear programming (MILP) baseline for a UK residential HEMS, using demand data from the REFIT dataset. A 3 by 3 sensitivity study is conducted across three battery sizes and three PV array sizes, with post-hoc degradation cost estimated using the Naumann stress model and rainflow cycle counting. Results show that degradation remains constant for each battery size and can exceed energy cost savings by up to 1,060 %. These results demonstrate that energy-cost-only optimisation systematically underestimates the true system cost, motivating a degradation-aware control formulation.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2605.12099v1",
+      "title": "Bayesian Dynamic Modeling of Realized Volatility in Financial Asset Price Forecasting",
+      "published": "2026-05-12",
+      "category": "stat.ME",
+      "summary": "We present a new class of Bayesian dynamic models for bivariate price-realized volatility time series in financial forecasting. A novel dynamic gamma process model adopted for realized volatility is integrated with traditional Bayesian dynamic linear models (DLMs) for asset price series. This represents reduced-form volatility leverage and feedback effects through use of realized volatility proxies in conditional DLMs for prices or returns, coupled with the synthesis of higher frequency data to track and anticipate volatility fluctuations. Analysis is computationally straightforward, extending conjugate-form Bayesian analyses for sequential filtering and model monitoring with simple and direct simulation for forecasting. A main applied setting is equity return forecasting with daily prices and realized volatility from high-frequency, intraday data. Detailed empirical studies of multiple S&amp;P sector ETFs highlight the improvements achievable in asset price forecasting relative to standard models and deliver contextual insights on the nature and practical relevance of volatility leverage and feedback effects. The analytic structure and negligible extra computational cost will enable scaling to higher dimensions for multivariate price series forecasting for decouple/recouple portfolio construction and risk management applications.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2605.10364v3",
+      "title": "DeepLévy: Learning Heavy-Tailed Uncertainty in Highly Volatile Time Series",
+      "published": "2026-05-11",
+      "category": "cs.LG",
+      "summary": "Modeling uncertainty in heavy-tailed time series remains a critical challenge for deep probabilistic forecasting models, which often struggle to capture abrupt, extreme events. While Lévy stable distributions offer a natural framework for modeling such non-Gaussian behaviors, the intractability of their probability density functions severely limits conventional likelihood-based inference. To address this, we introduce DeepLévy, a neural framework that learns mixtures of Lévy stable distributions by minimizing the discrepancy between empirical and parametric characteristic functions. DeepLévy incorporates a mixture mechanism that adaptively learns context-dependent weights and parameters over multiple Lévy components, enabling flexible multi-horizon uncertainty modeling. Evaluations on both real and synthetic datasets demonstrate that DeepLévy outperforms state-of-the-art deep probabilistic forecasting approaches in tail risk metrics, especially under extreme volatility.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2604.27082v1",
+      "title": "When Your LLM Reaches End-of-Life: A Framework for Confident Model Migration in Production Systems",
+      "published": "2026-04-29",
+      "category": "cs.AI",
+      "summary": "We present a framework for migrating production Large Language Model (LLM) based systems when the underlying model reaches end-of-life or requires replacement. The key contribution is a Bayesian statistical approach that calibrates automated evaluation metrics against human judgments, enabling confident model comparison even with limited manual evaluation data. We demonstrate this framework on a commercial question-answering system serving 5.3M monthly interactions across six global regions; evaluating correctness, refusal behavior, and stylistic adherence to successfully identify suitable replacement models. The framework is broadly applicable to any enterprise deploying LLM-based products, providing a principled, reproducible methodology for model migration that balances quality assurance with evaluation efficiency. This is a capability increasingly essential as the LLM ecosystem continues to evolve rapidly and organizations manage portfolios of AI-powered services across multiple models, regions, and use cases.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2604.19604v6",
+      "title": "The Cost of a Free Lunch: Evidence from U.S. Derivatives Markets",
+      "published": "2026-04-21",
+      "category": "q-fin.GN",
+      "summary": "Put-call parity is a terminal-payoff identity; quoted residuals against traded futures are near zero. Yet enforcing parity is path-dependent, exposing arbitrageurs to daily settlement, margin, and finite capital. Using minute-level NBBO data on S&amp;P 500 and Russell 2000 options, I extract option-implied discount factors, compare them with the OIS curve, and construct an annualized carry gap. A reduced-form specification centered on a volatility times sqrt(tau) path-risk term links the carry gap to implementation risk, trading frictions, and financial conditions, with coefficient signs stable across leave-one-year-out validation. The carry gap is an implementation wedge invisible in price space but systematic in carry space.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2512.10584v3",
+      "title": "Volatility time series modeling by single-qubit quantum circuit learning",
+      "published": "2025-12-11",
+      "category": "q-fin.CP",
+      "summary": "We employ single-qubit quantum circuit learning (QCL) to model the dynamics of volatility time series. To assess its effectiveness, we generate synthetic data using the Rational GARCH model, which is specifically designed to capture volatility asymmetry. Our results show that QCL-based volatility predictions preserve the negative return-volatility correlation, a hallmark of asymmetric volatility dynamics. Moreover, analysis of the Hurst exponent and multifractal characteristics indicates that the predicted series, like the original synthetic data, exhibits anti-persistent behavior and retains its multifractal structure.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2511.03314v1",
+      "title": "Multifractality and sample size influence on Bitcoin volatility patterns",
+      "published": "2025-11-05",
+      "category": "q-fin.ST",
+      "summary": "The finite sample effect on the Hurst exponent (HE) of realized volatility time series is examined using Bitcoin data. This study finds that the HE decreases as the sampling period $Δ$ increases and a simple finite sample ansatz closely fits the HE data. We obtain values of the HE as $Δ\\rightarrow 0$, which are smaller than 1/2, indicating rough volatility. The relative error is found to be $1\\%$ for the widely used five-minute realized volatility. Performing a multifractal analysis, we find the multifractality in the realized volatility time series, smaller than that of the price-return time series.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2508.01880v3",
+      "title": "Time-Varying Factor-Augmented Models for Volatility Forecasting",
+      "published": "2025-08-03",
+      "category": "q-fin.ST",
+      "summary": "Accurate volatility forecasts are vital in modern finance for risk management, portfolio allocation, and strategic decision-making. However, existing methods face key limitations. Fully multivariate models, while comprehensive, are computationally infeasible for realistic portfolios. Factor models, though efficient, primarily use static factor loadings, failing to capture evolving volatility co-movements when they are most critical. To address these limitations, we propose a novel, model-agnostic Factor-Augmented Volatility Forecast framework. Our approach employs a time-varying factor model to extract a compact set of dynamic, cross-sectional factors from realized volatilities with minimal computational cost. These factors are then integrated into both statistical and AI-based forecasting models, enabling a unified system that jointly models asset-specific dynamics and evolving market-wide co-movements. Our framework demonstrates strong performance across two prominent asset classes-large-cap U.S. technology equities and major cryptocurrencies-over both short-term (1-day) and medium-term (7-day) horizons. Using a suite of linear and non-linear AI-driven models, we consistently observe substantial improvements in predictive accuracy and economic value. Notably, a practical pairs-trading strategy built on our forecasts delivers superior risk-adjusted returns and profitability, particularly under adverse market conditions.",
+      "query": "vol_timing",
+      "why": "NEW citation factorvol2508: time-varying cross-sectional factors from realized vols augment vol forecasters — the factor-augmented book-vol direction (follow-up; the panel one factor is the candidate factor)."
+    },
+    {
+      "id": "2508.02691v3",
+      "title": "Statistical modeling of SOFR term structure",
+      "published": "2025-07-23",
+      "category": "q-fin.ST",
+      "summary": "SOFR derivatives market remains illiquid and incomplete so it is not amenable to classical risk-neutral term structure models which are based on the assumption of perfect liquidity and completeness. This paper develops a statistical SOFR term structure model that is well-suited for risk management and derivatives pricing within the incomplete markets paradigm. The model incorporates relevant macroeconomic factors that drive central bank policy rates which, in turn, cause jumps often observed in the SOFR rates. The model is easy to calibrate to historical data, current market quotes, and the user's views concerning the future development of the relevant macroeconomic factors. The model is well suited for large-scale simulations often required in risk management, portfolio optimization and indifference pricing of interest rate derivatives.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2506.18746v1",
+      "title": "The Within-Orbit Adaptive Leapfrog No-U-Turn Sampler",
+      "published": "2025-06-23",
+      "category": "stat.CO",
+      "summary": "Locally adapting parameters within Markov chain Monte Carlo methods while preserving reversibility is notoriously difficult. The success of the No-U-Turn Sampler (NUTS) largely stems from its clever local adaptation of the integration time in Hamiltonian Monte Carlo via a geometric U-turn condition. However, posterior distributions frequently exhibit multi-scale geometries with extreme variations in scale, making it necessary to also adapt the leapfrog integrator's step size locally and dynamically. Despite its practical importance, this problem has remained largely open since the introduction of NUTS by Hoffman and Gelman (2014). To address this issue, we introduce the Within-orbit Adaptive Leapfrog No-U-Turn Sampler (WALNUTS), a generalization of NUTS that adapts the leapfrog step size at fixed intervals of simulated time as the orbit evolves. At each interval, the algorithm selects the largest step size from a dyadic schedule that keeps the energy error below a user-specified threshold. Like NUTS, WALNUTS employs biased progressive state selection to favor states with positions that are further from the initial point along the orbit. Empirical evaluations on multiscale target distributions, including Neal's funnel and the Stock-Watson stochastic volatility time-series model, demonstrate that WALNUTS achieves substantial improvements in sampling efficiency and robustness compared to standard NUTS.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2505.12198v1",
+      "title": "Multivariate Affine GARCH with Heavy Tails: A Unified Framework for Portfolio Optimization and Option Valuation",
+      "published": "2025-05-18",
+      "category": "econ.EM",
+      "summary": "This paper develops and estimates a multivariate affine GARCH(1,1) model with Normal Inverse Gaussian innovations that captures time-varying volatility, heavy tails, and dynamic correlation across asset returns. We generalize the Heston-Nandi framework to a multivariate setting and apply it to 30 Dow Jones Industrial Average stocks. The model jointly supports three core financial applications: dynamic portfolio optimization, wealth path simulation, and option pricing. Closed-form solutions are derived for a Constant Relative Risk Aversion (CRRA) investor's intertemporal asset allocation, and we implement a forward-looking risk-adjusted performance comparison against Merton-style constant strategies. Using the model's conditional volatilities, we also construct implied volatility surfaces for European options, capturing skew and smile features. Empirically, we document substantial wealth-equivalent utility losses from ignoring time-varying correlation and tail risk. These findings underscore the value of a unified econometric framework for analyzing joint asset dynamics and for managing portfolio and derivative exposures under non-Gaussian risks.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2502.00151v1",
+      "title": "A Comprehensive Review: Applicability of Deep Neural Networks in Business Decision Making and Market Prediction Investment",
+      "published": "2025-01-31",
+      "category": "econ.GN",
+      "summary": "Big data, both in its structured and unstructured formats, have brought in unforeseen challenges in economics and business. How to organize, classify, and then analyze such data to obtain meaningful insights are the ever-going research topics for business leaders and academic researchers. This paper studies recent applications of deep neural networks in decision making in economical business and investment; especially in risk management, portfolio optimization, and algorithmic trading. Set aside limitation in data privacy and cross-market analysis, the article establishes that deep neural networks have performed remarkably in financial classification and prediction. Moreover, the study suggests that by compositing multiple neural networks, spanning different data type modalities, a more robust, efficient, and scalable financial prediction framework can be constructed.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2412.14353v4",
+      "title": "Multivariate Rough Volatility",
+      "published": "2024-12-18",
+      "category": "q-fin.ST",
+      "summary": "Motivated by empirical evidence from the joint behavior of realized volatility time series, we propose to model the joint dynamics of log-volatilities using a multivariate fractional Ornstein-Uhlenbeck process. This model is a multivariate version of the Rough Fractional Stochastic Volatility model introduced in [Gatheral, Jaisson, and Rosenbaum, Quant. Finance, 2018]. It allows for different Hurst exponents in the different marginal components and non trivial interdependencies. We discuss the main features of the model and propose a Generalized Method of Moments estimator that jointly identifies its parameters. We derive the asymptotic theory of the estimator and perform a simulation study that confirms the asymptotic theory in finite sample. We conduct an extensive empirical investigation of all realized-volatility time series covering the entire span of about two decades in the Oxford-Man realized library, and of a small spot-volatility system. Our analysis shows that these time series are strongly correlated and can exhibit asymmetries in their empirical cross-covariance function, accurately captured by our model. These asymmetries lead to spillover effects, which we derive analytically within our model and compute based on empirical estimates of model parameters. Moreover, in accordance with the existing literature, we observe behaviors close to non-stationarity and rough trajectories.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2412.12576v1",
+      "title": "Market-Neutral Strategies in Mid-Cap Portfolio Management: A Data-Driven Approach to Long-Short Equity",
+      "published": "2024-12-17",
+      "category": "q-fin.PM",
+      "summary": "Mid-cap companies, generally valued between \\$2 billion and \\$10 billion, provide investors with a well-rounded opportunity between the fluctuation of small-cap stocks and the stability of large-cap stocks. This research builds upon the long-short equity approach (e.g., Michaud, 2018; Dimitriu, Alexander, 2002) customized for mid-cap equities, providing steady risk-adjusted returns yielding a significant Sharpe ratio of 2.132 in test data. Using data from 2013 to 2023, obtained from WRDS and following point-in-time (PIT) compliance, the approach guarantees clarity and reproducibility. Elements of essential financial indicators, such as profitability, valuation, and liquidity, were designed to improve portfolio optimization. Testing historical data across various markets conditions illustrates the stability and resilience of the tactic. This study highlights mid-cap stocks as an attractive investment route, overlooked by most analysts, which combine transparency with superior performance in managing portfolios.",
+      "query": "vol_timing",
+      "why": ""
+    },
+    {
+      "id": "2609.29096v1",
+      "title": "Downside-Controlled Online Forecast Combination under Delayed and Revised Outcomes",
+      "published": "2026-09-24",
+      "category": "cs.LG",
+      "summary": "Post-hoc correction adjusts a forecaster that cannot be retrained, such as a foundation model, but a correction fitted where errors are stable can hurt where they shift. We aim for downside control: not much worse than the starting forecast. We combine the frozen forecaster, a static corrector and an online corrector on the simplex, using only losses that mature after the horizon. Across seven benchmarks and four base models, two of them foundation models, the worst deterioration over 28 pairs at the main horizon is 0.15% and gains reach 11.5%. On day-ahead load for seven European bidding zones it lowers mean MSE in all seven zones, while single correctors raise mean MSE by up to 102% where the published forecast is most accurate. Three empirical conditions on expert speed, stream length and outcome alignment, each fixed by a documented failure, delimit its scope. Learning from the provisional outcome improves four zones on the settled one; learning on the settled outcome restores all seven.",
+      "query": "combine",
+      "why": "Already cited in CITATIONS.md (vol-forecasting section) — this sweep independently re-found it, confirming relevance to the rolling-combination follow-up."
+    },
+    {
+      "id": "2609.12101v1",
+      "title": "Competence-Gated Pooling of Language Models and Priors for Event Forecasting",
+      "published": "2026-09-10",
+      "category": "cs.AI",
+      "summary": "In hybrid forecasting, a language model is often one of several available signals. A system may already have a market, crowd, or statistical forecast and must decide whether the model adds useful information or should be ignored. The relevant target is therefore not standalone model accuracy, but relative competence, defined as the model's marginal value beyond the available external forecast. Under Brier loss, we characterize when model disagreement can improve an external forecast and derive the gain from using domain-specific rather than global pooling weights. We then introduce a competence gate that estimates domain-level source weights from resolved outcomes, shrinks uncertain estimates toward a global weight, and recalibrates the pooled forecast. Across 2,357 resolved binary questions and five language models, the gate improves the main external baseline from 0.0771 to 0.0732 Brier and significantly outperforms global forecast combinations. The gain remains significant under leakage controls and against a leakage-safe time-series prior on the pooled structured set, with separate evidence on FRED. In contrast, the gate gives no significant improvement on the official ForecastBench market subset, where it largely defers to the market. Across four Qwen models, verbal confidence does not reliably identify when the model outperforms the external forecast, while outcome-estimated competence supports better abstention decisions. These results provide a practical approach for ",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2609.07512v1",
+      "title": "Statistical versus machine learning-based spatial interpolation of post-processed ensemble weather forecasts",
       "published": "2026-09-07",
       "category": "cs.LG",
-      "summary": "Associative Recall (AR) is the cognitive ability to learn and retrieve links between items in memory. In NLP, AR is used as a benchmark for evaluating the in-context memory capacity of architectures such as Mamba, and has been found to strongly correlate with language modeling performance. This paper explores AR from the perspective of mechanistic interpretability, aiming to reverse-engineer the exact internal algorithm used by Mamba to perform recall. Our key insight is that Mamba performs recall by implicitly learning linear hash functions, and we identify the low-level circuit that enables this behavior. Building on these findings and inspired by theoretical tools in similarity-preserving hashing, such as the Johnson-Lindenstrauss lemma, we develop a theoretical framework for analyzing AR, which we term Recall Scaling Laws. Given the vocabulary size and the number of facts in context, this framework allows us to (1) predict the embedding and state dimensions required for Mamba to achieve perfect recall, (2) predict recall success probability given the model dimensions, and (3) analyze multi-layer models and multi-head SSM patterns. Empirical results show that our theoretical findings are accurate and predictive, offering insights into how AR capacity scales with vocabulary, state, embedding size, and architecture.",
-      "why": "A 2026 theoretical/mechanistic study of associative recall via hashing (recall scaling laws) — direct, fresh grounding for the recall-vs-width question the section-I sweep measures."
+      "summary": "Statistical post-processing improves ensemble weather forecasts, but generating calibrated predictions at locations without observations remains challenging. This study compares statistical and machine-learning-based methods for post-processing ECMWF 2-m temperature and 10-m wind speed forecasts at observed and unobserved stations in Germany. We consider EMOS-based approaches, distributional regression networks, Transformers, and graph neural networks under both limited and extended predictor settings. For temperature, we also investigate linear forecast combinations and propose an altitude-aware linear pool (ALP). The results show that post-processing improves upon the raw ensemble in most settings, but no single method performs best across all variables, station groups, and evaluation metrics. The proposed ALP provides a small but significant improvement over the standard linear pool at unobserved locations.",
+      "query": "combine",
+      "why": ""
     },
     {
-      "id": "1205.2930",
-      "title": "Density Sensitive Hashing",
-      "published": "2012-05-14",
-      "category": "cs.IR",
-      "summary": "Nearest neighbors search is a fundamental problem in various research fields like machine learning, data mining and pattern recognition. Recently, hashing-based approaches, e.g., Locality Sensitive Hashing (LSH), are proved to be effective for scalable high dimensional nearest neighbors search. Many hashing algorithms found their theoretic root in random projection. Since these algorithms generate the hash tables (projections) randomly, a large number of hash tables (i.e., long codewords) are required in order to achieve both high precision and recall. To address this limitation, we propose a novel hashing algorithm called {\\em Density Sensitive Hashing} (DSH) in this paper. DSH can be regarded as an extension of LSH. By exploring the geometric structure of the data, DSH avoids the purely random projections selection and uses those projective functions which best agree with the distribution of the data. Extensive experimental results on real-world data sets have shown that the proposed method achieves better performance compared to the state-of-the-art hashing approaches.",
-      "why": "Density Sensitive Hashing: data-dependent hash directions chosen from the data density rather than only the covariance — the research relative of the measured noise-tail finding (aligning to low-variance directions dedicates bits to a noise-dominated region)."
+      "id": "2608.28116v1",
+      "title": "Generalized Gibbs Ensemble Weighting for Forecast Combination",
+      "published": "2026-08-28",
+      "category": "cs.LG",
+      "summary": "Forecast combination is a reliable way to improve predictive performance when several forecasting models are available. Simple aggregation rules such as the mean, median, trimmed mean, inverse-loss weighting, and exponential weighting are often strong baselines, but their relative performance can vary across datasets, forecast horizons, deployment settings, and levels of disagreement among base forecasters. We develop Generalized Gibbs Ensemble Weighting (GGEW), a probabilistic framework that treats forecasting models as experts and assigns ensemble weights using a Gibbs-style exponential transformation of normalized predictive loss. The framework extends this basic weighting rule through numerical stabilization, diversity-aware score corrections, and online hyperparameter adaptation. GGEW produces a family of related methods, including Stable Gibbs weighting, Directional Gibbs-NCL, and Symmetric Gibbs-NCL. These variants share one core algorithm and differ only in the score used inside the exponential weighting rule. For sequential deployment, we adopt a UCB-style bandit mechanism, called online Local-UCB, to adapt the learning rate, diversity strength, and Gibbs variant without evaluating the full hyperparameter grid at every prediction step. We evaluate GGEW on official M4 competition forecast submissions and external rolling-origin deployment experiments using Monash Traffic Hourly, Electricity Hourly, and Solar Weekly datasets. Results suggest that Gibbs-style adaptive w",
+      "query": "combine",
+      "why": "Already cited in CITATIONS.md — re-found independently; confirms GGEW relevance to gibbsCombineWeights."
     },
     {
-      "id": "0809.2274",
-      "title": "A randomized algorithm for principal component analysis",
-      "published": "2008-09-12",
+      "id": "2608.14170v1",
+      "title": "Constraining Primordial Power Asymmetry from Galaxy Clustering and Peculiar Velocity Information",
+      "published": "2026-08-14",
+      "category": "astro-ph.CO",
+      "summary": "Primordial power asymmetry would probe departures from statistical isotropy, offering a clue to the physics of the primordial Universe. We investigate how such asymmetries can be tested with galaxy surveys and quantify how peculiar-velocity information can improve these tests. We develop a unified bipolar spherical harmonic (BipoSH) analysis of the auto- and cross-power spectra of galaxy density and line-of-sight peculiar velocity, and perform Fisher forecasts combining a Euclid-like spectroscopic galaxy survey with peculiar velocities reconstructed from Simons Observatory-like CMB maps through the kinetic Sunyaev-Zel'dovich effect. For dipolar asymmetry, we consider both scale-independent and scale-dependent modulations proportional to $k^{-0.5}$. Galaxy clustering provides most of the constraining power in both cases, while peculiar velocities add only modest information. For quadrupolar asymmetry, we account for the recently identified anisotropic galaxy-bias response and marginalize over its amplitude. We find that galaxy clustering alone suffers from a degeneracy between the primordial quadrupolar modulation and anisotropic galaxy bias. This degeneracy can be substantially broken by adding peculiar-velocity information: the density-velocity cross-spectrum provides complementary information to the galaxy auto-spectrum, while the velocity auto-spectrum constrains the primordial modulation independently of anisotropic galaxy bias. The velocity information becomes increasing",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2608.13886v2",
+      "title": "A Forecast Combination Framework for Hierarchical and Grouped Time Series Reconciliation",
+      "published": "2026-08-14",
+      "category": "stat.ME",
+      "summary": "Forecast combining and forecast reconciliation for hierarchical and grouped time series have largely developed as separate research areas. This paper connects the two by developing a forecast combination framework for forecast reconciliation. For each bottom-level series, we construct a maximal linearly independent set of structured candidate forecasts from aggregation constraints, and show that combining these candidates and aggregating the resulting bottom-level forecasts is equivalent to standard unbiased linear reconciliation. Within this representation, we prove that mean-squared-error optimal combination weights exactly recover the widely used Minimum Trace (MinT) reconciliation. We further show that the optimal weight problem is separable across different bottom-level series, each yielding a Bates--Granger optimal forecast combination. This reveals MinT as a collection of optimal combinations over hierarchy-induced candidate forecasts. For finite-sample estimation, we propose a modular penalized framework that nests existing MinT variants and supports rich extensions including covariance shrinkage, weight penalization, and scalable series-wise separate estimation. Empirical results show that the framework is practically implementable, competitive with existing methods, and can improve accuracy while preserving coherence. Overall, the forecast combination perspective offers new interpretations of existing reconciliation approaches and provides a flexible basis for desig",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2608.08217v1",
+      "title": "Source-Agnostic Sizing of Flexibility Reserves",
+      "published": "2026-08-08",
+      "category": "eess.SY",
+      "summary": "Growing shares of variable renewable energy sources (VRES) increase forecast uncertainty and variability, requiring flexibility reserves that adapt to changing operating conditions and reflect the likelihood and severity of forecast deviations. Conventional fixed-rule or Gaussian approaches misrepresent asymmetric, heavy-tailed errors, leading to inefficient procurement or optimistic risk estimates. This paper presents a source-agnostic framework that constructs conditional error distributions for load, wind, and solar from historical deviations or probabilistic forecasts, combines them into a conditional net-load error distribution, and derives upward and downward reserves using coverage- and risk-based criteria. Nonparametric density estimation captures empirical error behavior without a parametric assumption, while a Conditional Value-at-Risk (CVaR)-based metric quantifies expected uncovered deviations. Experiments on a New York Independent System Operator (NYISO)-based synthetic dataset show that the framework meets target coverage with lower reserve volumes than static benchmarks and avoids the tail-risk distortion of Gaussian-based methods. Because reserves are built directly from the resource uncertainty distributions, the framework is transparent and interpretable, and it integrates seamlessly into existing production-cost models as deterministic reserve constraints, avoiding scenario-based stochastic optimization. It is implemented in the Electric Power Research Inst",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2608.05030v1",
+      "title": "From Score Matrices to Football-Aware Match-State Simulation: An Auditable LLM Harness for Exact-Score Reranking",
+      "published": "2026-08-05",
+      "category": "cs.AI",
+      "summary": "Football score forecasting combines a strong statistical core with a difficult contextual edge. Dynamic Poisson-family models estimate team strength, expected goals, and coherent score probabilities, but do not directly understand roles, tactical matchups, motivation, or how a first goal changes behaviour. Large language models (LLMs) can reason about such concepts, yet are not calibrated probability engines. We combine both components through an auditable information harness. This paper documents four iterations: V1, a dynamic score-driven Dixon-Coles baseline; V2, which maps LLM contextual ratings back into expected-goal parameters; V3, which replaces scalar correction with goal-by-goal simulations over a frozen score-candidate set; and V4, which adds shared first-breakthrough and post-goal cascade judgments, time-aware stopping, and deterministic tail candidates. The harness defines input semantics, supplies pre-match evidence, and constrains the LLM to an inspectable reasoning route. On a chronological replay of the first 150 matches of the 2025-26 English Premier League, V1 achieved 10.0% Top-1 and 26.7% Top-3 exact-score accuracy. V3 reached 12.0% and 30.0%, while V4 reached 14.7% and 30.7%. V4 increased candidate coverage from 77.3% to 84.7%, although no added tail candidate became a Top-3 exact hit. V1's native 1X2 distribution achieved 53.3% argmax accuracy, 0.9878 log loss, 0.5870 Brier score, and 0.2095 ranked probability score. These results are exploratory: the d",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2607.22310v1",
+      "title": "Thick as THieFs: Temporal coherent forecast combination for day-ahead electricity prices",
+      "published": "2026-07-24",
+      "category": "stat.AP",
+      "summary": "Day-ahead electricity prices are forecast by many competing models and at several temporal granularities, from hourly prices to block and baseload products. The resulting forecasts suffer from two distinct problems: forecasts produced at different granularities are incoherent, as the aggregates do not match the averages of their components, and no single model is the most accurate in every market, period and level. We develop a temporal coherent combination approach that addresses both problems in one step, pooling the forecasts that the competing experts produce at all the levels of a temporal hierarchy into a single forecast that satisfies the aggregation constraints and has minimum error variance among the linear unbiased combinations. Since the optimal solution depends on a high-dimensional error covariance matrix, we compare different estimators obtained by crossing correlation structures with linear and nonlinear shrinkage approaches. Using the base forecasts of four model classes for the German and Spanish day-ahead markets, the combined forecasts significantly outperform both the base forecasts and the best reconciled expert at nearly every temporal level.",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2607.12928v1",
+      "title": "Efficient Sequential Calibration with $O(T^{2/3-ε})$ Error Bound",
+      "published": "2026-07-14",
+      "category": "cs.LG",
+      "summary": "We study the online binary sequential calibration problem. A recent breakthrough by \\citet{dagan2024breaking} overcomes the classical \\(T^{2/3}\\) barrier for calibration error. Building on this result, we present an efficient randomized forecaster that achieves an expected calibration error \\(O(T^{2/3-\\varepsilon})\\) for some constant \\(\\varepsilon&gt;0\\). Our forecaster combines the \\textsc{SPR-Calibration} procedure \\citep{dagan2024breaking} with an outer Blackwell-style correction layer. The \\textsc{SPR-Calibration} procedure controls calibration with respect to a surrogate sequence of conditional-mean estimates, while the correction layer controls the additional error incurred when these surrogates are used to approximate the true outcomes. The analysis decomposes the total calibration error into the surrogate calibration error and the residual discrepancy between the surrogate sequence and the true outcomes. The former is bounded by the \\textsc{SPR-Calibration} guarantee in \\citet{dagan2024breaking}, and the latter is controlled using a quadratic potential argument together with the sparsity of the \\textsc{SPR-Calibration} forecaster.",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2606.27711v1",
+      "title": "The Simulacrum: Decision-Theoretic Pretraining for Near-Optimal Time-Series Forecasting and Inference",
+      "published": "2026-06-26",
+      "category": "cs.LG",
+      "summary": "We introduce a neural network-based framework for learning time series estimators through a process we term decision-theoretic pretraining. Analysts specify a generative world, a distribution over data-generating processes, and a target decision objective. A neural network trained on stratified simulations from this world approximates the corresponding optimal decision rule, yielding a neural estimator that provides forecasts, parameter estimates, predictive intervals, or model-selection for zero-shot inference on previously unseen time series. The joint specification of the generative world and objective enables the estimators to directly approximate process-level, finite-sample properties: near-optimal risk, bias control, minimax performance, and uniform calibration. Our experiments demonstrate that these neural estimators can outperform traditional baselines such as maximum likelihood estimation and model selection via AICc, for the same model structural model classes. Furthermore, even when trained purely on simulations of structural models, they achieve competitive or state-of-the-art forecasting accuracy on major real-world benchmarks, compared with statistical, neural or large pre-trained models. We illustrate the framework by addressing two longstanding challenges: finite-sample bias and miscalibration in AR(p) models, and the forecast combination puzzle. These applications highlight the approach's main advantage: its ability to approximate solutions to analytically i",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2606.22981v1",
+      "title": "Learning the distance for ABC and localized neural posterior estimation",
+      "published": "2026-06-22",
       "category": "stat.CO",
-      "summary": "Principal component analysis (PCA) requires the computation of a low-rank approximation to a matrix containing the data being analyzed. In many applications of PCA, the best possible accuracy of any rank-deficient approximation is at most a few digits (measured in the spectral norm, relative to the spectral norm of the matrix being approximated). In such circumstances, efficient algorithms have not come with guarantees of good accuracy, unless one or both dimensions of the matrix being approximated are small. We describe an efficient algorithm for the low-rank approximation of matrices that produces accuracy very close to the best possible, for matrices of arbitrary sizes. We illustrate our theoretical results via several numerical examples.",
-      "why": "The randomised PCA algorithm (Halko, Martinsson & Tropp): compute the top components with a randomised range finder instead of O(dim^3) eigendecomposition. The scaling path for `_refreshLshHyperplanes` if the aligned rank is ever taken large."
+      "summary": "Likelihood-free inference methods can perform Bayesian inference when evaluating the likelihood is impractical but simulating synthetic data from the model is feasible. Approximate Bayesian computation (ABC) is a well-established likelihood-free approach that constructs particle posterior approximations by evaluating the similarity between simulated and observed data using a distance function, which is used in rejection or weighting steps. Here we extend previous work on adaptive distance learning for ABC to misspecified time series, while also exploring applications in neural posterior estimation using prior-data fitted networks (NPE-PFN) with localization. The adaptation of the distance that we consider optimizes out-of-sample predictive performance using a scoring rule. We also establish a connection between linear pooling for forecast combination and our posterior estimation methods with randomized distances, showing that empirical estimation of pooling weights can be interpreted as another form of adaptive distance learning. For both ABC algorithms and NPE-PFN methods with localization, adaptive distance learning improves forecasting performance in simulated and real examples.",
+      "query": "combine",
+      "why": ""
     },
     {
-      "id": "1508.04535",
-      "title": "Bit-Scalable Deep Hashing with Regularized Similarity Learning for Image Retrieval and Person Re-identification",
-      "published": "2015-08-19",
-      "category": "cs.CV",
-      "summary": "Extracting informative image features and learning effective approximate hashing functions are two crucial steps in image retrieval . Conventional methods often study these two steps separately, e.g., learning hash functions from a predefined hand-crafted feature space. Meanwhile, the bit lengths of output hashing codes are preset in most previous methods, neglecting the significance level of different bits and restricting their practical flexibility. To address these issues, we propose a supervised learning framework to generate compact and bit-scalable hashing codes directly from raw images. We pose hashing learning as a problem of regularized similarity learning. Specifically, we organize the training images into a batch of triplet samples, each sample containing two images with the same label and one with a different label. With these triplet samples, we maximize the margin between matched pairs and mismatched pairs in the Hamming space. In addition, a regularization term is introduced to enforce the adjacency consistency, i.e., images of similar appearances should have similar codes. The deep convolutional neural network is utilized to train the model in an end-to-end fashion, where discriminative image features and hash functions are simultaneously optimized. Furthermore, each bit of our hashing codes is unequally weighted so that we can manipulate the code lengths by truncating the insignificant bits. Our framework outperforms state-of-the-arts on public benchmarks of similar image search and also achieves promising results in the application of person re-identification in surveillance. It is also shown that the generated bit-scalable hashing codes well preserve the discriminative powers with shorter code lengths.",
-      "why": "Bit-scalable deep hashing: the code length should be selected with the data, not fixed — grounds the \"oversubscribed hash width\" observation from section I."
+      "id": "2606.15701v1",
+      "title": "Robust Transformer-Based One-Step Stock Index Forecasting via Shifted Data Augmentation",
+      "published": "2026-06-14",
+      "category": "cs.LG",
+      "summary": "Transformers have shown remarkable success in sequence modeling, yet their direct application to financial time series remains challenging due to noisy signals, short-memory dynamics, and distributional shifts. This paper proposes a modified Transformer architecture for one-step stock index forecasting, combined with advanced learning-rate scheduling and a novel Shifted Data Augmentation (SDA) technique. We evaluate the proposed framework on two benchmark stock index datasets, VN30 and S&amp;P 500. Experimental results demonstrate that cosine annealing with warmup consistently improves forecasting accuracy over the generalized inverse-power scheduler. Furthermore, SDA substantially reduces forecasting errors and run-to-run variability while improving robustness to hyperparameter selection. The combination of cosine annealing scheduling and SDA achieved the best performance on both datasets, indicating that data augmentation can play a more important role than increasing model complexity in Transformer-based financial forecasting. These findings provide a practical and computationally efficient approach for robust stock index forecasting in noisy financial environments.",
+      "query": "combine",
+      "why": ""
     },
     {
-      "id": "2009.08591",
-      "title": "Fast Search on Binary Codes by Weighted Hamming Distance",
-      "published": "2020-09-18",
-      "category": "cs.CV",
-      "summary": "Weighted Hamming distance, as a similarity measure between binary codes and binary queries, provides superior accuracy in search tasks than Hamming distance. However, how to efficiently and accurately find $K$ binary codes that have the smallest weighted Hamming distance to the query remains an open issue. In this paper, a fast search algorithm is proposed to perform the non-exhaustive search for $K$ nearest binary codes by weighted Hamming distance. By using binary codes as direct bucket indices in a hash table, the search algorithm generates a sequence to probe the buckets based on the independence characteristic of the weights for each bit. Furthermore, a fast search framework based on the proposed search algorithm is designed to solve the problem of long binary codes. Specifically, long binary codes are split into substrings and multiple hash tables are built on them. Then, the search algorithm probes the buckets to obtain candidates according to the generated substring indices, and a merging algorithm is proposed to find the nearest binary codes by merging the candidates. Theoretical analysis and experimental results demonstrate that the search algorithm improves the search accuracy compared to other non-exhaustive algorithms and provides orders-of-magnitude faster search than the linear scan baseline.",
-      "why": "Fast search on binary codes by WEIGHTED Hamming distance: not all hash bits are equally reliable, so weight them. The research grounding for the measured result that aligning the low-variance tail hurts (those bits are noise) while the high-variance prefix helps — a natural next step is to weight or drop the tail bits."
+      "id": "2606.04900v1",
+      "title": "Multi-objective probabilistic forecast combination for inventory demand",
+      "published": "2026-06-03",
+      "category": "stat.AP",
+      "summary": "Probabilistic forecasts are essential for inventory management, where decisions depend on the full distribution of future demand. While probabilistic forecast combination is widely used to improve statistical accuracy, most existing approaches optimize statistical loss alone and overlook operational objectives. However, in inventory settings, higher forecast accuracy does not necessarily translate into better decision performance, especially under nonlinear cost structures and multiple, potentially conflicting, decision targets. To address this gap, we propose a multi-objective probabilistic forecast combination framework that simultaneously considers forecast accuracy and inventory decision performance. The framework formulates forecast combination as a multi-objective optimization problem and derives a set of Pareto-optimal combinations, enabling explicit trade-offs between forecasting and operational goals. Empirical studies using Walmart retail data and Royal Air Force spare parts data demonstrate that the proposed approach achieves more balanced and robust performance than individual models, simple averaging, and single-objective optimization. Our results provide a practical and flexible framework for aligning probabilistic forecasting with inventory decision-making.",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2604.12927v1",
+      "title": "Forecasting Oil Prices Across the Distribution: A Quantile VAR Approach",
+      "published": "2026-04-14",
+      "category": "econ.EM",
+      "summary": "We develop a Quantile Bayesian Vector Autoregression (QBVAR) to forecast real oil prices across different quantiles of the conditional distribution. The model allows predictor effects to vary across quantiles, capturing asymmetries that standard mean-focused approaches miss. Using monthly data from 1975 to 2025, we document three findings. First, the QBVAR improves median forecasts by 2-5\\% relative to Bayesian VARs, demonstrating that quantile-specific dynamics matter even for point prediction. Second, uncertainty and financial condition variables strongly predict downside risk, with left-tail forecast improvements of 10-25\\% that intensify during crisis episodes. Third, right-tail forecasting remains difficult; stochastic volatility models dominate for upside risk, though forecast combinations that include the QBVAR recover these losses. The results show that modeling the conditional distribution yields substantial gains for tail risk assessment, particularly during major oil market disruptions.",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2603.17381v4",
+      "title": "An Auditable AI Agent Loop for Empirical Economics: A Case Study in Forecast Combination",
+      "published": "2026-03-18",
+      "category": "econ.EM",
+      "summary": "AI coding agents, general purpose assistants that write and execute code, make empirical specification search fast and cheap, but they also widen hidden researcher degrees of freedom. This paper adapts an open-source agent-loop architecture to an empirical economics workflow and adds a post-search holdout evaluation. In a forecast-combination illustration, independent agent searches find methods that improve on benchmarks from the original study. Logged search and holdout evaluation together make adaptive specification search more transparent and help distinguish robust improvements from sample-specific discoveries.",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2603.11895v3",
+      "title": "Cosmological gravity on all scales V: MCMC forecasts combining large scale structure and CMB lensing for binned phenomenological modified gravity",
+      "published": "2026-03-12",
+      "category": "astro-ph.CO",
+      "summary": "As cosmology rapidly approaches the data-dominated phase of stage IV large scale structure surveys, the modelling of nonlinear scales has become a serious challenge that faces the community, particularly when analysing models beyond $w$CDM. In this work, we emulate the matter power spectrum in a phenomenological parameterisation of modified gravity in which a time-varying effective gravitational constant $μ$ and a gravitational slip $η$ are binned in redshift. We are able to achieve accuracy $&lt;1\\%$ in the modified gravity boost relative to COLA (COmoving Lagrangian Acceleration) simulations. We forecast the constraining power for each bin using a simulated $3\\times 2$pt LSST Y10-like data vector and a $6\\times 2$pt LSST Y10 x Simons Observatory cosmic microwave background (CMB) lensing data vector. We recover the characteristic degeneracy between $μ$ and $η$ previously identified in Fisher forecasts and demonstrate that the best-constrained direction corresponds to the combination $Σ=μ(1+η)/2$ which governs the lensing potential. We show that while large scale structure is sensitive to growth of structure at low redshift, CMB lensing extends the sensitivity to a higher redshift range. These results demonstrate that fast emulation of nonlinear modified-gravity effects enables full Bayesian analyses of model-agnostic gravity parameterisations with realistic survey data vectors and astrophysical systematics.",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2603.05570v1",
+      "title": "Hybrid ensemble forecasting combining physics-based and machine-learning predictions through spectral nudging",
+      "published": "2026-03-05",
+      "category": "physics.ao-ph",
+      "summary": "We present the first application of spectral nudging in a probabilistic ensemble forecasting framework, combining the physics-based ECMWF Integrated Forecasting System ensemble (IFS-ENS) with forecasts from the probabilistic machine-learned AIFS-ENS ensemble. Large scales of virtual temperature and vorticity are relaxed toward the machine-learned forecasts, while mesoscale structures remain governed by the physics-based model. This hybrid ensemble shows substantial improvements in large-scale forecast skill, with gains in predictive skill extended by up to two days in the tropics and by approximately half a day in the extra-tropics relative to IFS-ENS. Despite nudging being applied only to upper-air fields, improvements are also found in several near-surface parameters. Tropical cyclone track forecasts improve significantly, consistent with improved representation of the large-scale steering flow, without degrading storm intensity or ensemble spread. These results demonstrate that spectral nudging can be successfully extended to ensemble prediction and provide an attractive pathway for combining machine-learned and physics-based weather prediction systems.",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2603.01085v1",
+      "title": "Recovery-Informed Forecasting Strategy Enhancement",
+      "published": "2026-03-01",
+      "category": "stat.AP",
+      "summary": "We propose a three-stage framework named as Recovery-Informed Strategy Enhancement (RISE) to forecast the recovery of Chinese outbound tourism following the coronavirus disease 2019 pandemic. The framework decomposes the forecasts into three parts: the initial forecasts, the terminal forecasts and the recovery curve forecasts that connect the two points. We integrate multiple sources of information and employ forecast combination techniques in all stages, enhancing both the accuracy and robustness of recovery forecasts. Compared with conventional forecasting approaches, our framework provides a structured and transparent pipeline to integrate model-based forecasts with expert-informed judgment under structural breaks and high uncertainty. Our findings demonstrate the effectiveness of this framework, offering an adaptable tool for recovery trajectory forecasting in post-crisis contexts.",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2602.05226v1",
+      "title": "Predictive Synthesis under Sporadic Participation: Evidence from Inflation Density Surveys",
+      "published": "2026-02-05",
+      "category": "stat.AP",
+      "summary": "Central banks rely on density forecasts from professional surveys to assess inflation risks and communicate uncertainty. A central challenge in using these surveys is irregular participation: forecasters enter and exit, skip rounds, and reappear after long gaps. In the European Central Bank's Survey of Professional Forecasters, turnover and missingness vary substantially over time, causing the set of submitted predictions to change from quarter to quarter. Standard aggregation rules -- such as equal-weight pooling, renormalization after dropping missing forecasters, or ad hoc imputation -- can generate artificial jumps in combined predictions driven by panel composition rather than economic information, complicating real-time interpretation and obscuring forecaster performance. We develop coherent Bayesian updating rules for forecast combination under sporadic participation that maintain a well-defined latent predictive state for each forecaster even when their forecast is unobserved. Rather than relying on renormalization or imputation, the combined predictive distribution is updated through the implied conditional structure of the panel. This approach isolates genuine performance differences from mechanical participation effects and yields interpretable dynamics in forecaster influence. In the ECB survey, it improves predictive accuracy relative to equal-weight benchmarks and delivers smoother and better-calibrated inflation density forecasts, particularly during periods of",
+      "query": "combine",
+      "why": ""
+    },
+    {
+      "id": "2609.05433v1",
+      "title": "Perpetual Futures for Stocks: The SpaceX Pre-IPO Market",
+      "published": "2026-06-22",
+      "category": "q-fin.PR",
+      "summary": "Robert Shiller proposed perpetual futures in 1993 to create derivative markets for assets that are illiquid or whose price cannot be observed directly, such as single family homes, human capital, and the consumer price index. The crypto markets later built the instrument for a different reason and with a different funding rule. We give a single no arbitrage result that nests both designs: the perpetual price is the present value of a benchmark flow discounted at the funding rate, so the funding rule chooses both the benchmark and the discount. We give a random time change representation in which the price is the expected spot at the first event of a clock whose intensity is the funding rate, use it to show that stochastic volatility moves the basis only through the carry, so a volatility risk premium and not volatility itself can break the peg, read price discovery as the convergence of a Doob martingale driven by a stochastic approximation, and give a segmented market equilibrium that makes the pre listing premium structural rather than behavioural. The June 2026 SpaceX pre-IPO market is the first large scale realization of the idea for an equity claim, and we find that the perpetual consensus forecast the secondary clearing price more accurately than the bookbuilt offer. We close with other equity applications.",
+      "query": "carry",
+      "why": "NEW citation perpfund2609: funding rule chooses benchmark+discount; stochastic vol moves the basis only through the carry — theory behind the legs-separated carry construction."
+    },
+    {
+      "id": "2212.06888v7",
+      "title": "Fundamentals of Perpetual Futures",
+      "published": "2022-12-13",
+      "category": "q-fin.PR",
+      "summary": "Perpetual futures are the most popular cryptocurrency derivatives. Perpetuals offer leveraged exposure to their underlying without rollover or direct ownership. Unlike fixed-maturity futures, perpetuals are not guaranteed to converge to the spot price. To minimize the gap between perpetual and spot prices, long investors periodically pay shorts a funding rate proportional to this difference. We derive no-arbitrage prices for perpetual futures in frictionless markets and bounds in markets with trading costs. Empirically, deviations from these prices in crypto are larger than in traditional currency markets, comove across currencies, and diminish over time. An implied arbitrage strategy yields high Sharpe ratios.",
+      "query": "carry",
+      "why": "NEW citation perpfundamentals2212: no-arbitrage perp pricing, funding-gap deviations comove and decay — theory behind the funding-basis carry sleeve."
+    },
+    {
+      "id": "2609.14205v1",
+      "title": "CAST: A Cross-Asset State-Space Trading System for Drawdown Control in Stock Markets",
+      "published": "2026-09-13",
+      "category": "cs.CE",
+      "summary": "Managing drawdown, the peak-to-trough decline in an investment portfolio's value, is a precondition for long-term survival in practical investment management. However, mainstream stock forecasting methods predominantly optimize returns or Sharpe ratios under the independent and identically distributed (i.i.d.) assumption. Real markets do not follow this assumption, triggering catastrophic drawdowns. We propose a cross-asset state-space trading system (CAST), consisting of two components: The predictor, Cross-Asset Collaborative Kalman Filter (CoKF), estimates each asset's latent state online, coupling all assets through their correlations and adaptively fusing multiple integrated-random-walk orders. The controller, Model Predictive Control (MPC), converts the predictor's forecast into trades, using forecast uncertainty as an explicit risk penalty that controls drawdown. We evaluate CAST on four real-world stock markets over a 15-year test window and show that it consistently occupies the return-drawdown Pareto frontier, achieving strong risk-adjusted performance while maintaining substantially lower maximum drawdown than competitive baselines. A stress test across crisis periods further demonstrates robust behavior under market shocks and distribution shift. Because the predictor and controller interact only through the predicted price path, both are plug-and-play, making CAST a modular, interpretable trading system. The code is available at https://github.com/FanBroWell/CAST",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2608.30446v1",
+      "title": "End-to-End Neural Shrinkage of Indefinite Pairwise Correlation Matrices for Small-Cap-Inclusive Portfolios",
+      "published": "2026-08-31",
+      "category": "q-fin.PM",
+      "summary": "Small-cap-inclusive equity universes contain recently listed and intermittently traded securities, so enforcing a common look-back discards a substantial fraction of the available information. Pairwise-complete estimation preserves the longest overlap for each asset pair, but the resulting correlation matrix can be indefinite because its entries are computed on different samples. This prevents direct use in Markowitz optimization and falls outside the assumptions of standard random-matrix shrinkage. We adapt a rotation-invariant neural covariance estimator to this setting. The model computes mask-aware marginal moments and a pairwise correlation matrix proxy, processes its signed spectrum, and uses a bidirectional gated recurrent unit conditioned on factor-aligned effective sample lengths derived from the overlap matrix and eigenvector loadings. It maps all eigenvalues, including negative ones, to a positive inverse spectrum. The reconstructed covariance is positive definite and is trained end-to-end to minimize five-day realized global-minimum-variance risk. We evaluate 26 expanding-window models from 2000 to 2025 on up to 1,500 U.S. equities in a closing-auction simulator with point-in-time selection, commissions, financing, corporate actions, and market impact. Across the 26-year out-of-sample period, the neural estimator reduces annualized five-day volatility by approximately 20\\% and increases the Sharpe ratio by approximately 40\\% relative to the next-best covariance es",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2608.29093v1",
+      "title": "Titans-QFWP: A Regime-Aware Hybrid Quantum Fast Weight Programmer for Portfolio Optimization",
+      "published": "2026-08-29",
+      "category": "cs.LG",
+      "summary": "We propose Titans-QFWP, a hybrid reinforcement learning architecture integrating a Quantum Fast Weight Programmer with Titans-style memory (Persistence, Surprise, and Forgetting) for adaptive portfolio optimization. To address high-dimensional market features, we introduce an enhanced A3C^2 framework with Hungarian-aligned K-means clustering and scaled log-return rewards. Evaluated on 468 S&amp;P 500 stocks under an Equal-Parameter-Count (EPC) benchmark with approximately 3,000 trainable parameters, Titans-QFWP achieves strong performance (median ARR 0.4260, Calmar 8.5504, IR 0.8427). Ablation results reveal that quantum gating fundamentally reshapes memory component roles, with Persistence supporting drawdown control, Surprise contributing to return generation, and Forgetting providing additional stabilization. By stabilizing these quantum representations, the model enables defensive allocation during market drawdowns while preserving upside potential.",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2608.24703v1",
+      "title": "Lead-Lag Relationships in Financial Markets: A Comparison of Multiple Clustering Algorithms",
+      "published": "2026-08-25",
+      "category": "q-fin.ST",
+      "summary": "Lead-lag relationships are widely used in financial time series, and many clustering algorithms based on them have been developed. The traditional DTW-KMedoids algorithm performs well both on the synthetic dataset and the real financial dataset. However, there are still several limitations to these algorithms: low efficiency caused by high time complexity, poor mathematical properties from DTW distance, the clustering effect is sensitive to the number of clusters. To solve the problems above and improve the performance, this paper introduces three clustering algorithms: MiniRocket-KMeans, KShape, Ensemble algorithm (a combination of KShape and DTW-KMedoids) and compares their performance on synthetic and real stock datasets with DTW-KMedoids algorithm under the same trade strategy. In addition, this paper also finds the best number of clusters by maximizing the silhouette coefficient in each clustering algorithm to improve the stability of the experiment results. Our main conclusions are as follows: MiniRocket-KMeans performs best under the lead strategy, achieving a Sharpe ratio of 0.866 with a maximum drawdown controlled at -63.9\\%; the ensemble algorithm exhibits excellent stability; the robustness is significantly improved after finding the best number of clusters; the p-values of the hypothesis test on the Sharpe ratio of all strategies are 0.0, verifying the statistical validity of the lead-lag trading strategy. Finally, future improvement directions such as customized ",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2608.07977v1",
+      "title": "A Computable Stochastic Riccati Equations Framework for Mean--Variance Portfolio Selection with Multifactor Stochastic Volatility Model",
+      "published": "2026-08-08",
+      "category": "math.OC",
+      "summary": "We investigate a computable and empirically implementable framework for continuous-time mean--variance optimal portfolio selection with random market coefficients. The market model is built on a tractable multifactor stochastic volatility structure, which captures state-dependent risk premia, stochastic volatility, and dynamic cross-asset dependence. The optimal control is characterized by stochastic Riccati equations. On the computational side, we design an iterative BSDE-based procedure to approximate the stochastic Riccati equation from above and below, where the initial upper and lower bounds are obtained by solving two linear BSDEs. We then apply a logarithmic transformation to remove the singularity in the SRE, and solve the resulting transformed equation using both Deep BSDE and DBDP methods. The linear BSDE bounds also provide effective initial-value estimates, improving the convergence speed and training stability of the Deep BSDE solver. Empirical experiments based on sector ETF data show that the proposed multifactor mean--variance strategy produces smooth target-return wealth dynamics, with improved drawdown control and downside-risk protection relative to benchmark strategies. These results demonstrate the practical potential of combining stochastic Riccati equations, neural BSDE solvers, and multifactor market modeling for dynamic asset allocation.",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2607.23068v1",
+      "title": "Neural Network-Driven Volatility Drag Mitigation under Aggressive Leverage",
+      "published": "2026-07-25",
+      "category": "q-fin.PM",
+      "summary": "This paper introduces a compact reformulation of a modular end-to-end neural network for global minimum-variance portfolio optimization that decouples model complexity from both look-back window length and universe size. A five-parameter hyperbolic weighted moving average combined with a saturating exponential replaces the original 2,400-parameter lag-transformation layer, and a bidirectional gated-recurrent-unit eigencleaning module together with a streamlined marginal-volatility network reduce total learnable parameters from 39,586 to just 2,175. In out-of-sample tests against state-of-the-art nonlinear-shrinkage and risk-parity benchmarks, the compact network attains the lowest realized portfolio variance without compromising expected return. Under long-only constraints, the variance reduction supports substantially higher leverage while maintaining comparable drawdown control. Validation in a high-fidelity trading simulator that incorporates realistic margin-call dynamics confirms enhanced over-leverage resilience. These findings demonstrate that end-to-end variance-minimization architectures can achieve substantial parameter efficiency and robust capital-efficiency gains without sacrificing risk-adjusted performance.",
+      "query": "dd_control",
+      "why": "NEW citation voldrag2607: variance reduction supports higher leverage at matched drawdown — rationale note for the per-sleeve cap as leverage governor."
+    },
+    {
+      "id": "2606.09025v2",
+      "title": "Continuous Cash-Overlay Filters for a Static Growth--Defensive Risk Sleeve: Slow-Tail Compensation, V-Shape Crash Brakes, Walk-Forward Validation, and Max-Cash Combination",
+      "published": "2026-06-08",
+      "category": "q-fin.PM",
+      "summary": "This paper studies a modular cash-overlay rule for allocating between a fixed growth-defensive risky sleeve R and interest-bearing cash C. The risky sleeve is a static 50/50 combination of equal-weight growth/technology and defensive income/value ETF baskets; the target is future R-C return, with the cash leg earning the contemporaneous cash rate. Two independent filters are tested. The slow-tail filter maps continuous compensation, rate-headwind, risk-premium-compression, and rate-path-stress states into a cash weight with a 30% material-trade gate. The V-shape filter is a fast crash brake based on continuous VIX, rate, credit, drawdown, and re-entry states. A fixed max-cash layer then uses the larger cash weight requested by either filter each day. On the 2017-2026 common window, the selected max-cash combination earns an 18.83% CAGR versus 16.62% for 100% R and reduces maximum drawdown from -33.59% to -18.05%. In the main walk-forward OOS window, the expanding combination earns 19.35% versus 17.59% for 100% R, with maximum drawdown of -22.05% versus -33.59%; the rolling version earns 18.50% with the same -22.05% drawdown. Post-2022 tests show lower drawdown but lower CAGR during a strong risky-sleeve rebound. The results support modular cash overlays as drawdown-control tools rather than standalone return-enhancement claims; fully real-time variable re-screening and multiple-testing-adjusted inference remain future work.",
+      "query": "dd_control",
+      "why": "NEW citation cashoverlay2606: slow-tail compensation + V-shape crash brake + max-cash combination, walk-forward validated — designs the e108 drawdown-governor arms."
+    },
+    {
+      "id": "2604.00415v1",
+      "title": "Dynamic Weight Optimization for Double Linear Policy: A Stochastic Model Predictive Control Approach",
+      "published": "2026-04-01",
+      "category": "eess.SY",
+      "summary": "The Double Linear Policy (DLP) framework guarantees a Robust Positive Expectation (RPE) under optimized constant-weight designs or admissible prespecified time-varying policies. However, the sequential optimization of these time-varying weights remains an open challenge. To address this gap, we propose a Stochastic Model Predictive Control (SMPC) framework. We formulate weight selection as a receding-horizon optimal control problem that explicitly maximizes risk-adjusted returns while enforcing survivability and predicted positive expectation constraints. Notably, an analytical gradient is derived for the non-convex objective function, enabling efficient optimization via the L-BFGS-B algorithm. Empirical results demonstrate that this dynamic, closed-loop approach improves risk-adjusted performance and drawdown control relative to constant-weight and prescribed time-varying DLP baselines.",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2510.21147v1",
+      "title": "Hierarchical AI Multi-Agent Fundamental Investing: Evidence from China's A-Share Market",
+      "published": "2025-10-24",
+      "category": "q-fin.PM",
+      "summary": "We present a multi-agent, AI-driven framework for fundamental investing that integrates macro indicators, industry-level and firm-specific information to construct optimized equity portfolios. The architecture comprises: (i) a Macro agent that dynamically screens and weights sectors based on evolving economic indicators and industry performance; (ii) four firm-level agents -- Fundamental, Technical, Report, and News -- that conduct in-depth analyses of individual firms to ensure both breadth and depth of coverage; (iii) a Portfolio agent that uses reinforcement learning to combine the agent outputs into a unified policy to generate the trading strategy; and (iv) a Risk Control agent that adjusts portfolio positions in response to market volatility. We evaluate the system on the constituents by the CSI 300 Index of China's A-share market and find that it consistently outperforms standard benchmarks and a state-of-the-art multi-agent trading system on risk-adjusted returns and drawdown control. Our core contribution is a hierarchical multi-agent design that links top-down macro screening with bottom-up fundamental analysis, offering a robust and extensible approach to factor-based portfolio construction.",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2508.16598v1",
+      "title": "Sizing the Risk: Kelly, VIX, and Hybrid Approaches in Put-Writing on Index Options",
+      "published": "2025-08-09",
+      "category": "q-fin.PM",
+      "summary": "This paper examines systematic put-writing strategies applied to S&amp;P 500 Index options, with a focus on position sizing as a key determinant of long-term performance. Despite the well-documented volatility risk premium, where implied volatility exceeds realized volatility, the practical implementation of short-dated volatility-selling strategies remains underdeveloped in the literature. This study evaluates three position sizing approaches: the Kelly criterion, VIX-based volatility regime scaling, and a novel hybrid method combining both. Using SPXW options with expirations from 0 to 5 days, the analysis explores a broad design space, including moneyness levels, volatility estimators, and memory horizons. Results show that ultra-short-dated, far out-of-the-money options deliver superior risk-adjusted returns. The hybrid sizing method consistently balances return generation with robust drawdown control, particularly under low-volatility conditions such as those seen in 2024. The study offers new insights into volatility harvesting, introducing a dynamic sizing framework that adapts to shifting market regimes. It also contributes practical guidance for constructing short-dated option strategies that are robust across market environments. These findings have direct applications for institutional investors seeking to enhance portfolio efficiency through systematic exposure to volatility premia.",
+      "query": "dd_control",
+      "why": "NEW citation kellyvix2508: Kelly vs VIX-regime vs hybrid sizing; hybrid balances return with robustness — the sizing-menu follow-up."
+    },
+    {
+      "id": "2504.21095v2",
+      "title": "EvoPort: An Evolutionary Framework for Portfolio Optimization via Randomized Alpha Discovery and Ensemble-Based Allocation",
+      "published": "2025-04-29",
+      "category": "stat.CO",
+      "summary": "In this paper, we introduce EvoPort, a novel evolutionary portfolio optimization method that leverages stochastic exploration over a spectrum of investment pipeline depths. From raw equity data, we employ a randomized feature generation framework that hierarchically produces mathematical, logical, time-series, and cross-sectional operators for uncovering latent trading signals. Candidate alphas are then evaluated through a randomized hill-climbing optimization procedure, taking as guidance performance measures such as mean squared error (MSE) or Sharpe ratio. In order to increase robustness and generalizability further, we use a random ensemble model selection process whereby a heterogeneous set of machine learning models (e.g., linear regression, logistic regression, XG-Boost) are randomly drawn and combined to backtest the generated alphas. Finally, we use randomized portfolio weighting schemes based on the Markowitz modern portfolio theory with stochastic optimization techniques such as inverse volatility, risk parity, and variance-constrained approaches to optimally allocate assets. Our empirical results on real equity datasets demonstrate that EvoPort not only discovers rich sets of heterogeneous predictive signals but also constructs very robust and profitable portfolios. Compared to conventional alpha construction and allocation methods, our approach exhibits significant improvement in cumulative returns, Sharpe ratio, and drawdown control. We highlight the interpretab",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2405.15415v2",
+      "title": "Semi-Supervised Learning via Cross-Prediction-Powered Inference for Wireless Systems",
+      "published": "2024-05-24",
+      "category": "cs.IT",
+      "summary": "In many wireless application scenarios, acquiring labeled data can be prohibitively costly, requiring complex optimization processes or measurement campaigns. Semi-supervised learning leverages unlabeled samples to augment the available dataset by assigning synthetic labels obtained via machine learning (ML)-based predictions. However, treating the synthetic labels as true labels may yield worse-performing models as compared to models trained using only labeled data. Inspired by the recently developed prediction-powered inference (PPI) framework, this work investigates how to leverage the synthetic labels produced by an ML model, while accounting for the inherent bias concerning true labels. To this end, we first review PPI and its recent extensions, namely tuned PPI and cross-prediction-powered inference (CPPI). Then, we introduce two novel variants of PPI. The first, referred to as tuned CPPI, provides CPPI with an additional degree of freedom in adapting to the quality of the ML-based labels. The second, meta-CPPI (MCPPI), extends tuned CPPI via the joint optimization of the ML labeling models and of the parameters of interest. Finally, we showcase two applications of PPI-based techniques in wireless systems, namely beam alignment based on channel knowledge maps in millimeter-wave systems and received signal strength information-based indoor localization. Simulation results show the advantages of PPI-based techniques over conventional approaches that rely solely on labeled",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2310.00642v1",
+      "title": "From Bandits Model to Deep Deterministic Policy Gradient, Reinforcement Learning with Contextual Information",
+      "published": "2023-10-01",
+      "category": "cs.LG",
+      "summary": "The problem of how to take the right actions to make profits in sequential process continues to be difficult due to the quick dynamics and a significant amount of uncertainty in many application scenarios. In such complicated environments, reinforcement learning (RL), a reward-oriented strategy for optimum control, has emerged as a potential technique to address this strategic decision-making issue. However, reinforcement learning also has some shortcomings that make it unsuitable for solving many financial problems, excessive resource consumption, and inability to quickly obtain optimal solutions, making it unsuitable for quantitative trading markets. In this study, we use two methods to overcome the issue with contextual information: contextual Thompson sampling and reinforcement learning under supervision which can accelerate the iterations in search of the best answer. In order to investigate strategic trading in quantitative markets, we merged the earlier financial trading strategy known as constant proportion portfolio insurance (CPPI) into deep deterministic policy gradient (DDPG). The experimental results show that both methods can accelerate the progress of reinforcement learning to obtain the optimal solution.",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2309.04507v1",
+      "title": "Generating drawdown-realistic financial price paths using path signatures",
+      "published": "2023-09-08",
+      "category": "q-fin.CP",
+      "summary": "A novel generative machine learning approach for the simulation of sequences of financial price data with drawdowns quantifiably close to empirical data is introduced. Applications such as pricing drawdown insurance options or developing portfolio drawdown control strategies call for a host of drawdown-realistic paths. Historical scenarios may be insufficient to effectively train and backtest the strategy, while standard parametric Monte Carlo does not adequately preserve drawdowns. We advocate a non-parametric Monte Carlo approach combining a variational autoencoder generative model with a drawdown reconstruction loss function. To overcome issues of numerical complexity and non-differentiability, we approximate drawdown as a linear function of the moments of the path, known in the literature as path signatures. We prove the required regularity of drawdown function and consistency of the approximation. Furthermore, we obtain close numerical approximations using linear regression for fractional Brownian and empirical data. We argue that linear combinations of the moments of a path yield a mathematically non-trivial smoothing of the drawdown function, which gives one leeway to simulate drawdown-realistic price paths by including drawdown evaluation metrics in the learning objective. We conclude with numerical experiments on mixed equity, bond, real estate and commodity portfolios and obtain a host of drawdown-realistic paths.",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2308.15135v2",
+      "title": "Signature Trading: A Path-Dependent Extension of the Mean-Variance Framework with Exogenous Signals",
+      "published": "2023-08-29",
+      "category": "q-fin.PM",
+      "summary": "In this article we introduce a portfolio optimisation framework, in which the use of rough path signatures (Lyons, 1998) provides a novel method of incorporating path-dependencies in the joint signal-asset dynamics, naturally extending traditional factor models, while keeping the resulting formulas lightweight and easily interpretable. We achieve this by representing a trading strategy as a linear functional applied to the signature of a path (which we refer to as \"Signature Trading\" or \"Sig-Trading\"). This allows the modeller to efficiently encode the evolution of past time-series observations into the optimisation problem. In particular, we derive a concise formulation of the dynamic mean-variance criterion alongside an explicit solution in our setting, which naturally incorporates a drawdown control in the optimal strategy over a finite time horizon. Secondly, we draw parallels between classical portfolio stategies and Sig-Trading strategies and explain how the latter leads to a pathwise extension of the classical setting via the \"Signature Efficient Frontier\". Finally, we give examples when trading under an exogenous signal as well as examples for momentum and pair-trading strategies, demonstrated both on synthetic and market data. Our framework combines the best of both worlds between classical theory (whose appeal lies in clear and concise formulae) and between modern, flexible data-driven methods that can handle more realistic datasets. The advantage of the added flexi",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2305.12539v1",
+      "title": "Value-at-Risk-Based Portfolio Insurance: Performance Evaluation and Benchmarking Against CPPI in a Markov-Modulated Regime-Switching Market",
+      "published": "2023-05-21",
+      "category": "q-fin.CP",
+      "summary": "Designing dynamic portfolio insurance strategies under market conditions switching between two or more regimes is a challenging task in financial economics. Recently, a promising approach employing the value-at-risk (VaR) measure to assign weights to risky and riskless assets has been proposed in [Jiang C., Ma Y. and An Y. \"The effectiveness of the VaR-based portfolio insurance strategy: An empirical analysis\" , International Review of Financial Analysis 18(4) (2009): 185-197]. In their study, the risky asset follows a geometric Brownian motion with constant drift and diffusion coefficients. In this paper, we first extend their idea to a regime-switching framework in which the expected return of the risky asset and its volatility depend on an unobservable Markovian term which describes the cyclical nature of asset returns in modern financial markets. We then analyze and compare the resulting VaR-based portfolio insurance (VBPI) strategy with the well-known constant proportion portfolio insurance (CPPI) strategy. In this respect, we employ a variety of performance evaluation criteria such as Sharpe, Omega and Kappa ratios to compare the two methods. Our results indicate that the CPPI strategy has a better risk-return tradeoff in most of the scenarios analyzed and maintains a relatively stable return profile for the resulting portfolio at the maturity.",
+      "query": "dd_control",
+      "why": "Triage: VaR-based portfolio insurance vs CPPI under regime switching — noted alternative to drawdown modulation; not cited (no direct arm this round)."
+    },
+    {
+      "id": "2303.11959v2",
+      "title": "Optimizing Trading Strategies in Quantitative Markets using Multi-Agent Reinforcement Learning",
+      "published": "2023-03-15",
+      "category": "q-fin.TR",
+      "summary": "Quantitative markets are characterized by swift dynamics and abundant uncertainties, making the pursuit of profit-driven stock trading actions inherently challenging. Within this context, reinforcement learning (RL), which operates on a reward-centric mechanism for optimal control, has surfaced as a potentially effective solution to the intricate financial decision-making conundrums presented. This paper delves into the fusion of two established financial trading strategies, namely the constant proportion portfolio insurance (CPPI) and the time-invariant portfolio protection (TIPP), with the multi-agent deep deterministic policy gradient (MADDPG) framework. As a result, we introduce two novel multi-agent RL (MARL) methods, CPPI-MADDPG and TIPP-MADDPG, tailored for probing strategic trading within quantitative markets. To validate these innovations, we implemented them on a diverse selection of 100 real-market shares. Our empirical findings reveal that the CPPI-MADDPG and TIPP-MADDPG strategies consistently outpace their traditional counterparts, affirming their efficacy in the realm of quantitative trading.",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "2303.02613v1",
+      "title": "On Data-Driven Drawdown Control with Restart Mechanism in Trading",
+      "published": "2023-03-05",
+      "category": "math.OC",
+      "summary": "This paper extends the existing drawdown modulation control policy to include a novel restart mechanism for trading. It is known that the drawdown modulation policy guarantees the maximum percentage drawdown no larger than a prespecified drawdown limit for all time with probability one. However, when the prespecified limit is approaching in practice, such a modulation policy becomes a stop-loss order, which may miss the profitable follow-up opportunities if any. Motivated by this, we add a data-driven restart mechanism into the drawdown modulation trading system to auto-tune the performance. We find that with the restart mechanism, our policy may achieve a superior trading performance to that without the restart, even with a nonzero transaction costs setting. To support our findings, some empirical studies using equity ETF and cryptocurrency with historical price data are provided.",
+      "query": "dd_control",
+      "why": "NEW citation ddrestart2303: drawdown modulation with a data-driven restart — designs the e108 modulation-with-restart arm."
+    },
+    {
+      "id": "1902.06505v1",
+      "title": "Options on CPPI with guaranteed minimum equity exposure",
+      "published": "2019-02-18",
+      "category": "q-fin.PM",
+      "summary": "In the present paper we provide a two-step principal protection strategy obtained by combining a modification of the Constant Proportion Portfolio Insurance (CPPI) algorithm and a classical Option Based Portfolio Insurance (OBPI) mechanism. Such a novel approach consists in assuming that the percentage of wealth invested in stocks cannot go under a fixed level, called guaranteed minimum equity exposure, and using such an adjusted CPPI portfolio as the underlying of an option. The first stage ensures to overcome the so called cash-in risk, typically related to a standard CPPI technique, while the second one guarantees the equity market participation. To show the effectiveness of our proposal we provide a detailed computational analysis within the Heston-Vasicek framework, numerically comparing the evaluation of the price of European plain vanilla options when the underlying is either a purely risky asset, a standard CPPI portfolio and a CPPI with guaranteed minimum equity exposure.",
+      "query": "dd_control",
+      "why": ""
+    },
+    {
+      "id": "1812.07635v1",
+      "title": "Portfolio Rebalancing under Uncertainty Using Meta-heuristic Algorithm",
+      "published": "2018-12-18",
+      "category": "q-fin.PM",
+      "summary": "In this paper, we solve portfolio rebalancing problem when security returns are represented by uncertain variables considering transaction costs. The performance of the proposed model is studied using constant-proportion portfolio insurance (CPPI) as rebalancing strategy. Numerical results showed that uncertain parameters and different belief degrees will produce different efficient frontiers, and affect the performance of the proposed model. Moreover, CPPI strategy performs as an insurance mechanism and limits downside risk in bear markets while it allows potential benefit in bull markets. Finally, using a globally optimization solver and genetic algorithm (GA) for solving the model, we concluded that the problem size is an important factor in solving portfolio rebalancing problem with uncertain parameters and to gain better results, it is recommended to use a meta-heuristic algorithm rather than a global solver.",
+      "query": "dd_control",
+      "why": ""
     }
   ]
 }

@@ -106,6 +106,15 @@ export const CITATIONS = Object.freeze({
     rumelhart1986mlp: 'Rumelhart, Hinton & Williams, Learning Representations by Back-Propagating Errors, Nature 323:533-536, 1986 (seeded full/mini-batch SGD on a one-hidden-layer tanh net with a sigmoid head)',
     corsi2009har: 'Corsi, A Simple Approximate Long-Memory Model of Realized Volatility, Journal of Financial Econometrics 7(2):172-196, 2009 (the HAR-RV daily/weekly/monthly cascade that nests AR(1); the sizing reference forecast)',
     voltarget2603: 'Devanathan et al., Single-Asset Adaptive Leveraged Volatility Control, arXiv 2603.01298 (open-loop vol-targeting suffers turnover/leverage/estimation-error spikes; grounds the cap + causal trailing-RMS choice and records the feedback-control follow-up)',
+    cashoverlay2606: 'Continuous Cash-Overlay Filters for a Static Growth-Defensive Risk Sleeve, arXiv 2606.09025 (slow-tail compensation + V-shape crash brakes + max-cash combination, walk-forward validated; grounds the drawdown-governor sizing arms)',
+    ddrestart2303: 'On Data-Driven Drawdown Control with Restart Mechanism in Trading, arXiv 2303.02613 (drawdown modulation guarantees a max drawdown with probability one; the restart mechanism re-engages after the limit binds; grounds the modulation-with-restart sizing arm)',
+    perpfund2609: 'Perpetual Futures for Stocks: The SpaceX Pre-IPO Market, arXiv 2609.05433 (the funding rule chooses both the benchmark and the discount; stochastic volatility moves the basis only through the carry; grounds the legs-separated carry construction)',
+    perpfundamentals2212: 'Fundamentals of Perpetual Futures, arXiv 2212.06888 (no-arbitrage perp pricing with funding-gap deviations that comove across currencies and decay; grounds the funding-basis carry sleeve)',
+    spillvol2608: 'Spillover-Informed Network Architecture for Global Volatility Forecasting, arXiv 2608.14171 (a Diebold-Yilmaz spillover network cuts OOS QLIKE ~13% vs HAR; grounds the cross-stream network vol-forecast direction)',
+    factorvol2508: 'Time-Varying Factor-Augmented Models for Volatility Forecasting, arXiv 2508.01880 (dynamic cross-sectional factors extracted from realized vols augment statistical and AI forecasters; grounds the factor-augmented book-vol forecast direction)',
+    roughvol2605: 'Memory, Roughness, and Information Persistence in Financial Markets, arXiv 2605.24285 (volatility proxies carry long memory d~0.23-0.44 with locally rough dynamics; grounds the EWMA/HAR persistence framing of the trailing-RMS forecast)',
+    voldrag2607: 'Neural Network-Driven Volatility Drag Mitigation under Aggressive Leverage, arXiv 2607.23068 (variance reduction supports higher leverage at matched drawdown control; grounds the cap-as-leverage-rationale note)',
+    kellyvix2508: 'Sizing the Risk: Kelly, VIX, and Hybrid Approaches in Put-Writing on Index Options, arXiv 2508.16598 (Kelly vs VIX-regime vs hybrid sizing; the hybrid balances return generation with robustness; grounds the sizing-menu follow-up)',
     murphy1973: 'Murphy, A New Vector Partition of the Probability Score, Journal of Applied Meteorology 12(4):595-600, 1973 (reliability-resolution-uncertainty partition)',
     wald1945: 'Wald, Sequential Tests of Statistical Hypotheses, Annals of Mathematical Statistics 16(2):117-186, 1945 (sequential testing; the CUSUM precursor)',
     page1954: 'Page, Continuous Inspection Schemes, Biometrika 41(1/2):100-115, 1954 (the two-sided CUSUM control scheme)',
@@ -230,6 +239,35 @@ export const ANALYSIS_MODULES = Object.freeze({
         'positionSeriesFromConfidence',
         // Round 29 → 30 (P2): the configuration-robust / exposure-matched restatement primitives.
         'exposureDeadZone', 'restateReportAtCadence', 'exposureMatchedPair',
+    ],
+    'walkforward/returns.js': [
+        'barReturns', 'logReturns', 'confidenceToPosition', 'confidenceFromProb',
+        'positionSeriesFromConfidence', 'probToPosition', 'isCausalFold',
+    ],
+    'walkforward/folds.js': [
+        'aggregateFolds', 'blockStability', 'scoreSignalFullHistory', 'poolSignalFullHistory',
+        'buildFullHistoryBlock', 'foldWinFraction',
+    ],
+    'walkforward/audit.js': [
+        'auditNoLookahead', 'walkForwardEvaluate', 'walkForwardEvaluateAsync',
+    ],
+    'walkforward/power.js': [
+        'sharpeStandardError', 'minimumDetectableSharpe', 'UNDERPOWERED_MDE', 'barsToDetect',
+        'dependenceSummary', 'clustersOf',
+        // Inter-part use only (the evaluation/report/restatement parts import
+        // it; the walkforward.js shim does not re-export it — round-74 split).
+        'powerSummary',
+    ],
+    'walkforward/report.js': [
+        'poolReports', 'promoteDecision', 'pairedPromotionTest',
+    ],
+    'walkforward/restate.js': [
+        'restateReportAtCost', 'restateReportAtPolicy', 'verifyPolicyRoundTrip', 'exposureDeadZone',
+        'restateReportAtCadence', 'exposureMatchedPair', 'costLadder',
+    ],
+    'walkforward/search.js': [
+        'DEPENDENCE_GATE_READER', 'familyCorrelation', 'familywiseSearch', 'walkForwardSearch',
+        'formatReport',
     ],
     'holding.js': [
         'DEFAULT_TURNOVER_GRID', 'turnoverSweep', 'bestTurnoverPolicy', 'formatTurnoverSweep',
@@ -393,6 +431,55 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['pardo2008walkforward', 'leprado2018afml', 'leakage2605', 'honesteval2608', 'algoxpert2603', 'politisromano1994subsampling', 'romano2005stepm', 'minervascore2608', 'meanshiftlrv2603', 'cameronmiller2015', 'kunsch1989', 'clusterjackknife2602', 'kish1965', 'ledoitwolf2008', 'demsar2006', 'efftests1612', 'harveysliu2016', 'frazzini2018costs', 'binancefees'],
         proves: ['analysis.test.js', 'walkforward.test.js'],
         note: 'Walk-forward harness on top of backtest.js. Proved: barReturns/logReturns exact; probToPosition is odd about prob=50, monotone, bounded and zero on the dead-zone band; aggregateFolds mean/median/positiveFraction exact; and the flagship no-lookahead audit is exact — a signal reading view.returns[t+1] is flagged at 17/18 test bars and a full-sample-mean signal is flagged, while a strictly causal signal is clean, and walkForwardEvaluate throws on non-causal (non-walk-forward) folds. The promotion gate is size/power calibrated: requiring the absolute DSR>=0.95 edge floor cuts false promotions of a zero-skill candidate to ~3.5% (was ~37-41% relative-only) while still promoting an AR(1) momentum edge at full power. The real-candle runner (walkforward.test.js) drives a live HiveMind over a shipped symbol, re-fit per fold and frozen afterwards, with a clean audit, a caught t+1 feature, an exact per-fold buy-and-hold anchor, bit-identical determinism, and an A/B of the default-off features whose inert settings (surprise floor=1, homeostasis gain=0) are bit-identical to off end-to-end. Round 8: familywiseSearch/walkForwardSearch put the variance-consistent subsampling SPA + Romano-Wolf step-down (Politis & Romano 1994; Romano & Wolf 2005) on the honest-evaluation path over a report set, segment-aware via the fold lengths passed as `groups` (no resampling window straddles a fold boundary; each fold\x27s no-exposure first bar trimmed, arXiv 2603.17226 mean-shift LRV grounding); promoteDecision gains opt-in maxSearchP / requireSearchReject hurdles (defaults null/false, so the existing gate is bit-identical) and formatReport renders a search-corrected line, so the walk-forward runner can report the search-luck-corrected decision next to DSR (arXiv 2608.23808). Round 9: familywiseSearch/walkForwardSearch take opt-in `kfwer` (single-step k-FWER, arXiv 0710.2258) and `fdpTarget` (the FDP step-down heuristic, arXiv 1311.4030), both default-off so the Round-8 object is byte-identical; promoteDecision gains a maxFdp hurdle (null by default, so the existing gate is unchanged) and formatReport renders kfwer/fdp lines only when attached. Round 11: walkforward.test.js section I repeats the section-H family-wise A/B on the full 150-bar / 6-fold slice (48 windows, groups 14^6, b=7, m=1) with the same verdict — oracle caught, no real feature promoted, DSR and family-wise agree on every candidate. ROUND 23 (N0/N2): auditNoLookahead gains an optional viewFor(returns, perturb) hook so the audit perturbs the actual model input — without it a candle-driven model passed vacuously (BUGS.md #22) — and now returns {clean, violations, probes, viewDiffers, reachable, vacuous} with a requireReachable flag and an explicit non-finite-position reason; walkForwardEvaluate forwards viewFor to both the scoring view and the audit, and returns `power`. sharpeStandardError(bars)/minimumDetectableSharpe add the Lo (2002) Sharpe SE and the 95% MDE so every report says how much edge the sample could even see; poolReports merges one walk-forward report per stream (symbol) into a single pooled report via backtest#poolFolds (a single report is the identity); formatReport prints the power line and reads an undefined metric as n/a instead of NaN. ROUND 24b: the power summary gains an `underpowered` flag (MDE95 above UNDERPOWERED_MDE = 1.0, i.e. a null verdict that could not have detected Sharpe 1) and `barsToDetect1` (the pooled sample that would detect Sharpe ±1.0) from the new pure helper `barsToDetect`; formatReport marks an underpowered power line, and analyze#formatAnalysis states the same run-level verdict. ROUND 25 (dependence-aware inference): the pooled sample of a K-stream walk-forward is a RECTANGULAR fold grid, so the i.i.d. Lo (2002) SE is wrong twice over — the streams are strongly correlated per fold (measured 0.41-0.52 on the attempt-3 power run, where the i.i.d. SE understated the truth ~2x and `underpowered` read false while the honest MDE95 was ≈±1.0 Sharpe) and the fold windows are the sample unit that actually repeats. New: `dependenceSummary` measures the delete-one-cluster jackknife SE of the pooled Sharpe over fold-window clusters (Efron 1979; Cameron & Miller 2015; the delete-block jackknife for stationary series, Künsch 1989; a 2026 CSDID application where it repairs over-rejection with few/unequal clusters, arXiv 2602.12043) and reports designEffect=(seCluster/seIid)^2, effectiveBars=bars/designEffect, and the equicorrelation reading K/(1+(K-1)*rbar) (Kish 1965, as a diagnostic); `powerSummary` rides the honest SE alongside the i.i.d. one (seDependent/mdeSharpeDependent/underpoweredDependent/varianceInflation) rather than replacing it, and `poolFolds`/`backtestMetrics` take `effectiveBars` so PSR/DSR are also reported on the design-effect-adjusted sample (dsrAdjusted/psrAdjusted, null — not 1 — when no design effect was measured); `pairedPromotionTest` builds the paired delete-one-cluster Sharpe-difference t(C-1) and the exact sign test over the same clusters (Demsar 2006; Ledoit & Wolf 2008 for comparing Sharpe ratios); `promoteDecision` gains opt-in requireSharpeDiff / requireBreadth / minDsrAdjusted which are SKIPPED (not failed, and recorded as `skipped-no-panel` in the returned `gate`) when a single-stream report has no panel to estimate them from, so every default decision is bit-identical to round 24b; `restateReportAtCost`/`costLadder` re-score the retained per-fold (returns, signals) at any cost level with the exact scored arithmetic (defaulting `trials` to the report\x27s own deflation count) — the attempt-3 verdict flipped between costBps 0 (keep-off) and 2 (sig:acceleration promotes with zero reasons), so a single scored cost level cannot express it (Binance taker fees 5/10 bps; Frazzini, Israel & Moskowitz 2018 on the cost scale); and `familyCorrelation` reports how correlated the candidates\x27 per-fold excess returns were (mean pairwise r, the strongest pair, an effective trial count) — DIAGNOSTIC ONLY, because substituting an effective number of independent tests for the number of tests actually run does not control the family-wise error rate (arXiv 1612.04535) and correlated tests are still tests that were run (Harvey, Liu & Zhu 2016), so the deflated Sharpe keeps trials=K. Round 26 (R26-3): `confidenceFromProb`/`confidenceToPosition` are the ONE signed-confidence -> position pipeline both candidate families use (the controller via `probToPosition`, which is re-expressed through them and byte-identical on the whole controller domain; the signals via `makeSignalForVariant`), so a turnover/participation comparison is no longer confounded by the mapping; `walkForwardEvaluate` journals the raw pre-policy confidence beside the emitted positions, and `restateReportAtPolicy`/`verifyPolicyRoundTrip` restate/verify a policy sweep offline (pinned: the scored policy reproduces the emitted positions and pooled Sharpe exactly). Round 26 (R26-7): the shipped dependence gate is now magnitude-plus-stability — `requireSharpeDiff` (the paired-Sharpe effect-size floor) together with `requireClusterStability` (the leave-one-cluster-out stability of that same difference) — while `requireBreadth`/`pairedPromotionTest.breadth` is demoted to REPORTED, not shipped, because a breadth count does not by itself bound the family-wise error of the search; `promoteDecision` gains `requireClusterStability`/`minStableFraction` (both default-off, so the classic gate path is bit-identical) and `pairedPromotionTest` returns `stability`. Round 29 -> 30 (P2/P4): `exposureDeadZone` places the |confidence| quantile that realises a target in-market share; `restateReportAtCadence` re-scores a journal on a different `testSize` grid (a fixed-position restatement — the models are held, only the fold partition moves); `exposureMatchedPair` quotes a cross-family comparison at a matched share with a pointwise (band-dropped) rule and reports `matchedWithinTolerance`; `poolReports` appends EXTRA (carry) panel streams with a per-stream length check and a constant-stream guard (`panelMismatchReason: "length" | "degenerate"`), and the cost/policy restatements re-append the sleeve plus a same-cost `dependenceWithoutExtras` (`BUGS.md` #63/#64/#65).',
+    },
+    'walkforward/returns.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'pardo2008walkforward'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-74 split of analysis/walkforward.js (byte-exact move; walkforward.js is the re-export shim): the signal/position primitives — close-to-close returns, the confidence-to-position map and the fold-causality predicate. Self-contained (no imports); proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/folds.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'pardo2008walkforward'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-74 split of analysis/walkforward.js (byte-exact move): per-fold pooling, the R2 window-robustness statistic, the R1 long-sample scorers and the fold-win fraction. Proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/audit.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['pardo2008walkforward', 'leakage2605', 'honesteval2608'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-74 split of analysis/walkforward.js (byte-exact move): the walk-forward evaluators (sync + async) and the flagship no-lookahead audit. Proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/power.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['harveysliu2016', 'kish1965', 'cameronmiller2015', 'kunsch1989', 'clusterjackknife2602', 'ledoitwolf2008'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-74 split of analysis/walkforward.js (byte-exact move): the power/sizing/dependence readers (Lo SE, MDE, bars-to-detect, dependence summary, clusters) plus powerSummary for inter-part use only (not re-exported by the shim). Proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/report.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['harveysliu2016', 'demsar2006', 'efftests1612', 'white2000rc', 'hansen2005spa', 'romano2005stepm', 'minervascore2608', 'algoxpert2603'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-74 split of analysis/walkforward.js (byte-exact move): the report pooler, the paired promotion test and the promotion gate. Proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/restate.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['frazzini2018costs', 'binancefees', 'leprado2018afml'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-74 split of analysis/walkforward.js (byte-exact move): the cost/policy/cadence/exposure restatements of a finished report without the model. Proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/search.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['politisromano1994subsampling', 'romano2005stepm', 'meanshiftlrv2603', 'minervascore2608'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-74 split of analysis/walkforward.js (byte-exact move): the family-wise search (SPA/step-down/k-FWER/FDP) and the report renderer. Proved by the unchanged analysis.test.js + walkforward.test.js sections.',
     },
     'dependence.js': {
         status: LOCK_LEVELS.INVARIANT,
@@ -1184,8 +1271,8 @@ export const PLUGIN_REGISTRY = Object.freeze({
         state: 'UNTESTED',
         defaultStack: false,
         proves: ['contracts.test.js'],
-        citations: ['corsi2009har', 'voltarget2603', 'leprado2018afml'],
-        note: 'V2.2: the forecast-sizing risk policy — the W4c-z vol-target scaler as a RiskPolicy (position = the shipped clamp bit-identical to cap-band; sizing = the vendored applyVolTargetScaling arithmetic, bit-exact against analysis/forecast.js by the §O differential; per-sleeve caps in VOL_TARGET_SPECS with the target caller-supplied because it is a measurement, not policy). UNTESTED + off the default roster: no GATE run has scored a sized book yet (round 69 wires the `--sleeve-sizing` run mode that can — F-116 qualifies the payoff as adaptive-target-specific).',
+        citations: ['corsi2009har', 'voltarget2603', 'cashoverlay2606', 'leprado2018afml'],
+        note: 'V2.2: the forecast-sizing risk policy — the W4c-z vol-target scaler as a RiskPolicy (position = the shipped clamp bit-identical to cap-band; sizing = the vendored applyVolTargetScaling arithmetic, bit-exact against analysis/forecast.js by the §O differential; per-sleeve caps in VOL_TARGET_SPECS with the target caller-supplied because it is a measurement, not policy). UNTESTED + off the default roster: no GATE run has scored a sized book yet (round 69 wires the `--sleeve-sizing` run mode that can — F-116 qualifies the payoff as adaptive-target-specific; round 73 adds the `drawdown` governor mode, F-118).',
     },
     'sleeve:carry-dispersion': {
         kind: 'sleeve',

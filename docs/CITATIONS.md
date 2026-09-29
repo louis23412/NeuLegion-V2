@@ -172,6 +172,10 @@ venue/year so they remain findable.
 - *Downside-Controlled Online Forecast Combination under Delayed and Revised Outcomes.* arXiv 2609.29096, 2026. (frozen + static + online correctors on the simplex with downside control — the frozen-vs-rolling frame; `tournamentRollingCombineVolForecast`)
 - *Generalized Gibbs Ensemble Weighting for Forecast Combination.* arXiv 2608.28116, 2026. (Gibbs-exponential-loss ensemble weights with online adaptation — the family `gibbsCombineWeights` instantiates in plain form)
 - Devanathan et al. *Single-Asset Adaptive Leveraged Volatility Control.* arXiv 2603.01298, 2026. (open-loop vol-targeting — scale inversely with a variance forecast, which is exactly `applyVolTargetScaling` — suffers turnover/leverage/estimation-error spikes; grounds the per-sleeve 4x cap and the `bookVolMean` readout, and records the feedback-control follow-up; `sleeve_score.js` `scoreSleeveSized`)
+- *Spillover-Informed Network Architecture for Global Volatility Forecasting.* arXiv 2608.14171, 2026. (each market's vol forecast draws on linked markets' recent vol through a Diebold-Yilmaz spillover network — ~13% OOS QLIKE cut vs HAR; the cross-stream network vol-forecast direction)
+- *Time-Varying Factor-Augmented Models for Volatility Forecasting.* arXiv 2508.01880, 2025. (dynamic cross-sectional factors extracted from realized vols augment both statistical and AI forecasters — the factor-augmented book-vol forecast direction; the panel's one factor is the candidate factor)
+- *Memory, Roughness, and Information Persistence in Financial Markets.* arXiv 2605.24285, 2026. (volatility proxies carry long memory, d ~ 0.23–0.44, with locally rough dynamics — the persistence framing behind the causal trailing-RMS / EWMA / HAR forecast menu)
+- *Neural Network-Driven Volatility Drag Mitigation under Aggressive Leverage.* arXiv 2607.23068, 2026. (variance reduction supports higher leverage at matched drawdown control — the rationale note behind the per-sleeve cap as a leverage governor rather than a return lever)
 - *Regime-Conditional Distributional Comparison of Trading Strategies: A GAMLSS/ZAGA Framework.* arXiv 2606.31251.
 - *Spurious Predictability in Financial Machine Learning.* arXiv 2604.15531.
 - *Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade.* arXiv 2608.23808. (independent 2026 production study — 359,062 backtest records — whose robustness grade composes **DSR + PBO + SPA + MinTRL**, the same four-test battery this project ships)
@@ -276,6 +280,10 @@ recent window. Cite the sample when a cost conclusion is drawn —
   68(4):929–985, 2013. (momentum across asset classes: combining weakly-correlated
   sleeves is how breadth is actually bought — the empirical form of Grinold's √breadth
   and of the round-26 composite lead)
+
+- *Sizing the Risk: Kelly, VIX, and Hybrid Approaches in Put-Writing on Index Options.* arXiv 2508.16598, 2025. (Kelly vs VIX-regime vs hybrid sizing on short-dated vol selling — the hybrid balances return generation with robustness; the sizing-menu follow-up)
+- *Continuous Cash-Overlay Filters for a Static Growth–Defensive Risk Sleeve.* arXiv 2606.09025, 2026. (a slow-tail compensation filter plus a fast V-shape crash brake combined by a max-cash layer, walk-forward validated — the drawdown-governor sizing-arm design)
+- *On Data-Driven Drawdown Control with Restart Mechanism in Trading.* arXiv 2303.02613, 2023. (drawdown modulation guarantees a max drawdown cap with probability one; the restart mechanism re-engages after the cap binds and beats the no-restart policy net of costs — the modulation-with-restart sizing-arm design)
 
 ## Experimental design, replication & model comparison
 
@@ -414,6 +422,8 @@ factor rather than by adding correlated streams (the design effect is the bindin
 - arXiv 1908.02164. *Statistical Arbitrage for Multiple Co-Integrated Stocks.* (market-neutral eigenportfolio construction with backtests)
 - arXiv 1901.09309. *High-dimensional statistical arbitrage with factor models and stochastic control.* (factor-neutral construction)
 - Grinold. *The Fundamental Law of Active Management.* Journal of Portfolio Management 15(3):30–37, 1989. (breadth counts *independent* forecasts — the reason a market-neutral sleeve is worth more per stream than a ninth correlated one)
+- *Fundamentals of Perpetual Futures.* arXiv 2212.06888. (no-arbitrage perp pricing with funding-gap deviations that comove across currencies and decay — the theory behind the funding-basis carry sleeve)
+- *Perpetual Futures for Stocks: The SpaceX Pre-IPO Market.* arXiv 2609.05433, 2026. (the funding rule chooses both the benchmark and the discount; stochastic volatility moves the basis only through the carry — the theory behind the legs-separated carry construction: funding lives in `fRate` alone)
 
 ## Round 29 — the model class, new data sources, and configuration robustness
 
