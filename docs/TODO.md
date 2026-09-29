@@ -1138,6 +1138,28 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    empty-list fallback cannot recur). Needs the user's machine / native drivers. Detail:
    `PLAN-round30.md` §6.2/§6.3, `round29-TESTING.md` §3–§5.
 
+104. [ ] **Sized-leg G5 (round-75 follow-up).** `sleeveDsr` on a sized series is a reported readout,
+   not a claim: a sized book needs its own G5 pass (capacity + factor-neutral on the sized series,
+   and a DSR that respects the vol-target limit law — sweep 2026-09u's 2503.16878: a
+   volatility-targeted index has its own limiting distribution whose vol exceeds the target, so the
+   flat inputs do not transfer blindly). Until then, read `sized.dsr` as diagnostics and keep the
+   flat book as the only G5 claim (F-119).
+
+105. [ ] **Decay attribution on the sleeve (round-75 follow-up).** The flat halves read 0.47 → 0.20
+   per-bar (`20260929T061347-seed1-sleeve`) — a measured gap, not a hunch. Next: a per-year /
+   per-block Sharpe series on the honest book plus a first-vs-last formal comparison, recorded
+   beside the operator-owned decay attestation (which stays human either way).
+
+106. [ ] **Unseen-data protocol (round-75 follow-up).** Define what counts as unseen for the shipped
+   funding/candle files (frozen spec + scored-on-unseen), following sweep 2026-09u's 2608.27734
+   frame: leakage-safety must be structural (registry-validated tools / import law / no-lookahead
+   audit), because a leaky oracle at Sharpe 35 survives DSR and PBO outright — statistics cannot
+   substitute for the construction guardrail. The attestation stays human either way.
+
+107. [ ] **`analyze.js` split (deferred; high-risk).** 3600+ lines. Split only with a byte-exact shim
+   + lock-registry rows à la R74's `walkforward.js` split — no behavioral need this round, so this
+   waits for a round that touches the driver anyway.
+
 **Round-29 research sweep (2026-09-24):** five grounding notes —
 `docs/research/round29-model-class.md`, `round29-crypto-edges.md`,
 `round29-adaptation-and-regime.md`, `round29-evaluation-robustness.md`,

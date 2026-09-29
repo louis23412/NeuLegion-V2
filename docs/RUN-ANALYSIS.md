@@ -3861,3 +3861,91 @@ regime, not about the arms. And the corpus measures no P2/P4 opt-in blocks
    until a maker/queue model (TODO 94) changes its 1.5 bps break-even.
 5. **Leave the roster at the pruned K=3** until (1)–(3) are done: the K=6 run shows every added
    momentum arm lowers every `dsrAdjusted` without adding edge.
+
+## 19. Round 75 — the sleeve DSR knob + the first `sleeve-runs.sh` operator runs (2026-09-29)
+
+### 19.1 The three operator runs
+
+The turnkey script worked first try (`bash scripts/sleeve-runs.sh all`; the `<same 8>` bash
+redirection error that motivated it is gone). All three runs score the carry-dispersion book over
+6606 buckets × 8 streams at 4 bps; artifacts are `state/runs/20260929T061347-seed1-sleeve`
+(flat), `.../061349-seed1-sleeve` (adaptive), `.../061350-seed1-sleeve` (drawdown):
+
+| run | book net | turnover/yr | break-even | halves (per-bar) | worst block |
+| --- | --- | --- | --- | --- | --- |
+| flat (061347) | 11.26 (neutral 11.60) | 10.01 | 42.88 bps | 0.471 / 0.201 | +0.118 |
+| adaptive sized (061349) | 10.61 (base 11.26) | 46.89 | 11.57 bps | 0.577 / 0.052 | −0.011 |
+| drawdown sized (061350) | 10.63 (base 11.26) | 46.84 | 11.57 bps | 0.579 / 0.052 | −0.011 |
+
+Null-basis 52.15 %, marked 43.9 % on all three (the book is flat half the time — participation,
+not turnover). G5 reads false on (dsr,decay,unseen) on all three — pre-round-75 code, `dsrAdjusted`
+unscored. Lab record: `FINDINGS.md` F-119.
+
+### 19.2 What the runs say
+
+1. **Sizing buys nothing on net and spends 4.7× turnover.** −0.6 net for +36.9 turnover/yr; the
+   break-even headroom collapses to a quarter (42.9 → 11.6 bps). Still passing at 4 bps — but the
+   margin story is the flat book's, not the sized book's.
+2. **Sizing concentrates the book in time.** The sized second half (0.05) is a quarter of the flat
+   second half (0.20) and the sized worst block is negative while the flat worst block is +0.118:
+   vol-targeting levers the calm stretches that then break — the open-loop spike (`voltarget2603`),
+   now measured on the shipped composition rather than cited.
+3. **The governor is a no-op at this scale** (adaptive vs drawdown Δnet 0.02, Δturnover 0.05/yr):
+   the 6606-bucket book rarely nears the pre-registered 5 % cap. F-118's single-episode caveat is
+   confirmed material — the e108 DD cut does not transfer to the full marked history.
+4. **The flat halves (0.47 → 0.20 per-bar) attach the first number to the decay attestation.**
+   Reported-never-gating, not a verdict — but the operator-owned decay check now has a measured
+   starting point (TODO 105).
+
+Consequence, recorded before any gate banks anything else: the **flat book stays the G5 claim** and
+sizing stays opt-in — a timing/risk preference, not a level gain.
+
+### 19.3 The round-75 change: the G5 `dsr` knob, machine-scored
+
+`src/sleeve_score.js#sleeveDsr`: the delete-one-block jackknife over the G5's own 6 blocks gives
+the cluster-robust SE of the book Sharpe; `designEffect = (seCluster/seIid)^2`, `effectiveBars =
+bars/designEffect`, and the DSR (Bailey & Lopez de Prado 2014) is re-run on the effective sample
+at **trials = 1, stated** — the shipped spec is one frozen recipe, so this DSR is an UPPER bound on
+selection-adjusted confidence (the lab search history behind the spec is unquantified and
+documented, not hidden; sweep 2026-09u's 2608.27734 is the citable warning that a leaky oracle at
+Sharpe 35 survives DSR/PBO outright). Three states mirror the walk-forward gate exactly: `deflated`
+(DE > 1), `full-sample` (DE ≤ 1 — the gate's `not-needed`, scored at full n, never a fail), and
+unavailable (fail-closed, the knob fails as before). Everything runs in per-bar units with n in
+bars — Lo (2002)'s formula is per-observation, so annualizing the statistic while counting bars
+would make the design effect depend on the display annualization (caught by probe before pinning:
+DE 74.7 vs the honest 27.6 on the §S concentrated vector). The sized legs get a reported-only DSR
+(their G5 claim is TODO 104 — sweep 2026-09u's 2503.16878 shows a vol-targeted index has its own
+limiting distribution, so the flat inputs do not transfer blindly). Six new `contracts` §S checks
+(ledger 231 → 237, node mirror re-pinned); no golden moves — the sleeve arithmetic is untouched,
+only new code plus additive report keys (`dsr`, `sized.dsr`, one `dsr` summary line; the G5 line now
+names only the remaining attestations).
+
+Predicted effect on §19.1's runs (to confirm on the re-run, §19.4): the `dsr` reason drops — per-bar
+0.34 over ~6600 bars clears 0.95 at any plausible design effect — leaving G5 at (decay,unseen),
+both operator-owned by design.
+
+### 19.4 Recommended next actions (evidence-backed)
+
+1. **Operator re-run + native gate** (§19.5): `npm test`, then `bash scripts/sleeve-runs.sh base` to
+   confirm the `dsr` summary line and G5 `(decay,unseen)` on real data; upload the new `report.json`.
+2. **TODO 104 (sized-leg G5).** A sized book needs its own pass — capacity + neutral on the sized
+   series, DSR under the vol-target limit law (2503.16878) — before any sized number is read as a
+   claim rather than a readout.
+3. **TODO 105 (decay attribution).** Per-year/per-block Sharpe series on the honest book plus a
+   first-vs-last formal comparison; the halves already say 0.47 → 0.20, so this starts from a
+   measured gap, not a hunch.
+4. **TODO 106 (unseen-data protocol).** Define what counts as unseen for the shipped
+   funding/candle files (frozen-spec + scored-on-unseen), following 2608.27734's structural-guardrail
+   frame; the attestation stays human either way.
+5. **TODO 107 (`analyze.js` split).** 3600+ lines; split only with a byte-exact shim + registry à la
+   R74 — high-risk, no behavioral need this round.
+
+### 19.5 Exact operator commands
+
+```bash
+npm test                          # full native gate (must stay 132/132 with the 237-contracts ledger)
+bash scripts/sleeve-runs.sh base  # confirm: a `dsr …` summary line, G5 verdict false (decay,unseen)
+```
+
+Upload: the new `state/runs/<runId>-sleeve/report.json` (one file). Nothing else is needed — the
+browser harness already ran `contracts` 237/237 and `analyze` 289/289 against this exact code.

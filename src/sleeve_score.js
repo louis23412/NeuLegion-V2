@@ -19,7 +19,8 @@ import { singleBook } from './plugins/books/single.js';
 import { capBandRisk } from './plugins/risk/cap-band.js';
 import { volTargetRisk } from './plugins/risk/vol-target.js';
 import { scoreBookReturns, scoreG5, stressHalves, worstBlock } from './analysis/portfolio.js';
-import { factorNeutralSharpe } from './analysis/dependence.js';
+import { factorNeutralSharpe, clusterJackknife } from './analysis/dependence.js';
+import { sharpeRatio, sharpeStandardError, deflatedSharpeRatio, skewness, kurtosis } from './analysis/performance.js';
 import { parseFundingJsonl } from './analysis/carry.js';
 
 export const SLEEVE_IDS = Object.freeze(['carry-dispersion', 'toptrader-fade', 'oi-change']);
@@ -211,6 +212,100 @@ export function parseSleeveInputs({ fundingTexts, candleTexts, gridMs = 28_800_0
     };
 }
 
+// The sleeve DSR block (round 75): the G5 `dsr` knob, machine-scored.
+//
+// The walk-forward gate clears its DSR floor on the design-effect-adjusted
+// sample (`walkforward#dependenceSummary` + `backtestMetrics#effectiveBars`,
+// Bailey & Lopez de Prado (2014) — deflated Sharpe). The sleeve book has no folds, so the
+// cluster unit is the G5's own block grid: the delete-one-block jackknife
+// (`dependence#clusterJackknife`, Cameron & Miller 2015) over `blocks`
+// contiguous calendar blocks — the same window in every stream is one market
+// event, the project's documented cluster position (`dependence.js`) — gives
+// the honest (cluster-robust) SE of the book Sharpe, `designEffect =
+// (seCluster/seIid)^2` the variance inflation, and `effectiveBars =
+// bars/designEffect` the sample the DSR floor uses. It absorbs serial
+// dependence, block-concentration and non-normality together: an edge carried
+// by one block makes the leave-one-out Sharpes disagree, the SE explodes, and
+// the DSR collapses — the concentration veto the gate wants.
+//
+// Three outcomes, mirroring the walk-forward gate's own three states:
+//   `deflated`    DE > 1 and at least two effective bars: the DSR is re-run
+//                 on the effective sample (the `backtestMetrics` convention).
+//   `full-sample` DE <= 1 (measurable, nothing over-confident to deflate):
+//                 the unadjusted floor is the honest one — the gate's
+//                 `not-needed` state, scored at the full sample, never a fail.
+//   unavailable   unmeasurable (too short, non-finite, degenerate): fail-closed,
+//                 `dsrAdjusted` stays null and the G5 knob fails as before.
+// `trials` is 1: the shipped spec is one frozen recipe, stated, not banked —
+// so this DSR is an UPPER bound on selection-adjusted confidence (the lab
+// search history that produced the spec is unquantified and documented, not
+// hidden). The `nStar < 2` guard (fewer than two effective bars) is a
+// theoretical trip-wire — unreachable at the shipped block counts — kept so a
+// single-block event can never manufacture a passing DSR.
+// Units: everything runs in PER-BAR Sharpe with n in bars — Lo (2002)'s SE
+// formula is stated in per-observation units, so annualizing the jackknife
+// statistic while counting bars would make the design effect depend on the
+// display annualization. The report annualizes only for display.
+export const SLEEVE_DSR_BLOCKS = 6;
+export const SLEEVE_DSR_TRIALS = 1;
+
+export function sleeveDsr({ net, blocks = SLEEVE_DSR_BLOCKS, trials = SLEEVE_DSR_TRIALS } = {}) {
+    const fail = (reason) => ({ available: false, reason, trials, blocks, dsrAdjusted: null });
+    if (!Array.isArray(net) || net.length === 0) return fail('no scored book series');
+    const T = net.length;
+    const b = Number.isInteger(blocks) && blocks >= 2 ? blocks : SLEEVE_DSR_BLOCKS;
+    if (T < 2 * b) return fail(`the book has ${T} bars — fewer than two bars per block over ${b} blocks`);
+    for (const v of net) if (!Number.isFinite(v)) return fail('the scored book series is not finite');
+    const perBar = sharpeRatio(net, { periodsPerYear: 1 });
+    const sk = skewness(net);
+    const ku = kurtosis(net);
+    const base = Math.floor(T / b);
+    const rem = T % b;
+    const clusters = [];
+    let from = 0;
+    for (let c = 0; c < b; c++) {
+        const size = base + (c < rem ? 1 : 0);
+        clusters.push(net.slice(from, from + size));
+        from += size;
+    }
+    const stat = (a) => sharpeRatio(a, { periodsPerYear: 1 });
+    const jk = clusterJackknife({ clusters, statistic: stat });
+    if (!Number.isFinite(jk.estimate) || !Number.isFinite(jk.se)) return fail('the delete-one-block jackknife is not finite');
+    const seIid = sharpeStandardError({ sharpe: jk.estimate, n: T, skew: sk, kurtosis: ku });
+    if (!(seIid > 0)) return fail('the i.i.d. Sharpe standard error is not positive');
+    const designEffect = (jk.se / seIid) ** 2;
+    if (!Number.isFinite(designEffect) || designEffect < 0) return fail('the variance inflation is not finite');
+    let mode = 'full-sample';
+    let n = T;
+    if (designEffect > 1) {
+        const nStar = Math.round(T / designEffect);
+        if (nStar >= 2 && nStar < T) { mode = 'deflated'; n = nStar; }
+        else if (nStar < 2) return fail('fewer than two effective bars — the edge is a single-block event');
+    }
+    const dsrAdjusted = deflatedSharpeRatio({ sharpe: perBar, n, skew: sk, kurtosis: ku, trials });
+    const dsrFullSample = deflatedSharpeRatio({ sharpe: perBar, n: T, skew: sk, kurtosis: ku, trials });
+    if (!Number.isFinite(dsrAdjusted) || !Number.isFinite(dsrFullSample)) return fail('the deflated Sharpe is not finite');
+    return {
+        available: true, dsrAdjusted, dsrFullSample, designEffect, effectiveBars: n,
+        bars: T, clusters: b, trials, mode, seCluster: jk.se, seIid,
+        perBarSharpe: perBar, skew: sk, kurtosis: ku, reason: null,
+    };
+}
+
+// The JSON-safe projection of a `sleeveDsr` result for the report artifact.
+export function dsrReport(d) {
+    if (!d || d.available !== true) {
+        return { available: false, trials: SLEEVE_DSR_TRIALS, dsrAdjusted: null, reason: (d && d.reason) || 'unscored' };
+    }
+    return {
+        available: true, trials: d.trials, mode: d.mode,
+        dsrAdjusted: d.dsrAdjusted, dsrFullSample: d.dsrFullSample,
+        designEffect: d.designEffect, effectiveBars: d.effectiveBars, bars: d.bars,
+        clusters: d.clusters, seCluster: d.seCluster, seIid: d.seIid,
+        perBarSharpe: d.perBarSharpe, reason: null,
+    };
+}
+
 export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps = 4, gridMs = 28_800_000, barMs = 3_600_000, sizingTarget = null, sizingWindow = SIZED_SLEEVE_DEFAULTS.window } = {}) {
     if (!SLEEVE_IDS.includes(sleeveId)) {
         return { sleeveId, available: false, reason: `unknown sleeve "${String(sleeveId)}" (known: ${SLEEVE_IDS.join(', ')})`, costBps };
@@ -235,8 +330,9 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
     if (!scored.available) return { ...scored, streams: parsed.streams, buckets: parsed.buckets };
     const panel = view.fRate[0].map((_, j) => view.fRate.map((row, i) => row[j] + (view.basisPnl[i][j] === null ? 0 : view.basisPnl[i][j])));
     const fn = factorNeutralSharpe(scored.net, panel);
+    const dsr = sleeveDsr({ net: scored.net });
     const g5 = scoreG5({
-        net: scored.net, costBps, blocks: 6, dsrAdjusted: null,
+        net: scored.net, costBps, blocks: 6, dsrAdjusted: dsr.available ? dsr.dsrAdjusted : null,
         neutralSharpe: fn.neutral, decayDocumented: false, unseenData: false,
     });
     const rep = {
@@ -249,6 +345,7 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
         neutralAnnual: fn.neutral * Math.sqrt(365 * 3),
         rawAnnual: fn.raw * Math.sqrt(365 * 3),
         stress: scored.stress, worstBlock: scored.worstBlock,
+        dsr: dsrReport(dsr),
         g5verdict: g5.verdict, g5reasons: g5.reasons,
         g5knobs: g5.knobs.map((k) => ({ knob: k.knob, pass: k.pass, note: k.note })),
     };
@@ -270,6 +367,7 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
                 skipped: sized.skipped, scoredBars: sized.scoredBars,
                 bookVolMean: sized.bookVolMean,
                 stress: sized.stress, worstBlock: sized.worstBlock,
+                dsr: dsrReport(sleeveDsr({ net: sized.net })),
             };
         } else {
             rep.sized = { available: false, reason: sized.reason };
@@ -283,15 +381,21 @@ export function formatSleeveReport(r) {
         return `[sleeve] ${r && r.sleeveId ? r.sleeveId : 'unknown'}: unavailable — ${r && r.reason ? r.reason : 'no reason'}`;
     }
     const f2 = (v) => (Number.isFinite(v) ? v.toFixed(2) : 'n/a');
+    const f4 = (v) => (Number.isFinite(v) ? v.toFixed(4) : 'n/a');
+    const dsrLine = (d) => d && d.available === true
+        ? `dsr ${d.mode} ${f4(d.dsrAdjusted)} (DE ${f2(d.designEffect)}, ${d.effectiveBars}/${d.bars} effective bars, trials=${d.trials})`
+        : 'dsr unscored';
+    const attest = (r.g5reasons || []).filter((x) => x === 'decay' || x === 'unseen');
     const lines = [
         `[sleeve] ${r.sleeveId} @${r.costBps}bps over ${r.buckets} buckets x ${r.streams} streams`,
         `  net ${f2(r.netAnnual)} / neutral ${f2(r.neutralAnnual)} (raw ${f2(r.rawAnnual)}), turnover ${f2(r.turnoverAnnual)}/yr, break-even ${f2(r.breakEvenCostBps)} bps`,
         `  null-basis ${(100 * r.nullBasisFraction).toFixed(2)}%, marked ${(100 * r.markedFraction).toFixed(1)}%`,
-        `  G5 verdict ${r.g5verdict} (${r.g5reasons.join(',')}) — the operator run owns dsr/decay/unseen`,
+        `  ${dsrLine(r.dsr)}`,
+        `  G5 verdict ${r.g5verdict} (${r.g5reasons.join(',')})${attest.length ? ` — the operator run owns ${attest.join('/')}` : ''}`,
     ];
     if (r.sized) {
         lines.push(r.sized.available === true
-            ? `  sized @${r.sized.target}/bar (w${r.sized.window}, bookVol ${r.sized.bookVolMean.toExponential(2)}): net ${f2(r.sized.netAnnual)} (base ${f2(r.sized.baseNetAnnual)}), turnover ${f2(r.sized.turnoverAnnual)}/yr, break-even ${f2(r.sized.breakEvenCostBps)} bps, skipped ${r.sized.skipped}/${r.sized.skipped + r.sized.scoredBars}`
+            ? `  sized @${r.sized.target}/bar (w${r.sized.window}, bookVol ${r.sized.bookVolMean.toExponential(2)}): net ${f2(r.sized.netAnnual)} (base ${f2(r.sized.baseNetAnnual)}), turnover ${f2(r.sized.turnoverAnnual)}/yr, break-even ${f2(r.sized.breakEvenCostBps)} bps, skipped ${r.sized.skipped}/${r.sized.skipped + r.sized.scoredBars}; ${dsrLine(r.sized.dsr)}`
             : `  sized unavailable — ${r.sized.reason}`);
     }
     return lines.join('\n');

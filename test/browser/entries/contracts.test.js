@@ -109,7 +109,7 @@ import { mlpLearner, MLP_DEFAULTS, isMlp } from '../../../src/plugins/learners/m
 import { fitRidge, predictRidge, fitMLP, predictMLP } from '../../../src/analysis/benchmark.js';
 import { applyVolTargetScaling } from '../../../src/analysis/forecast.js';
 import { DEFAULT_STACK, PLUGIN_IDS, installDefaultStack } from '../../../src/plugins/index.js';
-import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, drawdownGovernor, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport } from '../../../src/sleeve_score.js';
+import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, drawdownGovernor, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport, sleeveDsr, dsrReport, SLEEVE_DSR_BLOCKS, SLEEVE_DSR_TRIALS } from '../../../src/sleeve_score.js';
 import { bookReturns, bookTurnover, scoreBook, scoreBookReturns } from '../../../src/analysis/portfolio.js';
 
 // The lock register's V2 section (`test/lock-registry.js`) and the module-by-module
@@ -1614,6 +1614,72 @@ export async function run(options = {}) {
             const a = scoreSleeveSized('carry-dispersion', kCarryView, { costBps: 0, target: 'adaptive', window: 24 });
             return s.available === true && s.target === 0.02 && s.skipped === 1 &&
                 a.available === true && a.target === 'adaptive';
+        })());
+
+    // ---- S. machine-scored sleeve DSR (round 75) ------------------------------
+    // The G5 `dsr` knob stops being an operator-owned unscored hurdle: the
+    // delete-one-block jackknife over the G5's own 6 blocks measures the
+    // variance inflation, and the DSR (trials=1, stated) is re-run on the
+    // effective sample — the walk-forward gate's convention, with the gate's
+    // own three states (deflated / full-sample `not-needed` / unavailable).
+    const sConcentrated = new Array(50).fill(0).concat(new Array(10).fill(1));
+    const sDiffuse = [];
+    for (let i = 0; i < 30; i++) sDiffuse.push(0.02, -0.01);
+    check('S: sleeveDsr fails closed on short, non-finite and non-array books, and scores a flat book at 0.5',
+        (() => {
+            const short = sleeveDsr({ net: new Array(11).fill(0.01) });
+            const nan = sleeveDsr({ net: sDiffuse.slice(0, 59).concat([NaN]) });
+            const junk = sleeveDsr({ net: 'nope' });
+            const flat = sleeveDsr({ net: new Array(60).fill(0) });
+            return short.available === false && nan.available === false && junk.available === false &&
+                [short, nan, junk].every((x) => typeof x.reason === 'string' && x.dsrAdjusted === null) &&
+                flat.available === true && near(flat.dsrAdjusted, 0.5, 1e-12);
+        })());
+    check('S: a single-block edge deflates — large DE, few effective bars, DSR below the floor',
+        (() => {
+            const a = sleeveDsr({ net: sConcentrated });
+            const b = sleeveDsr({ net: sConcentrated });
+            return a.available === true && a.mode === 'deflated' &&
+                a.designEffect > 10 && a.effectiveBars <= 3 &&
+                a.dsrAdjusted > 0.5 && a.dsrAdjusted < 0.92 &&
+                a.dsrFullSample > a.dsrAdjusted && a.trials === SLEEVE_DSR_TRIALS &&
+                deepEqual(a, b);
+        })());
+    check('S: a block-uniform book measures no inflation and scores at the full sample',
+        (() => {
+            const d = sleeveDsr({ net: sDiffuse });
+            return d.available === true && d.mode === 'full-sample' &&
+                d.designEffect === 0 && d.effectiveBars === d.bars &&
+                d.dsrAdjusted > 0.95 && d.trials === 1 && d.clusters === SLEEVE_DSR_BLOCKS;
+        })());
+    check('S: the flat report carries a measured DSR and the G5 dsr knob reflects it',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4 });
+            const text = formatSleeveReport(r);
+            const knob = r.g5knobs.find((k) => k.knob === 'dsr');
+            return r.available === true && r.dsr.available === true &&
+                Number.isFinite(r.dsr.dsrAdjusted) && r.dsr.dsrAdjusted >= 0 && r.dsr.dsrAdjusted <= 1 &&
+                r.dsr.effectiveBars <= r.dsr.bars && r.dsr.trials === 1 &&
+                knob.pass === (r.dsr.dsrAdjusted >= 0.95) &&
+                text.includes('dsr ') && text.includes('G5 verdict false');
+        })());
+    check('S: the sized leg carries its own reported-only DSR beside the flat one',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: kFundTexts, candleTexts: kCandleTexts, costBps: 4, sizingTarget: 0.01 });
+            const text = formatSleeveReport(r);
+            return r.available === true && r.sized && r.sized.available === true &&
+                r.sized.dsr && r.sized.dsr.available === true &&
+                Number.isFinite(r.sized.dsr.dsrAdjusted) &&
+                r.dsr.available === true && text.includes('dsr ');
+        })());
+    check('S: the block count is the G5 grid by default and an option otherwise',
+        (() => {
+            const two = sleeveDsr({ net: sConcentrated, blocks: 2 });
+            const six = sleeveDsr({ net: sConcentrated });
+            const one = sleeveDsr({ net: sConcentrated, blocks: 1 });
+            return two.available === true && two.clusters === 2 &&
+                two.designEffect !== six.designEffect &&
+                deepEqual(one, six);
         })());
 
     const failed = checks.filter((c) => !c.pass);
