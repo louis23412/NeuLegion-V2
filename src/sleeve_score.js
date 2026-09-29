@@ -66,7 +66,8 @@ export function resolveSleeve(sleeveId) {
 // before 2023-10-31) — it is NEVER a price: reading it as one fabricates a
 // −100 % perp return and a +100 % basis (e74 measured −5.3 % book prints from
 // exactly this). Callers substitute an independent mark history for 0-marks
-// (the lab's `data/mark_8h.json`); what is still missing stays null.
+// (the vendored `src/data/marks_8h.json` via `--carry-marks`); what is still
+// missing stays null.
 export function buildCarrySleeveView({ streams, gridMs = 28_800_000 } = {}) {
     if (!Array.isArray(streams) || !streams.length) throw new Error('buildCarrySleeveView: at least one stream is required');
     const ms = (t) => (typeof t === 'number' ? t : Date.parse(t));
@@ -177,15 +178,64 @@ export function scoreSleeve(sleeveId, view, { costBps = 0, panel = null } = {}) 
 // Shipped funding marks cover ~2023-10 on (CYCLE-005); without a substituted
 // mark history the view is confined to the marked window — reported, not
 // hidden, as `markedFraction`.
-export function parseSleeveInputs({ fundingTexts, candleTexts, gridMs = 28_800_000, barMs = 3_600_000 } = {}) {
+// The ext-marks file parser (round 78, TODO 95): the lab `mark_8h.json`
+// shape — `{scale, symbols: {sym: {t0, stepMs, v}}}` with prices stored at
+// `v/scale` on the grid `t0 + i*stepMs` — projected to `{symbol: Map<gridMs,
+// price>}`. Pure, no I/O: the CLI reads the file, like the funding texts.
+// Fail-closed on anything that is not that shape, so a corrupt marks file can
+// never silently score as unmarked.
+export function parseMarksJson(text) {
+    let raw;
+    try { raw = JSON.parse(String(text)); } catch {
+        throw new Error('parseMarksJson: the marks file is not valid JSON');
+    }
+    if (!raw || typeof raw !== 'object' || !raw.symbols || typeof raw.symbols !== 'object' || Array.isArray(raw.symbols)) {
+        throw new Error('parseMarksJson: the marks file needs a {scale, symbols: {sym: {t0, stepMs, v}}} shape');
+    }
+    const scale = raw.scale == null ? 100 : Number(raw.scale);
+    if (!Number.isFinite(scale) || !(scale > 0)) throw new Error('parseMarksJson: scale must be a positive number');
+    const out = {};
+    for (const [sym, s] of Object.entries(raw.symbols)) {
+        if (!s || typeof s !== 'object' || !Number.isFinite(s.t0) || !Number.isFinite(s.stepMs) || !(s.stepMs > 0) || !Array.isArray(s.v)) {
+            throw new Error(`parseMarksJson: symbol "${String(sym)}" needs {t0, stepMs, v[]}`);
+        }
+        const m = new Map();
+        for (let i = 0; i < s.v.length; i++) {
+            if (s.v[i] == null) continue;
+            const p = Number(s.v[i]) / scale;
+            if (Number.isFinite(p) && p > 0) m.set(s.t0 + i * s.stepMs, p);
+        }
+        out[String(sym)] = m;
+    }
+    return out;
+}
+
+export function parseSleeveInputs({ fundingTexts, candleTexts, gridMs = 28_800_000, barMs = 3_600_000, marks = null, symbols = null } = {}) {
     if (!Array.isArray(fundingTexts) || !Array.isArray(candleTexts) ||
         !fundingTexts.length || fundingTexts.length !== candleTexts.length) {
         throw new Error('parseSleeveInputs: fundingTexts and candleTexts must be non-empty parallel arrays');
     }
+    if (marks != null && (!Array.isArray(symbols) || symbols.length !== fundingTexts.length)) {
+        throw new Error('parseSleeveInputs: marks need symbols (one per stream, positionally matched) to select each stream\'s mark map');
+    }
     const streams = fundingTexts.map((text, j) => {
         const { rows } = parseFundingJsonl(text);
         let markRows = 0;
-        for (const r of rows) if (r.markPrice > 0) markRows += 1;
+        let substitutedRows = 0;
+        let sub = null;
+        if (marks != null) {
+            const key = String(symbols[j]).toLowerCase();
+            const hit = Object.keys(marks).find((k) => k.toLowerCase() === key);
+            if (hit == null) throw new Error(`parseSleeveInputs: no mark map for symbol "${String(symbols[j])}" (stream ${j})`);
+            sub = marks[hit];
+        }
+        for (const r of rows) {
+            if (r.markPrice > 0) { markRows += 1; continue; }
+            if (sub) {
+                const m = sub.get(Math.floor(r.timestamp / gridMs) * gridMs);
+                if (Number.isFinite(m) && m > 0) { r.markPrice = m; substitutedRows += 1; }
+            }
+        }
         const closes = [];
         for (const line of String(candleTexts[j]).split('\n')) {
             const t = line.trim();
@@ -196,19 +246,22 @@ export function parseSleeveInputs({ fundingTexts, candleTexts, gridMs = 28_800_0
             const close = Number(c.close);
             if (Number.isFinite(ts) && Number.isFinite(close)) closes.push({ timestamp: ts + barMs, close });
         }
-        return { fundingRows: rows, spotCloses: closes, markRows, fundingRowsTotal: rows.length };
+        return { fundingRows: rows, spotCloses: closes, markRows, substitutedRows, fundingRowsTotal: rows.length };
     });
     const view = buildCarrySleeveView({ streams, gridMs });
     const cells = view.buckets * view.streams;
     const nullBasis = view.basisPnl.flat().filter((x) => x === null).length;
     const markedRows = streams.reduce((a, s) => a + s.markRows, 0);
     const fundingRows = streams.reduce((a, s) => a + s.fundingRowsTotal, 0);
+    const marksSubstituted = streams.reduce((a, s) => a + s.substitutedRows, 0);
     return {
         view,
         streams: streams.length,
         buckets: view.buckets,
         nullBasisFraction: cells ? nullBasis / cells : 1,
         markedFraction: fundingRows ? markedRows / fundingRows : 0,
+        marksApplied: marks != null,
+        marksSubstituted,
     };
 }
 
@@ -413,7 +466,7 @@ export function dsrReport(d) {
     };
 }
 
-export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps = 4, gridMs = 28_800_000, barMs = 3_600_000, sizingTarget = null, sizingWindow = SIZED_SLEEVE_DEFAULTS.window } = {}) {
+export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps = 4, gridMs = 28_800_000, barMs = 3_600_000, sizingTarget = null, sizingWindow = SIZED_SLEEVE_DEFAULTS.window, marksText = null, symbols = null } = {}) {
     if (!SLEEVE_IDS.includes(sleeveId)) {
         return { sleeveId, available: false, reason: `unknown sleeve "${String(sleeveId)}" (known: ${SLEEVE_IDS.join(', ')})`, costBps };
     }
@@ -423,9 +476,20 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
             reason: 'the positioning sleeves need operator data the repo does not ship (toptrader ratios / open interest); only carry-dispersion runs on funding + spot',
         };
     }
+    let marks = null;
+    if (marksText != null) {
+        if (!Array.isArray(symbols) || symbols.length !== fundingTexts.length) {
+            throw new Error('runSleeveReport: marksText needs symbols (one per stream, positionally matched to the funding texts)');
+        }
+        try {
+            marks = parseMarksJson(marksText);
+        } catch (err) {
+            return { sleeveId, available: false, reason: String(err && err.message ? err.message : err), costBps };
+        }
+    }
     let parsed;
     try {
-        parsed = parseSleeveInputs({ fundingTexts, candleTexts, gridMs, barMs });
+        parsed = parseSleeveInputs({ fundingTexts, candleTexts, gridMs, barMs, marks, symbols });
     } catch (err) {
         return { sleeveId, available: false, reason: String(err && err.message ? err.message : err), costBps };
     }
@@ -446,6 +510,7 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
         sleeveId, available: true, costBps,
         streams: parsed.streams, buckets: parsed.buckets,
         nullBasisFraction: parsed.nullBasisFraction, markedFraction: parsed.markedFraction,
+        marks: parsed.marksApplied ? { substituted: parsed.marksSubstituted } : null,
         netAnnual: scored.netSharpe * Math.sqrt(365 * 3),
         turnoverAnnual: scored.turnover * (365 * 3) / scored.net.length,
         breakEvenCostBps: scored.breakEvenCostBps,
@@ -510,6 +575,9 @@ export function formatSleeveReport(r) {
             ` (Δ ${s(f.diff)} ± ${(1.96 * f.seDiff).toFixed(2)})`;
     };
     const attest = (r.g5reasons || []).filter((x) => x === 'decay' || x === 'unseen');
+    const marksLine = (m) => m && m.substituted > 0
+        ? `  marks +${m.substituted} ext rows (shipped marks kept where positive)`
+        : null;
     const lines = [
         `[sleeve] ${r.sleeveId} @${r.costBps}bps over ${r.buckets} buckets x ${r.streams} streams`,
         `  net ${f2(r.netAnnual)} / neutral ${f2(r.neutralAnnual)} (raw ${f2(r.rawAnnual)}), turnover ${f2(r.turnoverAnnual)}/yr, break-even ${f2(r.breakEvenCostBps)} bps`,
@@ -519,6 +587,8 @@ export function formatSleeveReport(r) {
         `  ${firstLastLine(r.firstLast)}`,
         `  G5 verdict ${r.g5verdict} (${r.g5reasons.join(',')})${attest.length ? ` — the operator run owns ${attest.join('/')}` : ''}`,
     ];
+    const ml = marksLine(r.marks);
+    if (ml) lines.splice(3, 0, ml);
     if (r.sized) {
         lines.push(r.sized.available === true
             ? `  sized @${r.sized.target}/bar (w${r.sized.window}, bookVol ${r.sized.bookVolMean.toExponential(2)}): net ${f2(r.sized.netAnnual)} (base ${f2(r.sized.baseNetAnnual)}), turnover ${f2(r.sized.turnoverAnnual)}/yr, break-even ${f2(r.sized.breakEvenCostBps)} bps, skipped ${r.sized.skipped}/${r.sized.skipped + r.sized.scoredBars}; ${dsrLine(r.sized.dsr)}`

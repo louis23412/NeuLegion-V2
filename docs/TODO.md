@@ -1053,6 +1053,13 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    six years of one venue, with 0.84 % vol and maxDD −3.34 %. It excludes basis risk, execution,
    borrow/margin, liquidation, and the spot leg's own carry. Fetch the mark/index **basis** series
    and cost the spot leg before any *tradeable-carry* claim. Detail: `RUN-ANALYSIS.md` §16.5.
+   **Round-78 progress:** the basis-marking half is now native — opt-in `--carry-marks` scores the
+   dispersion sleeve on the substituted full-history marks (the e74 lab semantics), with `bash
+   scripts/sleeve-runs.sh honest` as the turnkey entry; the honest run is predicted at net ≈6.2
+   (e74's stored book) vs the shipped-marks 11.26 (`RUN-ANALYSIS.md` §22.2/§22.4, lab e110). What
+   remains after it confirms: execution beyond taker fees, borrow/margin (see sweep 2026-09x's
+   2502.06028, where those costs live), liquidation, and the basis-risk failure modes (sweep 09x's
+   2605.10400 funding trilemma). The honest level is a *marked*-carry claim, not a tradeable one.
 
 96. [ ] **P5 — continuous test-time adaptation (deferred; gate G-D OPEN, nothing measured).** The
    shipped controller **already adapts continuously within a fold** (`getSignal` trains on
@@ -1143,7 +1150,9 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    and a DSR that respects the vol-target limit law — sweep 2026-09u's 2503.16878: a
    volatility-targeted index has its own limiting distribution whose vol exceeds the target, so the
    flat inputs do not transfer blindly). Until then, read `sized.dsr` as diagnostics and keep the
-   flat book as the only G5 claim (F-119).
+   flat book as the only G5 claim (F-119). Grounding filed round 77 (sweep 2026-09w's 2609.05433:
+   the perp price is the PV of a benchmark flow discounted at the funding rate — the vol-targeted
+   book's limit law must respect that the discount/benchmark choice moves with the sizing).
 
 105. [x] **Decay attribution on the sleeve (round-75 follow-up; round-76 evidence landed; round-77 comparison landed).** The flat halves read 0.47 → 0.20
    per-bar (`20260929T061347-seed1-sleeve`) — a measured gap, not a hunch — and round 76 added the
@@ -1152,8 +1161,8 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    supplied the first real yearly readout (2020 +0.66 → 2026 +0.11, slope −0.09/yr, §21.1), and round 77
    added the formal first-vs-last comparison (`sleeveFirstLast`: stress-split halves with Lo SEs +
    95% intervals + the second-minus-first Δ, descriptive, never gating; six §U checks, ledger 249/3106).
-   The lab cross-check is written (e109: port-verify of the operator block + honest-book decay direction,
-   lab F-120 measured in-session provisional) but its operator run is still pending (item 108).
+   The lab cross-check is verified AI-side in-session (e109 check set 5/5 on the
+   real data through the repo's own modules; lab F-120 measured, no operator run).
 
 106. [ ] **Unseen-data protocol (round-75 follow-up; round-76 procedure written).** Defined in
    `docs/UNSEEN.md`: unseen = every byte post-dates the spec freeze with no feedback (following
@@ -1166,13 +1175,25 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    + lock-registry rows à la R74's `walkforward.js` split — no behavioral need this round, so this
    waits for a round that touches the driver anyway.
 
-108. [ ] **Round-77 operator runs (gate the round).** `npm test` (expect 132/132 — the node mirror
+108. [ ] **Round-77 operator runs (gate the round; repo only).** `npm test` (expect 132/132 — the node mirror
    asserts the 249-contracts ledger), `bash scripts/sleeve-runs.sh base` (expect the new
-   `first-last per-bar Sharpe … (Δ … ± …)` line beside dsr/yearly, G5 still false on (decay,unseen)),
-   and `node src/NeuLegion-lab/run_lab.mjs e109_yearly_crosscheck.js` (expect 5/5 — the yearly
-   port-verify plus the honest-book decay direction that F-120 provisionally records). Upload the new
-   `state/runs/<runId>-sleeve/report.json` plus the e109 result. Until these run, the §U/U4-U5 and e109
-   checks are code-reviewed + shipped-bytes-verified, not natively gated. Detail: `RUN-ANALYSIS.md` §21.5.
+   `first-last per-bar Sharpe … (Δ … ± …)` line beside dsr/yearly, G5 still false on (decay,unseen)).
+   Upload the new `state/runs/<runId>-sleeve/report.json`. Until these run, the §U/U4-U5
+   checks are code-reviewed + shipped-bytes-verified, not natively gated; the e109 cross-check
+   (yearly port-verify + honest-book decay direction) is verified AI-side in-session instead —
+   there is no lab run for the operator. Detail: `RUN-ANALYSIS.md` §21.5.
+   **Status 2026-09-29: two-thirds done** — `npm test` 132/132 green and the base re-run printed
+   `first-last per-bar Sharpe +0.47 → +0.20 (Δ -0.27 ± 0.05)` exactly as predicted
+   (`20260929T115738-seed1-sleeve`, read in `RUN-ANALYSIS.md` §22.1; per-half Sharpes bit-equal to the
+   stress halves, Δ CI (−0.32,−0.22)). The e109 cross-check needs no operator run — verified AI-side (§21.3).
+
+109. [ ] **Round-78 operator runs (gate the round; repo only).** `npm test` (expect 132/132 — mirrors assert the
+   255/290 ledgers), `bash scripts/sleeve-runs.sh honest` (expect a `marks +N ext rows` line,
+   net ≈6.2, turnover ≈10, break-even ≈46 bps, G5 still false on (decay,unseen) — the e74-level
+   reproduction, over the vendored repo-local `src/data/marks_8h.json`). Upload the honest
+   `state/runs/<runId>-sleeve/report.json`. The e109/e110 cross-checks are verified AI-side
+   in-session (5/5 each on the real data; §21.3/§22.2) — no lab runs for the operator.
+   Detail: `RUN-ANALYSIS.md` §22.4.
 
 **Round-29 research sweep (2026-09-24):** five grounding notes —
 `docs/research/round29-model-class.md`, `round29-crypto-edges.md`,

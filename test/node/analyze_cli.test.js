@@ -585,6 +585,46 @@ test('the analyze CLI scores a structural sleeve with --sleeve (round 44, W2)', 
         assert.equal(drawnReport.result.sizing.target, 'drawdown', 'report.json does not record the drawdown target');
         assert.equal(drawnReport.result.sized.target, 'drawdown', 'the sized block does not record the drawdown target');
 
+        // Round 78 (--carry-marks): the honest-marks leg — an ext mark history
+        // substituting per-row where the shipped marks are missing. The
+        // fixtures carry markPrice 0 everywhere, so every row substitutes;
+        // symbols go in UPPERCASE to pin the case-insensitive mark-map match.
+        const marksFile = path.join(root, 'marks.json');
+        fs.writeFileSync(marksFile, JSON.stringify({
+            scale: 100,
+            symbols: {
+                btcusdt: { t0, stepMs: grid, v: Array.from({ length: 40 }, (_, i) => (100 + i) * 100) },
+                ethusdt: { t0, stepMs: grid, v: Array.from({ length: 40 }, (_, i) => (200 - i) * 100) },
+            },
+        }));
+        const zeroFund = (file, fn) => {
+            const rows = [];
+            for (let i = 0; i < 40; i++) rows.push(JSON.stringify({ timestamp: t0 + i * grid, fundingRate: fn(i), markPrice: 0 }));
+            fs.writeFileSync(file, rows.join('\n'));
+        };
+        const z0 = path.join(root, 'zfund0.jsonl');
+        const z1 = path.join(root, 'zfund1.jsonl');
+        zeroFund(z0, () => 0.0001);
+        zeroFund(z1, (i) => (i < 10 ? 0.0005 : 0.0008));
+        const marksRes = spawnSync(process.execPath, [
+            analyzePath,
+            '--sleeve=carry-dispersion', `--carry-files=${z0},${z1}`, `--files=${c0},${c1}`,
+            '--symbols=BTCUSDT,ETHUSDT', '--cost-bps=4', `--carry-marks=${marksFile}`,
+        ], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: path.join(root, 'state-marks') },
+        });
+        assert.equal(marksRes.status, 0, `the honest-marks sleeve run exited ${marksRes.status}:\n${marksRes.stderr}`);
+        assert.match(marksRes.stdout, /marks \+\d+ ext rows/, 'the summary does not print the marks line');
+        const marksRunDir = path.join(root, 'state-marks', 'runs', fs.readdirSync(path.join(root, 'state-marks', 'runs'))[0]);
+        const marksManifest = JSON.parse(fs.readFileSync(path.join(marksRunDir, 'run.json'), 'utf8'));
+        const marksReport = JSON.parse(fs.readFileSync(path.join(marksRunDir, 'report.json'), 'utf8'));
+        assert.equal(marksManifest.carryMarks, marksFile, 'run.json does not record the marks file');
+        assert.equal(marksReport.carryMarks, marksFile, 'report.json does not record the marks file');
+        assert.equal(marksReport.result.marks.substituted, 80, 'the honest-marks book substituted the wrong row count');
+        assert.ok(marksReport.result.nullBasisFraction < 0.05, 'the honest-marks book is not basis-marked');
+
         // Refusals: empty id, unknown id, missing funding files, empty sizing,
         // window-without-sizing.
         for (const [flags, re] of [
@@ -594,6 +634,9 @@ test('the analyze CLI scores a structural sleeve with --sleeve (round 44, W2)', 
             [['--sleeve=carry-dispersion', `--files=${c0},${c1}`], /needs --carry-files/],
             [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-sizing='], /--sleeve-sizing is present but empty/],
             [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-sizing-window=12'], /--sleeve-sizing-window needs --sleeve-sizing/],
+            [[`--carry-marks=${marksFile}`], /--carry-marks needs --sleeve/],
+            [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--carry-marks='], /--carry-marks is present but empty/],
+            [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, `--carry-marks=${marksFile}`], /--carry-marks needs --symbols/],
         ]) {
             const bad = spawnSync(process.execPath, [analyzePath, ...flags], {
                 cwd: projectRoot,

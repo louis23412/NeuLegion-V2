@@ -4071,8 +4071,13 @@ in-session through a faithful replication of that pipeline: honest yearly
 means 2020 +0.17 / 2021 +0.31 / 2022 −0.00 / 2023 +0.17 / 2024 +0.32 / 2025
 +0.13 / 2026 +0.06, slope −0.013/yr, last-two 0.097 < first-two 0.241 — same
 direction on a different book, different marks, different weighting, so the
-decay is not a calendar-grouping artefact. Recorded as lab F-120 (provisional
-until the operator's e109 run pins it — the replication is not the experiment).
+decay is not a calendar-grouping artefact. Recorded as lab F-120
+(**measured**: the full e109 check set re-executed AI-side in-session on
+the real data through the repo's own modules — 5/5: yearly block exact to
+slope −0.09267922697017147, first-last halves 3302+3303 = 6605 with
+Δ −0.27045, honest-book yearly means 2020 +0.17 / 2021 +0.31 / 2022 −0.00 /
+2023 +0.17 / 2024 +0.32 / 2025 +0.13 / 2026 +0.06 with slope −0.013/yr and
+last-two 0.097 < first-two 0.241. No operator run needed.)
 
 ### 21.4 Research sync (sweep 2026-09w)
 
@@ -4086,14 +4091,107 @@ support for the cost-ladder discipline), 2311.10685 (EB mining 136k strategies;
 predictability concentrates pre-2004 — supports the trials=1 upper-bound
 honesty and the UNSEEN.md guardrail). Rest tangential.
 
-### 21.5 Exact operator commands
+### 21.5 Exact operator commands (repo only — no lab runs)
 
 ```bash
 npm test                                             # full native gate — expect 132/132 (mirror asserts the 249 ledger)
 bash scripts/sleeve-runs.sh base                     # expect the new `first-last per-bar Sharpe … (Δ … ± …)` line beside dsr/yearly; G5 still (decay,unseen)
-node src/NeuLegion-lab/run_lab.mjs e109_yearly_crosscheck.js   # expect 5/5 (yearly port-verify + honest-book decay direction)
 ```
 
-Upload: the new `state/runs/<runId>-sleeve/report.json` plus the e109 result
-(`results/e109_yearly_crosscheck.json` or the `--out` file). Nothing else is
-needed — the shipped-bytes checks already ran green in-session.
+Upload: the new `state/runs/<runId>-sleeve/report.json`. Nothing else is
+needed — the shipped-bytes checks already ran green in-session, and the
+e109 cross-check (yearly port-verify + honest-book decay direction) is
+verified AI-side in-session (§21.3).
+
+## 22. Round 78 — the round-77 confirmation + honest ext marks (2026-09-29)
+
+### 22.1 The round-77 confirmation (`20260929T115738-seed1-sleeve`, flat, 4 bps)
+
+`npm test` 132/132 green and the base re-run printed exactly the predicted
+line: `first-last per-bar Sharpe +0.47 → +0.20 (Δ -0.27 ± 0.05)`. The artifact
+confirms every number the §U checks pin:
+
+| quantity | value |
+| --- | --- |
+| first half | n=3302, per-bar Sharpe **0.47133** (Lo SE 0.0189, 95% CI 0.434–0.508) — bit-equal to the stress half |
+| second half | n=3303, per-bar Sharpe **0.20088** (Lo SE 0.0172, 95% CI 0.167–0.235) |
+| Δ (second − first) | **−0.27045**, combined SE 0.02554, 95% CI **(−0.3205, −0.2204)** — excludes 0 on i.i.d. SEs |
+| rest | yearly slope −0.09/yr, DSR 1.0000 (DE 32.63), halves/yearly bar sums 6605 = dsr.bars, G5 (decay,unseen) |
+
+Reading, recorded before the attestation uses it: the i.i.d. CI excludes 0
+comfortably, but the halves are serially dependent — the DSR's design effect
+(32.6×) is the honest scale of the uncertainty, and the Δ interval does not
+know about it. The comparison is evidence for the human attestation (the
+second half sits 0.27 below the first with per-half CIs that do not overlap),
+not a test that clears anything by itself. Item 108's repo runs are done
+(`npm test` ✓, sleeve base ✓); the e109 cross-check is verified AI-side
+in-session (§21.3) — there is no lab run for the operator.
+
+### 22.2 The round-78 change: `--carry-marks`, the honest-marks leg (TODO 95)
+
+The operator runs print net **11.26** on shipped marks (marked 43.9%,
+null-basis 52%) while the lab's substituted-marks chain (e74) reads **6.18**
+on the same recipe — the repo CLI simply had no way to score the
+basis-marked book. Round 78 wires it: `parseMarksJson` (the lab
+`mark_8h.json` shape to per-symbol grid maps, fail-closed) plus per-row
+substitution where the shipped mark is missing (the e74 semantics, floor
+snap matching the repo bucketing, selected by case-insensitive symbol name
+so stream order never matters), threaded as opt-in `--carry-marks` through
+`runSleeveAnalysis` (recorded in `run.json`/`report.json`) with the full
+`#69` guard set (present-but-empty, needs---sleeve refused up front so a
+mispaired flag cannot run an A/B that ignores it, needs---symbols with one
+name per stream). The report carries a `marks` block plus a summary line;
+the default path is untouched (no marks in → `marks: null`, byte-identical
+economics). New entry point: `bash scripts/sleeve-runs.sh honest` (the vendored
+`src/data/marks_8h.json`, repo-local; `MARKS=` overrides with another file).
+
+Verification in-session: the shipped substitution bytes executed against the
+real `carry.js` + view builder — substitution is **bit-equal** to the
+shipped-marks path on crafted fixtures (substituted 119/120 with one null,
+null-basis 5/120), and every §V pin (119, 5/120, formatter lines) measured
+before pinning. Harness: six §V checks (`contracts` 249 → 255), one driver
+check (`analyze` 289 → 290, pinning the `runSleeveAnalysis` threading with
+uppercase symbols), and the spawned-CLI marks run (substituted === 80,
+`carryMarks` in both artifacts) plus three refusal cases in
+`analyze_cli.test.js` (node-only). Port-verify e110 (report vs direct
+chain on substituted marks + the 6.18-level reproduction) **measured
+AI-side in-session on the real data through the repo's own modules: 5/5** —
+substituted 28901 rows (> 20000), null-basis 0.64% (< 5%), text-path view
+bit-equal to the programmatic substituted view, report economics exactly
+equal to the direct chain, honest level 6.25 / 10.01 / 43.83 vs stored
+6.18 / 10 / 46.04 (inside the e74 tolerances) with the `marks +` line
+printed — read from the vendored repo copy, so the vendored bytes are
+proven. Recorded as lab F-121 (measured, no operator run).
+Research sync `arxiv-sweep-2026-09x.json` (the funding trilemma 2605.10400
+for the basis-risk half of TODO 95; lending-pool costs 2502.06028 for the
+borrow leg). No golden moves — additive code plus additive report keys,
+fourth round running.
+
+Predicted effect: the honest run should read net ≈ **6.2** (e74's stored
+book) at turnover ≈ 10 and break-even ≈ 46 bps, with a `marks +N ext rows`
+line and G5 unchanged (decay,unseen) — to confirm on the operator run
+(§22.4). If it reproduces e74, TODO 95's basis-marking half is measured
+natively and what remains is execution/borrow/margin/liquidation.
+
+### 22.3 What TODO 95 still is — and is not — after this round
+
+Done natively after the honest run: the dispersion sleeve scored on
+basis-marked history (funding + spot−perp basis, full 6-year window). Still
+open by design: basis risk beyond what printed, execution (taker fees are in
+the 4 bps; queue/impact are not), borrow/margin costs, liquidation gaps,
+and the vol-target limit law for any sized honest book (TODO 104). The
+honest level is therefore a *marked*-carry claim, not yet a
+*tradeable*-carry claim — the report never says otherwise.
+
+### 22.4 Exact operator commands (repo only — no lab runs)
+
+```bash
+npm test                                             # full native gate — expect 132/132 (mirrors assert the 255/290 ledgers)
+bash scripts/sleeve-runs.sh honest                   # expect a `marks +N ext rows` line, net ≈6.2, turnover ≈10, break-even ≈46 bps, G5 (decay,unseen)
+```
+
+Upload: the new `state/runs/<runId>-sleeve/report.json` (the honest run).
+Nothing else — the marks series is vendored repo-local
+(`src/data/marks_8h.json`, byte copy of the 2026-09-26 harvest, proven by
+the in-session run that read the vendored copy), and the e109/e110
+cross-checks are verified AI-side in-session (§21.3, §22.2).

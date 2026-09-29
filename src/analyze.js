@@ -2142,6 +2142,7 @@ export const makeNodeFoldDispatcher = ({ url, spawn = null, timeoutMs = null } =
 export async function runSleeveAnalysis({
     sleeve = 'carry-dispersion', carryFiles = null, files = null, symbols = null,
     file = CONFIG.file, costBps = 0, sizingTarget = null, sizingWindow = 24,
+    carryMarks = null,
     readFile = (f) => fs.readFileSync(f, 'utf8'),
 } = {}) {
     if (!carryFiles || !carryFiles.length) {
@@ -2150,8 +2151,10 @@ export async function runSleeveAnalysis({
     const inputs = files && files.length ? files : (symbols && symbols.length ? resolveSymbolFiles(symbols) : [file]);
     const fundingTexts = carryFiles.map((f) => readFile(f));
     const candleTexts = inputs.map((f) => readFile(f));
-    const result = runSleeveReport({ sleeveId: sleeve, fundingTexts, candleTexts, costBps, sizingTarget, sizingWindow });
-    return { inputs, carryFiles, sleeve, costBps, sizingTarget, sizingWindow, result, summary: formatSleeveReport(result) };
+    const marksText = carryMarks == null ? null : readFile(carryMarks);
+    const markSymbols = symbols && symbols.length === 1 && symbols[0] === 'all' ? CANDLE_MANIFEST.map((e) => e.symbol) : symbols;
+    const result = runSleeveReport({ sleeveId: sleeve, fundingTexts, candleTexts, costBps, sizingTarget, sizingWindow, marksText, symbols: markSymbols });
+    return { inputs, carryFiles, sleeve, costBps, sizingTarget, sizingWindow, carryMarks, result, summary: formatSleeveReport(result) };
 }
 
 // Run the A/B against real candle data. Loads the model lazily so importing this
@@ -3326,6 +3329,13 @@ export const ANALYZE_USAGE = [
     '                           empty list is an error — BUGS.md #69)',
     '  --carry-files=<a,b>      funding JSONL per stream (P4 carry sleeve; positional;',
     '                           a present-but-empty list is an error — BUGS.md #69)',
+    '  --carry-marks=<file>     ext mark history ({scale, symbols:{sym:{t0,stepMs,v}}}) substituting',
+    '                           per-row where a funding row carries no mark (round 78,',
+    '                           TODO 95: scores the basis-marked book, not just the',
+    '                           shipped-marks window; selected by symbol name, so it',
+    '                           needs --symbols with one name per stream; shipped',
+    '                           marks are kept where positive; needs --sleeve; a',
+    '                           present-but-empty value is an error — BUGS.md #69)',
     '  --sleeve=<id>            score a structural sleeve as a book instead of the A/B',
     '                           (W2 acceptance; needs --carry-files plus --files/--symbols;',
     '                           only carry-dispersion runs on shipped data — the',
@@ -3567,6 +3577,10 @@ if (isMain) {
         const seedList = list('seeds');
         const sleeveGiven = flagGiven('sleeve');
         const sleeveId = argOf('sleeve');
+        // Round 78: --carry-marks outside --sleeve mode is refused up front —
+        // ext-mark substitution is a sleeve-view input, so a mispaired flag
+        // must fail loudly rather than run an A/B that ignores it.
+        if (flagGiven('carry-marks') && !sleeveGiven) throw new Error('analyze: --carry-marks needs --sleeve (ext-mark substitution is a sleeve-view input)');
         if (sleeveGiven) {
             // Round 44 (W2): the sleeve run mode — a structural book scored by the
             // gate's own arithmetic, not an A/B. Writes run.json + report.json
@@ -3585,18 +3599,29 @@ if (isMain) {
             if (sizingGiven && (sizingRaw == null || !String(sizingRaw).trim())) throw new Error('analyze: --sleeve-sizing is present but empty (a positive per-bar vol target is required — BUGS.md #69)');
             if (flagGiven('sleeve-sizing-window') && !sizingGiven) throw new Error('analyze: --sleeve-sizing-window needs --sleeve-sizing');
             const sizingOpt = parseSleeveSizing({ sizing: sizingGiven ? sizingRaw : null, window: argOf('sleeve-sizing-window') });
+            // Round 78 (TODO 95): the opt-in honest-marks leg — an ext mark
+            // history substituting per-row where the shipped marks are missing.
+            // A present-but-empty --carry-marks is refused (BUGS.md #69); it
+            // needs --symbols with one name per --carry-files stream (marks
+            // select by symbol name; the needs---sleeve guard sits above).
+            const carryMarksGiven = flagGiven('carry-marks');
+            const carryMarksRaw = argOf('carry-marks');
+            if (carryMarksGiven && (carryMarksRaw == null || !String(carryMarksRaw).trim())) throw new Error('analyze: --carry-marks is present but empty (a marks file path is required — BUGS.md #69)');
+            const carryMarksPath = carryMarksGiven ? String(carryMarksRaw).trim() : null;
+            if (carryMarksPath != null && (!sleeveSymbols || sleeveSymbols.length !== carryFilesList.length)) throw new Error('analyze: --carry-marks needs --symbols with one name per --carry-files stream (marks are selected by symbol name)');
             const sleeveT0 = performance.now();
             const startedAt = Date.now();
             const sleeveOut = await runSleeveAnalysis({
                 sleeve: sleeveId, carryFiles: carryFilesList, files: filesList,
                 symbols: sleeveSymbols, costBps: sleeveCost,
                 sizingTarget: sizingOpt.sized ? sizingOpt.target : null, sizingWindow: sizingOpt.window,
+                carryMarks: carryMarksPath,
             });
             const durationMs = performance.now() - sleeveT0;
             const runId = `${makeRunId({ seed: num('seed', 1), startedAt })}-sleeve`;
             const runDir = createRunDirectory(CONFIG.stateFolder, runId);
-            writeJson(runDir, 'run.json', { runId, mode: 'sleeve', sleeve: sleeveId, startedAt, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, inputs: sleeveOut.inputs, carryFiles: carryFilesList });
-            writeReport(runDir, { mode: 'sleeve', sleeve: sleeveId, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, durationMs, inputs: sleeveOut.inputs, carryFiles: carryFilesList, result: sleeveOut.result });
+            writeJson(runDir, 'run.json', { runId, mode: 'sleeve', sleeve: sleeveId, startedAt, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, inputs: sleeveOut.inputs, carryFiles: carryFilesList, carryMarks: carryMarksPath });
+            writeReport(runDir, { mode: 'sleeve', sleeve: sleeveId, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, durationMs, inputs: sleeveOut.inputs, carryFiles: carryFilesList, carryMarks: carryMarksPath, result: sleeveOut.result });
             console.log(sleeveOut.summary);
             console.log(`\nsleeve report at ${path.join(runDir, 'report.json')} (${durationMs.toFixed(0)}ms)`);
         } else if (seedList) {

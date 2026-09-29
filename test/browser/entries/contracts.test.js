@@ -109,7 +109,7 @@ import { mlpLearner, MLP_DEFAULTS, isMlp } from '../../../src/plugins/learners/m
 import { fitRidge, predictRidge, fitMLP, predictMLP } from '../../../src/analysis/benchmark.js';
 import { applyVolTargetScaling } from '../../../src/analysis/forecast.js';
 import { DEFAULT_STACK, PLUGIN_IDS, installDefaultStack } from '../../../src/plugins/index.js';
-import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, drawdownGovernor, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport, sleeveDsr, dsrReport, SLEEVE_DSR_BLOCKS, SLEEVE_DSR_TRIALS, sleeveYearly, yearlyReport, sleeveFirstLast, firstLastReport } from '../../../src/sleeve_score.js';
+import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, drawdownGovernor, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport, sleeveDsr, dsrReport, SLEEVE_DSR_BLOCKS, SLEEVE_DSR_TRIALS, sleeveYearly, yearlyReport, sleeveFirstLast, firstLastReport, parseMarksJson } from '../../../src/sleeve_score.js';
 import { bookReturns, bookTurnover, scoreBook, scoreBookReturns } from '../../../src/analysis/portfolio.js';
 
 // The lock register's V2 section (`test/lock-registry.js`) and the module-by-module
@@ -1815,6 +1815,69 @@ export async function run(options = {}) {
                 JSON.parse(JSON.stringify(p)).first.n === 10 &&
                 q.available === false && typeof q.reason === 'string' &&
                 q.first === null && q.diff === null && q.seDiff === null;
+        })());
+
+    // ---- V. honest ext marks (round 78, TODO 95) -------------------------------
+    // The repo can score the basis-marked book, not just the shipped-marks
+    // window: an ext mark history substitutes per-row where the shipped mark
+    // is missing (the e74 lab semantics), selected by symbol name so stream
+    // order never matters. The default path is untouched (no marks in, no
+    // marks out); a corrupt marks file lands available:false, never a silent
+    // unmarked book.
+    const vFundZero = (fn) => {
+        const rows = [];
+        for (let i = 0; i < 40; i++) rows.push(JSON.stringify({ timestamp: kT0 + i * kGrid, fundingRate: fn(i), markPrice: 0 }));
+        return rows.join('\n');
+    };
+    const vZeroTexts = [vFundZero(() => 0.0001), vFundZero((i) => (i < 10 ? 0.0005 : 0.0008)), vFundZero((i) => (i < 10 ? 0.0008 : 0.0005))];
+    const vSyms = ['s0', 's1', 's2'];
+    const vMarksText = JSON.stringify({
+        scale: 100,
+        symbols: {
+            s0: { t0: kT0, stepMs: kGrid, v: Array.from({ length: 40 }, (_, i) => (100 + i) * 100) },
+            s1: { t0: kT0, stepMs: kGrid, v: Array.from({ length: 40 }, (_, i) => (200 - i) * 100).map((x, i) => (i === 5 ? null : x)) },
+            s2: { t0: kT0, stepMs: kGrid, v: Array.from({ length: 40 }, () => 300 * 100) },
+        },
+    });
+    const vThrows = (fn) => { try { fn(); return false; } catch { return true; } };
+    check('V: parseMarksJson fails closed on non-JSON, bad shape, bad scale and bad series',
+        ['nope', '{}', '{"symbols":[]}', JSON.stringify({ scale: 0, symbols: {} }),
+            JSON.stringify({ symbols: { a: { t0: 0 } } })].every((t) => vThrows(() => parseMarksJson(t))));
+    check('V: parseMarksJson projects the grid with scale division and skips null marks',
+        (() => {
+            const m = parseMarksJson(vMarksText);
+            return m.s0.get(kT0) === 100 && m.s0.get(kT0 + 39 * kGrid) === 139 &&
+                m.s1.size === 39 && m.s1.get(kT0 + 5 * kGrid) === undefined && m.s2.size === 40;
+        })());
+    check('V: substitution needs symbols and a named map per stream, and the default path is untouched',
+        (() => {
+            const noSyms = vThrows(() => parseSleeveInputs({ fundingTexts: vZeroTexts, candleTexts: kCandleTexts, marks: parseMarksJson(vMarksText) }));
+            const noMap = vThrows(() => parseSleeveInputs({ fundingTexts: vZeroTexts, candleTexts: kCandleTexts, marks: parseMarksJson(vMarksText), symbols: ['s0', 'nope', 's2'] }));
+            const plain = parseSleeveInputs({ fundingTexts: vZeroTexts, candleTexts: kCandleTexts });
+            return noSyms && noMap && plain.marksApplied === false && plain.marksSubstituted === 0 &&
+                plain.nullBasisFraction > 0.5 && !formatSleeveReport(runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: vZeroTexts, candleTexts: kCandleTexts, costBps: 4 })).includes('marks +');
+        })());
+    check('V: substitution fills the unmarked rows (119/120, one null) and confines the null basis to the edges',
+        (() => {
+            const p = parseSleeveInputs({ fundingTexts: vZeroTexts, candleTexts: kCandleTexts, marks: parseMarksJson(vMarksText), symbols: vSyms });
+            return p.marksApplied === true && p.marksSubstituted === 119 && near(p.nullBasisFraction, 5 / 120, 1e-12);
+        })());
+    check('V: the marks report carries the substitution block, reprices the book and prints it',
+        (() => {
+            const r1 = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: vZeroTexts, candleTexts: kCandleTexts, costBps: 4 });
+            const r2 = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: vZeroTexts, candleTexts: kCandleTexts, costBps: 4, marksText: vMarksText, symbols: vSyms });
+            const bad = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: vZeroTexts, candleTexts: kCandleTexts, costBps: 4, marksText: 'nope', symbols: vSyms });
+            return r1.available === true && r1.marks === null &&
+                r2.available === true && r2.marks.substituted === 119 &&
+                r2.nullBasisFraction < r1.nullBasisFraction && r2.netAnnual !== r1.netAnnual &&
+                formatSleeveReport(r2).includes('marks +119 ext rows') &&
+                bad.available === false && typeof bad.reason === 'string';
+        })());
+    check('V: the marks report still carries every evidence block over the scored bars',
+        (() => {
+            const r = runSleeveReport({ sleeveId: 'carry-dispersion', fundingTexts: vZeroTexts, candleTexts: kCandleTexts, costBps: 4, marksText: vMarksText, symbols: vSyms });
+            return r.available === true && r.dsr.available === true &&
+                r.firstLast.available === true && r.firstLast.first.n + r.firstLast.second.n === r.dsr.bars;
         })());
 
     const failed = checks.filter((c) => !c.pass);

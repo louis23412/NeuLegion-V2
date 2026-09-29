@@ -2148,12 +2148,30 @@ export async function run() {
         const sFundTexts = [sFund(() => 0.0001), sFund((i) => (i < 10 ? 0.0005 : 0.0008)), sFund((i) => (i < 10 ? 0.0008 : 0.0005))];
         const sCandleTexts = [sCandles(100, sRets), sCandles(200, sRets.map((r) => -r)), sCandles(300, sRets.map((r) => r / 2))];
         const sFiles = ['f0', 'f1', 'f2'];
+        const sZeroFund = (fn) => {
+            const rows = [];
+            for (let i = 0; i < 40; i++) rows.push(JSON.stringify({ timestamp: sT0 + i * sGrid, fundingRate: fn(i), markPrice: 0 }));
+            return rows.join('\n');
+        };
+        const sZeroTexts = [sZeroFund(() => 0.0001), sZeroFund((i) => (i < 10 ? 0.0005 : 0.0008)), sZeroFund((i) => (i < 10 ? 0.0008 : 0.0005))];
+        const sMarksText = JSON.stringify({
+            scale: 100,
+            symbols: {
+                s0: { t0: sT0, stepMs: sGrid, v: Array.from({ length: 40 }, (_, i) => (100 + i) * 100) },
+                s1: { t0: sT0, stepMs: sGrid, v: Array.from({ length: 40 }, (_, i) => (200 - i) * 100) },
+                s2: { t0: sT0, stepMs: sGrid, v: Array.from({ length: 40 }, () => 300 * 100) },
+            },
+        });
         const sRead = (f) => {
             const fi = sFiles.indexOf(f);
             if (fi >= 0) return sCandleTexts[fi];
             if (f === 'c0') return sFundTexts[0];
             if (f === 'c1') return sFundTexts[1];
             if (f === 'c2') return sFundTexts[2];
+            if (f === 'z0') return sZeroTexts[0];
+            if (f === 'z1') return sZeroTexts[1];
+            if (f === 'z2') return sZeroTexts[2];
+            if (f === 'marks') return sMarksText;
             throw new Error(`unexpected file ${f}`);
         };
         const sOut = await runSleeveAnalysis({ sleeve: 'carry-dispersion', carryFiles: ['c0', 'c1', 'c2'], files: sFiles, costBps: 4, readFile: sRead });
@@ -2166,6 +2184,13 @@ export async function run() {
         let sThrew = false;
         try { await runSleeveAnalysis({ sleeve: 'carry-dispersion', carryFiles: [], files: sFiles, readFile: sRead }); } catch (err) { sThrew = /--carry-files/.test(String(err && err.message)); }
         check('a sleeve run without funding files throws naming --carry-files', sThrew);
+        // Round 78 (--carry-marks): the ext-mark substitution threads from the
+        // driver into the report by symbol name (uppercase here, pinning the
+        // case-insensitive match), and every unmarked row substitutes.
+        const sMarksOut = await runSleeveAnalysis({ sleeve: 'carry-dispersion', carryFiles: ['z0', 'z1', 'z2'], files: sFiles, symbols: ['S0', 'S1', 'S2'], costBps: 4, carryMarks: 'marks', readFile: sRead });
+        check('the sleeve mode substitutes ext marks by symbol name and records them',
+            sMarksOut.carryMarks === 'marks' && sMarksOut.result.available === true &&
+            sMarksOut.result.marks.substituted === 120 && sMarksOut.summary.includes('marks +120 ext rows'));
     }
 
     try { if (typeof fs.rmSync === 'function') fs.rmSync('.nl-analyze-test', { recursive: true, force: true }); } catch { /* best effort */ }
