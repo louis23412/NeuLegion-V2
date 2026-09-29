@@ -38,5 +38,5 @@ test('the V2 contract layer is well-formed, the port is exact, and the import la
     });
     const failures = result.failures || [];
     assert.equal(result.failed, 0, failures.map((f) => `${f.name}: ${f.detail}`).join('\n'));
-    assert.equal(result.total, 191, `expected the 191 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
+    assert.equal(result.total, 201, `expected the 201 checks in the RUNBOOK.md §6 ledger, got ${result.total}`);
 });

@@ -104,6 +104,7 @@ export const CITATIONS = Object.freeze({
     brier1950: 'Brier, Verification of Forecasts Expressed in Terms of Probability, Monthly Weather Review 78(1):1-3, 1950 (the proper quadratic scoring rule)',
     hoerl1970ridge: 'Hoerl & Kennard, Ridge Regression: Biased Estimation for Nonorthogonal Problems, Technometrics 12(1):55-67, 1970 (L2-penalized linear fit with the intercept unpenalized)',
     rumelhart1986mlp: 'Rumelhart, Hinton & Williams, Learning Representations by Back-Propagating Errors, Nature 323:533-536, 1986 (seeded full/mini-batch SGD on a one-hidden-layer tanh net with a sigmoid head)',
+    corsi2009har: 'Corsi, A Simple Approximate Long-Memory Model of Realized Volatility, Journal of Financial Econometrics 7(2):172-196, 2009 (the HAR-RV daily/weekly/monthly cascade that nests AR(1); the sizing reference forecast)',
     murphy1973: 'Murphy, A New Vector Partition of the Probability Score, Journal of Applied Meteorology 12(4):595-600, 1973 (reliability-resolution-uncertainty partition)',
     wald1945: 'Wald, Sequential Tests of Statistical Hypotheses, Annals of Mathematical Statistics 16(2):117-186, 1945 (sequential testing; the CUSUM precursor)',
     page1954: 'Page, Continuous Inspection Schemes, Biometrika 41(1/2):100-115, 1954 (the two-sided CUSUM control scheme)',
@@ -252,6 +253,9 @@ export const ANALYSIS_MODULES = Object.freeze({
         'fitCombineWeights', 'inverseMseWeights', 'fitLassoCombineWeights', 'predictCombine',
         'tournamentCombineVolForecast', 'tournamentCombineVolForecastAcrossSplits',
         'tournamentCombineVolPanel', 'applyVolTargetScaling',
+        'gibbsCombineWeights', 'rollingCombineWeights',
+        'tournamentRollingCombineVolForecast', 'tournamentRollingCombineVolForecastAcrossSplits',
+        'tournamentRollingCombineVolPanel',
     ],
     'decision.js': [
         'foldConcentration', 'confidencePersistence', 'nextRunPlan',
@@ -992,6 +996,7 @@ export const CORE_MODULES = Object.freeze({
     'plugins/sleeves/toptrader-fade.js': ['TOPTRADER_FADE_SPEC', 'toptraderFadeSleeve', 'isToptraderFade'],
     'plugins/sleeves/oi-change.js': ['OI_CHANGE_SPEC', 'oiChangeSleeve', 'isOiChange'],
     'plugins/risk/cap-band.js': ['CAP_BAND_SPECS', 'DEFAULT_POSITION_SPEC', 'capBandRisk', 'isCapBandRisk'],
+    'plugins/risk/vol-target.js': ['VOL_TARGET_DEFAULTS', 'VOL_TARGET_SPECS', 'volTargetRisk', 'isVolTarget'],
     'plugins/books/single.js': ['singleBook', 'isSingleBook'],
     'plugins/books/fixed-split.js': ['commonTimeIndexes', 'fixedSplitBook', 'isFixedSplitBook'],
 });
@@ -1099,6 +1104,14 @@ export const PLUGIN_REGISTRY = Object.freeze({
         proves: ['contracts.test.js'],
         citations: ['leprado2018afml'],
         note: 'The ported cap/no-trade-band risk policy plus the shipped fixed +/-1 clamp (with the dead-zone hazard documented at BUGS.md #61). LIVE as a policy (it is pure arithmetic proved by vectors) but NOT the default stack: the shipped engine has no risk layer, so nothing is promoted until the sleeve book clears G2.',
+    },
+    'risk:vol-target': {
+        kind: 'risk',
+        state: 'UNTESTED',
+        defaultStack: false,
+        proves: ['contracts.test.js'],
+        citations: ['corsi2009har', 'leprado2018afml'],
+        note: 'V2.2: the forecast-sizing risk policy — the W4c-z vol-target scaler as a RiskPolicy (position = the shipped clamp bit-identical to cap-band; sizing = the vendored applyVolTargetScaling arithmetic, bit-exact against analysis/forecast.js by the §O differential; per-sleeve caps in VOL_TARGET_SPECS with the target caller-supplied because it is a measurement, not policy). UNTESTED + off the default roster: no run has scored a sized book through the gate yet.',
     },
     'sleeve:carry-dispersion': {
         kind: 'sleeve',

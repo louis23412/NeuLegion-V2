@@ -60,6 +60,9 @@ import {
     fitCombineWeights, inverseMseWeights, fitLassoCombineWeights, predictCombine,
     tournamentCombineVolForecast, tournamentCombineVolForecastAcrossSplits,
     tournamentCombineVolPanel, applyVolTargetScaling,
+    gibbsCombineWeights, rollingCombineWeights,
+    tournamentRollingCombineVolForecast, tournamentRollingCombineVolForecastAcrossSplits,
+    tournamentRollingCombineVolPanel,
 } from '../../../src/analysis/forecast.js';
 import {
     foldConcentration, confidencePersistence, nextRunPlan, decisionReport, formatDecision,
@@ -5206,6 +5209,116 @@ export async function run() {
         })());
     } catch (e) {
         check('R66 W4c QLIKE checks completed', false, e && e.stack ? e.stack : String(e));
+    }
+    try {
+        check('R67 (W4c-w): Gibbs weights match the hand exponential', (() => {
+            const f = gibbsCombineWeights([0, 0, 0, 0], [[1, 1, 1, 1], [2, 2, 2, 2]], { eta: 2 });
+            if (!f.available) return false;
+            const w0 = 1 / (1 + Math.exp(-6));
+            const w1 = Math.exp(-6) / (1 + Math.exp(-6));
+            return Math.abs(f.weights[0] - w0) < 1e-12 && Math.abs(f.weights[1] - w1) < 1e-12 &&
+                Math.abs(f.weights[0] + f.weights[1] - 1) < 1e-12 && f.weights[0] > f.weights[1] &&
+                f.eta === 2;
+        })());
+        check('R67 (W4c-w): Gibbs is equal weights at eta 0 and fails closed', (() => {
+            const e = gibbsCombineWeights([0, 0, 0, 0], [[1, 1, 1, 1], [2, 2, 2, 2]], { eta: 0 });
+            const bad = gibbsCombineWeights([0, 0], [[1, 1], [2, 2]], { eta: -1 });
+            const exact = gibbsCombineWeights([1, 2, 3], [[1, 2, 3], [2, 3, 4]]);
+            if (!e.available) return false;
+            return Math.abs(e.weights[0] - 0.5) < 1e-12 && Math.abs(e.weights[1] - 0.5) < 1e-12 &&
+                bad.available === false && exact.available === false;
+        })());
+        check('R67 (W4c-w): rolling equal weights start after the minimum and average', (() => {
+            const actual = [1, 0, 1, 0, 1, 0, 1, 0];
+            const cols = [[1, 0, 1, 0, 1, 0, 1, 0], [0, 1, 0, 1, 0, 1, 0, 1]];
+            const r = rollingCombineWeights(actual, cols, { window: 4, method: 'eq' });
+            if (!r.available) return false;
+            return r.weights[0] === null && r.weights[1] === null && r.weights[2] === null &&
+                Number.isNaN(r.combined[0]) &&
+                Math.abs(r.weights[3][0] - 0.5) < 1e-12 &&
+                Math.abs(r.combined[3] - (cols[0][3] + cols[1][3]) / 2) < 1e-12 &&
+                r.minBars === 3 && r.scored === 5;
+        })());
+        check('R67 (W4c-w): rolling OLS recovers the exact blend', (() => {
+            const actual = [1, 0, 1, 0, 1, 0, 1, 0];
+            const cols = [[1, 0, 1, 0, 1, 0, 1, 0], [0, 1, 0, 1, 0, 1, 0, 1]];
+            const r = rollingCombineWeights(actual, cols, { window: 6, method: 'ols' });
+            if (!r.available) return false;
+            return r.weights.every((w) => w === null || (Math.abs(w[0] - 1) < 1e-9 && Math.abs(w[1]) < 1e-9));
+        })());
+        check('R67 (W4c-w): rolling weights are causal (prefix-identical)', (() => {
+            const actual = [];
+            const c0 = [];
+            const c1 = [];
+            for (let i = 0; i < 30; i++) {
+                actual.push(2 + Math.sin(i / 5));
+                c0.push(2 + Math.sin(i / 5) + 0.01 * ((i * 13) % 3));
+                c1.push(2 + Math.cos(i / 7) + 0.01 * ((i * 29) % 5));
+            }
+            const full = rollingCombineWeights(actual, [c0, c1], { window: 10, method: 'ols' });
+            const pre = rollingCombineWeights(actual.slice(0, 21), [c0.slice(0, 21), c1.slice(0, 21)], { window: 10, method: 'ols' });
+            if (!full.available || !pre.available) return false;
+            for (let i = 0; i <= 20; i++) {
+                const a = full.weights[i];
+                const b = pre.weights[i];
+                if (a === null && b === null) continue;
+                if (!a || !b) return false;
+                if (Math.abs(a[0] - b[0]) > 1e-12 || Math.abs(a[1] - b[1]) > 1e-12) return false;
+            }
+            return true;
+        })());
+        check('R67 (W4c-w): rolling fails closed on bad method, window and shape', (() => {
+            const actual = [1, 2, 3, 4, 5, 6];
+            const cols = [[1, 2, 3, 4, 5, 6], [2, 3, 4, 5, 6, 7]];
+            const a = rollingCombineWeights(actual, cols, { window: 4, method: 'nope' });
+            const b = rollingCombineWeights(actual, cols, { window: 2, method: 'ols' });
+            const c = rollingCombineWeights(actual, [cols[0]], { window: 4 });
+            const d = rollingCombineWeights([1, 2], [[1, 2], [1, 2]], { window: 4 });
+            return a.available === false && b.available === false && d.available === false &&
+                c.available === true;
+        })());
+        check('R67 (W4c-w): rolling tournament names a winner with consistent flags', (() => {
+            const vols = [];
+            for (let i = 0; i < 300; i++) vols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+            const t = tournamentRollingCombineVolForecast(vols, { split: 0.5, window: 60 });
+            if (!t.available) return false;
+            const ids = ['ewma', 'ar', 'har', 'eq', 'frozen', 'rols', 'rinv', 'rgibbs'];
+            return ids.includes(t.winner) &&
+                ids.every((k) => Number.isFinite(t.skills[k]) && Number.isFinite(t.mses[k])) &&
+                t.scoredN >= 2 &&
+                (t.anyRollingBeatsFrozen === (t.bestRollingSkill > t.skills.frozen)) &&
+                (t.beatsFrozen.rols === (t.skills.rols > t.skills.frozen)) &&
+                t.frozenWeights.length === 3;
+        })());
+        check('R67 (W4c-w): rolling tournament fails closed on short series', (() => {
+            const t = tournamentRollingCombineVolForecast([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], { split: 0.5 });
+            return t.available === false;
+        })());
+        check('R67 (W4c-w): rolling across-splits counts sum to the grid', (() => {
+            const vols = [];
+            for (let i = 0; i < 300; i++) vols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+            const t = tournamentRollingCombineVolForecastAcrossSplits(vols, { splits: [0.4, 0.5, 0.6], window: 40 });
+            if (!t.available) return false;
+            const sum = Object.values(t.wins).reduce((a, b) => a + b, 0);
+            return t.perSplit.length === 3 && sum === 3 &&
+                t.rollingWins === t.wins.rols + t.wins.rinv + t.wins.rgibbs &&
+                Math.abs(t.rollingWinFraction - t.rollingWins / 3) < 1e-12 &&
+                Math.abs(t.frozenWinFraction - t.wins.frozen / 3) < 1e-12;
+        })());
+        check('R67 (W4c-w): rolling panel reads unanimity off the counts and names failures', (() => {
+            const vols = [];
+            for (let i = 0; i < 300; i++) vols.push(2 + Math.sin(i / 9) + 0.05 * ((i * 37) % 7));
+            const t = tournamentRollingCombineVolPanel({ a: vols, b: vols.map((x) => x + 0.5) }, { splits: [0.5], window: 40 });
+            if (!t.available) return false;
+            const bad = tournamentRollingCombineVolPanel({ ok: vols, bad: [1, 2, 3] }, { splits: [0.5], window: 40 });
+            return t.streams === 2 &&
+                t.unanimousRolling === (t.rollingMajority === 2) &&
+                Math.abs(t.rollingMajorityFraction - t.rollingMajority / 2) < 1e-12 &&
+                Math.abs(t.frozenMajorityFraction - t.frozenMajority / 2) < 1e-12 &&
+                bad.available === false && /bad/.test(bad.reason);
+        })());
+    } catch (e) {
+        check('R67 W4c rolling-combination checks completed', false, e && e.stack ? e.stack : String(e));
     }
     } catch (e) {
         check('R35 W6 fix checks completed', false, e && e.stack ? e.stack : String(e));

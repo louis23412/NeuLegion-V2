@@ -99,6 +99,7 @@ import { carryDispersionSleeve, CARRY_DISPERSION_SPEC } from '../../../src/plugi
 import { toptraderFadeSleeve, TOPTRADER_FADE_SPEC } from '../../../src/plugins/sleeves/toptrader-fade.js';
 import { oiChangeSleeve, OI_CHANGE_SPEC } from '../../../src/plugins/sleeves/oi-change.js';
 import { capBandRisk, CAP_BAND_SPECS } from '../../../src/plugins/risk/cap-band.js';
+import { volTargetRisk, VOL_TARGET_DEFAULTS, VOL_TARGET_SPECS, isVolTarget } from '../../../src/plugins/risk/vol-target.js';
 import { singleBook } from '../../../src/plugins/books/single.js';
 import { fixedSplitBook, commonTimeIndexes } from '../../../src/plugins/books/fixed-split.js';
 import { legacyHivemindLearner, LEGACY_HIVEMIND_DEFAULTS } from '../../../src/plugins/learners/legacy-hivemind.js';
@@ -106,6 +107,7 @@ import { baseRateLearner, BASE_RATE_DEFAULTS, isBaseRate } from '../../../src/pl
 import { ridgeLearner, RIDGE_DEFAULTS, isRidge } from '../../../src/plugins/learners/ridge.js';
 import { mlpLearner, MLP_DEFAULTS, isMlp } from '../../../src/plugins/learners/mlp.js';
 import { fitRidge, predictRidge, fitMLP, predictMLP } from '../../../src/analysis/benchmark.js';
+import { applyVolTargetScaling } from '../../../src/analysis/forecast.js';
 import { DEFAULT_STACK, PLUGIN_IDS, installDefaultStack } from '../../../src/plugins/index.js';
 import { SLEEVE_IDS, resolveSleeve, scoreSleeve, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport } from '../../../src/sleeve_score.js';
 import { bookReturns, bookTurnover, scoreBook, scoreBookReturns } from '../../../src/analysis/portfolio.js';
@@ -150,6 +152,7 @@ import * as carryMod from '../../../src/plugins/sleeves/carry-dispersion.js';
 import * as fadeMod from '../../../src/plugins/sleeves/toptrader-fade.js';
 import * as oiMod from '../../../src/plugins/sleeves/oi-change.js';
 import * as capBandMod from '../../../src/plugins/risk/cap-band.js';
+import * as volTargetMod from '../../../src/plugins/risk/vol-target.js';
 import * as singleBookMod from '../../../src/plugins/books/single.js';
 import * as fixedSplitMod from '../../../src/plugins/books/fixed-split.js';
 
@@ -182,6 +185,7 @@ const CORE_IMPORTS = {
     'plugins/sleeves/toptrader-fade.js': fadeMod,
     'plugins/sleeves/oi-change.js': oiMod,
     'plugins/risk/cap-band.js': capBandMod,
+    'plugins/risk/vol-target.js': volTargetMod,
     'plugins/books/single.js': singleBookMod,
     'plugins/books/fixed-split.js': fixedSplitMod,
 };
@@ -220,6 +224,7 @@ const LAW_FILES = [
     'src/plugins/sleeves/toptrader-fade.js',
     'src/plugins/sleeves/oi-change.js',
     'src/plugins/risk/cap-band.js',
+    'src/plugins/risk/vol-target.js',
     'src/plugins/books/single.js',
     'src/plugins/books/fixed-split.js',
 ];
@@ -643,7 +648,7 @@ export async function run(options = {}) {
     // ---- G. the composition root --------------------------------------------
     resetRegistry();
     const installed = installDefaultStack({ replace: true });
-    check('G: installDefaultStack registers every declared plugin', deepEqual(installed, [...PLUGIN_IDS]) && installed.length === 10);
+    check('G: installDefaultStack registers every declared plugin', deepEqual(installed, [...PLUGIN_IDS]) && installed.length === 11);
     check('G: the default roster is exactly the legacy learner',
         deepEqual([...activeRoster('learner')], ['legacy-hivemind']) &&
         ['sleeve', 'book', 'risk'].every((kind) => activeRoster(kind).length === 0));
@@ -654,7 +659,7 @@ export async function run(options = {}) {
     check('G: the registry ids match the plugin manifest',
         deepEqual([...ids('sleeve')], ['carry-dispersion', 'oi-change', 'toptrader-fade']) &&
         deepEqual([...ids('book')], ['fixed-split', 'single']) &&
-        deepEqual([...ids('risk')], ['cap-band']) &&
+        deepEqual([...ids('risk')], ['cap-band', 'vol-target']) &&
         deepEqual([...ids('learner')], ['base-rate', 'legacy-hivemind', 'mlp', 'ridge']));
     check('G: the legacy adapter is a learner factory with the engine defaults',
         (() => {
@@ -1223,6 +1228,106 @@ export async function run(options = {}) {
             for (let i = 0; i < nX.length; i++) { a.fit(nX[i], 1); b.fit(nX[i], 0); }
             return a.predict(nX[0]) > 0.5 && b.predict(nX[0]) < -0.5;
         })());
+
+    // ---- O. the second risk policy (W4c-z): vol-target -----------------------
+    check('O: vol-target validates as a risk plugin, UNTESTED and off the roster',
+        validatePlugin(CONTRACTS.risk, volTargetRisk).ok === true &&
+        isVolTarget(volTargetRisk) === true && isVolTarget(capBandRisk) === false &&
+        [...activeRoster('risk')].includes('vol-target') === false &&
+        stateOf('risk', 'vol-target') === 'UNTESTED' &&
+        volTargetRisk.legacy === false && volTargetRisk.defaults === VOL_TARGET_DEFAULTS &&
+        volTargetRisk.defaults.target === 0.01 && volTargetRisk.defaults.cap === 4);
+    check('O: vol-target position is bit-identical to cap-band on a sweep',
+        (() => {
+            const vals = [-2, -1.5, -1, -0.5, -0.06, -0.05, -0.04, 0, 0.04, 0.05, 0.06, 0.5, 1, 1.5, 2, NaN, Infinity, -Infinity];
+            return vals.every((v) =>
+                volTargetRisk.position(v) === capBandRisk.position(v) &&
+                volTargetRisk.position(v, { deadZone: 0.05, maxAbs: 0.5 }) === capBandRisk.position(v, { deadZone: 0.05, maxAbs: 0.5 }));
+        })());
+    check('O: vol-target sizing is bit-identical to the analysis scaler',
+        (() => {
+            const rets = [0.01, -0.02, 0.03, NaN, 0.05];
+            const vols = [0.01, 0.02, 0.01, 0.01, 0];
+            const a = applyVolTargetScaling(rets, vols, { target: 0.02, cap: 4 });
+            const b = volTargetRisk.sizing(rets, vols, { target: 0.02, cap: 4 });
+            return a.available && b.available && JSON.stringify(a) === JSON.stringify(b);
+        })());
+    check('O: sizing matches on real-scale vols with per-bar targets',
+        (() => {
+            const rets = [];
+            const vols = [];
+            const tgts = [];
+            for (let i = 0; i < 60; i++) {
+                rets.push(0.004 * Math.sin(i / 6));
+                vols.push(0.003 + 0.002 * (1 + Math.sin(i / 9)));
+                tgts.push(0.005 + 0.001 * Math.cos(i / 11));
+            }
+            vols[7] = 0;
+            tgts[13] = -1;
+            const a = applyVolTargetScaling(rets, vols, { target: tgts, cap: 4 });
+            const b = volTargetRisk.sizing(rets, vols, { target: tgts, cap: 4 });
+            return a.available && b.available && JSON.stringify(a) === JSON.stringify(b) &&
+                b.scored === 58 && b.skipped === 2;
+        })());
+    check('O: sizing guards mirror the analysis scaler',
+        (() => {
+            const bad = [
+                volTargetRisk.sizing([0.01], [0.01, 0.02], { target: 0.02 }),
+                volTargetRisk.sizing([0.01], [0.01], { target: 0 }),
+                volTargetRisk.sizing([0.01], [0.01], { target: 0.02, cap: 0 }),
+                volTargetRisk.sizing([0.01], [0.01], { target: [0.02, 0.03] }),
+                volTargetRisk.sizing([0.01, 0.02], [0, -1], { target: 0.02 }),
+                volTargetRisk.sizing([], [], { target: 0.02 }),
+            ];
+            const ref = [
+                applyVolTargetScaling([0.01], [0.01, 0.02], { target: 0.02 }),
+                applyVolTargetScaling([0.01], [0.01], { target: 0 }),
+                applyVolTargetScaling([0.01], [0.01], { target: 0.02, cap: 0 }),
+                applyVolTargetScaling([0.01], [0.01], { target: [0.02, 0.03] }),
+                applyVolTargetScaling([0.01, 0.02], [0, -1], { target: 0.02 }),
+                applyVolTargetScaling([], [], { target: 0.02 }),
+            ];
+            return bad.every((b, i) => b.available === false && ref[i].available === false);
+        })());
+    check('O: dead vols are skipped with identical index counts',
+        (() => {
+            const a = applyVolTargetScaling([0.01, 0.02, 0.03, 0.04], [0.01, 0, -0.01, NaN], { target: 0.02 });
+            const b = volTargetRisk.sizing([0.01, 0.02, 0.03, 0.04], [0.01, 0, -0.01, NaN], { target: 0.02 });
+            return a.available && b.available && b.scored === 1 && b.skipped === 3 &&
+                JSON.stringify(a.index) === JSON.stringify(b.index);
+        })());
+    check('O: sizingForSleeve applies the registered cap and throws on unknown sleeves',
+        (() => {
+            const a = volTargetRisk.sizingForSleeve([0.01], [0.001], 'carry-dispersion', 0.02);
+            const def = volTargetRisk.sizing([0.01], [0.001], { target: 0.02, cap: VOL_TARGET_SPECS['carry-dispersion'].cap });
+            let threw = false;
+            try { volTargetRisk.sizingForSleeve([0.01], [0.001], 'nope', 0.02); } catch (e) { threw = /no registered spec/.test(e.message); }
+            return a.available && JSON.stringify(a) === JSON.stringify(def) &&
+                Math.abs(a.scales[0] - 4) < 1e-12 && threw === true;
+        })());
+    check('O: specs and defaults are frozen per-sleeve caps',
+        Object.isFrozen(VOL_TARGET_SPECS) && Object.isFrozen(VOL_TARGET_DEFAULTS) &&
+        ['carry-dispersion', 'toptrader-fade', 'oi-change'].every((s) =>
+            VOL_TARGET_SPECS[s] && VOL_TARGET_SPECS[s].cap === 4 && Object.isFrozen(VOL_TARGET_SPECS[s])) &&
+        volTargetRisk.specs === VOL_TARGET_SPECS);
+    check('O: sizing is deterministic and leverage-bounded',
+        (() => {
+            const rets = [];
+            const vols = [];
+            for (let i = 0; i < 120; i++) {
+                rets.push(0.01 * Math.sin(i / 7));
+                vols.push(0.005 + 0.002 * (1 + Math.sin(i / 11)));
+            }
+            const a = volTargetRisk.sizing(rets, vols, { target: 0.01, cap: 3 });
+            const b = volTargetRisk.sizing(rets, vols, { target: 0.01, cap: 3 });
+            return a.available && JSON.stringify(a) === JSON.stringify(b) &&
+                a.scored + a.skipped === a.n &&
+                a.scaled.every((s, i) => Math.abs(s) <= 3 * Math.abs(rets[a.index[i]]) + 1e-15);
+        })());
+    check('O: the composition root carries vol-target UNTESTED and off the default stack',
+        DEFAULT_STACK.some((e) => e.kind === 'risk' && e.plugin === volTargetRisk &&
+            e.state === 'UNTESTED' && e.defaultStack === false) &&
+        PLUGIN_IDS.includes('risk:vol-target'));
 
     const failed = checks.filter((c) => !c.pass);
     return { total: checks.length, failed: failed.length, failures: failed, checks };

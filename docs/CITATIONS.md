@@ -169,6 +169,8 @@ venue/year so they remain findable.
 - Timmermann. *Forecast Combinations.* Handbook of Economic Forecasting, vol. 1, ch. 4, 2006. (estimated weights add estimation error, so the equal-weight average is the reference to beat — the combination puzzle; the `eq` arm)
 - Patton. *Volatility Forecast Comparison Using Imperfect Volatility Proxies.* Journal of Econometrics 160(1):246–256, 2011. (QLIKE as the robust second skill beside MSE; `volForecastQlike`)
 - Audrino & Knaus. *Lasso-based forecast combinations for forecasting realized variances.* arXiv 1610.02653, 2016. (lasso-regularised combinations win on realized-variance panels — the combination hedges parsimony risk; `fitLassoCombineWeights`)
+- *Downside-Controlled Online Forecast Combination under Delayed and Revised Outcomes.* arXiv 2609.29096, 2026. (frozen + static + online correctors on the simplex with downside control — the frozen-vs-rolling frame; `tournamentRollingCombineVolForecast`)
+- *Generalized Gibbs Ensemble Weighting for Forecast Combination.* arXiv 2608.28116, 2026. (Gibbs-exponential-loss ensemble weights with online adaptation — the family `gibbsCombineWeights` instantiates in plain form)
 - *Regime-Conditional Distributional Comparison of Trading Strategies: A GAMLSS/ZAGA Framework.* arXiv 2606.31251.
 - *Spurious Predictability in Financial Machine Learning.* arXiv 2604.15531.
 - *Equity Strategy Backtesting: Luck or Edge? The MinervaScore as a Statistical Robustness Grade.* arXiv 2608.23808. (independent 2026 production study — 359,062 backtest records — whose robustness grade composes **DSR + PBO + SPA + MinTRL**, the same four-test battery this project ships)

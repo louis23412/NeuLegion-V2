@@ -29,6 +29,7 @@ import { carryDispersionSleeve } from './sleeves/carry-dispersion.js';
 import { toptraderFadeSleeve } from './sleeves/toptrader-fade.js';
 import { oiChangeSleeve } from './sleeves/oi-change.js';
 import { capBandRisk } from './risk/cap-band.js';
+import { volTargetRisk } from './risk/vol-target.js';
 import { singleBook } from './books/single.js';
 import { fixedSplitBook } from './books/fixed-split.js';
 
@@ -40,6 +41,7 @@ export const DEFAULT_STACK = Object.freeze([
     { kind: 'learner', plugin: ridgeLearner, state: 'UNTESTED', defaultStack: false },
     { kind: 'learner', plugin: mlpLearner, state: 'UNTESTED', defaultStack: false },
     { kind: 'risk', plugin: capBandRisk, state: 'LIVE', defaultStack: false },
+    { kind: 'risk', plugin: volTargetRisk, state: 'UNTESTED', defaultStack: false },
     { kind: 'sleeve', plugin: carryDispersionSleeve, state: 'UNTESTED', defaultStack: false },
     { kind: 'sleeve', plugin: toptraderFadeSleeve, state: 'UNTESTED', defaultStack: false },
     { kind: 'sleeve', plugin: oiChangeSleeve, state: 'UNTESTED', defaultStack: false },
