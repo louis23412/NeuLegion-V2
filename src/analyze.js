@@ -2142,7 +2142,7 @@ export const makeNodeFoldDispatcher = ({ url, spawn = null, timeoutMs = null } =
 export async function runSleeveAnalysis({
     sleeve = 'carry-dispersion', carryFiles = null, files = null, symbols = null,
     file = CONFIG.file, costBps = 0, sizingTarget = null, sizingWindow = 24,
-    carryMarks = null,
+    carryMarks = null, oiFile = null,
     readFile = (f) => fs.readFileSync(f, 'utf8'),
 } = {}) {
     if (!carryFiles || !carryFiles.length) {
@@ -2152,9 +2152,10 @@ export async function runSleeveAnalysis({
     const fundingTexts = carryFiles.map((f) => readFile(f));
     const candleTexts = inputs.map((f) => readFile(f));
     const marksText = carryMarks == null ? null : readFile(carryMarks);
+    const oiText = oiFile == null ? null : readFile(oiFile);
     const markSymbols = symbols && symbols.length === 1 && symbols[0] === 'all' ? CANDLE_MANIFEST.map((e) => e.symbol) : symbols;
-    const result = runSleeveReport({ sleeveId: sleeve, fundingTexts, candleTexts, costBps, sizingTarget, sizingWindow, marksText, symbols: markSymbols });
-    return { inputs, carryFiles, sleeve, costBps, sizingTarget, sizingWindow, carryMarks, result, summary: formatSleeveReport(result) };
+    const result = runSleeveReport({ sleeveId: sleeve, fundingTexts, candleTexts, costBps, sizingTarget, sizingWindow, marksText, symbols: markSymbols, oiText });
+    return { inputs, carryFiles, sleeve, costBps, sizingTarget, sizingWindow, carryMarks, oiFile, result, summary: formatSleeveReport(result) };
 }
 
 // Run the A/B against real candle data. Loads the model lazily so importing this
@@ -3336,11 +3337,16 @@ export const ANALYZE_USAGE = [
     '                           needs --symbols with one name per stream; shipped',
     '                           marks are kept where positive; needs --sleeve; a',
     '                           present-but-empty value is an error — BUGS.md #69)',
+    '  --oi-file=<file>         open-interest file ({symbols:{sym:{t0,stepMs,oiVal[],topLS[]}}})',
+    '                           projecting the oiValue/topLS/spotRet panels (round 80,',
+    '                           TODO 110; needs a positioning --sleeve plus --symbols',
+    '                           with one name per stream; refused when empty, on the',
+    '                           carry sleeve, or without --sleeve — BUGS.md #69)',
     '  --sleeve=<id>            score a structural sleeve as a book instead of the A/B',
     '                           (W2 acceptance; needs --carry-files plus --files/--symbols;',
-    '                           only carry-dispersion runs on shipped data — the',
-    '                           positioning sleeves report available:false; a present-but-',
-    '                           empty value is an error — BUGS.md #69)',
+    '                           carry-dispersion runs on shipped data; the positioning',
+    '                           sleeves (oi-change, toptrader-fade) need --oi-file;',
+    '                           a present-but-empty value is an error — BUGS.md #69)',
     '  --sleeve-sizing=<vol|adaptive|drawdown>',
     '                           ALSO score the sleeve book sized to a per-bar vol',
     '                           target through the vol-target risk policy (round 69;',
@@ -3581,6 +3587,7 @@ if (isMain) {
         // ext-mark substitution is a sleeve-view input, so a mispaired flag
         // must fail loudly rather than run an A/B that ignores it.
         if (flagGiven('carry-marks') && !sleeveGiven) throw new Error('analyze: --carry-marks needs --sleeve (ext-mark substitution is a sleeve-view input)');
+        if (flagGiven('oi-file') && !sleeveGiven) throw new Error('analyze: --oi-file needs --sleeve (positioning panels are a sleeve-view input)');
         if (sleeveGiven) {
             // Round 44 (W2): the sleeve run mode — a structural book scored by the
             // gate's own arithmetic, not an A/B. Writes run.json + report.json
@@ -3609,19 +3616,33 @@ if (isMain) {
             if (carryMarksGiven && (carryMarksRaw == null || !String(carryMarksRaw).trim())) throw new Error('analyze: --carry-marks is present but empty (a marks file path is required — BUGS.md #69)');
             const carryMarksPath = carryMarksGiven ? String(carryMarksRaw).trim() : null;
             if (carryMarksPath != null && (!sleeveSymbols || sleeveSymbols.length !== carryFilesList.length)) throw new Error('analyze: --carry-marks needs --symbols with one name per --carry-files stream (marks are selected by symbol name)');
+            // Round 80 (TODO 110): the opt-in positioning leg — an open-interest
+            // file ({symbols: {sym: {t0, stepMs, oiVal[], topLS[]}}}) projecting
+            // the oiValue/topLS/spotRet panels the positioning sleeves score.
+            // Refused when empty, on the carry sleeve, or without matched
+            // --symbols (BUGS.md #69); --carry-marks with a positioning sleeve
+            // is refused too (marks are a carry-view input).
+            const positioningSleeves = ['oi-change', 'toptrader-fade'];
+            const oiFileGiven = flagGiven('oi-file');
+            const oiFileRaw = argOf('oi-file');
+            if (oiFileGiven && (oiFileRaw == null || !String(oiFileRaw).trim())) throw new Error('analyze: --oi-file is present but empty (an open-interest file path is required — BUGS.md #69)');
+            const oiFilePath = oiFileGiven ? String(oiFileRaw).trim() : null;
+            if (oiFilePath != null && sleeveId === 'carry-dispersion') throw new Error('analyze: --oi-file needs a positioning sleeve (oi-change, toptrader-fade)');
+            if (oiFilePath != null && (!sleeveSymbols || sleeveSymbols.length !== carryFilesList.length)) throw new Error('analyze: --oi-file needs --symbols with one name per --carry-files stream (OI series are selected by symbol name)');
+            if (carryMarksPath != null && positioningSleeves.includes(sleeveId)) throw new Error('analyze: --carry-marks needs the carry sleeve (carry-dispersion)');
             const sleeveT0 = performance.now();
             const startedAt = Date.now();
             const sleeveOut = await runSleeveAnalysis({
                 sleeve: sleeveId, carryFiles: carryFilesList, files: filesList,
                 symbols: sleeveSymbols, costBps: sleeveCost,
                 sizingTarget: sizingOpt.sized ? sizingOpt.target : null, sizingWindow: sizingOpt.window,
-                carryMarks: carryMarksPath,
+                carryMarks: carryMarksPath, oiFile: oiFilePath,
             });
             const durationMs = performance.now() - sleeveT0;
             const runId = `${makeRunId({ seed: num('seed', 1), startedAt })}-sleeve`;
             const runDir = createRunDirectory(CONFIG.stateFolder, runId);
-            writeJson(runDir, 'run.json', { runId, mode: 'sleeve', sleeve: sleeveId, startedAt, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, inputs: sleeveOut.inputs, carryFiles: carryFilesList, carryMarks: carryMarksPath });
-            writeReport(runDir, { mode: 'sleeve', sleeve: sleeveId, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, durationMs, inputs: sleeveOut.inputs, carryFiles: carryFilesList, carryMarks: carryMarksPath, result: sleeveOut.result });
+            writeJson(runDir, 'run.json', { runId, mode: 'sleeve', sleeve: sleeveId, startedAt, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, inputs: sleeveOut.inputs, carryFiles: carryFilesList, carryMarks: carryMarksPath, oiFile: oiFilePath });
+            writeReport(runDir, { mode: 'sleeve', sleeve: sleeveId, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, durationMs, inputs: sleeveOut.inputs, carryFiles: carryFilesList, carryMarks: carryMarksPath, oiFile: oiFilePath, result: sleeveOut.result });
             console.log(sleeveOut.summary);
             console.log(`\nsleeve report at ${path.join(runDir, 'report.json')} (${durationMs.toFixed(0)}ms)`);
         } else if (seedList) {

@@ -1047,6 +1047,11 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    rejection: model a resting limit order (maker fee/rebate + queue-position fill probability) and
    re-run the cost ladder before declaring the route closed on economics rather than on the DSR
    floor. Detail: `RUN-ANALYSIS.md` §16.4.
+   **Round-79 grounding:** 2608.21888 measured exactly this gap independently —
+   90% of 183 Binance pairs reverse at 15m (signs, not magnitudes), gross
+   ~1.3 bp/trade against a 5 bp round trip, concentrated after aggressive
+   taker flow (compensated liquidity provision). The maker model is confirmed
+   as the right unlock, not a rescue story.
 
 95. [ ] **P4 follow-up — price the carry sleeve's spot leg (basis / mark-spread series).** The
    measured **9.78 %/yr** is the **funding leg only** (delta-neutral: long spot / short perp), on
@@ -1060,6 +1065,12 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    remains after it confirms: execution beyond taker fees, borrow/margin (see sweep 2026-09x's
    2502.06028, where those costs live), liquidation, and the basis-risk failure modes (sweep 09x's
    2605.10400 funding trilemma). The honest level is a *marked*-carry claim, not a tradeable one.
+   **Round-79 status:** the basis-marking half is measured natively
+   (`20260929T215723-seed1-sleeve`: 6.25/10.01/43.83, `RUN-ANALYSIS.md` §23.1;
+   TODO 109 closed). The remainder is now grounded: 2605.05089 (spot-perp
+   basis as collateral control; tails cost most — sweep 09y) for the
+   collateral/liquidation leg; 2608.21888's compensated-liquidity framing as
+   context. Borrow/margin (2502.06028) and execution beyond taker fees still open.
 
 96. [ ] **P5 — continuous test-time adaptation (deferred; gate G-D OPEN, nothing measured).** The
    shipped controller **already adapts continuously within a fold** (`getSignal` trains on
@@ -1163,6 +1174,11 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    95% intervals + the second-minus-first Δ, descriptive, never gating; six §U checks, ledger 249/3106).
    The lab cross-check is verified AI-side in-session (e109 check set 5/5 on the
    real data through the repo's own modules; lab F-120 measured, no operator run).
+   **Round-79 flip (`RUN-ANALYSIS.md` §23.2):** on the honest book there is no
+   decay — halves 0.2118 → 0.1956 (Δ −0.016 ± 0.025, CI crosses 0), yearly
+   slope −0.015/yr, DE 32.63 → 2.84 (202 → 2325 eff. bars). The shipped-marks
+   decay (0.47 → 0.20) was the unmarked early book earning funding-only; the
+   G5 `decay` attestation now reads "no decay detected on the honest book".
 
 106. [ ] **Unseen-data protocol (round-75 follow-up; round-76 procedure written).** Defined in
    `docs/UNSEEN.md`: unseen = every byte post-dates the spec freeze with no feedback (following
@@ -1187,13 +1203,22 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    (`20260929T115738-seed1-sleeve`, read in `RUN-ANALYSIS.md` §22.1; per-half Sharpes bit-equal to the
    stress halves, Δ CI (−0.32,−0.22)). The e109 cross-check needs no operator run — verified AI-side (§21.3).
 
-109. [ ] **Round-78 operator runs (gate the round; repo only).** `npm test` (expect 132/132 — mirrors assert the
-   255/290 ledgers), `bash scripts/sleeve-runs.sh honest` (expect a `marks +N ext rows` line,
-   net ≈6.2, turnover ≈10, break-even ≈46 bps, G5 still false on (decay,unseen) — the e74-level
-   reproduction, over the vendored repo-local `src/data/marks_8h.json`). Upload the honest
-   `state/runs/<runId>-sleeve/report.json`. The e109/e110 cross-checks are verified AI-side
-   in-session (5/5 each on the real data; §21.3/§22.2) — no lab runs for the operator.
-   Detail: `RUN-ANALYSIS.md` §22.4.
+109. [x] **Round-78 operator runs (gated the round; repo only) — DONE 2026-09-29.** `npm test` 132/132 green;
+   `bash scripts/sleeve-runs.sh honest` printed exactly the predicted line (net 6.25, turnover 10.01/yr,
+   break-even 43.83 bps, `marks +28901 ext rows`, G5 false on (decay,unseen)) and the uploaded
+   `20260929T215723-seed1-sleeve/report.json` bit-matches the in-session e110 run. Detail:
+   `RUN-ANALYSIS.md` §22.4/§23.1.
+
+110. [~] **Round-80 direction (AI-side passes e112 15/15 2026-09-29; native oi/top runs pending)** — the OI-sleeve port (breadth must come from positioning, not momentum).**
+   Round 79 killed the carry+momentum composite (e111 5/5 null, F-122: zero edge at ~zero correlation).
+   The positioning sleeves are next: `open_interest_8h.json` exists lab-side (1.5 MB, vendoreable);
+   toptrader ratios arrive via the harvester (no file yet — OI first). Work: vendor the OI series,
+   extend the repo view (`spotRet` + OI panels), wire `oi-change` (F-46 50/50-blend grounding, BE
+   15.22 bps), score on real data AI-side first, then the native gate (`npm test` + sleeve run).
+   Queued behind it: TODO 104 (sized-leg limit law; 2503.16878 stands, sweep found nothing new) and
+   TODO 94 (maker-fee model for the parked 15m reversal — now grounded by 2608.21888: 90% of 183
+   Binance pairs reverse at 15m, gross ~1.3 bp/trade vs 5 bp round-trip, compensated-liquidity story).
+   Detail: `RUN-ANALYSIS.md` §23.5.
 
 **Round-29 research sweep (2026-09-24):** five grounding notes —
 `docs/research/round29-model-class.md`, `round29-crypto-edges.md`,

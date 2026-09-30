@@ -13,7 +13,7 @@ export const SLEEVE_CONTRACT = defineContract({
     kind: 'sleeve',
     purpose: 'map a panel view to a causal weight series and its sleeve returns',
     requires: ['signal'],
-    optional: ['returns', 'fingerprint'],
+    optional: ['returns', 'fingerprint', 'earnTimes'],
 });
 
 export const isSleevePlugin = (impl) => validatePlugin(SLEEVE_CONTRACT, impl).ok;

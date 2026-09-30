@@ -4195,3 +4195,114 @@ Nothing else — the marks series is vendored repo-local
 (`src/data/marks_8h.json`, byte copy of the 2026-09-26 harvest, proven by
 the in-session run that read the vendored copy), and the e109/e110
 cross-checks are verified AI-side in-session (§21.3, §22.2).
+
+## 23. Round 79 — honest confirmation, the decay flip, the momentum null (2026-09-29)
+
+### 23.1 The honest run confirms natively (`20260929T215723-seed1-sleeve`, flat, 4 bps)
+
+`npm test` 132/132 green and `bash scripts/sleeve-runs.sh honest` printed
+exactly the predicted line: net **6.25**, turnover **10.01/yr**, break-even
+**43.83 bps**, `marks +28901 ext rows`, G5 false on (decay,unseen). The
+artifact bit-matches the in-session e110 run (6.2485/10.0052/43.8308,
+substituted 28901, null-basis 0.64%), so the vendored
+`src/data/marks_8h.json` scores what the lab harvest scored. TODO 109
+closes here; TODO 95's basis-marking half is measured natively.
+
+### 23.2 The decay flip — the shipped-marks decay was a marking artefact
+
+On the honest book there is no decay to attest against:
+
+| quantity | shipped marks | honest marks |
+| --- | --- | --- |
+| first half per-bar | 0.47133 | **0.21183** (Lo SE 0.0187, CI 0.175–0.248) |
+| second half per-bar | 0.20088 | **0.19564** (Lo SE 0.0172, CI 0.162–0.229) |
+| Δ (second − first) | −0.27045 ± 0.02554 | **−0.01620 ± 0.02541, CI (−0.066, +0.034)** — crosses 0 |
+| yearly slope | −0.09/yr | **−0.015/yr** (2020 +0.21 → 2026 +0.11) |
+| DSR design effect | 32.63 (202 eff. bars) | **2.84 (2325 eff. bars)**, DSR still 1.0000 |
+
+Reading, recorded before the attestation uses it: the pre-2023-10-31 book
+had no shipped marks, so the shipped first half earned the funding leg only
+(0.47); honest marking adds the basis leg, which drags the early book down
+to the late book's level (0.21 ≈ 0.20). The "decay" was the basis leg
+being negative early, not the edge fading late. Years 2024–2026 are
+digit-identical between the runs (marks existed there). The G5 `decay`
+attestation therefore reads **no decay detected on the honest book** — a
+persistence positive, stated with the same i.i.d.-understatement caveat as
+before (the Δ interval does not know the cluster structure; the DSR's DE is
+the honest uncertainty scale).
+
+### 23.3 The momentum null — no sleeve, no composite (e111, F-122)
+
+The R8 shell with a momentum sort key (trailing-W 8h spot returns, rank
+weights, EWMA(0.02)+L1, 12.5% cap, next-bucket spot at 4 bps) through the
+repo's own view/score pipeline: net per-bar −0.010/−0.017/−0.008/+0.001 at
+W = 2/4/8/16, break-even negative throughout, correlation with carry
+−0.01…−0.04. The null is gross (−0.53…+0.57 ann), and a hold-6 variant
+churns 13× harder (849–993 vs 65–68/yr) — the keys are non-persistent noise
+at this grid. e111 passes 5/5 AI-side in-session (carry control replicates
+11.26 exactly). **No momentum sleeve is ported and no carry+momentum
+composite is built** — zero edge at ~zero correlation is nothing to blend.
+The 1h sig-momentum edge does not aggregate to 8h rank-dispersion (lab F-07's
+direction; independent support: 2607.27461's return-rank unforecastability).
+
+### 23.4 Research sync (sweep 2026-09y, q-fin-scoped procedure)
+
+Two queries (`cat:q-fin.PM AND all:momentum`, 59; `cat:q-fin.TR AND
+(all:crypto OR all:funding)`, 109), 6 noted
+(`docs/research/raw/arxiv-sweep-2026-09y.json`): 2608.21888 (90% of 183
+Binance pairs reverse at 15m; gross ~1.3 bp/trade vs 5 bp round-trip —
+taker-inaccessible, compensated-liquidity story; **the grounding TODO 94's
+maker-fee model was waiting for**); 2605.05089 (spot-perp basis as
+collateral control; collateral rises under vol stress, tails cost most —
+LINK/DOGE, matching F-41; **grounds the TODO 95 collateral/liquidation
+leg**); 2607.27461 (return rank unforecastable, vol rank forecastable —
+supports F-122 and vol-based sizing); 2607.28577 (Shadow Before Swap
+deployment gate — noted for UNSEEN/model-replacement work); 2607.00475
+(end-to-end policies vs simple rules — frames the sleeve-vs-controller bet);
+2609.04917 (alpha-translation-chain review — framing cousin). Procedure fix:
+unscoped momentum-title queries are polluted by optimization literature;
+q-fin scoping is now the rule. The vol-target limit-law query returned
+nothing new — 2503.16878 (TODO 104) stands.
+
+### 23.5 Round-80 direction
+
+The breadth purchase must come from the positioning sleeves, not momentum.
+Recon: `open_interest_8h.json` exists lab-side (1.5 MB, vendoreable);
+toptrader ratios arrive via the harvester (no file yet). Round 80 is the
+**OI-sleeve port**: vendor the OI series, extend the repo view (spotRet +
+OI panels), wire `oi-change` (F-46 50/50-blend grounding, BE 15.22 bps),
+score on real data AI-side first, then the native gate. TODO 104 (sized-leg
+limit law) and TODO 94 (maker model, now grounded) stay queued behind it.
+
+### 23.6 Operator commands (none — no repo code changed this round)
+
+No commands, no uploads. Everything this round is lab-side (e111, F-122),
+docs (§23, TODO statuses), and research (sweep 09y). The next native gate
+is round 80's OI port.
+
+## 24. Round 80 AI-side — positioning sleeves reproduce through the repo path (2026-09-29, no native run)
+
+### 24.1 e112 (15/15, lab-only, no repo code)
+
+`e112_oi_sleeve_score.js` drives the vendored `src/data/oi_8h.json` (byte-equal to the lab harvest) + 8 funding + 8 1h candle texts through the repo `runSleeveReport` on the 6606x8 grid at 4 bps. Lab finding F-123.
+
+| sleeve | net@4 | turnover | break-even | DSR | yearly slope | first-last |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| oi-change | 0.67 | 197/yr | 11.40 bps | 0.9305 full-sample (below floor — weak, as expected) | +0.02 | +0.015 → +0.026 |
+| toptrader-fade | 1.054 | 7.93/yr | 185.1 bps | 0.9664 deflated (passes) | +0.01 | +0.041 → +0.021 |
+
+Coverage oiVal 81.2% / topLS 66.8% (2021 starts late). Both show no decay. G5 false on (dsr,decay,unseen) for oi and (decay,unseen) for fade — the operator native run owns decay/unseen.
+
+### 24.2 Honest-run read-only confirmation
+
+The uploaded `20260929T215723-seed1-sleeve/report.json` bit-matches §23.1 (net 6.25 / 10.01 / 43.83, yearly +0.21→+0.11, first-last +0.212→+0.196, DSR 1.0 DE 2.84, G5 false on decay/unseen). No new numbers; §23.2's reading stands.
+
+### 24.3 Operator commands (native gate for TODO 110)
+
+```bash
+npm test
+bash scripts/sleeve-runs.sh oi
+bash scripts/sleeve-runs.sh top
+```
+
+Upload: the two new `state/runs/<runId>-sleeve/report.json` files. Expect oi net ≈0.7 / ~200x / BE ≈11 bps (DSR below floor) and fade net ≈1.05 / ~8x / BE ≈185 bps (DSR passes).

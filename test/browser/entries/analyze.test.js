@@ -2180,7 +2180,7 @@ export async function run() {
             sOut.result.buckets === 40 && sOut.inputs.length === 3 && sOut.summary.includes('carry-dispersion'));
         const sFade = await runSleeveAnalysis({ sleeve: 'toptrader-fade', carryFiles: ['c0', 'c1', 'c2'], files: sFiles, readFile: sRead });
         check('a positioning sleeve reports available:false with its data requirement',
-            sFade.result.available === false && /toptrader|open interest/i.test(sFade.result.reason));
+            sFade.result.available === false && /toptrader|open[- ]interest|oi-file/i.test(sFade.result.reason));
         let sThrew = false;
         try { await runSleeveAnalysis({ sleeve: 'carry-dispersion', carryFiles: [], files: sFiles, readFile: sRead }); } catch (err) { sThrew = /--carry-files/.test(String(err && err.message)); }
         check('a sleeve run without funding files throws naming --carry-files', sThrew);

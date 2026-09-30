@@ -16,7 +16,11 @@
 #   drawdown   + --sleeve-sizing=drawdown  (F-118: adaptive target x trailing-DD governor)
 #   honest     flat sleeve + --carry-marks (round 78, TODO 95: the basis-marked
 #              book over the full history, not just the shipped-marks window)
-#   all        base, adaptive, drawdown, honest
+#   oi         the oi-change sleeve + --oi-file (round 80, TODO 110: the
+#              cross-sectional dOI book over the vendored OI series)
+#   top        the toptrader-fade sleeve + --oi-file (round 80, TODO 110: the
+#              crowded-side fade over the vendored top-trader ratios)
+#   all        base, adaptive, drawdown, honest, oi, top
 #
 # Env:  COST_BPS (default 4), SLEEVE (default carry-dispersion).
 # Any extra args after the stage (or after "--") are appended to every run, e.g.
@@ -36,6 +40,10 @@ FUND="src/data/funding_btcusdt_8h.jsonl,src/data/funding_ethusdt_8h.jsonl,src/da
 # Override with a different file when needed, e.g.
 #   MARKS=/path/to/other_marks.json bash scripts/sleeve-runs.sh honest
 MARKS="${MARKS:-src/data/marks_8h.json}"
+# Positioning series for the `oi` / `top` stages (round 80, TODO 110): the
+# vendored open-interest harvest, repo-local like MARKS. Override with
+#   OI=/path/to/other_oi.json bash scripts/sleeve-runs.sh oi
+OI="${OI:-src/data/oi_8h.json}"
 
 check_list() {   # check_list <var-name> <comma-list>
   local name="$1" list="$2" f n=0
@@ -67,12 +75,14 @@ run() {          # run <label> <command...>
 usage() {
   cat <<'EOF'
 Usage: bash scripts/sleeve-runs.sh [stage] [-- extra analyze args]
-  stages: base adaptive drawdown honest all (default: all)
+  stages: base adaptive drawdown honest oi top all (default: all)
     base       flat carry-dispersion sleeve at --cost-bps=4
     adaptive   + --sleeve-sizing=adaptive
     drawdown   + --sleeve-sizing=drawdown
     honest     flat sleeve + --carry-marks (basis-marked book, TODO 95)
-    all        base, adaptive, drawdown, honest
+    oi         oi-change sleeve + --oi-file (positioning book, TODO 110)
+    top        toptrader-fade sleeve + --oi-file (positioning book, TODO 110)
+    all        base, adaptive, drawdown, honest, oi, top
 Env: COST_BPS (default 4), SLEEVE (default carry-dispersion).
 Extra args after the stage (or after "--") are appended to every run.
 Every run writes state/runs/<runId>/. Send back each run's report.json path.
@@ -92,12 +102,14 @@ run_stage() {
     adaptive) run "sleeve / adaptive sizing" npm run analyze -- --sleeve="$SLEEVE" --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --sleeve-sizing=adaptive "${EXTRA[@]}" ;;
     drawdown) run "sleeve / drawdown sizing (F-118)" npm run analyze -- --sleeve="$SLEEVE" --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --sleeve-sizing=drawdown "${EXTRA[@]}" ;;
     honest)   check_file MARKS "$MARKS"; run "sleeve / honest marks (TODO 95)" npm run analyze -- --sleeve="$SLEEVE" --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --carry-marks="$MARKS" "${EXTRA[@]}" ;;
+    oi)       check_file OI "$OI"; run "sleeve / oi-change (TODO 110)" npm run analyze -- --sleeve=oi-change --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --oi-file="$OI" "${EXTRA[@]}" ;;
+    top)      check_file OI "$OI"; run "sleeve / toptrader-fade (TODO 110)" npm run analyze -- --sleeve=toptrader-fade --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --oi-file="$OI" "${EXTRA[@]}" ;;
     *)        usage; exit 2 ;;
   esac
 }
 
 if [ "$STAGE" = "all" ]; then
-  for s in base adaptive drawdown honest; do run_stage "$s"; done
+  for s in base adaptive drawdown honest oi top; do run_stage "$s"; done
 else
   run_stage "$STAGE"
 fi

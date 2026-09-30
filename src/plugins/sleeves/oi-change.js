@@ -34,13 +34,17 @@ export const OI_CHANGE_SPEC = Object.freeze({
     lineage: 'NL-DATA-oi-change@r31',
 });
 
+const oiStartOf = (view) => {
+    const k = view.oiValue.length;
+    return Math.max(1, Number.isInteger(view.from) ? view.from : firstCommonIndex(dlogMatrix(view.oiValue), k));
+};
+
 export const oiChangeSleeve = {
     id: 'oi-change',
     capability: CAPABILITIES.SLEEVE,
     family: 'positioning',
     speed: 'fast',
     spec: OI_CHANGE_SPEC,
-
     // `view` carries { oiValue, spotRet, times } (oiValue[j][i] = the per-symbol
     // open-interest notional level; the sleeve differences it itself).
     signal(view) {
@@ -67,13 +71,24 @@ export const oiChangeSleeve = {
     // `start + t`, so it earns `spotRet[start + t + NEXT]` — the SAME effective
     // start (`max(1, from)`) `buildCrossSectionalBook` clamps to. Reading bare
     // `from` was an off-by-one for a caller passing `from: 0`.
+    //
+    // `earnTimes(view, weightRows)` names the earning bucket per scored row
+    // for the yearly attribution (round 80): row t earns the bucket at
+    // `start + t + NEXT`. The trailing row earns past the last bucket (the
+    // builder's `fin` guard scores it 0, never NaN) — it attributes to the
+    // final bucket, stated, diluting the last year by one zero bar.
     returns(view, weightRows) {
-        const k = view.oiValue.length;
-        const start = Math.max(1, Number.isInteger(view.from) ? view.from : firstCommonIndex(dlogMatrix(view.oiValue), k));
+        const start = oiStartOf(view);
         return weightRows.map((w, t) => {
             const forward = view.spotRet[start + t + OI_CHANGE_SPEC.NEXT] || [];
             return w.reduce((acc, x, j) => acc + x * fin(forward[j]), 0);
         });
+    },
+
+    earnTimes(view, weightRows) {
+        const start = oiStartOf(view);
+        const last = view.times[view.times.length - 1];
+        return weightRows.map((_, t) => view.times[start + t + OI_CHANGE_SPEC.NEXT] ?? last);
     },
 };
 

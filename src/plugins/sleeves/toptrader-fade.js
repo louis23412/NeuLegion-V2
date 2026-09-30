@@ -29,6 +29,11 @@ export const TOPTRADER_FADE_SPEC = Object.freeze({
     lineage: 'NL-DATA-toptrader-fade@r31',
 });
 
+const topStartOf = (view) => {
+    const k = view.topLS.length;
+    return Math.max(1, Number.isInteger(view.from) ? view.from : firstCommonIndex(view.topLS, k));
+};
+
 export const toptraderFadeSleeve = {
     id: 'toptrader-fade',
     capability: CAPABILITIES.SLEEVE,
@@ -62,13 +67,22 @@ export const toptraderFadeSleeve = {
     // returned rows are already offset by `start`. Reading bare `from` was an
     // off-by-one when a caller passed `from: 0` (the builder clamped, `returns` did
     // not).
+    //
+    // `earnTimes(view, weightRows)` names the earning bucket per scored row
+    // for the yearly attribution (round 80; see oi-change for the trailing-row
+    // convention).
     returns(view, weightRows) {
-        const k = view.topLS.length;
-        const start = Math.max(1, Number.isInteger(view.from) ? view.from : firstCommonIndex(view.topLS, k));
+        const start = topStartOf(view);
         return weightRows.map((w, t) => {
             const forward = view.spotRet[start + t + TOPTRADER_FADE_SPEC.NEXT] || [];
             return w.reduce((acc, x, j) => acc + x * fin(forward[j]), 0);
         });
+    },
+
+    earnTimes(view, weightRows) {
+        const start = topStartOf(view);
+        const last = view.times[view.times.length - 1];
+        return weightRows.map((_, t) => view.times[start + t + TOPTRADER_FADE_SPEC.NEXT] ?? last);
     },
 };
 
