@@ -4306,3 +4306,58 @@ bash scripts/sleeve-runs.sh top
 ```
 
 Upload: the two new `state/runs/<runId>-sleeve/report.json` files. Expect oi net ≈0.7 / ~200x / BE ≈11 bps (DSR below floor) and fade net ≈1.05 / ~8x / BE ≈185 bps (DSR passes).
+
+## 25. Round 82 — TODO 110 closes on the native gate; positioning follow-ups (2026-09-30, lab + docs only)
+
+### 25.1 Native confirmation (read-only, operator artefacts)
+
+`bash scripts/sleeve-runs.sh oi/top` reproduced e112 to the printed digit on the operator's machine:
+
+| sleeve | run | net@4 | turnover | break-even | DSR | yearly slope | first-last | G5 |
+| --- | --- | ---: | ---: | ---: | --- | ---: | --- | --- |
+| oi-change | 20260930T012415-seed1-sleeve | 0.670 | 197.11/yr | 11.40 bps | 0.9305 full-sample (DE 0.28, below floor) | +0.02 | +0.015 → +0.026 | false (dsr,decay,unseen) |
+| toptrader-fade | 20260930T012431-seed1-sleeve | 1.054 | 7.93/yr | 185.13 bps | 0.9664 deflated (DE 1.64, passes) | +0.01 | +0.041 → +0.021 | false (decay,unseen) |
+
+Coverage identical (oiVal 81.2%, topLS 66.8%). `npm test` 132/132 green. Lab finding F-124.
+Reading: the sleeve composition is cross-machine deterministic (vendored OI + repo path, same
+economics AI-side and natively). Fade is the second sleeve — every machine-scored knob passes and
+only the operator-owned decay/unseen attestations hold G5 false. Oi-change is characterised, not
+bankable (2.85x cost headroom, 197x churn, DSR below floor).
+
+### 25.2 e113 follow-ups (14/14, `results/e113_positioning_followup.json`)
+
+Cost ladder (0/1/2/4/8/16 bps): oi 1.032/0.941/0.851/0.670/0.308/−0.416 — a low-cost-only edge,
+dead past its 11.4 bp break-even, monotone in cost as arithmetic demands; fade 1.078→0.985 —
+cost-robust, max ladder drag 0.09. Carry x fade on 5274 earn-time-aligned bars: corr +0.02
+(independent books — a risk fact), but carry Sharpe 9.43 vs fade 1.05 on the overlap, so no
+composite is built: naive 50/50 reads 1.26 (47x per-bar-vol mismatch: 8.8e-5 vs 4.1e-3) and even
+the risk-parity blend reads 7.34 — a 9.4/1.1 pair cannot blend up (F-122's rule, opposite reason).
+Fade sizing: adaptive 0.66 at 42.5x turnover (vs flat 1.05 at 7.9x), drawdown-governor 0.02 at
+35.4x — F-119 repeats on a new book (sizing spends turnover, buys no level; the 5%-cap governor
+flats a calm book). Lab finding F-125 (MIXED). Round-81 loose end fixed alongside: e112 was
+imported in `run_all.js` but never stepped — e112+e113 steps now registered.
+
+### 25.3 Operator commands (none — no repo code changed this round)
+
+No commands, no uploads. TODO 110 closes here.
+
+## 26. Round 83 — analyze.js split (2026-09-30, foundations, needs the native gate)
+
+Pure move, no behavior change: `src/analyze.js` (3674 lines, 45 exports) is now
+`src/analyze/` — `roster.js` (505), `models.js` (587), `evaluate.js` (764),
+`cli.js` (1826) — behind a 51-line shim carrying the exact 45-name contract
+(verified 45/45 AI-side). DAG is acyclic (roster <- models <- evaluate <- cli).
+Two relative-path breaks caught AI-side by the bundler: the dynamic
+`hivemind/` imports and the `fold_worker.js` URL each gain one `../`; the
+`isMain` CLI dispatch moves to the shim (argv-vs-URL only matches in the invoked
+file) with the body as exported `analyzeMain()`. AI-side: analyze 290/0,
+contracts 255/0, locks 41/0, modules 59/0. Lab cycle CYCLE-110.
+
+### 26.1 Operator commands (native gate for the split)
+
+```bash
+npm test
+```
+
+Expect green (132/132). If anything CLI-side moved, it shows here first
+(`analyze_cli`, parallel-folds, checkpoint-throttle mirrors). No uploads.

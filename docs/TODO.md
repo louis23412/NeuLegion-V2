@@ -1209,7 +1209,7 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    `20260929T215723-seed1-sleeve/report.json` bit-matches the in-session e110 run. Detail:
    `RUN-ANALYSIS.md` §22.4/§23.1.
 
-110. [~] **Round-80 direction (AI-side passes e112 15/15 2026-09-29; native oi/top runs pending)** — the OI-sleeve port (breadth must come from positioning, not momentum).**
+110. [x] **Round-80 direction (CLOSED 2026-09-30: native gate passed as predicted — oi 0.670/197.11/11.40 DSR 0.9305, fade 1.054/7.93/185.13 DSR 0.9664, npm 132/132; e113 14/14 follow-ups in F-125)** — the OI-sleeve port (breadth must come from positioning, not momentum).**
    Round 79 killed the carry+momentum composite (e111 5/5 null, F-122: zero edge at ~zero correlation).
    The positioning sleeves are next: `open_interest_8h.json` exists lab-side (1.5 MB, vendoreable);
    toptrader ratios arrive via the harvester (no file yet — OI first). Work: vendor the OI series,
