@@ -93,14 +93,29 @@ export function makeCandleViewFor(candles, { frequency, panel = null } = {}) {
     const baseCloses = candles.map((c) => c.close);
     const baseVolumes = candles.map((c) => (Number.isFinite(c.volume) ? c.volume : 1));
     const baseReturns = barReturns(baseCloses);
-    const panelFor = (own) => {
+    // Sibling shock (round 86, R40 / lab F-130): on a probe pass the panel's
+    // non-own slots are shocked additively after `after` by the probe amount —
+    // the same law `auditNoLookahead` applies to the own returns it perturbs —
+    // so a cross-sectional arm (which never reads its own slot) is reachable by
+    // the audit. Arms that never read siblings are unaffected: the shock is
+    // strictly after `after`, so no causal read at t <= after can move, and the
+    // base pass is untouched.
+    const shockSiblings = (after, probe) => {
+        const p = Number.isFinite(probe) ? probe : DEFAULT_SHOCK.probe;
+        return panel.returnsByStream.map((rs, i) => {
+            if (i === panel.streamIndex || !Array.isArray(rs)) return rs;
+            return rs.map((r, t) => (t > after && Number.isFinite(r) ? r + p : r));
+        });
+    };
+    const panelFor = (own, sibShocked = null) => {
         if (!panel) return null;
         if (!Number.isInteger(panel.streamIndex) || panel.streamIndex < 0 || panel.streamIndex >= panel.returnsByStream.length) return null;
+        const sib = sibShocked || panel.returnsByStream;
         return {
             streamIndex: panel.streamIndex,
             label: panel.label,
             labels: panel.labels,
-            returnsByStream: panel.returnsByStream.map((rs, i) => (i === panel.streamIndex ? own : rs)),
+            returnsByStream: sib.map((rs, i) => (i === panel.streamIndex ? own : rs)),
         };
     };
     return (returns, perturb) => {
@@ -118,7 +133,7 @@ export function makeCandleViewFor(candles, { frequency, panel = null } = {}) {
             volumes,
             candles: shocked,
             perturb: { after: perturb.after, probe: perturb.probe },
-            panel: panelFor(own),
+            panel: panelFor(own, panel ? shockSiblings(perturb.after, perturb.probe) : null),
         };
     };
 }

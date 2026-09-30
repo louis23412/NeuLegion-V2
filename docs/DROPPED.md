@@ -51,7 +51,7 @@ deflection is monotone in `K`, so none promotes — and the strongest arm is una
 | --- | --- | ---: | ---: | ---: | --- |
 | `sig-vol-momentum` | `NL-SIG-vol-momentum@r30` | 1.1667 | 0.9173 | 14.42 bps | fails the adjusted-DSR floor at the searched roster |
 | `sig-blend-momentum` | `NL-SIG-blend-momentum@r30` | 0.7054 | 0.5662 | 8.62 bps | fails decisively |
-| `sig-network-momentum` | `NL-SIG-network-momentum@r30` | 1.3005 | 0.8654 | 15.29 bps | **VACUOUS** look-ahead audit (8 violations, `reachable 0/288`) — the cross-sectional wire is broken (`L10-bu`/`L10-cc`); **unmeasured**, not merely un-promoted |
+| `sig-network-momentum` | `NL-SIG-network-momentum@r30` | 1.3005 | 0.8654 | 15.29 bps | **VACUOUS** look-ahead audit (8 violations, `reachable 0/288`) — the probe never reached the arm's input (`L10-bu`/`L10-cc`); **unmeasured**, not merely un-promoted. **Round-86 update:** the scored wire was vindicated lab-side (e118/F-130: sibling-shock probe reaches 288/288 with 0 violations, pooled Sharpe bit-matches) and the probe now shocks sibling slots in production (`analysis/world.js` R40) — the arm is measurable; re-measure under the gate before promoting |
 | `sig-regime-momentum` | `NL-SIG-regime-momentum@r30` | 1.0657 | 0.8681 | 14.06 bps | fails the adjusted-DSR floor |
 
 **A drop is a roster label.** The modules ship and stay golden-pinned; the branches leave the future

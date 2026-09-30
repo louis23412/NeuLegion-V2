@@ -1,0 +1,132 @@
+{
+ "query": "abs:\"fill probability\" OR abs:\"queue imbalance\" sorted by submittedDate desc, 2026-09-30",
+ "hits": 17,
+ "noted": [
+  "2607.28323",
+  "2409.12721",
+  "2403.02572",
+  "2504.00846",
+  "1512.03492"
+ ],
+ "entries": [
+  {
+   "id": "2607.28323",
+   "version": "2607.28323v1",
+   "title": "Optimal Execution with Passive Market Impact",
+   "published": "2026-07-30",
+   "summary": "We derive a mesoscopic model for optimal execution with limit orders that incorporates microstructural features of passive price impact. Our framework is based on two empirical observables: the approximately exponential decay of limit-order fill probabilities with distance from the midprice, and the short-term linear response of price changes to order flow imbalance. Combining these ingredients, we obtain a reduced-form passive impact rate that decays exponentially with quote distance. The model describes passive execution at a tactical level, where fills arise from a sequence of quote adjustments that balance execution probability, adverse selection, and opportunity cost. We formulate and solve an optimal liquidation problem in which the trader controls the aggressiveness of passive sell quotes. This generates a trade-off between higher fill intensity and larger accumulated impact on the one hand, and lower impact but greater non-execution risk on the other. Empirical calibration using NASDAQ equities and public FX supports the empirical foundations of the model. We also analyse extensions with heterogeneous decay rates, transient impact, and target execution schedules."
+  },
+  {
+   "id": "2606.02982",
+   "version": "2606.02982v2",
+   "title": "DriftSched: Adaptive QoS-Aware Scheduling under Runtime Token Drift for Multi-Tenant GPU Inference",
+   "published": "2026-06-02",
+   "summary": "The rapid growth of large language model (LLM) inference services has increased the demand for efficient multi-tenant GPU scheduling. While modern inference runtimes such as vLLM improve throughput through continuous batching and optimized memory management, accurately estimating the runtime cost of heterogeneous inference requests remains challenging. In practice, admission-time workload estimates may deviate from observed execution behavior, leading to workload misclassification, queue imbalance, increased tail latency, and degraded Quality-of-Service (QoS). This paper presents DriftSched, a QoS-aware scheduling framework for multi-tenant LLM inference serving on NVIDIA L4 GPUs. DriftSched combines workload classification, token-budget estimation, tenant-aware queue management, and an online feedback mechanism to refine workload estimates using runtime observations. The framework evaluates FIFO, Priority, Weighted, Shortest-Job-First (SJF), and Aging Priority scheduling policies under heterogeneous multi-tenant workloads. Experimental results show that adaptive calibration reduces workload estimation error by an average of 38.8% (MAE) and 40.5% (RMSE), improving workload classification stability. Among all evaluated schedulers, SJF achieves the best overall performance, reducing median end-to-end latency by approximately 42% and P99 latency by approximately 16% relative to FIFO under sustained GPU contention. The results further indicate that scheduler selection has a greater impact on latency behavior than runtime calibration alone, while accurate workload characterization largely eliminates systematic estimation drift. This work contributes a reproducible framework for studying workload-estimation fidelity and QoS-aware scheduling in multi-tenant GPU inference systems."
+  },
+  {
+   "id": "2604.27718",
+   "version": "2604.27718v1",
+   "title": "Size-Limited Room Temperature Single-Photon Emission from Sidewall-Treated Fractional Dimension InGaN Quantum Dots: Determined by Density-of-States-Corrected Ultrafast Carrier Dynamics and Improved Signal-to-Noise Ratio",
+   "published": "2026-04-30",
+   "summary": "Room-temperature single-photon emission (SPE) resulting from a biexciton-exciton cascaded decay is demonstrated for the first time from chemically and photoelectrochemically etched site-controlled In0.14Ga0.86N quantum dots (QDs) embedded in vertical GaN nanowires. Diameter-dependent biexciton-exciton dynamics are analysed to determine the eligibility of QD as a single-photon emitter. The signal-to-noise ratio degrades with increasing QD diameter. Background noise photons pose a bottleneck to achieving SPE. This is also explained from a carrier dynamics perspective. Surface recombination contributes to inhomogeneous broadening at QD diameters larger than 35 nm. Below 35 nm, density-of-states-corrected Auger gradually becomes the principal biexciton-decay route with further reduction in QD diameter, thereby quenching the possibility of thermal broadening and setting a threshold for SPE. Below 9 nm, the Auger recombination rate becomes manyfold of other decay rates, causing multi-photon suppression via single Auger decay to form an exciton. Surface recombination probability of this exciton is minimized while biexciton state filling probability is maximized by reducing sidewall surface states through wet-treatment. These improve biexciton state preparation and enhance the single-photon purity of the exciton towards the exciton Bohr radius (3 nm) regime. Far away from this regime, higher-order autocorrelations to characterize quantum emission involving multi-photon events are discussed. This study establishes a generalized physical framework for predetermining SPE probability as a function of QD surface and geometry down to the exciton Bohr radius regime, with practical implementations. This work shows the pathway to design and develop next-generation semiconductor QDs for high-purity room-temperature SPE."
+  },
+  {
+   "id": "2604.20406",
+   "version": "2604.20406v2",
+   "title": "Bond Market Making with a Hit-Ratio Target",
+   "published": "2026-04-22",
+   "summary": "We study OTC bond market making on a size ladder with quadratic inventory penalty and a running target on the dealer's size-weighted hit ratio within a stochastic optimal control approach. We demonstrate that the corresponding reduced Hamilton-Jacobi-Bellman (HJB) equation remains separable by dualizing the hit ratio target term and provides the exact optimal controls through the inverse of the fill-probability function and the Hamiltonian derivative. We then focus on the quadratic approximation á la Bergault et al., which yields a Riccati equation for the inventory curvature while retaining the exact quote map. In its linearized form, this approximation produces explicit quote decompositions into riskless spread, inventory-risk correction, and hit-ratio correction. The formulation is general and applies to multi-bond, multi-client-tier scenarios, with special cases obtained by restricting the targeted tiers, their bond coverage, and their associated targets."
+  },
+  {
+   "id": "2512.05734",
+   "version": "2512.05734v1",
+   "title": "KANFormer for Predicting Fill Probabilities via Survival Analysis in Limit Order Books",
+   "published": "2025-12-05",
+   "summary": "This paper introduces KANFormer, a novel deep-learning-based model for predicting the time-to-fill of limit orders by leveraging both market- and agent-level information. KANFormer combines a Dilated Causal Convolutional network with a Transformer encoder, enhanced by Kolmogorov-Arnold Networks (KANs), which improve nonlinear approximation. Unlike existing models that rely solely on a series of snapshots of the limit order book, KANFormer integrates the actions of agents related to LOB dynamics and the position of the order in the queue to more effectively capture patterns related to execution likelihood. We evaluate the model using CAC 40 index futures data with labeled orders. The results show that KANFormer outperforms existing works in both calibration (Right-Censored Log-Likelihood, Integrated Brier Score) and discrimination (C-index, time-dependent AUC). We further analyze feature importance over time using SHAP (SHapley Additive exPlanations). Our results highlight the benefits of combining rich market signals with expressive neural architectures to achieve accurate and interpretabl predictions of fill probabilities."
+  },
+  {
+   "id": "2509.17715",
+   "version": "2509.17715v1",
+   "title": "Enhanced fill probability estimates in institutional algorithmic bond trading using statistical learning algorithms with quantum computers",
+   "published": "2025-09-22",
+   "summary": "The estimation of fill probabilities for trade orders represents a key ingredient in the optimization of algorithmic trading strategies. It is bound by the complex dynamics of financial markets with inherent uncertainties, and the limitations of models aiming to learn from multivariate financial time series that often exhibit stochastic properties with hidden temporal patterns. In this paper, we focus on algorithmic responses to trade inquiries in the corporate bond market and investigate fill probability estimation errors of common machine learning models when given real production-scale intraday trade event data, transformed by a quantum algorithm running on IBM Heron processors, as well as on noiseless quantum simulators for comparison. We introduce a framework to embed these quantum-generated data transforms as a decoupled offline component that can be selectively queried by models in low-latency institutional trade optimization settings. A trade execution backtesting method is employed to evaluate the fill prediction performance of these models in relation to their input data. We observe a relative gain of up to ~ 34% in out-of-sample test scores for those models with access to quantum hardware-transformed data over those using the original trading data or transforms by noiseless quantum simulation. These empirical results suggest that the inherent noise in current quantum hardware contributes to this effect and motivates further studies. Our work demonstrates the emerging potential of quantum computing as a complementary explorative tool in quantitative finance and encourages applied industry research towards practical applications in trading."
+  },
+  {
+   "id": "2507.11635",
+   "version": "2507.11635v1",
+   "title": "Efficacy of Galaxy Catalogues for following up gravitational wave events",
+   "published": "2025-07-15",
+   "summary": "The detection of gravitational waves (GW) by the LIGO-Virgo-KAGRA (LVK) network has opened up a new era in astrophysics. The identification of the electromagnetic counterparts of GW sources is crucial for multi-messenger astronomy, one way of which is to use galaxy catalogues to guide optical follow-up observations. In this paper, we test the utility of galaxy-targeted approach with mass prioritised galaxy ranking for the ongoing LIGO O4 run. We have used the simulated results for the expected LIGO O4 events and the NED-LVS galaxy catalogue and based our study for small field of view telescopes, specifically the GROWTH-India Telescope (GIT). With the increase in sensitivity of LIGO/Virgo in the ongoing observing run O4, the expected number of total detections have gone up but most of these are also now poorly localised. We show that a larger volume covered in the same field-of-view (FoV) on the sky results in a large increase in the total number of galaxies in each FoV. A significant top-heaviness is observed in the mass-ranked list of galaxies, which still number to a few thousand in most cases. At larger distances, such high numbers of deep follow-up observations are infeasible in most cases rendering galaxy catalogues useful in limited cases, but these are still useful at lower distances where LVK detectors are currently sensitive and where galaxy completeness is higher. We also explore the effect of mass-filling to account for galaxy catalogue incompleteness at large distances. If mass-filled probabilities are considered as the metric for ranking and coverage, we find that the conventional 2D probability search performs better than a 3D galaxy catalogue (without mass-filling) based search at distances larger than 300 Mpc (upto which NED-LVS is ~70% complete), and using 3D mass times probability in each tile performs better for nearby events."
+  },
+  {
+   "id": "2504.00846",
+   "version": "2504.00846v2",
+   "title": "The effect of latency on optimal order execution policy",
+   "published": "2025-04-01",
+   "summary": "Market participants regularly send bid and ask quotes to exchange-operated limit order books. This creates an optimization challenge where their potential profit is determined by their quoted price and how often their orders are successfully executed. The expected profit from successful execution at a favorable limit price needs to be balanced against two key risks: (1) the possibility that orders will remain unfilled, which hinders the trading agenda and leads to greater price uncertainty, and (2) the danger that limit orders will be executed as market orders, particularly in the presence of order submission latency, which in turn results in higher transaction costs. In this paper, we consider a stochastic optimal control problem where a risk-averse trader attempts to maximize profit while balancing risk. The market is modeled using Brownian motion to represent the price uncertainty. We analyze the relationship between fill probability, limit price, and order submission latency. We derive closed-form approximations of these quantities that perform well in the practical regime of interest. Then, we utilize a mean-variance method where our total reward function features a risk-tolerance parameter to quantify the combined risk and profit."
+  },
+  {
+   "id": "2409.12721",
+   "version": "2409.12721v3",
+   "title": "Market Simulation under Adverse Selection",
+   "published": "2024-09-19",
+   "summary": "In this paper, we study the effects of fill probabilities and adverse fills on the trading strategy simulation process. We specifically focus on a stochastic optimal control market-making problem and test the strategy on ES (E-mini S\\&amp;P 500), NQ (E-mini Nasdaq 100), CL (Crude Oil) and ZN (10-Year Treasury Note), which are some of the most liquid futures contracts listed on the CME (Chicago Mercantile Exchange). We provide empirical evidence that shows how fill probabilities and adverse fills can significantly affect performance and propose a more prudent simulation framework to deal with this. Many previous works aim to measure different types of adverse selection in the limit order book (LOB), however, they often simulate price processes and market orders independently. This has the ability to largely inflate the performance of a short-term style trading strategy. Our studies show that using more realistic fill probabilities and tracking adverse fills in the strategy simulation process more accurately shows how these types of trading strategies would perform in reality."
+  },
+  {
+   "id": "2407.17393",
+   "version": "2407.17393v1",
+   "title": "Market Making with Exogenous Competition",
+   "published": "2024-07-24",
+   "summary": "We study liquidity provision in the presence of exogenous competition. We consider a `reference market maker' who monitors her inventory and the aggregated inventory of the competing market makers. We assume that the competing market makers use a `rule of thumb' to determine their posted depths, depending linearly on their inventory. By contrast, the reference market maker optimises over her posted depths, and we assume that her fill probability depends on the difference between her posted depths and the competition's depths in an exponential way. For a linear-quadratic goal functional, we show that this model admits an approximate closed-form solution. We illustrate the features of our model and compare against alternative ways of solving the problem either via an Euler scheme or state-of-the-art reinforcement learning techniques."
+  },
+  {
+   "id": "2403.02572",
+   "version": "2403.02572v2",
+   "title": "Fill Probabilities in a Limit Order Book with State-Dependent Stochastic Order Flows",
+   "published": "2024-03-05",
+   "summary": "This paper studies the fill probabilities of limit orders placed at different price levels in a limit order book. These probabilities play a central role in execution optimization, as limit orders are not guaranteed to be executed and inherently involve a trade-off between execution cost and execution risk. We model the limit order book within a general state-dependent stochastic framework, representing its dynamics as a collection of interacting queuing systems while incorporating key stylized market features. Within this framework, we derive semi-analytical expressions for several quantities of interest under state-dependent order flows, including the probability of a mid-price change, the fill probabilities of orders placed at the best quotes, and those of orders placed deeper in the book before the opposite best quote moves. While the framework can be extended to even deeper price levels, the corresponding fill probabilities are typically negligible. We validate the proposed model through extensive numerical experiments using real foreign exchange spot market data. The results demonstrate that the model remains tractable while capturing essential order book dynamics, and that the derived expressions achieve good accuracy in estimating fill probabilities."
+  },
+  {
+   "id": "2307.04863",
+   "version": "2307.04863v2",
+   "title": "Interpretable ML for High-Frequency Execution",
+   "published": "2023-07-10",
+   "summary": "Order placement tactics play a crucial role in high-frequency trading algorithms and their design is based on understanding the dynamics of the order book. Using high quality high-frequency data and a set of microstructural features, we exhibit strong state dependence properties of the fill probability function. We train a neural network to infer the fill probability function for a fixed horizon. Since we aim at providing a high-frequency execution framework, we use a simple architecture. A weighting method is applied to the loss function such that the model learns from censored data. By comparing numerical results obtained on both digital asset centralized exchanges (CEXs) and stock markets, we are able to analyze dissimilarities between feature importances of the fill probability of small tick crypto pairs and Euronext equities. The practical use of this model is illustrated with a fixed time horizon execution problem in which both the decision to post a limit order or to immediately execute and the optimal distance of placement are characterized. We discuss the importance of accurately estimating the clean-up cost that occurs in the case of a non-execution and we show it can be well approximated by a smooth function of market features. We finally assess the performance of our model with a backtesting approach that avoids the insertion of hypothetical orders and makes possible to test the order placement algorithm with orders that realistically impact the price formation process."
+  },
+  {
+   "id": "2306.05479",
+   "version": "2306.05479v1",
+   "title": "Deep Attentive Survival Analysis in Limit Order Books: Estimating Fill Probabilities with Convolutional-Transformers",
+   "published": "2023-06-08",
+   "summary": "One of the key decisions in execution strategies is the choice between a passive (liquidity providing) or an aggressive (liquidity taking) order to execute a trade in a limit order book (LOB). Essential to this choice is the fill probability of a passive limit order placed in the LOB. This paper proposes a deep learning method to estimate the filltimes of limit orders posted in different levels of the LOB. We develop a novel model for survival analysis that maps time-varying features of the LOB to the distribution of filltimes of limit orders. Our method is based on a convolutional-Transformer encoder and a monotonic neural network decoder. We use proper scoring rules to compare our method with other approaches in survival analysis, and perform an interpretability analysis to understand the informativeness of features used to compute fill probabilities. Our method significantly outperforms those typically used in survival analysis literature. Finally, we carry out a statistical analysis of the fill probability of orders placed in the order book (e.g., within the bid-ask spread) for assets with different queue dynamics and trading activity."
+  },
+  {
+   "id": "1809.08060",
+   "version": "1809.08060v3",
+   "title": "State-dependent Hawkes processes and their application to limit order book modelling",
+   "published": "2018-09-21",
+   "summary": "We study statistical aspects of state-dependent Hawkes processes, which are an extension of Hawkes processes where a self- and cross-exciting counting process and a state process are fully coupled, interacting with each other. The excitation kernel of the counting process depends on the state process that, reciprocally, switches state when there is an event in the counting process. We first establish the existence and uniqueness of state-dependent Hawkes processes and explain how they can be simulated. Then we develop maximum likelihood estimation methodology for parametric specifications of the process. We apply state-dependent Hawkes processes to high-frequency limit order book data, allowing us to build a novel model that captures the feedback loop between the order flow and the shape of the limit order book. We estimate two specifications of the model, using the bid-ask spread and the queue imbalance as state variables, and find that excitation effects in the order flow are strongly state-dependent. Additionally, we find that the endogeneity of the order flow, measured by the magnitude of excitation, is also state-dependent, being more pronounced in disequilibrium states of the limit order book."
+  },
+  {
+   "id": "1804.05608",
+   "version": "1804.05608v1",
+   "title": "Probability distribution of substituted Titanium in RT12 (R = Nd, Sm, T = Fe, Co) structures",
+   "published": "2018-04-16",
+   "summary": "We investigated the atomic fill site probability distributions across supercell structures of RT12-xTi (R=Nd, Sm, T=Fe, Co). We use a combined molecular dynamics and Boltzmann distribution approach to extrapolate the probability distributions for Ti substitution from lower to higher temperatures with an equilibrium condition to assess how temperature affects the predictability of the structures fill path. It was found that the Nd and Sm based Fe systems have the highest filling probability path at lower temperatures but the cohesive energy change due to Ti substitution in Sm and Nd based crystals indicates that a more stable system could be achieved with a combination Co and Fe in the transition metal site."
+  },
+  {
+   "id": "1710.03870",
+   "version": "1710.03870v3",
+   "title": "A High Frequency Trade Execution Model for Supervised Learning",
+   "published": "2017-10-11",
+   "summary": "This paper introduces a high frequency trade execution model to evaluate the economic impact of supervised machine learners. Extending the concept of a confusion matrix, we present a 'trade information matrix' to attribute the expected profit and loss of the high frequency strategy under execution constraints, such as fill probabilities and position dependent trade rules, to correct and incorrect predictions. We apply the trade execution model and trade information matrix to Level II E-mini S&amp;P 500 futures history and demonstrate an estimation approach for measuring the sensitivity of the P&amp;L to the error of a Recurrent Neural Network. Our approach directly evaluates the performance sensitivity of a market making strategy to prediction error and augments traditional market simulation based testing."
+  },
+  {
+   "id": "1512.03492",
+   "version": "1512.03492v1",
+   "title": "Queue Imbalance as a One-Tick-Ahead Price Predictor in a Limit Order Book",
+   "published": "2015-12-11",
+   "summary": "We investigate whether the bid/ask queue imbalance in a limit order book (LOB) provides significant predictive power for the direction of the next mid-price movement. We consider this question both in the context of a simple binary classifier, which seeks to predict the direction of the next mid-price movement, and a probabilistic classifier, which seeks to predict the probability that the next mid-price movement will be upwards. To implement these classifiers, we fit logistic regressions between the queue imbalance and the direction of the subsequent mid-price movement for each of 10 liquid stocks on Nasdaq. In each case, we find a strongly statistically significant relationship between these variables. Compared to a simple null model, which assumes that the direction of mid-price changes is uncorrelated with the queue imbalance, we find that our logistic regression fits provide a considerable improvement in binary and probabilistic classification for large-tick stocks, and provide a moderate improvement in binary and probabilistic classification for small-tick stocks. We also perform local logistic regression fits on the same data, and find that this semi-parametric approach slightly outperform our logistic regression fits, at the expense of being more computationally intensive to implement."
+  }
+ ]
+}

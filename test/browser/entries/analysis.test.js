@@ -3934,6 +3934,34 @@ export async function run() {
             makeCandleViewFor(kCandles, { panel: badPanel })(null, null).panel === null);
         check('R35 (L10-cc): makeCandleViewFor with an out-of-range streamIndex yields a null panel on a probe pass',
             makeCandleViewFor(kCandles, { panel: { streamIndex: 5, label: 'x', labels: ['a', 'b'], returnsByStream: [[0.01], [0.02]] } })(null, { after: 3, probe: 0.05 }).panel === null);
+        const r40Own = Array.from({ length: 24 }, (_, i) => 0.001 * ((i % 5) - 2));
+        const r40Sib = Array.from({ length: 24 }, (_, i) => 0.002 * ((i % 7) - 3));
+        const r40Panel = { streamIndex: 0, label: 'a', labels: ['a', 'b'], returnsByStream: [r40Own, r40Sib] };
+        const r40ViewFor = makeCandleViewFor(kCandles, { panel: r40Panel });
+        const r40Base = r40ViewFor(null, null);
+        const r40Probe = r40ViewFor(null, { after: 10, probe: 0.05 });
+        check('R40 (F-130): probe pass shocks sibling slots after t, and only after t',
+            r40Probe.panel.returnsByStream[1].every((v, t) => v === (t > 10 ? r40Sib[t] + 0.05 : r40Sib[t])) &&
+            JSON.stringify(r40Probe.panel.returnsByStream[0]) === JSON.stringify(r40Probe.returns),
+            JSON.stringify(r40Probe.panel.returnsByStream[1].slice(9, 13)));
+        check('R40 (F-130): base pass panel carries the unshocked series',
+            JSON.stringify(r40Base.panel.returnsByStream[1]) === JSON.stringify(r40Sib) &&
+            JSON.stringify(r40Base.panel.returnsByStream[0]) === JSON.stringify(r40Base.returns));
+        check('R40 (F-130): probe without an explicit amount falls back to DEFAULT_SHOCK.probe',
+            r40ViewFor(null, { after: 10 }).panel.returnsByStream[1][11] === r40Sib[11] + DEFAULT_SHOCK.probe);
+        check('R40 (F-130): panel-less probe view is unchanged (null panel)',
+            makeCandleViewFor(kCandles)(null, { after: 10, probe: 0.05 }).panel === null);
+        const r40Net = { id: 'sig-network-momentum', fn: networkMomentum, window: 16, params: { lag: 1 } };
+        const r40BaseSeries = { returns: r40Own, closes: null, volumes: null, panel: r40Base.panel };
+        const r40ProbeSeries = { returns: r40Probe.returns, closes: null, volumes: null, panel: r40Probe.panel };
+        check('R40 (F-130): a sibling shock after t moves a later network position but never the position at t',
+            positionAt(r40Net, r40BaseSeries, 10) === positionAt(r40Net, r40ProbeSeries, 10) &&
+            Array.from({ length: 13 }, (_, k) => k + 11).some((t) => positionAt(r40Net, r40BaseSeries, t) !== positionAt(r40Net, r40ProbeSeries, t)),
+            `${positionAt(r40Net, r40BaseSeries, 10)} vs ${positionAt(r40Net, r40ProbeSeries, 10)}`);
+        const r40Mom = { id: 'm', fn: momentum, window: 16 };
+        check('R40 (F-130): an own-only arm ignores the panel entirely (sibling shock cannot reach it)',
+            [10, 15, 20].every((t) => positionAt(r40Mom, { returns: r40Own }, t) === positionAt(r40Mom, { returns: r40Own, panel: r40Base.panel }, t) &&
+                positionAt(r40Mom, { returns: r40Own }, t) === positionAt(r40Mom, { returns: r40Own, panel: r40Probe.panel }, t)));
         check('R35 (L10-cd): worldFromCandles maxBars 0 yields an empty world',
             (() => { const w = worldFromCandles(kCandles, { maxBars: 0 }); return w.candles.length === 0 && w.returns.length === 0; })());
         check('R35 (L10-cd): worldFromCandles rejects negative and fractional maxBars',

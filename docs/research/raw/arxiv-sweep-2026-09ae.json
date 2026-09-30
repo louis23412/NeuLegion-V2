@@ -1,0 +1,221 @@
+{
+ "query": "ti:\"market making\" sorted by submittedDate desc, 2026-09-30",
+ "hits": 30,
+ "noted": [
+  "2609.22785",
+  "2605.19584",
+  "2605.06405"
+ ],
+ "entries": [
+  {
+   "id": "2609.22785",
+   "version": "2609.22785v1",
+   "title": "Robust Market Making with Hawkes Order Flow and Price Impact via Adversarial Reinforcement Learning",
+   "published": "2026-09-19",
+   "summary": "Market-making strategies in real limit order book markets face substantial model uncertainty and regime-shift risk. Existing adversarial reinforcement learning approaches improve robustness by formulating the Avellaneda--Stoikov market-making problem as a zero-sum game between a market maker and an environmental adversary. However, these approaches typically rely on Poisson order arrivals and neglect trade-induced price impact, limiting their ability to capture important high-frequency market microstructure effects such as clustered order flow, self-excitation, and post-trade price feedback. We extend adversarial reinforcement learning for market making to a more complex environment with Hawkes self-exciting order arrivals and trade-induced price impact. To mitigate the increased non-stationarity introduced by the expanded regime space, we incorporate an LSTM module that explicitly models the temporal structure of recent observations. We further characterize the equilibrium properties of the proposed framework through both game-theoretic analysis and numerical experiments, and introduce a robustness evaluation protocol focused on improvements in the left tail of the return distribution. Experimental results across a range of market regimes show that the proposed method achieves improved left-tail performance in most complex microstructure environments. In particular, the gains are pronounced in regimes with strong Hawkes excitation and low-to-moderate price impact. Bootstrap tests provide no evidence that these improvements are obtained through a stronger terminal directional inventory bias. These results suggest that combining adversarial training with temporal state representation can improve the robustness of reinforcement-learning-based market-making strategies under order-flow self-excitation, price impact, and regime uncertainty."
+  },
+  {
+   "id": "2609.17788",
+   "version": "2609.17788v1",
+   "title": "SAiFE-gym: Model-based Environments for Automated Market Making with Concentrated Liquidity",
+   "published": "2026-09-15",
+   "summary": "We present SAiFE_gym, a Python module that provides a collection of simulation environments for studying trading problems in Constant Product Markets (CPMs) with Concentrated Liquidity (CL). These markets give Liquidity Providers (LPs) granular control over how their capital is allocated and enable them to adjust their range of liquidity provision dynamically based on market conditions, which in turn, dictates how they earn fees. We decompose the microstructure of CPMs with CL in interactive components that allow researchers and practitioners to capture various economic settings. We employ a vectorized approach to optimize our environments, making them scalable for high dimensional Reinforcement Learning (RL) workflows that best describe sequential decision problems. We demonstrate the benefits of our environments by evaluating the performance of RL agents in CPMs with CL under uncertainty in market parameters."
+  },
+  {
+   "id": "2609.11614",
+   "version": "2609.11614v1",
+   "title": "Deep Learning of Robust Market Making under Regime-Switching Order Flow",
+   "published": "2026-09-10",
+   "summary": "Classical market-making strategies based on stochastic control, such as the Avellaneda-Stoikov and the Guéant-Lehalle-Fernandez-Tapia (GLFT) extension, provide closed-form quoting rules, but rest on assumptions that break down at realistic microstructure timescales. One of them is that order flow is stationary, while empirical evidence points to the existence of regimes, possibly associated with algorithmic execution of metaorders. In this case, existing methods provide negative PnL. In this paper, we develop a deep reinforcement-learning market maker (RLMM) - a Rainbow-style distributional DQN (C51) which is calibrated and tested in a zero-intelligence limit order book. We find that, in the stationary setting, RLMM outperforms GLFT across the entire observed risk-return frontier. The RLMM is more robust to flow asymmetry than GLFT, but, like any stationarily trained strategy, it still suffers large drawdowns from inventory saturation under persistent directional imbalance. Augmenting the state of RLMM with two auxiliary signals - a Bayesian online change-point filter over the directional flow bias and a queue-adjusted quote-exposure imbalance -restores profitability. A final scenario-bandit step that reweights low-return regime scenarios further improves performance under random-persistence and correlated-direction stress."
+  },
+  {
+   "id": "2608.18195",
+   "version": "2608.18195v1",
+   "title": "Multi-Level Market Making with Reinforcement Learning",
+   "published": "2026-08-18",
+   "summary": "We introduce a reinforcement learning framework for market making in a limit order book. Our algorithm aims to maximize trading revenue by dynamically submitting market and limit orders of varying sizes across multiple price levels while controlling inventory size. We use multivariate logistic-normal distributions to model order allocations and employ a deep-set encoder to aggregate features from variable-length order sets into a fixed-dimensional latent representation. Additionally, we incorporate potential-based reward shaping to accelerate learning without altering the optimal policy. We illustrate the performance of the method in three simulated market environments consisting of noise traders who submit random trades, tactical traders who respond to instantaneous volume imbalance, and strategic traders who trade in the direction of an exponentially weighted volume imbalance signal."
+  },
+  {
+   "id": "2608.02002",
+   "version": "2608.02002v2",
+   "title": "Hawkes-Driven OTC Market Making: Volterra-Riccati Approximation",
+   "published": "2026-08-03",
+   "summary": "We formulate an over-the-counter (OTC) market-making problem in which request-for-quote (RFQ) arrivals are modelled by general Hawkes kernels and fills are controlled thinnings of the exogenous request flow. The modelling choice is motivated by spot-FX RFQ data: after filtering and transforming to seasonality-adjusted RFQ activity time, two-way activity in major currency pairs exhibits large fitted branching ratios and multi-scale persistence. For general Hawkes kernels the control problem is path-dependent: the relevant state contains the order-flow history, or equivalently the forward curve of conditional future RFQ intensities. Exact Markovian lifting is available for exponential kernels, but it becomes high-dimensional for mixtures of exponentials and impractical for long-memory kernels. We therefore develop a hierarchy of Volterra-Riccati approximations. The first level replaces random future request flow by its conditional Volterra forecast; the second adds a covariance correction for intensity uncertainty; the third updates the quote rule with the realized Hawkes memory, or equivalently with the post-request conditional forecast curve. The approximation hierarchy is validated in an exponential Hawkes benchmark, where the exact lifted HJB can be solved numerically. The state-feedback Volterra-Riccati policy closely tracks the exact benchmark, especially in directional regimes, while a memory-free Poisson policy suffers substantial regret. We then apply the same state-feedback rule to a power-law-like RFQ memory model. A directional RFQ burst changes the conditional forecast of future flow and is converted by the continuation-value shadow price into a persistent quote skew. The resulting endogenous OTC quote impact inherits the long-memory decay of the RFQ forecast response and improves inventory and P&amp;L risk control relative to a no-conditioning Poisson benchmark."
+  },
+  {
+   "id": "2607.17991",
+   "version": "2607.17991v1",
+   "title": "Optimal Market Making in Prediction Markets",
+   "published": "2026-07-20",
+   "summary": "Prediction markets are attracting growing attention as trading volumes rise and their practical relevance increases. To ensure efficient price discovery, liquidity provision becomes ever more important. Due to the binary settlement structure in prediction markets, optimal market making leads to an optimization problem that is fundamentally different from the ones studied in classical settings. In this paper, we develop a stochastic control framework for prediction markets in which the market price is modeled as a conditional probability of the outcome that is generated by a transformed latent belief diffusion. A market maker selects bid and ask quotes to maximize expected terminal wealth while controlling both mark-to-market inventory risk and the settlement risk of remaining positions at resolution. We derive the associated Hamilton--Jacobi--Bellman equation and characterize the unique optimal bid and ask quotes. By transforming the equation to the latent belief space and using a fixed-point argument, we prove existence and uniqueness of a classical solution and verify the resulting optimal quoting strategy. In addition, we provide a numerical analysis, which reveals how optimal liquidity provision in prediction markets depends on inventory, market beliefs, time to resolution, and risk aversion. Further, we demonstrate that the optimal quoting strategy substantially improves downside protection while preserving most of its expected profit relative to a myopic benchmark that maximizes the instantaneous expected mark-to-market profit."
+  },
+  {
+   "id": "2607.17428",
+   "version": "2607.17428v2",
+   "title": "Uniform-Loss Automated Market Making for Prediction Markets",
+   "published": "2026-07-19",
+   "summary": "Automated market makers (AMMs) for prediction markets descend from market scoring rules, where a mechanism operator subsidizes a market to aggregate beliefs about uncertain events. The existing literature has focused on bounding the total worst-case loss to the subsidizer, but has not addressed how that loss is distributed across price states or over time. We use the framework of loss-versus-rebalancing (LVR) to study this distribution and introduce \\textit{uniform AMMs}, defined by the property that instantaneous LVR is proportional to pool value and independent of the current token price. In a static setting, we show that for a broad class of \\textit{win-martingales} -- processes that converge to 0 or 1 at a fixed resolution time -- there exists a pricing function that achieves uniform LVR under that process, and conversely, that any sufficiently regular pricing function induces a win-martingale under which it is uniform. We then extend the framework to dynamic liquidity management, showing that liquidity levels can be adjusted over time to implement a prescribed target expected cumulative loss schedule. This theory is illustrated with canonical examples of win-martingales and pricing functions. Our results can inform AMM designers and liquidity providers on how the inevitable cost of subsidizing price discovery can be shaped and controlled across both price and time."
+  },
+  {
+   "id": "2607.11328",
+   "version": "2607.11328v2",
+   "title": "Strategic OTC market making with reputation feedback",
+   "published": "2026-07-13",
+   "summary": "Electronic over-the-counter (OTC) liquidity provision is increasingly shaped not only by the price of the next quote, but also by a dealer's accumulated standing with clients and platforms. We develop a stochastic-control model in which request-for-quote (RFQ) win ratios and streaming fill ratios feed back into future flow through performance-based flow gates, creating an explicit trade-off between immediate spread capture and long-term franchise value. The resulting policy naturally alternates between reputation-building campaigns and franchise monetization phases, and can generate multiple stable client-flow regimes even in a parsimonious single dealer control problem."
+  },
+  {
+   "id": "2607.08291",
+   "version": "2607.08291v1",
+   "title": "Robustness in Sequential Decision Making under Evolving Uncertainty: Evidence from High-Frequency Market Making",
+   "published": "2026-07-09",
+   "summary": "We study sequential decision making under evolving uncertainty in high-frequency financial markets, where changing market dynamics continually challenge static decision policies. We show that robustness has two economically meaningful dimensions: uncertainty tolerance, which determines how much uncertainty the decision maker allows, and action robustness, which governs how conservatively decisions respond. Robustness is not merely protection against model misspecification, but a state-dependent mechanism that reshapes sequential decision behaviors. Simulation and empirical evidence show that action robustness has a substantially larger impact than uncertainty tolerance. Moreover, excessive robustness may reduce profitability in illiquid markets by limiting execution opportunities."
+  },
+  {
+   "id": "2606.19772",
+   "version": "2606.19772v1",
+   "title": "Signature Methods for Optimal Market Making",
+   "published": "2026-06-18",
+   "summary": "We propose a signature-based method to solve the optimal market-making problem under a mean-variance criterion. By exploiting signature linearization techniques, we reduce the market-making problem to a pseudo-linear optimization over the expected signature of an augmented market path, and we develop a signature algorithm named Sig-REINFORCE to learn the optimal bid and ask quotes. We test our method in two scenarios, in which market-order arrivals follow either a Poisson or a self-exciting Hawkes process, and we benchmark it against a Proximal Policy Optimization (PPO) baseline."
+  },
+  {
+   "id": "2606.09454",
+   "version": "2606.09454v1",
+   "title": "Axiomatic Market Making",
+   "published": "2026-06-08",
+   "summary": "This paper axiomatizes the bid-ask market maker's quoting rule. A quoting rule maps the maker's state, namely inventory, belief, variance, trade intensity, and informed-trader fraction, to a bid-ask pair. Eight natural axioms, together with six environmental assumptions on the maker's inventory cost, force a unique three-parameter family: the mid-quote is linear in inventory, and the spread decomposes additively into inventory and adverse-selection components. Each of the three parameters is identified from a distinct moment of the observable quoting rule, with the three identifications mutually decoupled. The eight axioms partition into a four-axiom indispensable core, one structural choice, and three modularity extensions. Two structural corollaries follow: the latent inventory cost function is recoverable from the limit order book, and a sharp phase transition separates a functioning regime from a frozen one. A closing meta-theorem identifies four features invariant across all admissible structural primitives within the axiom system. To our knowledge, this is the first forced-uniqueness axiomatization of the quoting rule."
+  },
+  {
+   "id": "2606.01477",
+   "version": "2606.01477v3",
+   "title": "Avellaneda-Stoikov and Cartea-Jaimungal as One Framework: A Forced Uniqueness Theorem for Inventory Market Making",
+   "published": "2026-05-31",
+   "summary": "In inventory market making, the running-penalty coefficient $φ$ of the Cartea-Jaimungal framework and the risk-aversion parameter $γ$ of the Avellaneda-Stoikov framework are typically treated as independent free parameters, calibrated separately. We show that they are in fact not independent. A small set of axioms on the market maker's dynamic preference functional, namely cash-additivity, normalization, concavity, strong dynamic consistency, and law-invariance, forces the preference functional to be the entropic certainty-equivalent on liquidation-adjusted terminal wealth, parametrized by a single positive scalar $γ$. The Avellaneda-Stoikov framework is the unique representative of this axiom class. The Cartea-Jaimungal framework is its second-order Taylor expansion in inventory magnitude, with the running coefficient forced to $φ= γσ^2/2$ and (under a mild regularity condition on the liquidation cost) the terminal coefficient forced to $α= \\frac{1}{2}L''(0)$. The two frameworks, typically presented as competing alternatives with the choice between them driven by tractability, are different manifestations of a single underlying object. The forced relation is invertible, $γ= 2φ/σ^2$, giving a consistency cross-check on independently calibrated desk parameters."
+  },
+  {
+   "id": "2605.30643",
+   "version": "2605.30643v1",
+   "title": "Quality-Adjusted Hit-Ratio Targeting in Corporate Bond Market Making",
+   "published": "2026-05-28",
+   "summary": "Hit ratio is a common service metric for electronic corporate bond market making, but raw hit-ratio targets can be economically misleading when client flow has heterogeneous adverse-selection content. This paper extends a stochastic-control framework for OTC bond RFQ market making with hit-ratio constraints by replacing raw hit ratio with a residual-quality-adjusted hit ratio. The key modelling distinction is that adverse post-trade markouts are first decomposed into observable credit factors, carry/rolldown, issuer-relative-value effects, index or ETF demand effects, and residual adverse selection. Only the residual component is treated as client-flow toxicity. The resulting control problem remains tractable: after dualizing the quality-hit-ratio penalty, the HJB retains separable Hamiltonians, and the dual variable is the solution of an exact one-dimensional nonlinear fixed point for each targeted tier. Under a quadratic value-function approximation, optimal quotes decompose into a riskless spread, inventory skew, credit-alpha skew, residual-toxicity charge, and quality-hit-ratio subsidy. Synthetic multi-bond simulations with nonlinear dual solves illustrate that raw hit-ratio targeting can subsidize residual-toxic flow, while residual-quality targeting reallocates service toward low-residual-toxicity flow and improves the attained service/economics frontier. A final reduced-form extension studies inventory-recycling value through risk-aware style-aligned client-flow warehousing. Sweep or portfolio-trade opportunities fill randomly, and participation is sized using the same quadratic value approximation as the RFQ quoting problem. A passive/index-demand experiment is reported in the appendix as a special case of forecastable client flow. The numerical evidence is synthetic and mechanism-oriented; no proprietary RFQ data are used."
+  },
+  {
+   "id": "2605.24878",
+   "version": "2605.24878v1",
+   "title": "Entropy-Regularized Certainty-Equivalent Bellman Policies for Risk-Sensitive Market Making",
+   "published": "2026-05-24",
+   "summary": "We study a finite-inventory risk-sensitive market making problem in which a dealer controls bid and ask quotes, faces Brownian midprice risk, and receives liquidity-taking orders through point processes with quote-dependent intensities. The objective is the certainty equivalent induced by exponential utility with terminal and running inventory penalties. We introduce an exact discrete entropy-regularized Bellman operator that applies log-sum-exp regularization to deterministic-action certainty-equivalent scores, rather than to a risk-neutral one-step reward. This distinction is essential because the exponential certainty equivalent does not commute with quote randomization. For time step \\(h\\) and entropy parameter \\(λ\\), we prove uniform convergence to the unregularized continuous-time risk-sensitive value at rate \\[ O\\bigl(h+λ(1+|\\logλ|)\\bigr). \\] We also prove certainty-equivalent performance bounds for the induced Gibbs policies under a fresh-sampling relaxed implementation, in which quote marks are sampled at potential fill events rather than frozen over a time step. Under a quadratic growth condition on the Hamiltonian in the relevant quote coordinates, these policies concentrate around the unregularized optimal quote set. Finally, we show that a lower-cost Hamiltonian-Gibbs proxy satisfies a certainty-equivalent performance bound of the same order as the exact Bellman Gibbs policy. Numerical experiments in an Avellaneda--Stoikov specification support the predicted scaling for discretization error, entropy bias, policy gap, quote concentration, and exact-versus-proxy consistency."
+  },
+  {
+   "id": "2605.19584",
+   "version": "2605.19584v1",
+   "title": "Online Market Making and the Value of Observing the Order Book",
+   "published": "2026-05-19",
+   "summary": "We study an online market-making problem in which a learner sequentially posts bid and ask prices for a single asset while interacting with traders holding private valuations. Unlike existing online learning formulations that assume fully censored feedback, we introduce an action-dependent feedback model inspired by real limit order books: when a trade occurs, the trader's valuation remains hidden, whereas when no trade occurs, informative feedback about supply and demand is revealed. We show that this additional information fundamentally changes the learnability of the problem. In the stochastic setting with i.i.d. market prices, we propose an elimination-based algorithm that achieves $O(\\sqrt T)$ regret with high probability, without requiring any smoothness assumptions on the distribution of trader valuations. We then extend this result to a broad class of mean-reverting price processes by considering both local, autoregressive dynamics and a weaker global drift condition based on cumulative deviations from the mean. Under either assumption, we establish high-probability $O(\\sqrt T)$ regret bounds, relying on a new concentration inequality of independent interest. Finally, in the adversarial setting with oblivious prices, we design an explore-then-perturb algorithm that guarantees $O(T^{2/3})$ regret in expectation. Our results quantify the value of observing the order book in online market making and demonstrate that even limited, action-dependent feedback can substantially improve regret guarantees compared to standard bandit feedback models."
+  },
+  {
+   "id": "2605.06405",
+   "version": "2605.06405v1",
+   "title": "Funding-Aware Optimal Market Making for Perpetual DEXs",
+   "published": "2026-05-07",
+   "summary": "This paper studies optimal liquidity provision for perpetual contracts when the funding rate is a stochastic state variable. The core extension to classical market making is the coupling between inventory and funding payments: inventory creates both mark-to-market exposure and a state-dependent funding cash flow. A reduced inventory-funding control problem is formulated, solved with a monotone finite-difference Hamilton-Jacobi-Bellman scheme, and bid and ask quote offsets are recovered from discrete inventory value differences. Funding is calibrated on Hyperliquid ETH, BTC, and SOL perpetual data. Gaussian OU funding is retained as a tractable diffusion baseline, while OU-plus-jump diagnostics document the heavy-tailed funding innovations that should enter a future extension. In 100-seed holdout simulations under two official-fill proxy calibrations, the funding-aware HJB improves mean ETH/BTC performance while lowering inventory RMS relative to classical Avellaneda-Stoikov. SOL gains are positive versus unscaled AS but are not a Pareto improvement once a risk-scaled AS diagnostic is included."
+  },
+  {
+   "id": "2604.20406",
+   "version": "2604.20406v2",
+   "title": "Bond Market Making with a Hit-Ratio Target",
+   "published": "2026-04-22",
+   "summary": "We study OTC bond market making on a size ladder with quadratic inventory penalty and a running target on the dealer's size-weighted hit ratio within a stochastic optimal control approach. We demonstrate that the corresponding reduced Hamilton-Jacobi-Bellman (HJB) equation remains separable by dualizing the hit ratio target term and provides the exact optimal controls through the inverse of the fill-probability function and the Hamiltonian derivative. We then focus on the quadratic approximation á la Bergault et al., which yields a Riccati equation for the inventory curvature while retaining the exact quote map. In its linearized form, this approximation produces explicit quote decompositions into riskless spread, inventory-risk correction, and hit-ratio correction. The formulation is general and applies to multi-bond, multi-client-tier scenarios, with special cases obtained by restricting the targeted tiers, their bond coverage, and their associated targets."
+  },
+  {
+   "id": "2604.10194",
+   "version": "2604.10194v1",
+   "title": "Mandatory Disclosure in Oligopolistic Market Making",
+   "published": "2026-04-11",
+   "summary": "We develop a multi-period Kyle-type model that incorporates both mandatory disclosure of informed trades and imperfect competition among market makers. We prove the existence and uniqueness of a linear equilibrium and show that the liquidity-enhancing effect of disclosure is fundamentally linked to the degree of market-making competition. Disclosure lowers trading costs by reducing price impact, and its marginal benefit is strictly larger when competition is weak. We empirically validate this prediction using the 2002 Sarbanes-Oxley Act disclosure reform as a natural experiment. A difference-in-differences analysis of U.S. equities confirms that the spread reduction following enhanced disclosure is significantly larger for stocks with fewer active market makers."
+  },
+  {
+   "id": "2607.11888",
+   "version": "2607.11888v1",
+   "title": "Optimal Adaptive Market Making: A Theoretical Framework for High-Yield Liquidity Provision in Perpetual Futures Markets",
+   "published": "2026-04-05",
+   "summary": "We develop a rigorous theoretical framework for optimal market making in perpetual futures markets with zero maker fees. We model the market maker's problem as a stochastic optimal control problem on a filtered probability space, where the controls are adaptive bid-ask spreads and inventory hedging decisions across two exchanges. Our contributions include: (i) a PnL decomposition theorem separating revenue into spread income, adverse selection loss, inventory carrying cost, hedging friction, and funding rate exposure; (ii) the Hamilton-Jacobi-Bellman equation for the joint spread-inventory-hedging control problem under CARA utility with a verification theorem; (iii) High-APY Regime Theorems characterizing profitable regions via five dimensionless parameters, culminating in a Master APY Formula; (iv) analysis of zero-fee economics on decentralized perpetual exchanges with optimal entry-exit thresholds; (v) optimal cross-exchange hedging policies with funding rate dynamics and a hedge regime trichotomy; (vi) a robustness margin quantifying parameter uncertainty tolerance; (vii) exponential drawdown probability bounds and a universal APY-VaR identity; (viii) ergodic inventory distribution under optimal control with Bayesian adaptive estimation; (ix) Kelly-optimal leverage with ruin boundaries; and (x) multi-pair portfolio allocation with diversification saturation results. Numerical analysis with twenty-three figures reveals phase transitions between profitable and unprofitable regimes. Our framework unifies and extends the Avellaneda-Stoikov, Gueant-Lehalle-Fernandez-Tapia, and Glosten-Milgrom paradigms for modern decentralized venue microstructure."
+  },
+  {
+   "id": "2603.22596",
+   "version": "2603.22596v3",
+   "title": "ParlayMarket: Automated Market Making for Parlay-style Joint Contracts",
+   "published": "2026-03-23",
+   "summary": "Prediction markets are powerful mechanisms for information aggregation, but existing designs are optimized for single-event contracts. Traders frequently express beliefs about joint outcomes - sports parlays, conditional forecasts, multi-scenario financial bets. Current platforms either prohibit such trades or rely on ad hoc mechanisms that ignore correlation structure, resulting in inefficient prices and fragmented liquidity. We introduce \\textbf{\\textit{ParlayMarket}}, an automated market-maker for parlay-style joint contracts. The mechanism maintains a shared pairwise exponential-family belief state, so all base and parlay prices are marginals of one coherent distribution. This compresses the $2^M$ outcome space into $O(M^2)$ sufficient statistics and allows one liquidity pool to support an exponentially large family. Our main result characterizes the resulting learning and loss dynamics. Under repeated trading, prices converge to the best pairwise approximation of the true joint distribution. The induced expected market-maker loss grows at most quadratically in the number of base events, rather than exponentially in the number of listed parlays; moreover, this quadratic dependence is worst-case optimal for dense pairwise dependence, since there are $O(M^2)$ independent correlation directions to learn. Parlay trades are essential to this guarantee: they provide direct constraints on joint outcomes and reduce steady-state error relative to learning from marginal trades alone. Experiments on synthetic correlated markets and historical Kalshi combo data confirm the predicted scaling and show that the mechanism remains effective in realistic market-making settings. Our results demonstrate that combinatorial expressiveness does not require combinatorial capital."
+  },
+  {
+   "id": "2603.07752",
+   "version": "2603.07752v1",
+   "title": "Dynamic slippage control and rejection feedback in spot FX market making",
+   "published": "2026-03-08",
+   "summary": "We study an OTC FX market-making problem, built on the Avellaneda-Stoikov tradition, in which a dealer streams size-dependent quotes on a discrete ladder and manages inventory risk over a finite horizon under Poisson arrivals of trade requests. Adverse selection is modelled through latency-driven price moves over a delay window, represented by Gaussian marks whose conditional means can depend on the quoted spread, capturing selective client reaction to stale quotes. The dealer can address latency risk through trade rejection when slippage breaches a tolerance threshold. We treat slippage tolerance as an explicit control jointly optimized with quotes: upon receiving a trade request, the dealer chooses an acceptance/rejection rule, which makes the trade economically akin to an embedded option written on the latency price move. We further introduce rejection feedback through an EMA-based rejection score used as a reputation proxy, so that client intensity is endogenously modulated by past rejections via a multiplicative factor. Using dynamic programming, we derive a Markov control problem with state variables (inventory, rejection-score) and show how rejection decision enters the HJB equation through Hamiltonians that include an expectation over the latency mark and a maximization over both quote and rejection rule parameters. For practical control evaluation, we develop an adiabatic-quadratic approximation: fixing reputation on the inventory-control time scale, expanding Hamiltonians to the second order, and adopting quadratic ansatz in inventory, yielding tractable Riccati-type ODE and closed-form expressions for approximate quotes and slippage thresholds. This approximation provides a fast surrogate for policy design and enables self-consistent calibration of rejection behaviour."
+  },
+  {
+   "id": "2603.01344",
+   "version": "2603.01344v1",
+   "title": "Pricing and hedging for liquidity provision in Constant Function Market Making",
+   "published": "2026-03-02",
+   "summary": "This paper develops a robust mathematical framework for Constant Function Market Makers (CFMMs) by transitioning from traditional token reserve analyses to a coordinate system defined by price and intrinsic liquidity. We establish a canonical parametrization of the bonding curve that ensures dimensional consistency across diverse trading functions, such as those employed by Uniswap and Balancer, and demonstrate that asset reserves and value functions exhibit a linear dependence on this intrinsic liquidity. This linear structure facilitates a streamlined approach to arbitrage-free pricing, delta hedging, and systematic risk management. By leveraging the Carr-Madan spanning formula, we characterize Impermanent Loss (IL) as a weighted strip of vanilla options, thereby defining a fine-grained implied volatility structure for liquidity profiles. Furthermore, we provide a path-dependent analysis of IL using the last-passage time. Empirical results from Uniswap v3 ETH/USDC pools and Deribit option markets confirm a volatility smile consistent with crypto-asset dynamics, validating the framework's utility in characterizing the risk-neutral fair value of liquidity provision."
+  },
+  {
+   "id": "2601.17247",
+   "version": "2601.17247v2",
+   "title": "Learning Market Making with Closing Auctions",
+   "published": "2026-01-24",
+   "summary": "In this work, we investigate a market making execution problem on a trading session in which a continuous phase on a limit order book is followed by a closing auction. Whereas standard optimal market making models typically rely on terminal inventory penalties to manage end-of-day risk, ignoring the significant liquidity events available in closing auctions, we propose a deep reinforcement learning framework, consisting of a Deep Q-Network and its continuous-control actor-critic extensions (DDPG, TD3 and SAC), that explicitly incorporates this mechanism. We introduce a market making framework designed to explicitly anticipate the closing auction, continuously refining the projected clearing price as the trading session evolves. We develop a generative stochastic market model to simulate the trading session and to emulate the market. Our theoretical model and these deep reinforcement learning methods are applied on the generator in two settings: (1) when the mid price follows a rough Heston model with generative data from this stochastic model; and (2) when the mid price corresponds to historical data of assets from the S&amp;P 500 index and the performance of our algorithm is compared with stylized reference benchmarks from optimal market making."
+  },
+  {
+   "id": "2601.13421",
+   "version": "2601.13421v2",
+   "title": "Market Making and Transient Impact in Spot FX",
+   "published": "2026-01-19",
+   "summary": "Dealers in foreign exchange markets provide bid and ask prices to their clients at which they are happy to buy and sell, respectively. To manage risk, dealers can skew their quotes and hedge in the interbank market. Hedging offers certainty but comes with transaction costs and market impact. Optimal market making with execution has previously been addressed within the Almgren-Chriss market impact model, which includes instantaneous and permanent components. However, there is overwhelming empirical evidence of the transient nature of market impact, with instantaneous and permanent impacts arising as the two limiting cases. In this note, we consider an intermediate scenario and study the interplay between risk management and impact resilience."
+  },
+  {
+   "id": "2512.24432",
+   "version": "2512.24432v1",
+   "title": "Automated Market Making for Energy Sharing",
+   "published": "2025-12-30",
+   "summary": "We develop an axiomatic theory for Automated Market Makers (AMMs) in local energy sharing markets and analyze the Markov Perfect Equilibrium of the resulting economy with a Mean-Field Game. In this game, heterogeneous prosumers solve a Bellman equation to optimize energy consumption, storage, and exchanges. Our axioms identify a class of mechanisms with linear, Lipschitz continuous payment functions, where prices decrease with the aggregate supply-to-demand ratio of energy. We prove that implementing batch execution and concentrated liquidity allows standard design conditions from decentralized finance-quasi-concavity, monotonicity, and homotheticity-to construct AMMs that satisfy our axioms. The resulting AMMs are budget-balanced and achieve ex-ante efficiency, contrasting with the strategy-proof, expost optimal VCG mechanism. Since the AMM implements a Potential Game, we solve its equilibrium by first computing the social planner's optimum and then decentralizing the allocation. Numerical experiments using data from the Paris administrative region suggest that the prosumer community can achieve gains from trade up to 40% relative to the grid-only benchmark."
+  },
+  {
+   "id": "2512.20850",
+   "version": "2512.20850v1",
+   "title": "Implicit Numerical Scheme for the Hamilton-Jacobi-Bellman Quasi-Variational Inequality in the Optimal Market-Making Problem with Alpha Signal",
+   "published": "2025-12-24",
+   "summary": "We address the problem of combined stochastic and impulse control for a market maker operating in a limit order book. The problem is formulated as a Hamilton-Jacobi-Bellman quasi-variational inequality (HJBQVI). We propose an implicit time-discretization scheme coupled with a policy iteration algorithm. This approach removes time-step restrictions typical of explicit methods and ensures unconditional stability. Convergence to the unique viscosity solution is established by verifying monotonicity, stability, and consistency conditions and applying the comparison principle."
+  },
+  {
+   "id": "2512.13871",
+   "version": "2512.13871v2",
+   "title": "A Fair, Flexible, Zero-Waste Digital Electricity Market: A First-Principles Approach Combining Automatic Market Making, Holarchic Architectures and Shapley Theory",
+   "published": "2025-12-15",
+   "summary": "This thesis presents a fundamental rethink of electricity market design at the wholesale and balancing layers. Rather than treating markets as static spot clearing mechanisms, it reframes them as a continuously online, event driven dynamical control system: a two sided marketplace operating directly on grid physics. Existing energy only, capacity augmented, and zonal market designs are shown to admit no shock robust Nash equilibrium under realistic uncertainty, instead relying on price caps, uplift, and regulatory intervention to preserve solvency and security. In response, the thesis develops a holarchic Automatic Market Maker (AMM) in which prices are bounded, exogenous control signals derived from physical tightness rather than emergent equilibrium outcomes. The AMM generalises nodal and zonal pricing through nested scarcity layers, from node to cluster to zone to region to system, such that participant facing prices inherit from the tightest binding constraint. Nodal and zonal pricing therefore emerge as special cases of a unified scarcity propagation rule. Beyond pricing, the AMM functions as a scarcity aware control system and a digitally enforceable rulebook for fair access and proportional allocation under shortage. Fuel costs are recovered through pay as bid energy dispatch consistent with merit order, while non fuel operating and capital costs are allocated according to adequacy, flexibility, and locational contribution. Large scale simulations demonstrate bounded input bounded output stability, controllable procurement costs, zero structural waste, and improved distributional outcomes. The architecture is climate aligned and policy configurable, but requires a managed transition and new operational tools for system operators and market participants."
+  },
+  {
+   "id": "2512.04603",
+   "version": "2512.04603v1",
+   "title": "FX Market Making with Internal Liquidity",
+   "published": "2025-12-04",
+   "summary": "As the FX markets continue to evolve, many institutions have started offering passive access to their internal liquidity pools. Market makers act as principal and have the opportunity to fill those orders as part of their risk management, or they may choose to adjust pricing to their external OTC franchise to facilitate the matching flow. It is, a priori, unclear how the strategies managing internal liquidity should depend on market condions, the market maker's risk appetite, and the placement algorithms deployed by participating clients. The market maker's actions in the presence of passive orders are relevant not only for their own objectives, but also for those liquidity providers who have certain expectations of the execution speed. In this work, we investigate the optimal multi-objective strategy of a market maker with an option to take liquidity on an internal exchange, and draw important qualitative insights for real-world trading."
+  },
+  {
+   "id": "2511.17621",
+   "version": "2511.17621v2",
+   "title": "From Competition to Coordination: Market Making as a Scalable Framework for Safe and Aligned Multi-Agent LLM Systems",
+   "published": "2025-11-18",
+   "summary": "As foundation models are increasingly deployed as interacting agents in multi-agent systems, their collective behavior raises new challenges for trustworthiness, transparency, and accountability. Traditional coordination mechanisms, such as centralized oversight or adversarial adjudication, struggle to scale and often obscure how decisions emerge. We introduce a market-making framework for multi-agent large language model (LLM) coordination that organizes agent interactions as structured economic exchanges. In this setup, each agent acts as a market participant, updating and trading probabilistic beliefs, to converge toward shared, truthful outcomes. By aligning local incentives with collective epistemic goals, the framework promotes self-organizing, verifiable reasoning without requiring external enforcement. Empirically, we evaluate this approach across factual reasoning, ethical judgment, and commonsense inference tasks. Market-based coordination yields accuracy gains of up to 10% over single-shot baselines while preserving interpretability and transparency of intermediate reasoning steps. Beyond these improvements, our findings demonstrate that economic coordination principles can operationalize accountability and robustness in multi-agent LLM systems, offering a scalable pathway toward self-correcting, socially responsible AI capable of maintaining trust and oversight in real world deployment scenarios."
+  },
+  {
+   "id": "2511.02518",
+   "version": "2511.02518v2",
+   "title": "Option market making with hedging-induced market impact",
+   "published": "2025-11-04",
+   "summary": "This paper develops a model for option market making in which the hedging activity of the market maker generates price impact on the underlying asset. The option order flow is modeled by Cox processes, with intensities depending on the state of the underlying and on the market maker's quoted prices. The resulting dynamics combine stochastic option demand with both permanent and transient impact on the underlying, leading to a coupled evolution of inventory and price. We first study market manipulation and arbitrage phenomena that may arise from the feedback between option trading and underlying impact. We then establish the well-posedness of the mixed control problem, which involves continuous quoting decisions and impulsive hedging actions. Finally, we implement a numerical method based on policy optimization to approximate optimal strategies and illustrate the interplay between option market liquidity, inventory risk, and underlying impact."
+  }
+ ]
+}

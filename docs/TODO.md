@@ -1038,15 +1038,19 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    (`sig-range` 0.2611, `sig-agreement` 0.2113), and the surface statement remains the single
    authority in `round29-evaluation-robustness.md` §6 / the index / registry.
 
-94. [ ] **P3 follow-up — a maker-fee / queue-position cost model (before the reversal route is
-   called closed on economics).** The 15m reversal is **real but economically inaccessible under
-   a *taker* fee**: the per-bar edge is ≈0.18 bps at 0.52 turnover/bar and the break-even cost is
-   **0.32–0.56 bps** (the `sig-reversal-4` variant gets to 4.5–5.1 bps on short harness windows),
-   against a 5–10 bps taker fee — so at 5 bps the reversal book's interval-correct net Sharpe is
-   **−15.9** and the gate promotes **0/3** cadences. The rejection is therefore a *taker-cost*
-   rejection: model a resting limit order (maker fee/rebate + queue-position fill probability) and
-   re-run the cost ladder before declaring the route closed on economics rather than on the DSR
-   floor. Detail: `RUN-ANALYSIS.md` §16.4.
+94. [x] **P3 follow-up — a maker-fee / queue-position cost model (MEASURED-COMPLETE
+   2026-09-30, CYCLE-114).** The bar-measurable half was already settled by F-34 (L08
+   closed: passive fill friction −0.6…−1.6 bps/fill at every depth, identical for a
+   seeded-random side — pure adverse selection; maker book gross Sharpe −0.002/−0.271
+   vs taker +0.415/+0.534, edge consumed before any fee). This round's sweep
+   (09ae/ag: 2607.28323 exponential fill-decay + OFI response, 2403.02572,
+   2409.12721, 2512.05734, 2504.00846) confirms the remaining queue-position half
+   needs L2/trade data the project does not have — data-blocked alongside W5 venues,
+   documented here so a future round with book data can pick it up. No model built
+   (a bar-fitted queue model would be fiction). The taker-cost rejection stands as measured:
+   per-bar edge ≈0.18 bps at 0.52 turnover/bar, break-even 0.32–0.56 bps against a 5–10 bps
+   taker fee (interval-correct net Sharpe −15.9 at 5 bps, gate promotes 0/3 cadences).
+   Detail: `RUN-ANALYSIS.md` §16.4.
    **Round-79 grounding:** 2608.21888 measured exactly this gap independently —
    90% of 183 Binance pairs reverse at 15m (signs, not magnitudes), gross
    ~1.3 bp/trade against a 5 bp round trip, concentrated after aggressive
@@ -1187,9 +1191,10 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    Remaining: execute it when ≥ ~1 fresh year post-freeze exists. The attestation stays human either
    way.
 
-107. [ ] **`analyze.js` split (deferred; high-risk).** 3600+ lines. Split only with a byte-exact shim
-   + lock-registry rows à la R74's `walkforward.js` split — no behavioral need this round, so this
-   waits for a round that touches the driver anyway.
+107. [x] **`analyze.js` split (DONE round 83, CYCLE-110, native-gated 132/132).** 3674 lines → `src/analyze/`
+   ×4 (roster/models/evaluate/cli, acyclic) + 51-line shim with the exact 45-name contract (no new
+   lock rows needed — curated subset unchanged, import law covers core/plugins only). Two `../`
+   path fixes (dynamic hivemind imports, fold_worker URL) + `isMain` dispatch moved to the shim.
 
 108. [ ] **Round-77 operator runs (gate the round; repo only).** `npm test` (expect 132/132 — the node mirror
    asserts the 249-contracts ledger), `bash scripts/sleeve-runs.sh base` (expect the new
@@ -2119,3 +2124,40 @@ branch is no longer on this list — it is now audited by `dimensions.test.js`
 re-freeze between two tested branches rather than a blind change. Each remaining
 item is pinned by the golden fingerprints; changing one is a deliberate re-freeze,
 not a bug fix.
+
+111. [ ] **Model track — turn the first model skill into an edge (round-84 e114/e115; HIGHEST model EV).**
+   e114 sets the honest baseline (live-HiveMind next-bar-sign skill −0.0069, 6/24 — no directional
+   work anywhere, closed three ways with F-110 + 2603.16886). e115 finds the first positive
+   shipped-model skill (big-move Brier +0.0246, 19/24, 7/8 symbols; lagged persistence −0.67).
+   Update 2026-09-30 (CYCLE-112, F-128): e116 bucket-level big-move skill reads −0.0105 (8/24) —
+   the 1h skill does not survive 8h aggregation, so the timed book (e117) is screened OUT without
+   build per the pre-registered gate. Remaining book-actionable model question: HAR-residual skill
+   (does the model beat the linear vol reference on buckets?); plus 1h-horizon execution uses.
+   The V2.3 vol-learner port stays gated behind a positive residual test (linear-class first per
+   2508.15922, NOT a bigger transformer per 2603.16886). Detail: lab CYCLE-111/CYCLE-112,
+   F-126/F-127/F-128.
+   MEASURED-COMPLETE 2026-09-30 (CYCLE-113, F-129): e117 HAR-residual skill −0.0090 (≤5/24) —
+   the model adds nothing over the linear vol reference, so NO V2.3 vol-learner port. Final ledger:
+   directional CLOSED / 1h magnitude SUPPORTED-but-not-book-actionable / 8h CLOSED / residual
+   CLOSED. Open: 1h-horizon execution uses (idea only). Model attention returns to the locked-core
+   upgrade question in a future round.
+
+> **Rerank 2026-09-30 (round 85):** the W6 re-freeze arc for the network-arm audit
+> (F-130) takes the top tier: e118 proves the Sharpe-1.3/BE-15.3bp arm is causal under
+> a reaching probe, so an audit-layer fix (sibling-slot perturbation, scored path
+> untouched, goldens unmoved) would put the biggest unlocked edge candidate under a real
+> gate for the first time. Fade G5 attestations (106/108) stay top-tier but operator-owned.
+> Model track (111) drops to idea-only (1h execution uses). Sleeve breadth stays below.
+> Closed this round: 94 (maker half settled by F-34, queue half data-blocked).
+> Queued, not urgent: 95 remainder, 104, W5 venues, L10-co/cp/cq/cr.
+
+112. [ ] **Round-86 W6 re-freeze arc — native-gate the sibling-shock probe (repo code DONE
+   AI-side, needs `npm test`).** `analysis/world.js#makeCandleViewFor` probe passes now shock
+   sibling panel slots (round-86 R40, lab F-130/e118 9/9: production audit reaches 288/288
+   with 0 violations, pooled Sharpe still 1.3005 — scored path unmoved). Pinned by six §R40
+   checks (`analysis` 850 → 856, node mirror re-pinned, ledger 3113 → 3119). Lab e66 repaired
+   alongside (its maxBars-edge and panel-attachment checks pinned pre-R35 behavior and threw —
+   run_all's e66 step was red; now green). Gate: `npm test` (expect 132/132 — the wrap mirror
+   asserts the new 856 count). After green: re-run the K=6 1h A/B natively and read the network
+   arm's audit (expect reachable, violations readout), then decide promotion. Detail:
+   `RUN-ANALYSIS.md` §31, lab CYCLE-115.

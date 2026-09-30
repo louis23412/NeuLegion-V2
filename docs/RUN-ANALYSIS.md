@@ -4361,3 +4361,110 @@ npm test
 
 Expect green (132/132). If anything CLI-side moved, it shows here first
 (`analyze_cli`, parallel-folds, checkpoint-throttle mirrors). No uploads.
+
+## 27. Round 84 — the model track opens (2026-09-30, lab + docs only)
+
+Operator reprioritisation: HiveMind is demoted but NOT research-only — build it into a working
+model; inspect/upgrade locked parts when research justifies it.
+
+### 27.1 Research sync (sweep 2026-09ad, q-fin-scoped, 4 noted)
+
+2603.16886 (918 controlled experiments: directional accuracy ~50% for ALL MSE-trained models at
+hourly resolution; ModernTCN best, architecture >> seed); 2502.09079 (crypto ~= Brownian noise
+univariate, naive beats complex — the G-A thesis with complexity backing); 2508.15922
+(probabilistic crypto-vol forecasting; linear-on-log-vol + QRS stacking beats fancier models —
+frames the vol-learner port); 2606.27670 (CryptoGAT: temporal models fail on pure-price crypto,
+cross-asset framing wins — independent support for cross-sectional sleeves). Lab CYCLE-111.
+
+### 27.2 e114/e115 (lab-only, no repo change)
+
+e114 (4/4): live-HiveMind next-bar-sign Brier skill **−0.0069**, 6/24 cells — the honest model
+baseline (one self-caught bug: driver FEATURE_LEN is 6, not the walkforward entry's local 12).
+No directional work anywhere (F-126). e115 (5/5): big-move skill **+0.0246**, 19/24 cells, 7/8
+symbols (late splits +0.06…+0.11); lagged-state persistence **−0.67** (states anti-persist at 1h —
+the model isn't free-riding lag-1). First positive shipped-model skill (F-127). Both registered
+in lab `run_all.js`. Next: TODO 111 (e116 payoff test → V2.3 vol-learner only if it pays).
+
+### 27.3 Maintenance (this round)
+
+TODO 107 closed (round-83 split native-gated 132/132); TODO 111 opened + rerank (model track
+joins the top tier beside the fade G5 attestations). Note on the 2026-09-30 heads-up listing the
+two seed1-sleeve run/report pairs as externally changed: re-read was attempted, but the pair is
+absent from this workspace snapshot (only older runs exist here) — nothing to edit regardless,
+since gate artefacts are read-only; the numbers stand as pinned in §25/F-124.
+
+### 27.4 Operator commands (none — no repo code changed this round)
+
+No commands, no uploads. `npm test` NOT needed (repo untouched).
+
+## 28. Round 84b — bucket skill screens out the timed book (2026-09-30, lab + docs only)
+
+e116 (3/3, lab `results/e116_bucket_bigmove.json`): bucket big-move Brier skill **−0.0105**,
+8/24 positive, on the repo view's own 8h panels (one self-caught transposition bug: spotRet is
+bucket-major). The e115 1h skill (+0.0246) does not aggregate — e117 stays unbuilt per the
+pre-registered gate (F-128, CYCLE-112). TODO 111 reranked toward HAR-residual skill + 1h
+execution uses. No operator commands, no uploads; `npm test` NOT needed (repo untouched).
+
+## 29. Round 84c — HAR-residual closes the model track (2026-09-30, lab + docs only)
+
+e117 (3/3, lab `results/e117_har_residual.json`): HiveMind skill on HAR(1,3,21) positive-residual
+labels **−0.0090** (≤5/24, best +0.016 noise-shaped) — the model predicts what HAR already
+predicts, plus noise (F-129, CYCLE-113). No V2.3 vol-learner port. TODO 111 marked
+measured-complete. No operator commands, no uploads; `npm test` NOT needed (repo untouched).
+
+## 30. Round 85 — the network arm is measurable; TODO 94 closes (2026-09-30, lab + docs only)
+
+### 30.1 e118: sibling-shock audit reaches the arm (8/8, F-130)
+
+Lab `e118_network_audit.js` rebuilds `sig-network-momentum` through the repo's own
+functions on the run's exact window (8x1h last-600, train 60 / test 15, probe 0.05,
+1 probe/fold): pooled Sharpe **1.3005**, bit-matching run `20260927T060215-seed1`
+(1.30049/4320 bars). Production viewFor reproduces the corpus (vacuous 8/8, reachable
+0/288); the sibling-shocked twin (base views byte-equal 8/8) reaches **288/288** with
+**0 violations**. The 1.3 is causal — the vacuity is the probe's, not the arm's. The
+fix is audit-layer (perturb sibling slots for cross-sectional arms); scored path and
+goldens unmoved. Proposed next: the W6 re-freeze arc (audit change + harness checks +
+native gate). Lab cycle CYCLE-114, artefact `results/e118_network_audit.json`,
+registered in lab `run_all.js`.
+
+### 30.2 Research sync (sweeps 09ae/ag) + TODO 94 measured-complete
+
+Sweeps `docs/research/raw/arxiv-sweep-2026-09ae.json` (market making, 30 hits),
+`-09af.json` (reversal+crypto, 12) and `-09ag.json` (fill/queue, 17): 2607.28323
+(fill decay + OFI response), 2403.02572, 2409.12721, 2504.00846 plus 2605.06405
+(funding-aware perp making, TODO 95 context). The queue-position half of TODO 94 needs
+L2 data the project lacks — data-blocked, documented; the bar half stands settled by
+F-34. Regressions this round: e112 15/15, e113 14/14 AI-side.
+
+### 30.3 Operator commands (none — no repo code changed this round)
+
+No commands, no uploads. `npm test` NOT needed (repo untouched).
+
+## 31. Round 86 — the sibling-shock probe goes production (2026-09-30, W6 re-freeze arc)
+
+### 31.1 The fix (repo change, audit-layer only)
+
+`src/analysis/world.js#makeCandleViewFor` probe passes now shock the panel's non-own
+slots additively after `after` (the audit's own-returns perturbation law, lab F-130).
+Arms that never read siblings are unaffected by construction; scored path, goldens, and
+all non-XS audits are byte-identical. Pinned by six §R40 harness checks (`analysis`
+850 → 856, node mirror re-pinned, ledger 3113 → 3119). AI-side: analysis 856/0,
+walkforward 90/0, analyze 290/0; e118 9/9 post-fix (production audit reaches 288/288,
+0 violations; pooled Sharpe still 1.3005). Lab cycle CYCLE-115.
+
+### 31.2 Lab repair: e66 was red
+
+The round's bug checks found `e66_world_audit.js` throwing: two of its checks pinned
+pre-R35 contracts (maxBars falsy/slice behaviour; unshocked panel siblings), so run_all's
+e66 step was red. Both restated to the current fail-closed contracts; e66 green again and
+its artefact rewritten. Lesson recorded: the audit-of-audits needs its own regenerate
+in the round checklist.
+
+### 31.3 Operator commands (native gate for TODO 112)
+
+```bash
+npm test
+```
+
+Expect 132/132 (the wrap mirror asserts the new 856 count). No uploads. After green:
+re-run the K=6 1h A/B natively and read the network arm's audit, then decide promotion.
