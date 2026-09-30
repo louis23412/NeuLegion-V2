@@ -78,7 +78,7 @@ run_stage() {
     seeds)   run "G-F / seed replication (5 seeds, CRN)" npm run analyze -- --symbols=all --bars=600 --train=60 --test=15 --audit-probes=1 --reuse-base --concurrency=4 --seeds=1,2,3,4,5 --cost-ladder=0,2,5,10 ;;
     breadth) check_list FUND "$FUND"
              run "G-G / pruned verdict + funding sleeve (9th panel stream)" npm run analyze -- --symbols=all --bars=600 --train=60 --test=15 --audit-probes=1 --reuse-base --concurrency=4 --carry-files="$FUND" --cost-ladder=0,2,5,10 ;;
-    gh)      run "G-H / round-30 momentum upgrades vs baseline+sig-momentum (K=6)" npm run analyze -- --symbols=all --bars=600 --train=60 --test=15 --audit-probes=1 --reuse-base --concurrency=4 --variants=baseline,sig-momentum,sig-vol-momentum,sig-blend-momentum,sig-network-momentum,sig-regime-momentum --cost-ladder=0,2,5,10 ;;
+    gh)      run "G-H / round-30 momentum upgrades vs baseline+sig-momentum (K=5; regime-momentum trimmed round 91, TODO 114: excess r=0.9964 vs momentum)" npm run analyze -- --symbols=all --bars=600 --train=60 --test=15 --audit-probes=1 --reuse-base --concurrency=4 --variants=baseline,sig-momentum,sig-vol-momentum,sig-blend-momentum,sig-network-momentum --cost-ladder=0,2,5,10 ;;
     *)       usage; exit 2 ;;
   esac
 }

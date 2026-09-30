@@ -65,7 +65,7 @@ differs, the 8×200 sanity run. "adjDSR" is the dependence-adjusted DSR at the r
 | `sig-frac-momentum` | `NL-SIG-frac-momentum@r23` | **DROPPED (worst)** | −0.4185 | −1.67 bps | 0.0119 | worst in every dimension tested; turnover 2092/bar makes it cost-fragile even if the sign flipped. |
 | `sig-vol-momentum` | `NL-SIG-vol-momentum@r30` | **DROPPED** | 1.1667 | 14.42 bps | 0.9173 (K=6) | measured in the 2026-09-27 corpus (`RUN-ANALYSIS.md` §18.3); fails the adjusted-DSR floor at the searched roster. Resolvable by id, out of the default roster. |
 | `sig-blend-momentum` | `NL-SIG-blend-momentum@r30` | **DROPPED** | 0.7054 | 8.62 bps | 0.5662 (K=6) | fails decisively in the same corpus. |
-| `sig-network-momentum` | `NL-SIG-network-momentum@r30` | **DROPPED (re-measurement pending, TODO 113)** | 1.3005 | 15.29 bps | 0.8654 (K=6) | corpus audit VACUOUS (8 violations); lab e118 vindicates the wire and the probe is production (`world.js` R40, gate passed 132/132) — re-measure under the gate before any promotion. Requires the panel (`BUGS.md` #70). |
+| `sig-network-momentum` | `NL-SIG-network-momentum@r30` | **DROPPED (measured, round 90)** | 1.3005 | 15.29 bps | 0.8654 (K=6) | re-measured natively in `20260930T154333-seed1` (`RUN-ANALYSIS.md` §35): audit clean (reachable 288/288, 0 violations — P11 resolved), but the single binding hurdle is the dependence-adjusted DSR floor (streamCorr 0.73, DE 5.38, 802 effective bars). Measured-not-promoted. Requires the panel (`BUGS.md` #70). |
 | `sig-regime-momentum` | `NL-SIG-regime-momentum@r30` | **DROPPED** | 1.0657 | 14.06 bps | 0.8681 (K=6) | fails the adjusted-DSR floor in the same corpus. |
 
 **Branch relationship (the tree).** `momentum` is the trunk; `accel` is its second difference

@@ -1152,8 +1152,9 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    adjusted-DSR floor — and network 1.3005/0.8654 with a VACUOUS audit. Register states set from
    that measurement in round 88 (all four DROPPED in `src/lineage.js` / `docs/lineage.json` /
    `docs/LINEAGE.md`, consistent with `DROPPED.md` §2b; all remain resolvable by id, out of the
-   default roster). The network arm's re-measurement under the fixed probe continues as TODO 113
-   (same `scripts/round30-runs.sh gh` command).
+   default roster). The network arm's re-measurement under the fixed probe CLOSED as TODO 113
+   in round 90 (`20260930T154333-seed1`: reachable 288/288, 0 violations, adjDSR 0.8654 —
+   measured-not-promoted; `RUN-ANALYSIS.md` §35).
 
 103. [ ] **Round-30 operator runs (M4–M6, M8).** Re-run **3c** (`CANDLES_15M` non-empty) and **3d**
    (`FUND` non-empty) on the corrected commands; run the **G-F** seed replication (5 seeds, CRN), the
@@ -2141,8 +2142,16 @@ not a bug fix.
    MEASURED-COMPLETE 2026-09-30 (CYCLE-113, F-129): e117 HAR-residual skill −0.0090 (≤5/24) —
    the model adds nothing over the linear vol reference, so NO V2.3 vol-learner port. Final ledger:
    directional CLOSED / 1h magnitude SUPPORTED-but-not-book-actionable / 8h CLOSED / residual
-   CLOSED. Open: 1h-horizon execution uses (idea only). Model attention returns to the locked-core
-   upgrade question in a future round.
+   CLOSED. Open: 1h-horizon execution uses — DOCUMENTED AS DATA-BLOCKED (round 91, not built
+   as a fake model, same standard as TODO 94's queue half). The two candidate uses of the e115
+   big-move skill (+0.0246): (a) adverse-selection avoidance — widen/cancel maker quotes in
+   predicted big-move states; (b) taker-timing — delay book rebalances out of predicted
+   high-vol states. Neither is measurable on bar data: quote/fill dynamics live below bar
+   resolution (CYCLE-114: 2607.28323; e25: spread estimators volatility-contaminated, selection
+   −0.6…−1.6 bps/fill) and the project holds no L2/trade/latency series. Unblocks: venue L2 +
+   trade prints with latency logs. Pre-registered gate: adverse-selection/move-timing gain in
+   bps per real fill vs the e25 baseline — a simulated spread never counts. Model attention
+   returns to the locked-core upgrade question in a future round.
 
 > **Rerank 2026-09-30 (round 85):** the W6 re-freeze arc for the network-arm audit
 > (F-130) takes the top tier: e118 proves the Sharpe-1.3/BE-15.3bp arm is causal under
@@ -2163,4 +2172,12 @@ not a bug fix.
    (re-run the K=6 1h A/B natively, read the network arm's audit, decide promotion). Detail:
    `RUN-ANALYSIS.md` §31–§32, lab CYCLE-115/CYCLE-116.
 
-113. [ ] **Round-87 — re-measure the network arm under the gate (K=6 1h A/B) and decide promotion.** Re-run the §18.3 roster natively (`scripts/round30-runs.sh gh`, i.e. baseline + 5 momentum arms, K=6, 8×1h last-600, train 60 / test 15, probe 1, reuse-base) and read `sig-network-momentum`'s audit block (expect reachable 288/288, violations 0 — the e118 law in production) plus its honest-K adjDSR (was 0.8654 at K=6, VACUOUS). Promotion needs the full gate, not the Sharpe: clean audit + paired magnitude + stability + adjDSR ≥ 0.95 + cost ladder. If it stays below the DSR floor, record it as measured-not-promoted and keep the DROPPED disposition; if it clears, open the W6 promotion arc (exposure-matched check per TODO 85 first — the arm's confidence scale vs the controller's is still unscored). Detail: `RUN-ANALYSIS.md` §18.3/§32.
+113. [x] **Round-87 — re-measure the network arm under the gate (K=6 1h A/B) and decide promotion.** **DONE (round 90).** The operator's `20260930T154333-seed1` run (45:25 wall, uploaded under `src/runs/`) re-ran the §18.3 roster natively: all five signals `reachable 288/288`, `violations 0` — the R40 sibling-shock law holds in production (AUDIT P11 resolved). `sig-network-momentum` reads pooled Sharpe 1.3005, adjDSR 0.8654 @ 802 effective bars — the ONLY failed hurdle (paired dSharpe 1.4152 significant, stability 1.0 all pass). Verdict: **measured-not-promoted**; the DROPPED disposition stands, re-measured. New learnings: dependence is the binding constraint and the network arm pays most (streamCorr 0.73, DE 5.38); vol is nearest the floor (0.9173, margin −0.033); momentum~regime-momentum excess r = 0.9964 (roster redundancy measured → item 114). Detail: `RUN-ANALYSIS.md` §35.
+
+114. [x] **Round-90 — trim the near-duplicate from the K=6 `gh` roster.** **DONE (round 91, AI-side).** `scripts/round30-runs.sh` (`gh` stage) now runs baseline + 4 momentum arms (K=5; `sig-regime-momentum` out, measured excess r = 0.9964 vs `sig-momentum`). No test pins the roster (only `resolveVariant` coverage, untouched); the edit is verified AI-side (K=5, flags otherwise byte-identical). Comparability note: the next `gh` starts a K=5 column beside the K=6 corpus (§15.4) — report both. Native gate: none owed until the next `gh` run itself, which is the verification.
+
+115. [x] **Round-92 — W5 symbol breadth: harvest mid-cap Binance perps + e121 stacked-panel test.** **DONE (round 93, AI-side).** Harvested exactly as specified (futures-um monthly zips — not spot daily; 8/8 symbols, 2024-06-01..2026-08-31, 19,728 bars each, zero gaps) via durable `src/NeuLegion-lab/data/harvest_midcap_1h.js`, vendored at `src/NeuLegion-lab/data/midcap/` with manifest. e121 6/6 SUPPORTED: stacked-16 effStreams 2.35 vs majors 1.75 (1.35× ≥ 1.25 gate), rbar 0.51 → 0.39; calibration bit-matches 1.0848. Honest notes: window Sharpe ~0.13–0.15 everywhere (F-01 face — verdict is dependence, not edge); midcaps add breadth, no extra edge. Detail: `RUN-ANALYSIS.md` §38, lab F-134.
+
+116. [ ] **Round-93 — native midcap port + augmented-panel run (operator-owned).** e121/F-134 measured the breadth lab-side; banking it needs the native panel: copy the 8 midcap series from `src/NeuLegion-lab/data/midcap/candles_*_1h.jsonl` to the repo `src/data/` candle convention and add the 8 entries to `CANDLE_MANIFEST` in `src/candles_audit.js` (`--symbols=all` is manifest-driven via `resolveSymbolFiles`), then `bash scripts/test.sh quick` (the §J2 manifest-map checks cover the new entries) and run the K=5 `gh` roster natively on the 16-symbol panel — read vol/network adjDSR + effStreams vs the 8-major baseline. Pre-registered interest: effStreams ≥ 2.3 with vol adjDSR moving up from 0.9173. Cost: ~17 MB added to the shipped tree + one ~45-min run. Upload `state/runs/<runId>/report.json`.
+
+117. [ ] **Round-94 follow-up — bank wave-2 breadth (operator-owned, QUEUED behind 116).** e122/F-135 measured the second wave lab-side (`src/NeuLegion-lab/data/midcap2/`: LTC/ETC/UNI/AAVE/ATOM/DOT/FIL/APT, 19,728 bars each, zero gaps): stacked-24 effStreams 2.63 vs stacked-16 2.35 (1.12×, MIXED vs the 1.20 bar), rbar 0.39 → 0.35; wave-2 standalone Sharpe −0.09 (breadth only, no edge). Run ONLY if 116 confirms on the 16-panel (effStreams ≥ 2.3 natively): same port recipe for the 8 wave-2 series, one K=5 `gh` on the 24-panel, read effStreams vs 2.35. If 116 fails, park this with the symbol-breadth leg (no third lab wave — sublinear scaling measured: +34% then +12%). Cost if run: ~17 MB + one ~60-min run. Upload `state/runs/<runId>/report.json`.

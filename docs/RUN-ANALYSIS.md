@@ -4573,3 +4573,252 @@ bash scripts/round30-runs.sh gh
 ```
 
 Upload `state/runs/<runId>/report.json` from the `gh` run.
+
+## 35. Round 90 — the K=6 re-run lands: network arm measured, not promoted (2026-09-30, docs only)
+
+Run `20260930T154333-seed1` is complete (45:25 wall; the §18.3 roster at K=6: baseline
++ 5 momentum arms; 288 folds, 4320 pooled bars, 8×1h last-600, train 60 / test 15,
+probe 1, reuse-base, seed 1). The operator uploaded `run.json`, `report.json`,
+`run.log`, `folds.jsonl`, `partial-report.json`, `progress.json` under
+`src/runs/20260930T154333-seed1/` (read-only evidence; numbers below verified
+AI-side against `report.json`, not trusted from the chat proof). TODO 113 CLOSED.
+
+### 35.1 The audit fix is verified in production
+
+All five signals: `reachable 288/288`, `violations 0`. The corpus VACUOUS (0/288 +
+8 violations) is gone — the R40 sibling-shock probe reaches the cross-sectional
+input natively, and the pooled Sharpe still reads 1.3005 (the e118 bit-match holds
+outside the lab). Baseline `reachable 229/288`, clean, as before (the base-rate
+mechanism is non-reactive on some folds — expected, not a finding). AUDIT P11 is
+resolved; the vacuity is closed, not downgraded.
+
+### 35.2 The verdict: measured-not-promoted on a single binding hurdle
+
+`sig-network-momentum`: pooled Sharpe **1.3005**, adjDSR **0.8654 @ 802 effective
+bars < 0.95** — the ONLY failed hurdle. Everything else gated passes: paired
+dSharpe 1.4152 vs required 1.2212 (one-sided p = 0.029), cluster stability 1.0,
+unadjusted DSR 1.0, breadth 22/36. The full re-measured table (this run):
+
+| arm | pooled Sharpe | adj. DSR (eff. bars) | break-even | verdict |
+| --- | ---: | ---: | ---: | --- |
+| `sig-momentum` | 1.0848 | 0.8743 (1192) | 14.64 bps | keep-off (DSR floor) |
+| `sig-vol-momentum` | 1.1667 | **0.9173** (1212) | 14.42 bps | keep-off (DSR floor, margin −0.033 — nearest) |
+| `sig-blend-momentum` | 0.7054 | 0.5662 (1079) | 8.62 bps | keep-off (DSR floor + paired p = 0.092) |
+| `sig-network-momentum` | 1.3005 | 0.8654 (802) | 15.29 bps | keep-off (DSR floor only) |
+| `sig-regime-momentum` | 1.0950 | 0.8752 (1173) | 14.73 bps | keep-off (DSR floor) |
+
+Family: SPA p = 0.3177, Rejects = [none]. Cost ladder promotes [none] at
+0/2/5/10 bps. Forecast MCS = [baseline] at 90 and 95. Run UNDERPOWERED under the
+cluster jackknife (dep MDE95 ±1.04, inflation 4.87x, 888 effective of 4320 bars).
+
+### 35.3 What this run teaches (new, not in §18.3)
+
+1. **Dependence is the binding constraint, and the network arm pays the most for
+   it.** streamCorr 0.73 → design effect 5.38 → effectiveStreams 1.31 → 802
+   effective bars, the fewest of all arms. The cross-sectional arm is the most
+   cross-stream-correlated signal in the roster, hence the most penalised by the
+   adjustment that gates it. Contrast the 15m run's `sig-reversal-xs`
+   (runs/README §3): cross-sectional demeaning collapses the design effect to
+   0.361 — power without signal there, signal without power here. A
+   decorrelated cross-sectional signal is the shape that would clear.
+2. **The paired magnitude already clears** (1.4152 > 1.2212 required, margin
+   +0.194) — so `nextRun.cheapestFlip: magnitude` names the DSR floor, not the
+   t-test. Real levers: lower design effect, more effective bars, larger raw
+   edge. Paired clusters need 28 / have 36 / need(80%) 60; barsToDetectDependent
+   5217; break-even 15.29 bps clears 0/2/5/10.
+3. **Roster redundancy is now measured, not asserted.** momentum~regime-momentum
+   excess-return r = **0.9964**; family mean pairwise excessCorr 0.81,
+   effectiveTrials 1.18 of 5. The deflated Sharpe correctly keeps trials = K
+   (correlated tests are still tests that were run), so the duplicate wastes
+   compute, not alpha — but 45 minutes a run makes compute the binding budget.
+   TODO 114 files the trim: drop `sig-regime-momentum` from the `gh` roster
+   (keep `sig-momentum`), vol stays as the watch-list arm nearest the floor.
+
+### 35.4 Rerank
+
+Top tier: fade G5 attestations (106/108, operator-owned) + TODO 114 (roster
+trim — one script line, then the standing gate). Model track stays idea-only
+(1h execution uses). Queued, not urgent: TODO 95 remainder, 104, W5 venues,
+L10-co/cp/cq/cr. No `npm test` needed this round (docs only); the roster trim
+is the next repo change and carries its own gate when it lands.
+
+### 35.5 Operator commands
+
+None this round (docs only — nothing to run, nothing to upload).
+
+## 36. Round 91 — roster trim + the demeaned-momentum experiment (2026-09-30, AI-side)
+
+Two work units: close TODO 114 in the repo, and run the experiment round 90 called for
+(§35.3: "a decorrelated cross-sectional signal is the shape that would clear").
+
+### 36.1 TODO 114 CLOSED: `gh` goes K=6 → K=5
+
+`scripts/round30-runs.sh` (`gh` stage) drops `sig-regime-momentum`; the roster is now
+baseline + `sig-momentum`, `sig-vol-momentum`, `sig-blend-momentum`,
+`sig-network-momentum` (K=5). Verified AI-side: 5 variants, regime absent, every other
+flag byte-identical (label parens balanced). No test pins the roster (only
+`resolveVariant` coverage, untouched); no scored-path change. The next `gh` run starts
+a K=5 column beside the K=6 corpus table (§15.4) — report both, and read `sig-vol-momentum`
+first (nearest the floor at 0.9173; one fewer trial means less deflation). No native gate
+is owed until that run, which is itself the verification.
+
+### 36.2 e119: cross-sectionally-demeaned 1h momentum keeps no edge — NEGATIVE (F-132)
+
+`e119_xs_demeaned_momentum.js` (9/9 AI-side, artefact
+`results/e119_xs_demeaned_momentum.json`, registered in `run_all.js`) rebuilds
+`sig-momentum` on the run's exact window (8×1h last-600, train 60 / test 15, deadZone-0.05
+policy, lag-1) plus two causal cross-sectional arms from the same per-bar confidences:
+
+| arm | pooled Sharpe | break-even | mean pair. corr | Kish DE | eff. streams |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A raw momentum | **1.0848** | 14.64 bps | 0.5196 | 4.64 | 1.73 |
+| B demeaned | 0.0926 | 1.15 bps | −0.0715 | 0.50 | 16.02 |
+| C z-scored | 0.1958 | 1.92 bps | −0.0430 | 0.70 | 11.44 |
+
+Calibration is exact: arm A bit-matches the run on Sharpe (1.0848), gross (1.186537),
+turnover (810.435), break-even (14.64), rbar (0.5196) and effectiveStreams (1.7252) —
+so the NEGATIVE is trustworthy, not harness drift. (One judgement call recorded: the run's
+composite designEffect 3.6239 folds in serial dependence beyond the stream panel, so the
+lab pins the Kish-consistent rbar/effStreams instead; `streams.js` documents the gap.)
+
+Reading, pre-registered: B < 0.25 → the 1h momentum edge is the market leg; demeaning
+removes the edge along with the correlation. The "decorrelated cross-sectional signal"
+direction is CLOSED for the 1h panel — same verdict shape as reversal-xs (power without
+signal there, signal without power here), now measured from both sides. Breadth stays
+where the independence already is: the sleeves (carry×fade corr +0.02, F-125), not a
+new price arm. No repo change; no golden moves.
+
+### 36.3 Rerank
+
+Top tier: fade G5 attestations (106/108, operator-owned) + TODO 111 (model track, highest
+model EV — 1h execution uses remain the only unmeasured model item). Queued, not urgent:
+TODO 95 remainder, 104, W5 venues, L10-co/cp/cq/cr. Research sync attempted (arXiv API on
+crypto cross-sectional momentum) but the fetch failed twice — recorded, not chased; the
+ledger (F-06/F-08/F-122, §13.5 market-component note) already grounds the e119 result.
+
+### 36.4 Operator commands
+
+None this round (AI-side only — nothing to run, nothing to upload).
+
+### 36.5 Second half: execution-uses documented as blocked + orchestrator sanity
+
+TODO 111's last open tail ("1h-horizon execution uses, idea only") is now documented as
+DATA-BLOCKED in the item itself: the two candidate uses of the e115 big-move skill
+(adverse-selection quote avoidance, taker-timing of rebalances), why neither is measurable
+on bar data (CYCLE-114 / e25), the unblocking data (venue L2 + trade prints + latency logs),
+and the pre-registered gate (bps per real fill vs the e25 baseline — a simulated spread never
+counts). No fake execution model is built, per the TODO 94 precedent. Sanity: `run_all.js`
+with the e119 step bundles clean through the browser harness (export `run` resolves), so the
+orchestrator is intact; the e119 artefact on disk matches the final code (written by the
+9/9 run). TODO 95 remainder confirmed operator-/data-owned (execution beyond taker fees,
+borrow/margin, liquidation — venue data the project does not hold).
+
+## 37. Round 92 — W5.4 multi-frequency panel: same factor, no gain (2026-09-30, AI-side)
+
+`e120_multifreq_panel.js` (7/7 AI-side, artefact `results/e120_multifreq_panel.json`,
+registered in `run_all.js`) stacks 15m momentum beside 1h momentum on the run's exact 1h
+test-bar grid (matched time lookbacks: 64×15m = 16h window, 128×15m = 32h z-window;
+strictly causal — last 15m bar with t < 1h open):
+
+| panel | pooled Sharpe | break-even | mean pair. corr | Kish DE | eff. streams |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A 1h momentum | **1.0848** | 14.64 bps | 0.5196 | 4.64 | 1.73 |
+| F 15m on 1h grid | 1.0407 | 13.33 bps | 0.5659 | 4.96 | 1.61 |
+| S stacked (16) | 1.0631 | — | 0.5245 | 8.87 | 1.80 |
+
+Calibration exact (arm A bit-matches the run on six numbers). Same-stream cross-frequency
+return corr runs 0.80–0.96 (mean ~0.90): the two frequencies are the same trade, and the
+stacked panel's rbar (0.5245) is no lower than the 1h panel's (0.5196) — NEGATIVE per the
+pre-registered gate, so W5.4 is CLOSED: frequency does not buy independence for momentum
+(4% more effective streams for twice the panel). The F Sharpe is descriptive only (15m held
+on the 1h grid, not the native 15m edge). Network probe: `data.binance.vision` answers 200
+from this workspace (arXiv's failure was endpoint-specific), so the remaining W5 breadth leg
+— new symbols — is AI-side feasible and filed as TODO 115. No repo change; no golden moves.
+
+### 37.1 Rerank
+
+W5 now reads: sleeves-as-streams (repo change + L10-cs, needs re-freeze decision),
+venue/symbol breadth (TODO 115, AI-side next), W5.4 CLOSED-negative, R5 demeaning held for
+sleeves with an edge. Top tier unchanged: fade G5 (106/108, operator-owned) + TODO 111
+(model track) + TODO 115 (breadth). Queued: 95 remainder, 104, L10-co/cp/cq/cr (scored-path
+kernels, re-freeze-gated).
+
+### 37.2 Operator commands
+
+None this round (AI-side only — nothing to run, nothing to upload).
+
+## 38. Round 93 — symbol breadth SUPPORTED: midcaps buy independence (2026-09-30, AI-side)
+
+TODO 115 executed in full: 8 mid-cap Binance perps harvested (monthly klines zips,
+2024-06-01..2026-08-31, 19,728 bars each, zero gaps/missing), vendored at
+`src/NeuLegion-lab/data/midcap/` with manifest + durable harvester
+(`data/harvest_midcap_1h.js`). `e121_symbol_breadth.js` (6/6 AI-side, artefact
+`results/e121_symbol_breadth.json`, registered in `run_all.js`) scores momentum on the
+timestamp-exact shared 600-bar grid ending 2026-08-31T23:00Z:
+
+| panel | pooled Sharpe | break-even | mean pair. corr | Kish DE | eff. streams |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| M 8 majors | 0.1528 | 2.35 bps | 0.5113 | 4.58 | 1.75 |
+| C 8 midcaps | 0.1164 | 2.12 bps | 0.3925 | 3.75 | 2.13 |
+| S stacked 16 | 0.1327 | — | 0.3865 | 6.80 | 2.35 |
+
+Calibration bit-matches the run (1.0848 on the run window), so the plumbing is sound.
+Stacked effStreams 2.35 ≥ 1.75 × 1.25 → SUPPORTED per the pre-registered gate: new symbols
+are the first breadth leg that moves the binding constraint (rbar 0.51 → 0.39; midcaps are
+less mutually correlated than majors). Two honest notes: (a) on this window momentum's own
+Sharpe is ~0.13–0.15 everywhere — another F-01 face, the verdict is about dependence, not
+edge; (b) midcaps carry no extra edge (0.12 ≈ 0.15) — a pure breadth gain. TODO 115 CLOSED;
+TODO 116 files the native port (repo data convention + midcap-augmented panel run,
+operator-owned). No repo change this round; no golden moves.
+
+### 38.1 Rerank
+
+Breadth now has a measured leg: TODO 116 (native midcap port + panel run) joins the top
+tier beside fade G5 (106/108, operator) and TODO 111 (model track). W5 reads:
+sleeves-as-streams (re-freeze-gated), symbol breadth measured-lab / pending-native (115
+done, 116 open), venues follow-up, W5.4 CLOSED, R5 held for sleeves with an edge. Queued:
+95 remainder, 104, L10-co/cp/cq/cr.
+
+### 38.2 Operator commands
+
+None this round (AI-side only — nothing to run, nothing to upload).
+
+## 39. Round 94 — foundations split + 09z sweep + wave-2 breadth MIXED (2026-09-30, AI-side)
+
+Three tracks. **Foundations:** `src/analysis/reality_check.js` (1104 lines, the
+biggest pure module left) split into `reality_check/bootstrap.js` (573 lines:
+RC/SPA block-bootstrap family + shared `relativePerformance`/`safeRatio`) and
+`reality_check/subsampling.js` (536 lines: Newey-West + subsampling
+SPA/StepM/k-FWER/FDP) behind an exact 18-name re-export shim, per the round-71
+recipe (export-over-duplicate for the shared guard; two `ANALYSIS_MODULES` +
+two `ANALYSIS_REGISTRY` rows; `locks.test.js` imports + map). Verified AI-side
+with baselines first: locks 41/0, analysis 856/0, contracts 255/0, walkforward
+90/0, analyze 294/0 — all counts unchanged — plus the lab's own module audit
+`e58` 39/39 `validationPass` through the new layout. No scored-path change, no
+golden moves. **Research sync:** `docs/research/raw/arxiv-sweep-2026-09z.json`
+(PM 59 hits, TR 109 hits; 8 read-and-grounded notes, 4 carryovers) — notably
+2607.09230 (L2 liquidity-STATE prediction gives TODO 111's execution uses their
+concrete task form; data requirement stands), 2608.09188 (venue lead-lag is
+unidentifiable from marks alone — W5 venues must be scored as independence),
+2512.01112 (ADL trilemma — TODO 95 liquidation leg), and 2609.14859 (pass rate
+confounds edge + sizing — gate discipline). **Breadth:** 8 more midcaps
+harvested (LTC/ETC/UNI/AAVE/ATOM/DOT/FIL/APT, 216/216 monthly zips, 19,728 bars
+each, zero gaps; `NeuLegion-lab/data/midcap2/`) and `e122` 6/6 MIXED (lab
+F-135): S16 replication 2.3536 vs e121's 2.35; wave-2 standalone Sharpe −0.09
+at effStreams 2.43/rbar 0.33 (least correlated panel yet, no edge); stacked-24
+2.631 vs stacked-16 2.3536 = 1.12× < 1.20 gate with rbar falling — breadth
+scales sublinearly (wave-1 +34%, wave-2 +12%).
+
+### 39.1 Rerank
+
+Top tier unchanged: TODO 116 (native 16-panel) + fade G5 (106/108, operator) +
+TODO 111 (execution uses now task-defined, still data-blocked). New TODO 117
+files the wave-2 follow-up (native 24-panel ONLY if 116 confirms; else park —
+no third lab wave). W5 venues operator-owned with the 2608.09188 scoring rule.
+Queued: 95 remainder, 104, L10-co/cp/cq/cr (golden-adjacent).
+
+### 39.2 Operator commands
+
+`npm test` from the repo root (the round-94 split needs the native gate: new
+files + registry rows + locks imports; expect 132/132 — counts unchanged, so
+no mirror re-pin, but only the native driver proves the CLI paths). No uploads.

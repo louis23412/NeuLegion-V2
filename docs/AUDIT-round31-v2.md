@@ -265,7 +265,7 @@ from the README.
 | **P8** | **Label/evaluator target mismatch.** Training labels are **trade outcomes** (TP/SL via `_processClosedTrades`), only *closed* trades train, and the holding horizon varies (`heldBars` mean 8.3, max 54) — while the model is scored as a directional forecaster | `controller/trades.js`, `BUGS.md` #33 lineage | selection bias + path-dependence + horizon mixing: the learner is optimising a different object than the one being graded | HIGH |
 | **P9** | **Un-validated memory-bank operators.** `_updateSemanticProtos` uses a `dynamicThreshold` mixing capacity overload, performance, agreement and stagnation; a **repulsion** term that pushes near-miss candidates away (`strength·sqrt(maxVariance·0.08)`); variance inflation; and importance updates | `memory/banks.js#_updateSemanticProtos` | many interacting, un-ablated structural operators between the data and the memory content | MEDIUM |
 | **P10** | **`train()` is an apply→distill→rollback→apply dance.** On the reset cadence it applies gradients, runs a "fresh" forward, distills teacher→student, **rolls the gradients back**, re-applies, runs another forward, then shares memory | `hiveMind.js#train` | an unusual, uncited two-pass optimizer that couples training to the ensemble readout | MEDIUM |
-| **P11** | **Cross-sectional content was audited through a probe that could not reach it.** `networkMomentum`'s self-skip needs `panel.streamIndex`; the audit perturbed only the own stream, which the arm never reads. The scored wire itself was correct (e63: the driver always sets `streamIndex`) | `analysis/features.js#networkMomentum`, `analysis/world.js#panelFor`; §18.4; L10-bu/L10-cc | the only non-beta arm (`sig-network-momentum`, pooled Sharpe **1.3005**) was **VACUOUS with 8 look-ahead violations** — unmeasurable. **Round-86 update (lab F-130):** sibling-shock probe reaches 288/288 with 0 violations; the fix is production in `world.js` (R40, `analysis` 850 → 856). Downgrade to MEDIUM pending the native gate + re-measurement — **round-87 update:** gate passed (`npm test` 132/132, 2026-09-30); re-measurement pending (TODO 113, `scripts/round30-runs.sh gh`) | HIGH |
+| **P11** | **Cross-sectional content was audited through a probe that could not reach it.** `networkMomentum`'s self-skip needs `panel.streamIndex`; the audit perturbed only the own stream, which the arm never reads. The scored wire itself was correct (e63: the driver always sets `streamIndex`) | `analysis/features.js#networkMomentum`, `analysis/world.js#panelFor`; §18.4; L10-bu/L10-cc | the only non-beta arm (`sig-network-momentum`, pooled Sharpe **1.3005**) was **VACUOUS with 8 look-ahead violations** — unmeasurable. **Round-86 update (lab F-130):** sibling-shock probe reaches 288/288 with 0 violations; the fix is production in `world.js` (R40, `analysis` 850 → 856). Downgrade to MEDIUM pending the native gate + re-measurement — **round-87 update:** gate passed (`npm test` 132/132, 2026-09-30); re-measurement pending (TODO 113, `scripts/round30-runs.sh gh`) — **round-90 update:** re-measured natively in `20260930T154333-seed1`: all five signals `reachable 288/288`, `violations 0` (`RUN-ANALYSIS.md` §35). The probe reaches the arm in production; the finding is **RESOLVED** (the arm itself stays DROPPED on the DSR floor — measured-not-promoted, TODO 113 CLOSED) | LOW |
 | **P12** | **The LSH index is off the product path — and the live read is partly random.** The scored reader (`_retrieveTopRelevantProtos`) probes `_semanticLSHBuckets` directly and "draws `Math.random()` a bucket-content-dependent number of times"; `_getGlobalLSHCandidates` (the only caller of multi-probe/query-mod) is reached only by `broadcastMemory`, a **discard** path | `memory/retrieval.js#_retrieveTopRelevantProtos`, `BUGS.md` #44 | (a) all the index R&D cannot move the score; (b) the read injects **Math.random()** variance unless `legion/rng.js#installSeededRandom` is on (default off) | HIGH |
 
 ### 3.2 Friction pairs (designs that clash)
@@ -503,16 +503,19 @@ index tier, or a new label policy — all of which the project (or the literatur
 ### V11. Failed features still carried by the plan — **resolved**
 | still carried | status | action |
 | --- | --- | --- |
-| `SIGUP_CANDIDATES` (vol/blend/network/regime momentum) | registered `UNTESTED`, but the corpus measured all five at K=6 — **none promotes** (§18.3); `sig-network-momentum` is VACUOUS | **A23**: mark them PARK/DROPPED in `LINEAGE.md` + `DROPPED.md`; do not carry them into round 31 |
+| `SIGUP_CANDIDATES` (vol/blend/network/regime momentum) | registered `UNTESTED`, but the corpus measured all five at K=6 — **none promotes** (§18.3); `sig-network-momentum` was VACUOUS (**round-90 update:** re-measured clean in `20260930T154333-seed1`, still promotes nothing — §35) | **A23**: mark them PARK/DROPPED in `LINEAGE.md` + `DROPPED.md`; do not carry them into round 31 |
 | LSH upgrades (`multiprobe`, `querymod`, `binarypc`, `bitweight`) | off the scored path (`BUGS.md` #44) | **A24**: **wire-or-drop** — either route the scored read through `_getGlobalLSHCandidates`, or stop investing and mark them PARK explicitly |
 | surprise, sample-weights, homeostasis, broadcast | measured inert/negative | **A17** (retire/validate) |
 | meta-labelling, reversal-to-taker-pass, model-class search, direction prediction | closed | anti-re-tread (unchanged) |
 
-### V12. The highest-Sharpe arm is unmeasurable — **already covered, re-emphasised**
-`sig-network-momentum` (pooled Sharpe **1.3005**, the corpus's best) is VACUOUS with 8 look-ahead
-violations because the cross-sectional wire is broken (P11). → Fix the own-stream-slot wiring (W6 /
+### V12. The highest-Sharpe arm is unmeasurable — **resolved in round 90**
+`sig-network-momentum` (pooled Sharpe **1.3005**, the corpus's best) was VACUOUS with 8 look-ahead
+violations because the cross-sectional wire was broken (P11). → Fix the own-stream-slot wiring (W6 /
 L10-bu/L10-cc) **before** citing any panel arm; until then the corpus contains **no** measured
-version of its strongest candidate.
+version of its strongest candidate. **Round-90 update:** fixed and re-measured — `20260930T154333-seed1`
+reads the arm clean (`reachable 288/288`, 0 violations) and it still promotes nothing (adjDSR 0.8654,
+DROPPED measured-not-promoted; `RUN-ANALYSIS.md` §35, TODO 113 CLOSED). V12's guard held: the measured
+version exists now, and the verdict did not change.
 
 ### Cycle 7 verdict
 The reconciled plan holds. The amendments add three guards that were genuinely missing — **A19**

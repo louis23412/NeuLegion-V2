@@ -74,7 +74,7 @@ direction is unchanged; four load-bearing claims are corrected.
 | **A19** | **No full-history laundering**: an arm with a data-selected parameter is excluded from the full-history score (or scored under the same expanding-window rule that selected it). |
 | **A21** | State the prior: G5 passing on the first port is ≈⅓; the floor deliverable is the harness + the sleeves + the negative result. |
 | **A22** | The **legion survives as a V2 runtime/scheduler** (many learner slots, the vault, the observer) — not the product's alpha source. |
-| **A23** | **`SIGUP_CANDIDATES` → PARK/DROPPED** (`DROPPED.md`): the run corpus measured all five at K=6 and none promotes; `sig-network-momentum` is VACUOUS. |
+| **A23** | **`SIGUP_CANDIDATES` → PARK/DROPPED** (`DROPPED.md`): the run corpus measured all five at K=6 and none promotes; `sig-network-momentum` was VACUOUS (**round 90:** re-measured clean, still promotes nothing — §35). |
 | **A24** | **Wire-or-drop the LSH upgrades** (`multiprobe`/`querymod`/`binarypc`/`bitweight`): route the scored read through `_getGlobalLSHCandidates`, or mark them PARK and stop investing (`BUGS.md` #44). |
 
 **The single most important correction:** do not sell W5 as the fix before W1 has re-measured the arms

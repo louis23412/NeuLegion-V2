@@ -51,12 +51,15 @@ deflection is monotone in `K`, so none promotes — and the strongest arm is una
 | --- | --- | ---: | ---: | ---: | --- |
 | `sig-vol-momentum` | `NL-SIG-vol-momentum@r30` | 1.1667 | 0.9173 | 14.42 bps | fails the adjusted-DSR floor at the searched roster |
 | `sig-blend-momentum` | `NL-SIG-blend-momentum@r30` | 0.7054 | 0.5662 | 8.62 bps | fails decisively |
-| `sig-network-momentum` | `NL-SIG-network-momentum@r30` | 1.3005 | 0.8654 | 15.29 bps | **VACUOUS** look-ahead audit (8 violations, `reachable 0/288`) — the probe never reached the arm's input (`L10-bu`/`L10-cc`); **unmeasured**, not merely un-promoted. **Round-86 update:** the scored wire was vindicated lab-side (e118/F-130: sibling-shock probe reaches 288/288 with 0 violations, pooled Sharpe bit-matches) and the probe now shocks sibling slots in production (`analysis/world.js` R40) — the arm is measurable; re-measure under the gate before promoting (**round-87:** gate passed 132/132; re-measurement TODO 113) |
+| `sig-network-momentum` | `NL-SIG-network-momentum@r30` | 1.3005 | 0.8654 | 15.29 bps | **measured-not-promoted (round 90).** The corpus VACUOUS is closed: re-measured natively in `20260930T154333-seed1` (`RUN-ANALYSIS.md` §35) the arm is clean (`reachable 288/288`, 0 violations — the R40 sibling-shock probe reaches it in production) and every gated hurdle passes except one: the dependence-adjusted DSR floor (0.8654 @ 802 effective bars; streamCorr 0.73, DE 5.38 — the arm pays most for the adjustment that gates it). Paired dSharpe 1.4152 significant, stability 1.0. The disposition stands, re-measured. |
 | `sig-regime-momentum` | `NL-SIG-regime-momentum@r30` | 1.0657 | 0.8681 | 14.06 bps | fails the adjusted-DSR floor |
 
 **A drop is a roster label.** The modules ship and stay golden-pinned; the branches leave the future
-search. If the cross-sectional wire (A24/W6) is fixed, `sig-network-momentum` is the one worth
-re-measuring — its pooled Sharpe is the corpus's highest, but it is currently *not a measurement*.
+search. The cross-sectional wire (A24/W6) was fixed and the arm re-measured natively
+in round 90 (`RUN-ANALYSIS.md` §35): clean audit, Sharpe 1.3005 intact, held by the
+dependence-adjusted DSR floor alone. The shape that would clear it is a decorrelated
+cross-sectional signal — cf. the 15m run's `sig-reversal-xs` (design effect 0.361):
+power without signal there, signal without power here.
 This entry implements `AUDIT-round31-v2.md` amendment **A23**.
 
 ## 3. Dropped benchmark (NL-BENCH)

@@ -41,6 +41,8 @@ import * as walkforwardRestateMod from '../../../src/analysis/walkforward/restat
 import * as walkforwardSearchMod from '../../../src/analysis/walkforward/search.js';
 import * as overfittingMod from '../../../src/analysis/overfitting.js';
 import * as realityCheckMod from '../../../src/analysis/reality_check.js';
+import * as realityCheckBootstrapMod from '../../../src/analysis/reality_check/bootstrap.js';
+import * as realityCheckSubsamplingMod from '../../../src/analysis/reality_check/subsampling.js';
 import * as dependenceMod from '../../../src/analysis/dependence.js';
 import * as worldMod from '../../../src/analysis/world.js';
 import * as featuresMod from '../../../src/analysis/features.js';
@@ -92,6 +94,8 @@ const ANALYSIS_IMPORTS = {
     'walkforward/search.js': walkforwardSearchMod,
     'overfitting.js': overfittingMod,
     'reality_check.js': realityCheckMod,
+    'reality_check/bootstrap.js': realityCheckBootstrapMod,
+    'reality_check/subsampling.js': realityCheckSubsamplingMod,
     'dependence.js': dependenceMod,
     'world.js': worldMod,
     'features.js': featuresMod,
