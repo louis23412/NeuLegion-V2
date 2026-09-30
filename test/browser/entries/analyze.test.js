@@ -47,6 +47,7 @@ import { poolReports, auditNoLookahead, restateReportAtPolicy, confidenceToPosit
 import { backtestMetrics } from '../../../src/analysis/backtest.js';
 import { shockCandles, volumeShockFactor, makeCandleViewFor } from '../../../src/analysis/world.js';
 import { CANDLE_MANIFEST } from '../../../src/candles_audit.js';
+import { resolveSymbolFiles } from '../../../src/analyze/cli.js';
 
 // A deterministic synthetic return series with a persistent, learnable rhythm:
 // slow up/down blocks, so a causal signal can genuinely carry an edge (and a
@@ -428,6 +429,25 @@ export async function run() {
     check('readCandles keeps full rows and back-fills a close-only row',
         rows.length === 2 && rows[0].volume === 500 && rows[1].open === 13 && rows[1].high === 13 && rows[1].low === 13 && rows[1].volume === 1,
         JSON.stringify(rows));
+
+    // ---- J2. --symbols resolves to the manifest files, once (round 89) ----
+    const norm = (p) => String(p).replace(/\\/g, '/');
+    check('resolveSymbolFiles maps BTCUSDT onto its manifest entry file',
+        (() => { const f = resolveSymbolFiles(['BTCUSDT'])[0]; return norm(f).endsWith('/' + CANDLE_MANIFEST[0].file) || norm(f) === CANDLE_MANIFEST[0].file; })(),
+        JSON.stringify(resolveSymbolFiles(['BTCUSDT'])));
+    check('resolveSymbolFiles never doubles the src segment',
+        resolveSymbolFiles(CANDLE_MANIFEST.map((e) => e.symbol)).every((f) => !norm(f).includes('src/src')),
+        JSON.stringify(resolveSymbolFiles(CANDLE_MANIFEST.map((e) => e.symbol)).slice(0, 2)));
+    check('resolveSymbolFiles covers every manifest symbol 1:1',
+        (() => {
+            const got = resolveSymbolFiles(CANDLE_MANIFEST.map((e) => e.symbol)).map(norm);
+            return got.length === CANDLE_MANIFEST.length &&
+                CANDLE_MANIFEST.every((e, i) => got[i].endsWith('/' + e.file) || got[i] === e.file);
+        })(),
+        `symbols=${CANDLE_MANIFEST.length}`);
+    check('resolveSymbolFiles is case-insensitive and names an unknown symbol',
+        norm(resolveSymbolFiles(['btcusdt'])[0]).endsWith('candles.jsonl') &&
+        (() => { try { resolveSymbolFiles(['NOPE']); return false; } catch (err) { return /NOPE/.test(String(err && err.message)); } })());
 
     // ---- K. the controller-backed model factory (N0) -----------------------
     class FakeController {

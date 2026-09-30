@@ -78,8 +78,8 @@ export function readCandles(file, { maxBars = null } = {}) {
 }
 
 // Map `--symbols=a,b` to manifest file paths (project-root relative).
-const resolveSymbolFiles = (symbols) => {
-    const root = path.join(import.meta.dirname || '.', '..');
+export const resolveSymbolFiles = (symbols) => {
+    const root = path.join(import.meta.dirname || '.', '..', '..');
     return symbols.map((s) => {
         const entry = CANDLE_MANIFEST.find((e) => e.symbol === String(s).toUpperCase());
         if (!entry) throw new Error(`analyze: unknown symbol "${s}" (known: ${CANDLE_MANIFEST.map((e) => e.symbol).join(', ')})`);

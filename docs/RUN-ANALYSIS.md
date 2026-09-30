@@ -4468,3 +4468,108 @@ npm test
 
 Expect 132/132 (the wrap mirror asserts the new 856 count). No uploads. After green:
 re-run the K=6 1h A/B natively and read the network arm's audit, then decide promotion.
+
+## 32. Round 87 — TODO 112 closed on the native gate; the network arm goes to re-measurement (2026-09-30, docs only)
+
+### 32.1 Gate closure
+
+The operator's `npm test` is green: `tests 132 / pass 132 / fail 0` (~348 s, proof in
+chat 2026-09-30). That is the exact gate round 86 asked for — the wrap mirror asserts the
+new 856 `analysis` count, so a stale checkout would have failed loudly. AI-side sanity in
+this round re-confirmed the shipped shape (`shockSiblings` present, additive `r + p` law,
+post-`after` only, base pass untouched, own-slot replace, fail-closed null panel; §R40
+markers present in the browser entry). No repo code changed this round, so no new gate is
+owed. TODO 112 marked CLOSED; TODO 113 opened for the re-measurement.
+
+### 32.2 Next: the K=6 re-run (TODO 113, operator-owned)
+
+The arm's lab certificate (e118/F-130: sibling-shock probe reaches 288/288, 0 violations,
+pooled Sharpe bit-matching 1.3005) is now the production law (`world.js` R40), but the
+promotion decision was never the Sharpe — it is the full gate at honest K=6 (was adjDSR
+0.8654, VACUOUS; §18.3). The re-run is the pre-registered §18.3 roster:
+
+```bash
+bash scripts/round30-runs.sh gh
+```
+
+i.e. `npm run analyze -- --symbols=all --bars=600 --train=60 --test=15 --audit-probes=1
+--reuse-base --concurrency=4
+--variants=baseline,sig-momentum,sig-vol-momentum,sig-blend-momentum,sig-network-momentum,sig-regime-momentum
+--cost-ladder=0,2,5,10`. Read `sig-network-momentum`'s audit block first (expect reachable
+288/288, violations 0), then the honest-K adjDSR + paired magnitude + stability + cost
+ladder. If the DSR floor still holds it below 0.95, the outcome is measured-not-promoted
+(the DROPPED disposition stands, re-measured). If it clears, the next arc opens with the
+TODO 85 exposure-matched check before any promotion — the arm's confidence scale against
+the controller's is still unscored, and the P5 sweep already showed what an unmatched
+comparison looks like (`BUGS.md` #61).
+
+### 32.3 Rerank (unchanged from round 85, minus the closed gate)
+
+Top tier: TODO 113 (the network-arm decision) + fade G5 attestations (106/108,
+operator-owned). Model track stays idea-only (1h execution uses). Queued, not urgent:
+TODO 95 remainder, 104, W5 venues, L10-co/cp/cq/cr. No `npm test` needed this round (docs
+only); the K=6 run is the next native job.
+
+### 32.4 Operator commands
+
+```bash
+bash scripts/round30-runs.sh gh
+```
+
+Upload the new `state/runs/<runId>/report.json` (or the run dir's report + run.log tail
+with the network arm's `audit:` line). No other uploads.
+
+## 33. Round 88 — full bug + sanity sweep; lineage coherence; lab index rebuild (2026-09-30, no scored-path change)
+
+AI-side harness: 33/33 browser entries green (analysis 856, analyze 290, contracts 255,
+walkforward 90, locks 41, modules 59). Static hunt clean (TODO hits are doc refs;
+`console.log` hits are CLI paths). Lab `run_all.js` covers e112–e118; e109–e111 are
+in-session by design. One real gap found and fixed: the SIGUP register states (code +
+`lineage.json` + `LINEAGE.md`, TODO 102 closed on the §18.3 corpus — vol/blend/regime
+DROPPED negative, network DROPPED pending TODO 113). Lab index table rebuilt 000–116
+(CYCLE-081/082 backfilled as marked reconstructions). Detail: lab CYCLE-117.
+
+Operator commands, in order:
+
+```bash
+npm test
+bash scripts/round30-runs.sh gh
+```
+
+First expects 132/132; second is the TODO-113 re-run (upload
+`state/runs/<runId>/report.json`).
+
+## 34. Round 89 — the `--symbols` path fix (2026-09-30, operator log → fix + pin)
+
+The operator's `gh` run died before scoring a single fold:
+
+```
+ENOENT: no such file or directory, open '.../NeuLegion-v2/src/src/candles.jsonl'
+```
+
+Cause: the round-83 split moved this reader from `src/analyze.js` to
+`src/analyze/cli.js` (one directory deeper) and its project-root step (`'..'`) came
+along unchanged — so every native `--symbols` run prefixed the manifest's
+project-root-relative entries (`src/candles.jsonl`, `src/data/...`) with `src/` twice.
+The two `../` fixes round 83 did land were the dynamic hivemind imports and the
+fold-worker URL; this third site was missed because no test covers `--symbols` (the
+native CLI tests use `--files`, the browser suite never touches the filesystem) —
+which is exactly why the full 132/132 gate stayed green around it. The `verdict`,
+`seeds` and `breadth` stages use `--symbols=all` too, so the same fix covers them;
+`--files` stages and the sleeve script (explicit paths, cwd-relative) never hit it.
+
+Fix: root steps up twice (`'..', '..'`), and `resolveSymbolFiles` is exported so the
+harness can pin it — four §J2 checks in the browser entry (manifest-true mapping,
+no `src/src`, full 1:1 coverage, case-insensitivity + unknown-symbol error).
+`analyze` 290 → 294, ledger 3119 → 3123, node mirror re-pinned. AI-side 294/294.
+No scored-path change, no golden moves.
+
+Operator commands, in order (same three — `gh` should now run past file resolution):
+
+```bash
+bash scripts/test.sh quick
+bash scripts/test.sh full
+bash scripts/round30-runs.sh gh
+```
+
+Upload `state/runs/<runId>/report.json` from the `gh` run.

@@ -235,10 +235,15 @@ wrap-style mirrors assert against. **Expected totals (all must be 0 failures):**
 | `locks` | 41 | | `analysis` | 856 |
 | `price_precision` | 29 | | `multisymbol` | 28 |
 | `guards` | 65 | | `observer` | 76 |
-| `analyze` | 290 | | `controller_invariants` | 23 |
+| `analyze` | 294 | | `controller_invariants` | 23 |
 | `contracts` | 255 | | `legacy_hivemind` | 15 |
 
-**Total: 3119 checks.** **(Round 86** — the sibling-shock probe: `makeCandleViewFor`'s probe
+**Total: 3123 checks.** **(Round 89** — the `--symbols` path fix: `resolveSymbolFiles`
+in `src/analyze/cli.js` went one `..` short after the round-83 split (every native
+`--symbols` run died with `src/src/candles.jsonl` ENOENT; the CLI tests only use
+`--files`, so it stayed green). Exported for testability, root is the project root
+again, pinned by four §J2 checks (`analyze` 290 → 294, node mirror re-pinned). No
+scored-path change, no golden moves. **(Round 86** — the sibling-shock probe: `makeCandleViewFor`'s probe
 pass now shocks the panel's non-own slots additively after `after` (the audit's own-returns
 perturbation law), so a cross-sectional arm is reachable by the audit (lab F-130: the
 Sharpe-1.3 network arm reaches 288/288 with 0 violations under the sibling shock). Arms that

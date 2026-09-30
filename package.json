@@ -19,6 +19,7 @@
     "dryrun": "node ./src/dryrun.js",
     "analyze": "node ./src/analyze.js",
     "test": "node --test \"test/node/*.test.js\"",
+    "test:quick": "bash scripts/test.sh quick",
     "test:candles": "node --test test/node/candles.test.js",
     "test:analysis": "node --test test/node/analysis.test.js",
     "test:contracts": "node --test test/node/contracts.test.js",

@@ -1143,15 +1143,17 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    (`0.2521533 / −0.0086142 / 0.4977679`), so it is not non-determinism. The corrected 3b command
    now carries `--model=bare` (`round29-TESTING.md` §3). Detail: `RUN-ANALYSIS.md` §17.3.
 
-102. [ ] **Round-30 momentum upgrades — implement + measure (gate G-H).** The four pre-registered
+102. [x] **Round-30 momentum upgrades — CLOSED (round 88): the corpus measured all four at K=6 (negative except the unauditable network arm).** The four pre-registered
    `NL-SIG-*@r30` branches are **implemented and tested** (`analysis/features.js#SIGUP_CANDIDATES`:
    `sig-vol-momentum`, `sig-blend-momentum`, `sig-network-momentum`, `sig-regime-momentum`; exposed
-   as the opt-in `analyze.js#SIGUP_VARIANTS`, registered `UNTESTED` in `src/lineage.js` /
-   `docs/lineage.json`, checked in `analysis.test.js` §G-H). **Remaining:** run G-H
-   (`bash scripts/round30-runs.sh gh`), record the outcome (may be negative — a full result) in
-   `RUN-ANALYSIS.md` §18, and set each branch's register state. `sig-network-momentum` needs the
-   ≥2-stream panel (the 8-symbol basket or the funding sleeve as a 9th). Blocked on the operator
-   runs below.
+   as the opt-in `analyze.js#SIGUP_VARIANTS`, checked in `analysis.test.js` §G-H). The
+   2026-09-27 run corpus (`RUN-ANALYSIS.md` §18.3, `20260927T060215-seed1`) ran exactly the G-H
+   roster at K=6: vol 1.1667/0.9173, blend 0.7054/0.5662, regime 1.0657/0.8681 — all fail the
+   adjusted-DSR floor — and network 1.3005/0.8654 with a VACUOUS audit. Register states set from
+   that measurement in round 88 (all four DROPPED in `src/lineage.js` / `docs/lineage.json` /
+   `docs/LINEAGE.md`, consistent with `DROPPED.md` §2b; all remain resolvable by id, out of the
+   default roster). The network arm's re-measurement under the fixed probe continues as TODO 113
+   (same `scripts/round30-runs.sh gh` command).
 
 103. [ ] **Round-30 operator runs (M4–M6, M8).** Re-run **3c** (`CANDLES_15M` non-empty) and **3d**
    (`FUND` non-empty) on the corrected commands; run the **G-F** seed replication (5 seeds, CRN), the
@@ -2151,13 +2153,14 @@ not a bug fix.
 > Closed this round: 94 (maker half settled by F-34, queue half data-blocked).
 > Queued, not urgent: 95 remainder, 104, W5 venues, L10-co/cp/cq/cr.
 
-112. [ ] **Round-86 W6 re-freeze arc — native-gate the sibling-shock probe (repo code DONE
-   AI-side, needs `npm test`).** `analysis/world.js#makeCandleViewFor` probe passes now shock
+112. [x] **Round-86 W6 re-freeze arc — CLOSED 2026-09-30 on the native gate (132/132).** `analysis/world.js#makeCandleViewFor` probe passes now shock
    sibling panel slots (round-86 R40, lab F-130/e118 9/9: production audit reaches 288/288
    with 0 violations, pooled Sharpe still 1.3005 — scored path unmoved). Pinned by six §R40
    checks (`analysis` 850 → 856, node mirror re-pinned, ledger 3113 → 3119). Lab e66 repaired
    alongside (its maxBars-edge and panel-attachment checks pinned pre-R35 behavior and threw —
-   run_all's e66 step was red; now green). Gate: `npm test` (expect 132/132 — the wrap mirror
-   asserts the new 856 count). After green: re-run the K=6 1h A/B natively and read the network
-   arm's audit (expect reachable, violations readout), then decide promotion. Detail:
-   `RUN-ANALYSIS.md` §31, lab CYCLE-115.
+   run_all's e66 step was red; now green). Gate: `npm test` 132/132 green on the operator's
+   machine 2026-09-30 (proof in chat: `tests 132 / pass 132 / fail 0`, ~348 s). Next: item 113
+   (re-run the K=6 1h A/B natively, read the network arm's audit, decide promotion). Detail:
+   `RUN-ANALYSIS.md` §31–§32, lab CYCLE-115/CYCLE-116.
+
+113. [ ] **Round-87 — re-measure the network arm under the gate (K=6 1h A/B) and decide promotion.** Re-run the §18.3 roster natively (`scripts/round30-runs.sh gh`, i.e. baseline + 5 momentum arms, K=6, 8×1h last-600, train 60 / test 15, probe 1, reuse-base) and read `sig-network-momentum`'s audit block (expect reachable 288/288, violations 0 — the e118 law in production) plus its honest-K adjDSR (was 0.8654 at K=6, VACUOUS). Promotion needs the full gate, not the Sharpe: clean audit + paired magnitude + stability + adjDSR ≥ 0.95 + cost ladder. If it stays below the DSR floor, record it as measured-not-promoted and keep the DROPPED disposition; if it clears, open the W6 promotion arc (exposure-matched check per TODO 85 first — the arm's confidence scale vs the controller's is still unscored). Detail: `RUN-ANALYSIS.md` §18.3/§32.

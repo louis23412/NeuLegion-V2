@@ -63,10 +63,10 @@ differs, the 8×200 sanity run. "adjDSR" is the dependence-adjusted DSR at the r
 | `sig-autocorr` | `NL-SIG-autocorr@r23` | **DROPPED** | −0.0996 | −1.23 bps | 0.0306 | **regime-dependent** (+1.79 @200 bars vs −0.10 @600): not a stable edge. |
 | `sig-vol-regime` | `NL-SIG-vol-regime@r23` | **DROPPED** | −0.3135 | −4.34 bps | 0.0071 | negative; fails `dsrDelta` (worse than baseline). |
 | `sig-frac-momentum` | `NL-SIG-frac-momentum@r23` | **DROPPED (worst)** | −0.4185 | −1.67 bps | 0.0119 | worst in every dimension tested; turnover 2092/bar makes it cost-fragile even if the sign flipped. |
-| `sig-vol-momentum` | `NL-SIG-vol-momentum@r30` | **UNTESTED (opt-in)** | — | — | — | pre-registered round-30 upgrade (gate **G-H**): trailing return / realised vol (the TSMOM sizing standard, `1904.04912`). |
-| `sig-blend-momentum` | `NL-SIG-blend-momentum@r30` | **UNTESTED (opt-in)** | — | — | — | pre-registered: mean risk-adjusted momentum over the 8/16/32-bar horizons (`2112.08534`). |
-| `sig-network-momentum` | `NL-SIG-network-momentum@r30` | **UNTESTED (opt-in)** | — | — | — | pre-registered: the other streams' lagged momentum — a lead-lag panel signal (`2308.11294`); **requires the panel** (`BUGS.md` #70). |
-| `sig-regime-momentum` | `NL-SIG-regime-momentum@r30` | **UNTESTED (opt-in)** | — | — | — | pre-registered: momentum gated on a causal crash regime (`2105.13727`, `2604.09060`). |
+| `sig-vol-momentum` | `NL-SIG-vol-momentum@r30` | **DROPPED** | 1.1667 | 14.42 bps | 0.9173 (K=6) | measured in the 2026-09-27 corpus (`RUN-ANALYSIS.md` §18.3); fails the adjusted-DSR floor at the searched roster. Resolvable by id, out of the default roster. |
+| `sig-blend-momentum` | `NL-SIG-blend-momentum@r30` | **DROPPED** | 0.7054 | 8.62 bps | 0.5662 (K=6) | fails decisively in the same corpus. |
+| `sig-network-momentum` | `NL-SIG-network-momentum@r30` | **DROPPED (re-measurement pending, TODO 113)** | 1.3005 | 15.29 bps | 0.8654 (K=6) | corpus audit VACUOUS (8 violations); lab e118 vindicates the wire and the probe is production (`world.js` R40, gate passed 132/132) — re-measure under the gate before any promotion. Requires the panel (`BUGS.md` #70). |
+| `sig-regime-momentum` | `NL-SIG-regime-momentum@r30` | **DROPPED** | 1.0657 | 14.06 bps | 0.8681 (K=6) | fails the adjusted-DSR floor in the same corpus. |
 
 **Branch relationship (the tree).** `momentum` is the trunk; `accel` is its second difference
 (derivative branch, best adjDSR); `frac-momentum` is a saturating re-parameterisation of the same

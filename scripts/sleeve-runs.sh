@@ -10,7 +10,8 @@
 # (the BUGS.md #69 guard, same as scripts/round30-runs.sh), so that failure mode
 # cannot recur.
 #
-# Usage:  bash scripts/sleeve-runs.sh [stage] [-- extra analyze args]
+# Usage:  bash scripts/sleeve-runs.sh <stage> [-- extra analyze args]
+#   (no stage prints this help — nothing runs by accident)
 #   base       the flat sleeve at --cost-bps=4 (no --sleeve-sizing)
 #   adaptive   + --sleeve-sizing=adaptive  (F-115/F-117 payoff mode)
 #   drawdown   + --sleeve-sizing=drawdown  (F-118: adaptive target x trailing-DD governor)
@@ -75,7 +76,7 @@ run() {          # run <label> <command...>
 usage() {
   cat <<'EOF'
 Usage: bash scripts/sleeve-runs.sh [stage] [-- extra analyze args]
-  stages: base adaptive drawdown honest oi top all (default: all)
+  stages: base adaptive drawdown honest oi top all (an explicit stage is required)
     base       flat carry-dispersion sleeve at --cost-bps=4
     adaptive   + --sleeve-sizing=adaptive
     drawdown   + --sleeve-sizing=drawdown
@@ -89,7 +90,8 @@ Every run writes state/runs/<runId>/. Send back each run's report.json path.
 EOF
 }
 
-STAGE="${1:-all}"
+STAGE="${1:-}"
+if [ -z "$STAGE" ]; then usage; exit 2; fi
 if [ $# -gt 0 ]; then shift; fi
 if [ "${1:-}" = "--" ]; then shift; fi
 EXTRA=("$@")
