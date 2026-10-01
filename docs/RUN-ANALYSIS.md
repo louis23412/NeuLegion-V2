@@ -5245,6 +5245,7 @@ no TODO), 2201.04699 (71% of an intraday perp agent's return is funding →
 carry-premise support). Mostly off-topic queries, recorded not chased.
 **Gate:** round 103 CLOSED on the operator's `npm test` 132/132 proof
 (2026-10-01, ~347 s); this round's split re-opens it.
+**Gate closed 2026-10-01:** operator `npm test` 132/132 (~355 s) closes this round (R104) as well.
 
 ### 49.1 Rerank
 
@@ -5257,5 +5258,51 @@ forecastability probe (10g idea), L10-co/cp/cq/cr, W5 venues.
 
 `npm test` from the repo root (the round-104 split needs the native gate: new
 `analysis/forecast/scoring/` directory + shim + registry rows; expect 132/132 —
+locks/analysis/walkforward/analyze proven AI-side, but only the native driver
+proves the worker/fs CLI paths and the new registry rows). No uploads.
+
+## 50. Round 105 — restate split + predictive-smoother NEGATIVE + research 10h (2026-10-01, AI-side)
+
+Three tracks. **Foundations:** `src/analysis/walkforward/restate.js` (555
+lines, registered) split into `walkforward/restate/` ×3 + shim, per the
+round-97 registered recipe: `costs.js` (cost restatement; owns the private
+`withExtraPanelStreams` helper, exported for inter-part use),
+`policies.js` (policy restatement + round-trip verification; imports the
+helper), `exposure.js` (dead zone, cadence, matched pair, cost ladder;
+imports the cost/policy restatements). Calls mapped line-by-line before
+cutting (comment mentions excluded); bodies byte-identical (all three
+verified true). One documented cleanup: the unused `confidenceToPosition`
+import (import + comment mention only) is dropped. The shim keeps the exact
+7-name registered contract; all consumers import through it unchanged.
+Registry: three `KNOWN_TESTS` rows + three module rows; three imports + map
+rows in `locks.test.js`. Verified AI-side first try: `locks.test.js` 41/0,
+`analysis.test.js` 856/0, `walkforward.test.js` 90/0, `analyze.test.js`
+294/0 (counts unchanged — pure move, no new checks). No golden moves.
+**Model track:** `e133` 4/2 NEGATIVE (lab F-146) pits a causal recursive
+AR(1) one-step funding forecast against the pinned EWMA constructor on the
+e129 rank-persistence curve: predicted ranks persist at rho1 0.70/0.72 —
+above raw (0.52/0.42, forecastability exists, consistent with 1912.03270)
+but far below manufactured 0.992 both panels. The adoption bar fails on both
+panels with the plumbing guards passing (finite curves; smoother replicates
+e129) — fixed EWMA stands, F-142 reinforced from the challenger side; the
+10g idea is consumed, no follow-up variant (a bigger forecaster is gated
+behind this bar per 2603.16886). e132 regressed 4/4 (same SUPPORTED). No spec
+change, no TODO. **Research:** sweep 10h is thin-honest — 3/5 queries empty,
+both hits already filed (2609.05433 3rd retrieval, 2607.11888 2nd; recorded
+as convergence, no doc change). **Gate:** round 104 CLOSED on the operator's
+`npm test` 132/132 proof (2026-10-01, ~355 s); this round's split re-opens it.
+
+### 50.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port with the
+stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (still
+data-blocked). Model track rests on the reinforced pinned spec (EWMA + 12.5%
+cap both plateaued, challenger beaten); next model work waits on native
+breadth. Queued: 117 (behind 116), L10-co/cp/cq/cr, W5 venues.
+
+### 50.2 Operator commands
+
+`npm test` from the repo root (the round-105 split needs the native gate: new
+`analysis/walkforward/restate/` directory + shim + registry rows; expect 132/132 —
 locks/analysis/walkforward/analyze proven AI-side, but only the native driver
 proves the worker/fs CLI paths and the new registry rows). No uploads.

@@ -41,6 +41,9 @@ import * as walkforwardAuditMod from '../../../src/analysis/walkforward/audit.js
 import * as walkforwardPowerMod from '../../../src/analysis/walkforward/power.js';
 import * as walkforwardReportMod from '../../../src/analysis/walkforward/report.js';
 import * as walkforwardRestateMod from '../../../src/analysis/walkforward/restate.js';
+import * as walkforwardRestateCostsMod from '../../../src/analysis/walkforward/restate/costs.js';
+import * as walkforwardRestatePoliciesMod from '../../../src/analysis/walkforward/restate/policies.js';
+import * as walkforwardRestateExposureMod from '../../../src/analysis/walkforward/restate/exposure.js';
 import * as walkforwardSearchMod from '../../../src/analysis/walkforward/search.js';
 import * as overfittingMod from '../../../src/analysis/overfitting.js';
 import * as realityCheckMod from '../../../src/analysis/reality_check.js';
@@ -112,6 +115,9 @@ const ANALYSIS_IMPORTS = {
     'walkforward/power.js': walkforwardPowerMod,
     'walkforward/report.js': walkforwardReportMod,
     'walkforward/restate.js': walkforwardRestateMod,
+    'walkforward/restate/costs.js': walkforwardRestateCostsMod,
+    'walkforward/restate/policies.js': walkforwardRestatePoliciesMod,
+    'walkforward/restate/exposure.js': walkforwardRestateExposureMod,
     'walkforward/search.js': walkforwardSearchMod,
     'overfitting.js': overfittingMod,
     'reality_check.js': realityCheckMod,

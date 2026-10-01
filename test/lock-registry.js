@@ -275,6 +275,17 @@ export const ANALYSIS_MODULES = Object.freeze({
         'restateReportAtCost', 'restateReportAtPolicy', 'verifyPolicyRoundTrip', 'exposureDeadZone',
         'restateReportAtCadence', 'exposureMatchedPair', 'costLadder',
     ],
+    'walkforward/restate/costs.js': [
+        'restateReportAtCost',
+        // Inter-part use only (policies.js imports it; the shim does not re-export it).
+        'withExtraPanelStreams',
+    ],
+    'walkforward/restate/policies.js': [
+        'restateReportAtPolicy', 'verifyPolicyRoundTrip',
+    ],
+    'walkforward/restate/exposure.js': [
+        'exposureDeadZone', 'restateReportAtCadence', 'exposureMatchedPair', 'costLadder',
+    ],
     'walkforward/search.js': [
         'DEPENDENCE_GATE_READER', 'familyCorrelation', 'familywiseSearch', 'walkForwardSearch',
         'formatReport',
@@ -575,6 +586,27 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['frazzini2018costs', 'binancefees', 'leprado2018afml'],
         proves: ['analysis.test.js', 'walkforward.test.js'],
         note: 'Round-74 split of analysis/walkforward.js (byte-exact move): the cost/policy/cadence/exposure restatements of a finished report without the model. Proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/restate/costs.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['frazzini2018costs', 'binancefees'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-105 split of analysis/walkforward/restate.js (byte-exact move): cost restatement of a finished report. Self-contained apart from backtest/folds/power; shares withExtraPanelStreams with policies.js. Same contract as the restate.js row it was cut from; proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/restate/policies.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-105 split of analysis/walkforward/restate.js (byte-exact move): policy restatement plus the byte-for-byte round-trip verification. Imports the panel helper from costs.js. Same contract as the restate.js row it was cut from; proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/restate/exposure.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['frazzini2018costs', 'leprado2018afml'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-105 split of analysis/walkforward/restate.js (byte-exact move): exposure dead zone, cadence restatement, the exposure-matched pair, and the cost ladder. Imports the cost/policy restatements. Same contract as the restate.js row it was cut from; proved by the unchanged analysis.test.js + walkforward.test.js sections.',
     },
     'walkforward/search.js': {
         status: LOCK_LEVELS.INVARIANT,
