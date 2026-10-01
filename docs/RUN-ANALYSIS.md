@@ -4919,3 +4919,45 @@ the stacked-16 read: availability + pooled triple + cross-leg corr) + fade G5
 `analyze/evaluate/` directory + shim; expect 132/132 — analyze/locks/contracts
 proven AI-side, but only the native driver proves the worker/fs CLI paths).
 No uploads.
+
+## 42. Round 97 — decision split + flow-reversal NEGATIVE (2026-10-01, AI-side)
+
+Two tracks. **Foundations:** `src/analysis/decision.js` (689 lines, a
+REGISTERED module) split into `analysis/decision/` ×5 + shim, per the
+round-94 recipe with full ceremony: `measures.js` (fold concentration +
+confidence persistence; `isNum`/`na` exported for inter-part use only — the
+round-74 `powerSummary` precedent), `plan.js` (next-run plan with both
+private helpers staying in-part), `report.js`, `format.js`, `cadence.js`.
+Bodies byte-identical except the two `export` prefixes. One self-caught bug:
+the shared guards sat between the file header and the first banner, outside
+every sliced zone — restored into `measures.js`, caught by the harness build
+before any suite ran (fail-closed verification working as designed). Five
+`ANALYSIS_MODULES` rows (exact lists, inter-part marks) + five
+`ANALYSIS_REGISTRY` rows (INVARIANT, analysis + analyze) + `locks.test.js`
+imports/map; the shim keeps the exact 7-name contract with no guard leakage.
+Verified AI-side with baselines first: analysis 856/0, analyze 294/0, locks
+41/0 post-split, plus contracts 255/0. **Model track:** `e125` 3/3 NEGATIVE
+(lab F-138) — raw fade-the-prior-sign on 15m majors × taker-flow quintiles
+(causal trailing-500 ranks): fade-all Sharpe 0.17 / BE 0.43 bps (a whisper,
+untradeable), no quintile gradient (Q5 BE 0.31 < all; HR flat 0.503–0.506),
+random null. TODO 88 CLOSED-negative on the bar-flow proxy; remaining caveat
+(trade-level aggressor flags, not bar-level shocks) filed as the unblock, not
+chased. **Research:** sweep 10c attempted twice (503, then transport
+timeouts) — recorded, not chased; grounding stands on 10b. **Gate:** round
+96 CLOSED on the operator's `npm test` 132/132 proof (2026-10-01, ~359 s);
+this round's split re-opens it.
+
+### 42.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port with the
+stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (control-defined,
+blocked). TODO 88 measured closed (bar-flow proxy; trade-flag unblock
+filed). Queued: 95 remainder, 104, 117 (behind 116), L10-co/cp/cq/cr,
+W5 venues (audit-OI-truth-first).
+
+### 42.2 Operator commands
+
+`npm test` from the repo root (the round-97 split needs the native gate: new
+`analysis/decision/` directory + registry rows + locks wiring; expect
+132/132 — counts unchanged, so no mirror re-pin, but only the native driver
+proves the registry/imports). No uploads.

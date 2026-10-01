@@ -57,6 +57,11 @@ import * as forecastCombineMod from '../../../src/analysis/forecast/combine.js';
 import * as forecastSizingMod from '../../../src/analysis/forecast/sizing.js';
 import * as forecastOnlineMod from '../../../src/analysis/forecast/online.js';
 import * as decisionMod from '../../../src/analysis/decision.js';
+import * as decisionMeasuresMod from '../../../src/analysis/decision/measures.js';
+import * as decisionPlanMod from '../../../src/analysis/decision/plan.js';
+import * as decisionReportMod from '../../../src/analysis/decision/report.js';
+import * as decisionFormatMod from '../../../src/analysis/decision/format.js';
+import * as decisionCadenceMod from '../../../src/analysis/decision/cadence.js';
 import * as raceMod from '../../../src/analysis/race.js';
 import * as benchmarkMod from '../../../src/analysis/benchmark.js';
 import * as carryMod from '../../../src/analysis/carry.js';
@@ -110,6 +115,11 @@ const ANALYSIS_IMPORTS = {
     'forecast/sizing.js': forecastSizingMod,
     'forecast/online.js': forecastOnlineMod,
     'decision.js': decisionMod,
+    'decision/measures.js': decisionMeasuresMod,
+    'decision/plan.js': decisionPlanMod,
+    'decision/report.js': decisionReportMod,
+    'decision/format.js': decisionFormatMod,
+    'decision/cadence.js': decisionCadenceMod,
     'race.js': raceMod,
     'benchmark.js': benchmarkMod,
     'carry.js': carryMod,

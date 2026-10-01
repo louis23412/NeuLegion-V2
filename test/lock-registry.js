@@ -333,6 +333,23 @@ export const ANALYSIS_MODULES = Object.freeze({
         // Round 29 → 30 (P2): configuration-robust promotion across a cadence grid.
         'promotionAcrossCadences', 'defaultCatastrophic',
     ],
+    'decision/measures.js': [
+        'foldConcentration', 'confidencePersistence',
+        // Inter-part use only (plan/report/format/cadence import them; the shim does not re-export them).
+        'isNum', 'na',
+    ],
+    'decision/plan.js': [
+        'nextRunPlan',
+    ],
+    'decision/report.js': [
+        'decisionReport',
+    ],
+    'decision/format.js': [
+        'formatDecision',
+    ],
+    'decision/cadence.js': [
+        'promotionAcrossCadences', 'defaultCatastrophic',
+    ],
     'race.js': [
         'halvingRounds', 'halvingSchedule', 'successiveHalving', 'formatRace',
     ],
@@ -590,6 +607,41 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['leprado2018afml', 'pardo2008walkforward', 'bouthillier2019', 'henderson2018', 'agarwal2021', 'alphadecay2502', 'gneitingraftery2007'],
         proves: ['analysis.test.js', 'analyze.test.js'],
         note: 'The decision-grade report (round 26, R26-8) — the composition half of the honest-evaluation battery. It computes NO new strategy statistic: foldConcentration restates the scored folds (top-K share of gross PnL, signed fold sums, the pooled Sharpe on each leave-one-fold-out panel, and each fold marginal contribution to that pooled Sharpe, rebuilt from the retained foldInputs with the same strategyReturns arithmetic the scored pass used); confidencePersistence measures the lag-1 autocorrelation of the journaled raw pre-policy confidence within folds and its exponential half-life (the alpha-decay ranking input, arXiv 2502.04284); nextRunPlan converts the finished run into sizing knobs (effective bars + MDE i.i.d. and dependence-corrected, the bars a detection of Sharpe 1 / of the observed Sharpe would need at the measured design effect, the turnover break-even against 0/2/5/10 bps, the observed per-fold wall time, and the single cheapest lever that would flip the verdict); decisionReport composes the six questions (training / edge / concentration / economics / family / nextRun) so every field is a value or an explicit {available:false, reason}; formatDecision renders the summary lines. Grounded in the same experimental-design references as the replication layer (Bouthillier et al. 2019; Henderson et al. 2018; Agarwal et al. 2021) and Pardo (2008) for stability as a promotion criterion. Proved (analysis.test.js section AK): foldConcentration exact on a hand-built fold grid (top-K shares sum to the gross, positive+negative = total, the leave-one-out range and marginal values match an independently recomputed leave-one-out Sharpe sweep, and the missing-foldInputs path is an explicit unavailable); confidencePersistence exact on the alternating (-1) and monotone (+1) series and on [0,0,1,1,1] (lag1 = 1/sqrt(3), halfLife = 2 ln2 / ln3); nextRunPlan exact on a frozen power/dependence fixture (barsToDetectDependent, the clearsBps booleans, the magnitude cheapest-flip factor — whose fixture now carries the REAL pairedClusterTest block, since a bare-number fixture hid a round-26b fix: the branch read `sharpeDifference` as a scalar when a real report carries a `.value`-bearing object — and the paired-units sizing `pairedUnitsNeeded`) and its cost/promoted branches, plus the stability, gate and search flip branches; decisionReport returns all six question blocks with availability flags and never a bare null (its `training.labelDistribution` is derived from the model diagnostics, not the unproduced `model.labelDistribution` field — `BUGS.md` #40; its `family` seed fields read a `replication` shape the only producer (`replicateAnalysis`, keyed `byVariant`) never emits, so their reasons now point at `replication.json` — `BUGS.md` #41); formatDecision names the verdict. On by default in analyze (--decision=0 disables) and pure post-processing, so it moves no scored number. Round 29 -> 30 (P2): `promotionAcrossCadences` turns a single-cadence verdict into a configuration-robust one (majority-pass with a catastrophic veto, `defaultCatastrophic`), and `nextRunPlan` / `decisionReport.training` carry the evaluation `cadence` so a level is never quoted without the grid it was measured on.',
+    },
+    'decision/measures.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'pardo2008walkforward'],
+        proves: ['analysis.test.js', 'analyze.test.js'],
+        note: 'Round-97 split of decision.js: fold concentration + confidence persistence + the shared isNum/na guards (inter-part only).',
+    },
+    'decision/plan.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'pardo2008walkforward'],
+        proves: ['analysis.test.js', 'analyze.test.js'],
+        note: 'Round-97 split of decision.js: next-run sizing plan (cheapest-flip + paired-units helpers stay private to this part).',
+    },
+    'decision/report.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'pardo2008walkforward', 'bouthillier2019', 'henderson2018', 'agarwal2021'],
+        proves: ['analysis.test.js', 'analyze.test.js'],
+        note: 'Round-97 split of decision.js: the decisionReport composition.',
+    },
+    'decision/format.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml'],
+        proves: ['analysis.test.js', 'analyze.test.js'],
+        note: 'Round-97 split of decision.js: the formatDecision renderer.',
+    },
+    'decision/cadence.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['alphadecay2502', 'gneitingraftery2007'],
+        proves: ['analysis.test.js', 'analyze.test.js'],
+        note: 'Round-97 split of decision.js: configuration-robust promotion across cadences + the catastrophic guard.',
     },
     'race.js': {
         status: LOCK_LEVELS.INVARIANT,

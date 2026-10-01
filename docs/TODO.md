@@ -991,7 +991,7 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    quoted at matched exposure (per-family `|confidence|` quantiles or matched `nonZeroFraction`;
    `BUGS.md` #61). Acceptance: verdict-neutral on the retained runs with `sig-accel`'s 0-bps
    promotion killed. `PLAN-round29.md` P2.
-88. [ ] **Short-horizon reversal on new bars (round-29 P3).** The documented crypto edge is
+88. [x] **Short-horizon reversal on new bars (round-29 P3) — MEASURED-CLOSED 2026-10-01 (CYCLE-127, F-138).** The documented crypto edge is
    **15-minute reversal** (`2608.21888`: 90 % of 183 Binance pairs, signs not magnitudes) and
    this round's measurement shows 1h has none (AC −0.013; `sig:autocorr` net Sharpe −0.0996).
    Fetch/audit 15m bars, test a reversal family (sign / cross-sectional / vol-scaled) under the
@@ -2183,3 +2183,5 @@ not a bug fix.
 117. [ ] **Round-94 follow-up — bank wave-2 breadth (operator-owned, QUEUED behind 116).** e122/F-135 measured the second wave lab-side (`src/NeuLegion-lab/data/midcap2/`: LTC/ETC/UNI/AAVE/ATOM/DOT/FIL/APT, 19,728 bars each, zero gaps): stacked-24 effStreams 2.63 vs stacked-16 2.35 (1.12×, MIXED vs the 1.20 bar), rbar 0.39 → 0.35; wave-2 standalone Sharpe −0.09 (breadth only, no edge). Run ONLY if 116 confirms on the 16-panel (effStreams ≥ 2.3 natively): same port recipe for the 8 wave-2 series, one K=5 `gh` on the 24-panel, read effStreams vs 2.35. If 116 fails, park this with the symbol-breadth leg (no third lab wave — sublinear scaling measured: +34% then +12%). Cost if run: ~17 MB + one ~60-min run. Upload `state/runs/<runId>/report.json`.
 
 118. [ ] **Round-95 — native midcap-carry port + sleeve run (operator-owned, QUEUED behind 116).** e123/F-136 measured the carry breadth lab-side (`src/NeuLegion-lab/data/midcap_funding/funding_*_8h.jsonl`: 8/8 series, 2466 rows each, zero gaps; carry-dispersion available 2466x8, descriptive net 18.11 vs majors 11.26 @ cost 4): copy the 8 funding series to the repo `src/data/funding_<sym>_8h.jsonl` convention (8 x ~200 KB) beside the 116 candle port and score `carry-dispersion` natively on the 8-midcap panel — read availability + pooled net/turnover/BE vs the majors baseline, plus the stacked-16 read (window-matched 16-stream book + cross-leg corr, per e124/F-137). Pre-registered interest: available:true with BE in the 30-50 bps band. Cost if run: ~2 MB + minutes (sleeve-only, no fold loop). Upload nothing (report the three numbers in chat).
+
+   (e125: fade-all BE 0.43 bps untradeable, no flow-quintile gradient; bar-flow proxy only — trade-level aggressor flags filed as the unblock.)
