@@ -4822,3 +4822,55 @@ Queued: 95 remainder, 104, L10-co/cp/cq/cr (golden-adjacent).
 `npm test` from the repo root (the round-94 split needs the native gate: new
 files + registry rows + locks imports; expect 132/132 — counts unchanged, so
 no mirror re-pin, but only the native driver proves the CLI paths). No uploads.
+
+## 40. Round 95 — cli split + 10a sweep + midcap-carry breadth (2026-09-30, AI-side)
+
+Four tracks. **Foundations:** `src/analyze/cli.js` (1826 lines, the biggest code
+module left) split into `analyze/cli/` ×4 + shim, per the round-71/83 recipe:
+`io.js` (candle/funding readers, `resolveSymbolFiles`, `probesPerFold`,
+`auditBlock`), `rows.js` (five report-row shapers, exported for inter-part use
+only — the round-74 `powerSummary` precedent), `run.js` (worker dispatcher,
+`runSleeveAnalysis`, `runAnalysis`), `main.js` (`replicateAnalysis`,
+`ANALYZE_USAGE`, `analyzeMain`). Sliced bodies byte-identical except four
+documented lines: the `import.meta.dirname` root steps up one more `..` and
+the two `../hivemind/` dynamic imports plus the `fold_worker.js` URL step up
+to `../../` (the round-89/round-83 path-fix class). The shim carries the exact
+11-name contract; `src/analyze.js` untouched. `cli.js` was never in
+`ANALYSIS_MODULES`, so no registry rows, no locks change, no ledger move.
+Verified AI-side with baselines first: locks 41/0, analyze 294/0, contracts
+255/0 post-split; both shims bundle with every name present and typed;
+`resolveSymbolFiles` resolves BTCUSDT to the manifest file and still throws on
+unknown symbols; the lab orchestrator still bundles with `run` exported.
+**Research sync:** `docs/research/raw/arxiv-sweep-2026-10a.json` (8
+grounded notes; retrieval lesson: unquoted `all:` OR-splits into noise,
+quoted `abs:` phrases retrieve 82/10/2) — 2609.05433 nests both perp designs
+in one no-arb result (the funding rule chooses benchmark + discount: carry is
+the tradeable primitive); 2605.06405 gives TODO 111's avoidance use its
+control form (funding-state HJB offsets, data requirement stands); 2606.15715
+measures sunshine-vs-hidden execution costs (taker-timing lives at trade
+resolution — block stands); 2310.14973 (OI misquoted on some venues) extends
+the venue rule to audit-OI-truth-first. **Sleeve breadth:** wave-1 midcap
+funding harvested (durable `NeuLegion-lab/data/harvest_midcap_funding.js`;
+216/216 monthly zips, 8/8 series zero gaps, 2466 rows each — TIA 4931 on a 4h
+grid the audit tolerates) and `e123` 4/4 (lab F-136): zero-invalid parses,
+zero-missing audits, carry-dispersion available on the 2466×8 panel with a
+descriptive-positive pooled read (midcap net 18.11 vs majors 11.26 @ cost 4,
+turnover ~10/yr both, BE ~39/43 bps) — plumbing verdict, not promotion.
+OI/toptrader midcap history probed and filed DATA-BLOCKED (API-only, 500-row
+cap, CloudFront-challenged). **Gate:** round 94 CLOSED on the operator's
+`npm test` 132/132 proof (2026-09-30); this round's split re-opens it.
+
+### 40.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + fade G5 (106/108, operator) + TODO 111
+(execution uses now control-defined, still data-blocked) + TODO 118 (native
+midcap-carry port, QUEUED behind 116 — carry breadth is the first sleeve leg
+with lab plumbing). W5 venues operator-owned with the audit-OI-truth-first
+amendment. Queued: 95 remainder, 104, 117 (behind 116), L10-co/cp/cq/cr.
+
+### 40.2 Operator commands
+
+`npm test` from the repo root (the round-95 split needs the native gate: new
+`analyze/cli/` directory + shim; expect 132/132 — analyze/locks/contracts
+proven AI-side, but only the native driver proves the worker/fs CLI paths).
+No uploads.
