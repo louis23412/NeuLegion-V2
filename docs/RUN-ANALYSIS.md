@@ -4961,3 +4961,43 @@ W5 venues (audit-OI-truth-first).
 `analysis/decision/` directory + registry rows + locks wiring; expect
 132/132 — counts unchanged, so no mirror re-pin, but only the native driver
 proves the registry/imports). No uploads.
+
+## 43. Round 98 — models split + dispersion-sizing NEGATIVE (2026-10-01, AI-side)
+
+Two tracks. **Foundations:** `src/analyze/models.js` (587 lines,
+unregistered) split into `analyze/models/` ×5 + shim, per the cheap recipe:
+`features.js`, `factories.js` (HiveMind + benchmark), `stats.js`
+(`labelDiagnostics` exported for inter-part use only — the round-74
+precedent), `controllers.js` (its own part: it sits between stats and
+signals in the file), `signals.js`. Bodies byte-identical except the one
+`export` prefix; the shim keeps the exact 9-name contract. No registry
+rows, no locks change, no ledger move. Verified AI-side with baselines
+first (analyze 294/0, locks 41/0, contracts 255/0), identical post-split —
+green first try. **Model upgrade:** `e126` 3/3 NEGATIVE (lab F-139) attacks
+the naive flat-1.0 book scale with dispersion-proportional sizing (causal,
+clamped, through the repo's own score path): scaled loses on Sharpe AND BE
+on BOTH panels (majors 0.34→−0.28, BE 42.9→2.2; midcap 0.55→−0.74, BE
+39.5→1.5). Mechanism: turnover explodes (60→1629, 22→739) — the regime
+factor moves far faster than the slow book and drowns it in costs. The
+exploratory slow variant (REG-90, descriptive only) fails the same way, so
+flat sizing STANDS and the precise next design is filed (TODO 119:
+quantized 2-state scale with hysteresis, or target-risk application — never
+per-bar multiplication). **Research:** 10c blocked again (arXiv 503, third
+time) — recorded, not chased. **Gate:** round 97 CLOSED on the operator's
+`npm test` 132/132 proof (2026-10-01, ~373 s); this round's split re-opens
+it.
+
+### 43.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port with the
+stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (blocked). New
+TODO 119 (quantized-regime carry sizing, AI-side queued — the eventual
+sizing upgrade, whose G5 home is TODO 104). Queued: 95 remainder, 117
+(behind 116), L10-co/cp/cq/cr, W5 venues.
+
+### 43.2 Operator commands
+
+`npm test` from the repo root (the round-98 split needs the native gate: new
+`analyze/models/` directory + shim; expect 132/132 — analyze/locks/contracts
+proven AI-side, but only the native driver proves the worker/fs CLI paths).
+No uploads.
