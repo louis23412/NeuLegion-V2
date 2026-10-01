@@ -44,6 +44,9 @@ import * as realityCheckMod from '../../../src/analysis/reality_check.js';
 import * as realityCheckBootstrapMod from '../../../src/analysis/reality_check/bootstrap.js';
 import * as realityCheckSubsamplingMod from '../../../src/analysis/reality_check/subsampling.js';
 import * as dependenceMod from '../../../src/analysis/dependence.js';
+import * as dependenceCorrelationMod from '../../../src/analysis/dependence/correlation.js';
+import * as dependenceClustersMod from '../../../src/analysis/dependence/clusters.js';
+import * as dependenceStudentMod from '../../../src/analysis/dependence/student.js';
 import * as worldMod from '../../../src/analysis/world.js';
 import * as featuresMod from '../../../src/analysis/features.js';
 import * as holdingMod from '../../../src/analysis/holding.js';
@@ -102,6 +105,9 @@ const ANALYSIS_IMPORTS = {
     'reality_check/bootstrap.js': realityCheckBootstrapMod,
     'reality_check/subsampling.js': realityCheckSubsamplingMod,
     'dependence.js': dependenceMod,
+    'dependence/correlation.js': dependenceCorrelationMod,
+    'dependence/clusters.js': dependenceClustersMod,
+    'dependence/student.js': dependenceStudentMod,
     'world.js': worldMod,
     'features.js': featuresMod,
     'holding.js': holdingMod,

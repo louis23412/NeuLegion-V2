@@ -5039,3 +5039,84 @@ stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (blocked). TODO
 `analyze/roster/` directory + shim; expect 132/132 — analyze/locks/contracts
 proven AI-side, but only the native driver proves the worker/fs CLI paths).
 No uploads.
+
+## 45. Round 100 — candle_fetcher split + rank-persistence NEGATIVE-descriptive (2026-10-01, AI-side)
+
+Two tracks. **Foundations:** `src/candle_fetcher.js` (655 lines,
+unregistered — the largest remaining unregistered module) split into
+`candle_fetcher/` ×5 + shim, per the cheap recipe: `intervals.js`
+(conversion, no imports), `candles.js` (validation/guard, no imports),
+`sources.js` (exchange descriptors; imports candles + intervals), `fetch.js`
+(HTTP + pagination; imports candles/sources/store/intervals), `store.js`
+(merge/gaps/JSONL/planning; imports candles + intervals). Bodies
+byte-identical; the shim keeps the exact 28-name contract. One self-caught
+bug: `fetch.js` uses `DEFAULT_BACKFILL_START` from intervals — caught by the
+first harness run as an import error, fixed with one line. Verified AI-side
+through the esbuild harness: `fetcher.test.js` 111/0, `candles.test.js`
+192/0. No registry rows, no locks change, no ledger move. **Model track:**
+`e128` 4/3 NEGATIVE-descriptive (lab F-141) measures the funding XS rank
+persistence through the repo's own `parseSleeveInputs` grid (6606 majors /
+2466 midcap buckets): raw 8h ranks churn (rho1 0.52/0.42, ±1.5–1.7 ranks per
+bucket — the pre-registered ≥ 0.7 bar failed), decay is ordered
+(rho1 > rho7 > rho30), persistence survives at 10–30d (rho30 0.25/0.20,
+rho90 0.20/0.15). Reading: the slow EWMA *constructs* the tradeable rank
+from a churny raw — smoothing is load-bearing, not tracking. The pinned R8
+spec is unchanged (already won OOS); no TODO filed. **Research:** sweep 10d
+blocked at the endpoint (https 503 challenge + http fail — 4th/5th
+consecutive retrieval failure across 10c/10d); per doctrine, not chased, sync
+pauses until the endpoint answers. **Gate:** round 99 CLOSED on the
+operator's `npm test` 132/132 proof (2026-10-01, ~348 s); this round's split
+re-opens it.
+
+### 45.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port with the
+stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (blocked). Queued:
+95 remainder, 104, 117 (behind 116), L10-co/cp/cq/cr, W5 venues.
+
+### 45.2 Operator commands
+
+`npm test` from the repo root (the round-100 split needs the native gate: new
+`candle_fetcher/` directory + shim; expect 132/132 — fetcher/candles proven
+AI-side, but only the native driver proves the worker/fs CLI paths).
+No uploads.
+
+## 46. Round 101 — dependence split + smoothed-rank SUPPORTED (2026-10-01, AI-side)
+
+Two tracks. **Foundations:** `src/analysis/dependence.js` (556 lines,
+registered) split into `analysis/dependence/` ×3 + shim, per the round-97
+registered recipe: `correlation.js` (pairwise correlation + Kish design
+effect, no imports), `clusters.js` (fold-window clusters + the
+delete-one-cluster jackknife family; imports `studentTPValue` from student),
+`student.js` (Student-t machinery + first-PC factor-neutral leg, no imports).
+Bodies byte-identical (one slicing-offset draft caught before writing — a
+stray head-comment tail in the first part, fixed). The shim keeps the exact
+19-name registered contract; all consumers (`streams.js`, `portfolio.js`,
+`sleeve/*`, `walkforward/*`, `decision/plan.js`) import through it unchanged.
+Registry: three `KNOWN_TESTS` export rows + three `ANALYSIS_REGISTRY` module
+rows (INVARIANT, same citations/proving tests as the cut row); three imports
++ three map rows in `locks.test.js`. Verified AI-side first try:
+`locks.test.js` 41/0, `analysis.test.js` 856/0 (counts unchanged — pure move,
+no new checks). No golden moves. **Model track:** `e129` 4/4 SUPPORTED (lab
+F-142) tests the F-141 reading constructively — causal EWMA(λ=0.02, the
+pinned R8 value) per funding series, rank the smoothed values: rho1 0.992 on
+both panels (raw 0.517/0.425 recomputed in-run, replicating e128 to the
+digit), smoothed ≥ raw at every lag, sm rho30 0.842/0.891. Smoothing is what
+makes the rank tradeably slow, on both panels; no spec change (the pinned R8
+book already does exactly this), no TODO filed. **Research:** 10d still
+paused (endpoint challenged twice in round 100; doctrine: not chased —
+nothing this round depends on it). **Gate:** rounds 100 + 101 both owed (two
+new directories: `candle_fetcher/`, `analysis/dependence/`).
+
+### 46.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port with the
+stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (blocked). Queued:
+95 remainder, 104, 117 (behind 116), L10-co/cp/cq/cr, W5 venues.
+
+### 46.2 Operator commands
+
+`npm test` from the repo root — ONE run covers both owed rounds (expect
+132/132: fetcher 111 + candles 192 + locks 41 + analysis 856 proven AI-side,
+but only the native driver proves the worker/fs CLI paths and the new
+registry rows). No uploads.

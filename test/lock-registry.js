@@ -371,6 +371,19 @@ export const ANALYSIS_MODULES = Object.freeze({
         'studentTCritical',
         'firstPCWeights', 'factorNeutralResidual', 'factorNeutralSharpe',
     ],
+    'dependence/correlation.js': [
+        'pearsonCorrelation', 'meanPairwiseCorrelation', 'equicorrelationDesignEffect',
+        'equicorrelationEffectiveSize',
+    ],
+    'dependence/clusters.js': [
+        'foldWindowClusters', 'concatClusters', 'clusterJackknife',
+        'pairedClusterTest', 'pairedClusterSignTest', 'signTest', 'signTestFloor',
+        'clusterStability',
+    ],
+    'dependence/student.js': [
+        'regularizedIncompleteBeta', 'studentTPValue', 'studentTCdf',
+        'studentTCritical', 'firstPCWeights', 'factorNeutralResidual', 'factorNeutralSharpe',
+    ],
     'world.js': [
         'DEFAULT_SHOCK', 'shockFactor', 'volumeShockFactor', 'shockCandles', 'makeCandleViewFor', 'worldFromCandles',
     ],
@@ -516,6 +529,27 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['cameronmiller2015', 'kunsch1989', 'clusterjackknife2602', 'kish1965', 'demsar2006', 'efftests1612', 'harveysliu2016', 'pardo2008walkforward', 'ledoitwolf2008'],
         proves: ['analysis.test.js', 'walkforward.test.js'],
         note: 'Dependence-aware inference for the pooled cross-stream evaluation (round 25) — the pure statistical primitives, importing nothing. Proved (analysis.test.js, section AD): pearsonCorrelation is exact on hand-computed vectors and NaN (never 0) on a zero-variance or short pair; meanPairwiseCorrelation skips uncorrelatable pairs; the equicorrelation design effect is exactly 1+(K-1)*rho and negative rho legitimately SHRINKS it (hedging streams really are worth more than one independent observation); foldWindowClusters tiles a rectangular stream panel into fold-window clusters and THROWS rather than mis-grouping a ragged/misaligned panel; concatClusters drops exactly the requested cluster; the delete-one-cluster jackknife SE is pinned against an independently computed leave-one-out sum; and the calibration that matters is Monte-Carlo checked — for a K-stream panel with equicorrelation rho, the jackknife SE / i.i.d. Lo SE ratio equals sqrt(1+(K-1)rho) at rho = 0, 0.25, 0.5, 0.75 (predicted 1.000/1.658/2.121/2.500), so the estimator recovers exactly the design effect it claims to. pairedClusterTest is a paired delete-one-cluster difference of Sharpe ratios referenced to t(C-1) (Cameron & Miller 2015 §IV; the delete-block jackknife for stationary observations, Künsch 1989; arXiv 2602.12043 for the same remedy with few/unequal clusters) and pairedClusterSignTest is the exact PER-WINDOW binomial sign test (this cluster\x27s statistic vs the baseline\x27s, ties dropped; Demsar 2006) — both exact on a deterministic fixture, both (available:false) rather than throwing when the panels differ. Round 26b fixed a copy-paste defect in pairedClusterSignTest: it had compared `all-but-cluster-c` (the jackknife form that belongs to pairedClusterTest/clusterStability), so it computed a leave-one-out stability test rather than the per-window win-fraction it replaces; the analysis.test.js fixture is now discriminating (4 wins / 1 loss / 1 tie on a panel where the leave-one-out form would read 6/6). studentTPValue is verified against exact table values (t=2.030108 at df=35 is two-sided 0.05; t=2 at df=1 is the Cauchy value 0.295167) and the sign test against exact binomial tails (25/36 -> 0.014408, 36/36 -> 2^-36); a DEGENERATE panel (zero jackknife variance with a non-zero difference) gives t = +-Infinity and p = 0 rather than NaN, so a perfectly dominant candidate is not silently failed. The module deliberately reports an effective number of independent tests as a DIAGNOSTIC only: such methods do not control the family-wise error rate (arXiv 1612.04535), so the family-wise gate keeps the searched K (Harvey, Liu & Zhu 2016). Round 26 (R26-7): clusterStability is the magnitude companion to pairedClusterSignTest — the pooled Sharpe difference recomputed on each leave-one-cluster-out panel must stay positive for (at least) every window (minFraction, default 1), so an edge carried by a single lucky fold is refused while an edge spread across folds passes; it is the promotion-stability reading of the delete-one-cluster series (Pardo 2008; Ledoit & Wolf 2008) built on the same design-effect-honest comparison (Cameron & Miller 2015; Kunsch 1989), and together with the gate magnitude floor it replaces the REPORTED-only breadth statistic.',
+    },
+    'dependence/correlation.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['kish1965', 'harveysliu2016'],
+        proves: ['analysis.test.js'],
+        note: 'Round-101 split of analysis/dependence.js (byte-exact move): pairwise correlation plus the Kish equicorrelation design effect and effective size. Same contract as the dependence.js row it was cut from; proved by the unchanged analysis.test.js section AD.',
+    },
+    'dependence/clusters.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['cameronmiller2015', 'kunsch1989', 'clusterjackknife2602', 'demsar2006', 'pardo2008walkforward'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-101 split of analysis/dependence.js (byte-exact move): fold-window clusters plus the delete-one-cluster jackknife family (jackknife, paired test, stability, sign test, exact binomial walk and its floor). Imports the t reference from student.js. Same contract as the dependence.js row it was cut from; proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'dependence/student.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['ledoitwolf2008'],
+        proves: ['analysis.test.js'],
+        note: 'Round-101 split of analysis/dependence.js (byte-exact move): the Student-t machinery (regularised incomplete beta, critical value, tail value and its cdf alias) plus the first-PC factor-neutral leg. Self-contained (no imports). Same contract as the dependence.js row it was cut from; proved by the unchanged analysis.test.js sections.',
     },
     'world.js': {
         status: LOCK_LEVELS.INVARIANT,
