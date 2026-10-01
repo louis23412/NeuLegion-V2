@@ -61,6 +61,9 @@ import * as streamsMod from '../../../src/analysis/streams.js';
 import * as replicationMod from '../../../src/analysis/replication.js';
 import * as forecastMod from '../../../src/analysis/forecast.js';
 import * as forecastScoringMod from '../../../src/analysis/forecast/scoring.js';
+import * as forecastScoringScoresMod from '../../../src/analysis/forecast/scoring/scores.js';
+import * as forecastScoringResamplingMod from '../../../src/analysis/forecast/scoring/resampling.js';
+import * as forecastScoringComparisonMod from '../../../src/analysis/forecast/scoring/comparison.js';
 import * as forecastVolMod from '../../../src/analysis/forecast/vol.js';
 import * as forecastRangeMod from '../../../src/analysis/forecast/range.js';
 import * as forecastCombineMod from '../../../src/analysis/forecast/combine.js';
@@ -129,6 +132,9 @@ const ANALYSIS_IMPORTS = {
     'replication.js': replicationMod,
     'forecast.js': forecastMod,
     'forecast/scoring.js': forecastScoringMod,
+    'forecast/scoring/scores.js': forecastScoringScoresMod,
+    'forecast/scoring/resampling.js': forecastScoringResamplingMod,
+    'forecast/scoring/comparison.js': forecastScoringComparisonMod,
     'forecast/vol.js': forecastVolMod,
     'forecast/range.js': forecastRangeMod,
     'forecast/combine.js': forecastCombineMod,

@@ -5196,8 +5196,7 @@ control amends TODO 104, explains e126 mechanistically), 2607.27070
 (event-heterogeneous cascades, TODO 95 context), 2602.15182 + 2512.01112
 (ADL haircuts land on profitable accounts, TODO 95 venue context), 2606.15715
 (sunshine execution, TODO 111 context). Two queries empty (narrow conjunctions),
-recorded not chased. **Gate:** round 102 CLOSED on the operator's `npm test`
-132/132 proof (2026-10-01, ~344 s); this round's split re-opens it.
+recorded not chased. **Gate closed 2026-10-01:** operator `npm test` 132/132 (~347 s) closes this round (R103) as well.
 
 ### 48.1 Rerank
 
@@ -5211,5 +5210,52 @@ amendment (10f). Queued: 117 (behind 116), L10-co/cp/cq/cr, W5 venues.
 
 `npm test` from the repo root (the round-103 split needs the native gate: new
 `analysis/backtest/` directory + shim + registry rows; expect 132/132 —
+locks/analysis/walkforward/analyze proven AI-side, but only the native driver
+proves the worker/fs CLI paths and the new registry rows). No uploads.
+
+## 49. Round 104 — scoring split + stacked-cap SUPPORTED + research 10g (2026-10-01, AI-side)
+
+Three tracks. **Foundations:** `src/analysis/forecast/scoring.js` (521 lines,
+registered) split into `forecast/scoring/` ×3 + shim, per the round-97
+registered recipe: `scores.js` (pair extraction + proper scores; keeps the
+performance.js import; the private `isArr`/`finite` guards gain `export`
+for inter-part use, not re-exported by the shim), `resampling.js` (shared
+block-bootstrap draws + Diebold-Mariano + MCS; imports rng + mean +
+stationaryBlockIndices + the guards), `comparison.js` (kind-grouped family
+comparison + renderer; imports scores + resampling). Bodies byte-identical
+(all three verified true; no cross-calls — the name mentions are comments).
+The shim keeps the exact 11-name registered contract; the parent
+`forecast.js` shim re-exports through it unchanged. Registry: three
+`KNOWN_TESTS` rows + three module rows; three imports + map rows in
+`locks.test.js`. Verified AI-side first try: `locks.test.js` 41/0,
+`analysis.test.js` 856/0, `walkforward.test.js` 90/0, `analyze.test.js`
+294/0 (counts unchanged — pure move, no new checks). No golden moves.
+**Model track:** `e132` 4/4 SUPPORTED (lab F-145) runs the cap ladder
+0.0625–0.5 on the window-matched stacked-16 grid (e124 plumbing, 2466
+buckets): plateau CONFIRMED (0.0625–0.25 range 0.01, pinned 0.40 level with
+best neighbor 0.40), cap binds monotonically (mean maxAbs 0.0625 → 0.1529).
+New mechanism read: the 0.25 and 0.5 lanes are identical — on 16-wide
+L1-normalized rows no weight ever reaches 0.25, so any cap ≥ 0.25 is a no-op
+and the book self-diversifies; the pinned 12.5% ports to the 16-panel
+unchanged (de-risks TODO 116/118). e131 regressed 4/4 (same SUPPORTED). No
+spec change, no TODO. **Research:** sweep 10g lands 3 grounded notes —
+2601.10812 re-retrieved (TODO 95 liquidation form converges from two queries),
+1912.03270 (GARCH-forecastable funding → queued e133 predictive-smoother idea,
+no TODO), 2201.04699 (71% of an intraday perp agent's return is funding →
+carry-premise support). Mostly off-topic queries, recorded not chased.
+**Gate:** round 103 CLOSED on the operator's `npm test` 132/132 proof
+(2026-10-01, ~347 s); this round's split re-opens it.
+
+### 49.1 Rerank
+
+Top tier: TODO 116 (native 16-panel, cap-port de-risked by e132) + TODO 118
+(native carry port with the stacked-16 read) + fade G5 (106/108, operator) +
+TODO 111 (still data-blocked). Queued: 117 (behind 116), e133 funding-
+forecastability probe (10g idea), L10-co/cp/cq/cr, W5 venues.
+
+### 49.2 Operator commands
+
+`npm test` from the repo root (the round-104 split needs the native gate: new
+`analysis/forecast/scoring/` directory + shim + registry rows; expect 132/132 —
 locks/analysis/walkforward/analyze proven AI-side, but only the native driver
 proves the worker/fs CLI paths and the new registry rows). No uploads.

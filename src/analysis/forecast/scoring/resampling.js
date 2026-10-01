@@ -1,0 +1,202 @@
+// src/analysis/forecast/scoring/resampling.js (round-104 split of src/analysis/forecast/scoring.js).
+// Block-bootstrapped resampling: shared draws, Diebold-Mariano, Model Confidence Set.
+import { mulberry32 } from '../../../legion/rng.js';
+import { mean } from '../../performance.js';
+import { stationaryBlockIndices } from '../../reality_check.js';
+import { isArr, finite } from './scores.js';
+// A stationary-block bootstrap of the mean of each series in `series` (one array
+// per model, all the same length). Returns the per-replicate means as a
+// `Float64Array` of shape [nBoot][K] flattened, so callers can derive both the
+// Diebold–Mariano SE and the Model Confidence Set from ONE set of resampling
+// draws. Deterministic for a given seed.
+export function bootstrapMeans(series, { nBoot = 1000, blockLength = null, seed = 12345 } = {}) {
+    const K = series.length;
+    if (!K) return { available: false, reason: 'no series' };
+    const T = series[0].length;
+    if (!T) return { available: false, reason: 'empty series' };
+    const b = Number.isFinite(blockLength) && blockLength >= 1
+        ? Math.max(1, Math.floor(blockLength))
+        : Math.max(1, Math.floor(Math.cbrt(T)));
+    const rng = mulberry32(seed >>> 0);
+    const out = new Float64Array(nBoot * K);
+    for (let rep = 0; rep < nBoot; rep++) {
+        const idx = stationaryBlockIndices(T, b, rng);
+        for (let k = 0; k < K; k++) {
+            const s = series[k];
+            let sum = 0;
+            for (let t = 0; t < T; t++) sum += s[idx[t]];
+            out[rep * K + k] = sum / T;
+        }
+    }
+    return { available: true, nBoot, blockLength: b, K, T, means: out };
+}
+
+// The Diebold–Mariano (1995) test on the paired per-bar loss differentials
+// d_t = lossA_t - lossB_t. The statistic is dbar / SE(dbar), with SE from the
+// stationary-block bootstrap (so serial dependence in the losses does not inflate
+// it); the p-value is the bootstrap two-sided tail. `favored` names the model with
+// the lower average loss (null when the difference is exactly zero / unavailable).
+export function dieboldMariano({ lossA = [], lossB = [], nBoot = 1000, blockLength = null, seed = 12345 } = {}) {
+    const n = Math.min(lossA.length, lossB.length);
+    const d = [];
+    for (let i = 0; i < n; i++) {
+        if (finite(lossA[i]) && finite(lossB[i])) d.push(lossA[i] - lossB[i]);
+    }
+    if (d.length < 2) return { available: false, reason: 'fewer than two paired observations' };
+    const dbar = mean(d);
+    const boot = bootstrapMeans([d], { nBoot, blockLength, seed });
+    if (!boot.available) return { available: false, reason: boot.reason };
+    let bmean = 0;
+    for (let rep = 0; rep < boot.nBoot; rep++) bmean += boot.means[rep];
+    bmean /= boot.nBoot;
+    let vsum = 0;
+    for (let rep = 0; rep < boot.nBoot; rep++) vsum += (boot.means[rep] - bmean) ** 2;
+    const se = Math.sqrt(vsum / Math.max(1, boot.nBoot - 1));
+    const absDbar = Math.abs(dbar);
+    let statistic;
+    let pValue;
+    // A numerically-zero bootstrap variance (e.g. a constant differential) is
+    // treated as zero: the difference is then either exactly zero (no evidence) or
+    // infinitely significant (no sampling variability at all).
+    if (!(se > 1e-12)) {
+        statistic = absDbar > 0 ? Infinity : 0;
+        pValue = absDbar > 0 ? 0 : 1;
+    } else {
+        statistic = dbar / se;
+        let exceed = 0;
+        for (let rep = 0; rep < boot.nBoot; rep++) {
+            if (Math.abs(boot.means[rep] - dbar) >= absDbar) exceed++;
+        }
+        pValue = (exceed + 1) / (boot.nBoot + 1);
+    }
+    return {
+        available: true,
+        n: d.length,
+        meanDifferential: dbar,
+        se,
+        statistic,
+        pValue,
+        blockLength: boot.blockLength,
+        favored: dbar < 0 ? 'A' : (dbar > 0 ? 'B' : null),
+    };
+}
+
+// The Hansen, Lunde & Nason (2011) Model Confidence Set, range statistic.
+// `losses` is one per-bar loss series per model; `ids` names them. The procedure
+// starts from the full set and, while the null "all models in the set are equally
+// good" is rejected (bootstrap p < alpha), eliminates the model with the largest
+// average loss relative to the rest. Returns the surviving set — the families that
+// cannot be distinguished from the best at 1 - alpha confidence. Deterministic for
+// a given seed. `alpha` is the significance level; confidence = 1 - alpha.
+export function modelConfidenceSet({ losses = [], ids = null, alpha = 0.10, nBoot = 1000, blockLength = null, seed = 12345 } = {}) {
+    const K = losses.length;
+    if (K < 2) {
+        return K === 1
+            ? { available: true, alpha, members: [0], memberIds: ids ? [ids[0]] : [0], eliminated: [], steps: 0, note: 'a single model is its own MCS' }
+            : { available: false, reason: 'need at least one loss series' };
+    }
+    const T = losses[0].length;
+    for (const s of losses) {
+        if (!isArr(s) || s.length !== T) return { available: false, reason: 'loss series must be arrays of equal length' };
+    }
+    const boot = bootstrapMeans(losses, { nBoot, blockLength, seed });
+    if (!boot.available) return { available: false, reason: boot.reason };
+    const names = ids || losses.map((_, i) => i);
+    const observed = losses.map((s) => mean(s));
+    const B = boot.nBoot;
+    const meanStar = (rep, k) => boot.means[rep * K + k];
+    // Bootstrap variance of each model mean (the diagonal of Sigma-hat) and of each
+    // pairwise differential mean. Precomputed once: the inner bootstrap loop must
+    // not recompute a variance.
+    const sd = new Array(K).fill(0);
+    const bootMean = new Array(K).fill(0);
+    for (let k = 0; k < K; k++) {
+        let m = 0;
+        for (let rep = 0; rep < B; rep++) m += meanStar(rep, k);
+        bootMean[k] = m / B;
+    }
+    for (let k = 0; k < K; k++) {
+        let v = 0;
+        for (let rep = 0; rep < B; rep++) v += (meanStar(rep, k) - bootMean[k]) ** 2;
+        sd[k] = Math.sqrt(v / Math.max(1, B - 1));
+    }
+    const sdDiff = [];
+    for (let i = 0; i < K; i++) {
+        sdDiff.push(new Array(K).fill(0));
+        for (let j = 0; j < K; j++) {
+            if (i === j) continue;
+            let m = 0;
+            for (let rep = 0; rep < B; rep++) m += meanStar(rep, i) - meanStar(rep, j);
+            m /= B;
+            let v = 0;
+            for (let rep = 0; rep < B; rep++) v += (meanStar(rep, i) - meanStar(rep, j) - m) ** 2;
+            sdDiff[i][j] = Math.sqrt(v / Math.max(1, B - 1));
+        }
+    }
+
+    const active = losses.map((_, i) => i);
+    const eliminated = [];
+    let lastP = null;
+    let steps = 0;
+    while (active.length > 1) {
+        // T_R = max_{i,j in M} |dbar_ij| / se(dbar_ij).
+        let TR = 0;
+        for (let a = 0; a < active.length; a++) {
+            for (let b = a + 1; b < active.length; b++) {
+                const i = active[a];
+                const j = active[b];
+                const s = sdDiff[i][j];
+                const dbar = observed[i] - observed[j];
+                if (s > 0) TR = Math.max(TR, Math.abs(dbar) / s);
+                else if (dbar !== 0) TR = Infinity;
+            }
+        }
+        // Centered bootstrap distribution of T_R over the active set.
+        let exceed = 0;
+        for (let rep = 0; rep < B; rep++) {
+            let TRb = 0;
+            for (let a = 0; a < active.length; a++) {
+                for (let b = a + 1; b < active.length; b++) {
+                    const i = active[a];
+                    const j = active[b];
+                    const s = sdDiff[i][j];
+                    if (s <= 0) continue;
+                    const d = (meanStar(rep, i) - meanStar(rep, j)) - (observed[i] - observed[j]);
+                    TRb = Math.max(TRb, Math.abs(d) / s);
+                }
+            }
+            if (TRb >= TR) exceed++;
+        }
+        const p = (exceed + 1) / (B + 1);
+        lastP = p;
+        if (p >= alpha) break;
+        // Eliminate the worst: max over the active set of (mean_i - mean of the
+        // rest) / se_i.
+        let worst = active[0];
+        let worstScore = -Infinity;
+        for (const i of active) {
+            const others = active.filter((x) => x !== i);
+            const mOthers = others.length ? mean(others.map((j) => observed[j])) : observed[i];
+            const num = observed[i] - mOthers;
+            const den = sd[i] > 0 ? sd[i] : (num > 0 ? 0 : Infinity);
+            const score = den === 0 ? Infinity : num / den;
+            if (score > worstScore) { worstScore = score; worst = i; }
+        }
+        eliminated.push({ index: worst, id: names[worst], step: steps, pValue: p });
+        active.splice(active.indexOf(worst), 1);
+        steps++;
+    }
+    return {
+        available: true,
+        alpha,
+        confidence: 1 - alpha,
+        members: active.slice(),
+        memberIds: active.map((i) => names[i]),
+        eliminated,
+        steps,
+        lastPValue: lastP,
+        nBoot: B,
+        blockLength: boot.blockLength,
+        note: 'a model is eliminated only when the equal-accuracy null over the surviving set is rejected; the survivors cannot be distinguished from the best at this confidence (Hansen, Lunde & Nason 2011)',
+    };
+}

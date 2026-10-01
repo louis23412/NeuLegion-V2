@@ -311,6 +311,18 @@ export const ANALYSIS_MODULES = Object.freeze({
         'brierLosses', 'bootstrapMeans', 'dieboldMariano', 'modelConfidenceSet',
         'forecastComparison', 'formatForecast',
     ],
+    'forecast/scoring/scores.js': [
+        'forecastPairs', 'brierBinIndex', 'brierScore', 'logScore', 'brierDecomposition',
+        'brierLosses',
+        // Inter-part use only (resampling/comparison import them; the shim does not re-export them).
+        'isArr', 'finite',
+    ],
+    'forecast/scoring/resampling.js': [
+        'bootstrapMeans', 'dieboldMariano', 'modelConfidenceSet',
+    ],
+    'forecast/scoring/comparison.js': [
+        'forecastComparison', 'formatForecast',
+    ],
     'forecast/vol.js': [
         'realizedVolatility', 'ewmaVolForecast', 'volForecastSkill',
         'fitArVolForecast', 'predictArVolForecast', 'tournamentVolForecast',
@@ -675,6 +687,27 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['brier1950', 'murphy1973', 'gneitingraftery2007', 'diebold1995', 'hansenlundenason2011'],
         proves: ['analysis.test.js'],
         note: 'Round-71 split of analysis/forecast.js (byte-exact move; forecast.js is the re-export shim): the forecast-scoring third — proper scores (Brier/Murphy/log), the block-bootstrapped Diebold-Mariano test, the Model Confidence Set, the kind-grouped family comparison and the summary renderer. Same contract as the forecast.js row it was cut from; proved by the unchanged analysis.test.js sections.',
+    },
+    'forecast/scoring/scores.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['brier1950', 'murphy1973', 'gneitingraftery2007'],
+        proves: ['analysis.test.js'],
+        note: 'Round-104 split of analysis/forecast/scoring.js (byte-exact move): forecast-pair extraction plus the proper scores (Brier, Murphy decomposition, log score, per-bar losses). Self-contained apart from the performance.js mean. Same contract as the scoring.js row it was cut from; proved by the unchanged analysis.test.js sections.',
+    },
+    'forecast/scoring/resampling.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['diebold1995', 'hansenlundenason2011', 'politisromano1994subsampling'],
+        proves: ['analysis.test.js'],
+        note: 'Round-104 split of analysis/forecast/scoring.js (byte-exact move): the shared stationary-block resampling draws plus the Diebold-Mariano test and the Model Confidence Set. Imports the isArr/finite guards from scores.js. Same contract as the scoring.js row it was cut from; proved by the unchanged analysis.test.js sections.',
+    },
+    'forecast/scoring/comparison.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['brier1950', 'diebold1995', 'hansenlundenason2011'],
+        proves: ['analysis.test.js'],
+        note: 'Round-104 split of analysis/forecast/scoring.js (byte-exact move): the kind-grouped family comparison plus the human-summary renderer. Imports scores and resampling. Same contract as the scoring.js row it was cut from; proved by the unchanged analysis.test.js sections.',
     },
     'forecast/vol.js': {
         status: LOCK_LEVELS.INVARIANT,
