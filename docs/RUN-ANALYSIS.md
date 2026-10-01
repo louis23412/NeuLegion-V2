@@ -4874,3 +4874,48 @@ amendment. Queued: 95 remainder, 104, 117 (behind 116), L10-co/cp/cq/cr.
 `analyze/cli/` directory + shim; expect 132/132 — analyze/locks/contracts
 proven AI-side, but only the native driver proves the worker/fs CLI paths).
 No uploads.
+
+## 41. Round 96 — evaluate split + stacked-16 carry SUPPORTED (2026-10-01, AI-side)
+
+Three tracks. **Foundations:** `src/analyze/evaluate.js` (764 lines) split
+into `analyze/evaluate/` ×3 + shim, per the round-71/83/95 recipe: `core.js`
+(`evaluateAB` + `finalizeAB`, exported for inter-part use only — the round-74
+`powerSummary` precedent), `async.js` (`evaluateABAsync`), `format.js`
+(the four formatters + two private helpers). Sliced bodies byte-identical;
+the only diff is the `export` prefix on `finalizeAB`. The shim carries the
+exact 5-name contract; `src/analyze.js` untouched. Nothing registered, so no
+registry rows, no locks change, no ledger move. Verified AI-side with
+baselines first: analyze 294/0, locks 41/0, contracts 255/0 post-split; both
+shims bundle with every name present; the lab orchestrator intact. Wiring
+audit: all 124 lab experiments registered in `run_all.js` — no wiring debt.
+**Sleeve-family model:** `e124` 4/4 (lab F-137) scores the 16-wide
+cross-sectional carry book on the window-matched grid (>= 2024-06-01): maj8w
+available (2537×8, net 3.76), mid8 (2466×8, net 18.11, e123 replicated),
+stacked-16 available (2466×16, net 13.26, turnover 17.6/yr, BE 24.1).
+Because carry-dispersion ranks funding ACROSS the basket, the stacked panel is
+a genuinely different book. Cross-leg correlation through the repo's own
+`parseSleeveInputs` + `scoreSleeve` series on the timestamp-intersected grid
+(`runSleeveReport` drops the period series — self-caught):
+corr(mid8, maj8w) = −0.02 — SUPPORTED (legs independent; the F-125 pattern
+again). Plumbing + independence verdict, not promotion (2y window).
+**Research:** sweep 10b (one targeted query, one grounding — 2608.21888:
+15m reversal lives in signs, concentrates after aggressive taker flow, depth
+conditions nothing) task-defines TODO 88 (sign-reversal × taker-flow
+conditioning; lab holds taker_1h/taker_15m — AI-side testable, filed as e125
+next). **Gate:** round 95 CLOSED on the operator's `npm test` 132/132 proof
+(2026-10-01); this round's split re-opens it.
+
+### 41.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port, now with
+the stacked-16 read: availability + pooled triple + cross-leg corr) + fade G5
+(106/108, operator) + TODO 111 (control-defined, blocked). Next lab: e125
+(TODO 88, pre-registered gate sketched in the item). Queued: 95 remainder,
+104, 117 (behind 116), L10-co/cp/cq/cr, W5 venues (audit-OI-truth-first).
+
+### 41.2 Operator commands
+
+`npm test` from the repo root (the round-96 split needs the native gate: new
+`analyze/evaluate/` directory + shim; expect 132/132 — analyze/locks/contracts
+proven AI-side, but only the native driver proves the worker/fs CLI paths).
+No uploads.
