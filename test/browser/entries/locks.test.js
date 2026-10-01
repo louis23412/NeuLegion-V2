@@ -31,6 +31,9 @@ import * as splitsMod from '../../../src/analysis/splits.js';
 import * as labelsMod from '../../../src/analysis/labels.js';
 import * as uniquenessMod from '../../../src/analysis/uniqueness.js';
 import * as backtestMod from '../../../src/analysis/backtest.js';
+import * as backtestPrimitivesMod from '../../../src/analysis/backtest/primitives.js';
+import * as backtestMetricsMod from '../../../src/analysis/backtest/metrics.js';
+import * as backtestFoldsMod from '../../../src/analysis/backtest/folds.js';
 import * as walkforwardMod from '../../../src/analysis/walkforward.js';
 import * as walkforwardReturnsMod from '../../../src/analysis/walkforward/returns.js';
 import * as walkforwardFoldsMod from '../../../src/analysis/walkforward/folds.js';
@@ -96,6 +99,9 @@ const ANALYSIS_IMPORTS = {
     'labels.js': labelsMod,
     'uniqueness.js': uniquenessMod,
     'backtest.js': backtestMod,
+    'backtest/primitives.js': backtestPrimitivesMod,
+    'backtest/metrics.js': backtestMetricsMod,
+    'backtest/folds.js': backtestFoldsMod,
     'walkforward.js': walkforwardMod,
     'walkforward/returns.js': walkforwardReturnsMod,
     'walkforward/folds.js': walkforwardFoldsMod,

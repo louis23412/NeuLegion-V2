@@ -1078,6 +1078,12 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    **Round-102 status:** the liquidation leg has a task form (sweep 10e's
    2601.10812: funding-aware optimal liquidation — costs + inventory risk +
    funding payments, closed-form for linear perp payoffs).
+   **Round-103 status:** the execution leg gains a measurement form (sweep 10f's
+   2603.09164 Slippage-at-Risk — forward slippage quantiles + concentration
+   adjustment, not a simulated spread), cascade context (2607.27070: early
+   warning is event-heterogeneous, endogenous vs exogenous types separated),
+   and venue context (2602.15182/2512.01112: ADL haircuts land on profitable
+   accounts — price ADL exposure, not just fees).
 
 96. [ ] **P5 — continuous test-time adaptation (deferred; gate G-D OPEN, nothing measured).** The
    shipped controller **already adapts continuously within a fold** (`getSignal` trains on
@@ -1174,6 +1180,10 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    flat book as the only G5 claim (F-119). Grounding filed round 77 (sweep 2026-09w's 2609.05433:
    the perp price is the PV of a benchmark flow discounted at the funding rate — the vol-targeted
    book's limit law must respect that the discount/benchmark choice moves with the sizing).
+   **Round-103 amendment (sweep 10f's 2603.01298):** any future sized-leg design
+   is closed-loop (proportional feedback on tracking error), never open-loop
+   inverse-variance scaling — open-loop is what explodes turnover (e126's
+   mechanism) via leverage spikes and estimation-error sensitivity.
 
 105. [x] **Decay attribution on the sleeve (round-75 follow-up; round-76 evidence landed; round-77 comparison landed).** The flat halves read 0.47 → 0.20
    per-bar (`20260929T061347-seed1-sleeve`) — a measured gap, not a hunch — and round 76 added the
@@ -2155,6 +2165,10 @@ not a bug fix.
    trade prints with latency logs. Pre-registered gate: adverse-selection/move-timing gain in
    bps per real fill vs the e25 baseline — a simulated spread never counts. Model attention
    returns to the locked-core upgrade question in a future round.
+   **Round-103 context (sweep 10f's 2606.15715):** visible (preannounced) TWAPs
+   attract liquidity and lower execution costs vs hidden metaorders
+   (Hyperliquid address-level evidence) — mechanism support for the taker-timing
+   use; the L2/fill data block stands.
 
 > **Rerank 2026-09-30 (round 85):** the W6 re-freeze arc for the network-arm audit
 > (F-130) takes the top tier: e118 proves the Sharpe-1.3/BE-15.3bp arm is causal under

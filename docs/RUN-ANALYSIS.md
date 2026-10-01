@@ -5148,6 +5148,7 @@ no spec change, no TODO. **Research:** sweep 10e lands 6 grounded notes
 2510.27334 (HFT selection → TODO 111 block), 2508.20225 (quoting context).
 **Gate:** rounds 100 + 101 CLOSED on the operator's `npm test` 132/132
 proof (2026-10-01, ~351 s); this round's split re-opens it.
+**Gate closed 2026-10-01:** operator `npm test` 132/132 (~344 s) closes this round (R102) as well.
 
 ### 47.1 Rerank
 
@@ -5163,3 +5164,52 @@ W5 venues.
 `analysis/features/` directory + shim + registry rows; expect 132/132 —
 locks/analysis proven AI-side, but only the native driver proves the
 worker/fs CLI paths and the new registry rows). No uploads.
+
+## 48. Round 103 — backtest split + cap-plateau SUPPORTED + research 10f (2026-10-01, AI-side)
+
+Three tracks. **Foundations:** `src/analysis/backtest.js` (410 lines,
+registered) split into `analysis/backtest/` ×3 + shim, per the round-97
+registered recipe: `primitives.js` (lagged positions, turnover, costed strategy
+returns, equity, drawdown, hit rate, trade count — no imports),
+`metrics.js` (full-report metrics + fold pooling; keeps the performance.js
+import; the `annualizeSharpe` re-export sits with its import here instead of
+the file end), `folds.js` (private scoreFold, serial + concurrent purged-CV,
+annualization; imports primitives + metrics + parallel). Bodies byte-identical
+(all three verified true against the original slices; one documented move: the
+line-409 re-export). The shim keeps the exact 13-name registered contract; all
+consumers (`walkforward/*`, `decision/measures.js`, three browser entries)
+import through it unchanged. Registry: three `KNOWN_TESTS` rows + three module
+rows; three imports + map rows in `locks.test.js`. Verified AI-side first try:
+`locks.test.js` 41/0, `analysis.test.js` 856/0, `walkforward.test.js` 90/0,
+`analyze.test.js` 294/0 (counts unchanged — pure move, no new checks). No
+golden moves. **Model track:** `e131` 4/4 SUPPORTED (lab F-144) runs the cap
+ladder 0.0625–0.5 through the repo's own `buildFundingBook` (pinned lambda
+0.02) + `cleanBook` + sleeve returns @ 4bps: plateau CONFIRMED on majors-full
+(0.0625–0.25 range 0.02, pinned 0.34 level with its best neighbor 0.33), the cap
+binds monotonically (mean maxAbs 0.0625 → 0.2427), midcap finite both lanes.
+Coherence: the 0.125 lane bit-matches e130's pinned-0.02 lane (0.3404/60.35/
+42.88) through the other ladder axis; e130 regressed 4/3 (same recorded
+NEGATIVE). No spec change (the pinned 12.5% book already does exactly this),
+no TODO. **Research:** sweep 10f lands 5 grounded notes — 2603.09164 (SaR
+liquidation-execution task form for TODO 95), 2603.01298 (closed-loop vol
+control amends TODO 104, explains e126 mechanistically), 2607.27070
+(event-heterogeneous cascades, TODO 95 context), 2602.15182 + 2512.01112
+(ADL haircuts land on profitable accounts, TODO 95 venue context), 2606.15715
+(sunshine execution, TODO 111 context). Two queries empty (narrow conjunctions),
+recorded not chased. **Gate:** round 102 CLOSED on the operator's `npm test`
+132/132 proof (2026-10-01, ~344 s); this round's split re-opens it.
+
+### 48.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port with the
+stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (sunshine context
+from 10f, still data-blocked). TODO 95 remainder gains the SaR execution task
+form + ADL venue context (10f); TODO 104 gains the closed-loop construction
+amendment (10f). Queued: 117 (behind 116), L10-co/cp/cq/cr, W5 venues.
+
+### 48.2 Operator commands
+
+`npm test` from the repo root (the round-103 split needs the native gate: new
+`analysis/backtest/` directory + shim + registry rows; expect 132/132 —
+locks/analysis/walkforward/analyze proven AI-side, but only the native driver
+proves the worker/fs CLI paths and the new registry rows). No uploads.

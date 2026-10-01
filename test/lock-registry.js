@@ -224,6 +224,16 @@ export const ANALYSIS_MODULES = Object.freeze({
         // reports use.
         'poolFolds', 'purgedCVBacktestAsync', 'annualizeSharpe',
     ],
+    'backtest/primitives.js': [
+        'positionsFromSignals', 'turnover', 'strategyReturns', 'equityCurve', 'maxDrawdown',
+        'hitRate', 'tradeCount',
+    ],
+    'backtest/metrics.js': [
+        'backtestMetrics', 'poolFolds', 'annualizeSharpe',
+    ],
+    'backtest/folds.js': [
+        'purgedCVBacktest', 'purgedCVBacktestAsync', 'annualizedReturn',
+    ],
     'walkforward.js': [
         'barReturns', 'logReturns', 'probToPosition', 'isCausalFold', 'aggregateFolds',
         'foldWinFraction', 'auditNoLookahead', 'walkForwardEvaluate', 'walkForwardEvaluateAsync', 'promoteDecision',
@@ -483,6 +493,27 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['leprado2018afml', 'finval2609'],
         proves: ['analysis.test.js'],
         note: 'No-lookahead backtest: positions lag one bar, costs charged on turnover. Proved exact arithmetic (cost 10bps on entry => 0.019, maxDrawdown 0.5), and that it does NOT bless noise: perfect foresight PSR>0.99 / drawdown ~0, anti-signal PSR<0.01 / drawdown >0.5, zero-skill signal DSR<0.95, costs monotone. purgedCVBacktest pools per-fold net returns; the series-reading metrics are correct, and the position-based ones (turnover/tradeCount/totalCost/grossSharpe) are overridden with the per-fold strategy sums + the pooled gross Sharpe, so the pooled report is a real strategy summary rather than an all-long overlay (BUGS.md #11). ROUND 25: backtestMetrics takes an `effectiveBars` sample size (the design-effect-adjusted n) and returns psrAdjusted/dsrAdjusted computed on it — null, not the unadjusted value, when no design effect was justified; it also reports participation (nonZeroFraction/meanAbsPosition, which is what distinguished the attempt-3 `query-mod` candidate: a median fold Sharpe of exactly 0 with a pooled DSR of 0.9992 is a filter that abstains on most folds) and a `minTrackRecordLengthStatus` (finite | beyond-horizon | unavailable), because JSON.stringify turns the Infinity of "no track record length would suffice" into a null indistinguishable from "not computed". poolFolds aggregates the participation metrics over the folds (the all-long overlay of the pooled series would report 1.0/1.0 — the overlay\\x27s participation, not the strategy\\x27s) and forwards `effectiveBars`; purgedCVBacktest retains `foldInputs` (each fold\\x27s returns/signals BY REFERENCE, no copies) so a finished report can be restated at any cost level without the model (walkforward#restateReportAtCost). Round 26 (R26-3): it also journals the raw pre-policy confidence per fold (`confidenceForFold`), so the whole report can be restated at another confidence->position policy too (`walkforward#restateReportAtPolicy`) — still without the model.',
+    },
+    'backtest/primitives.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml'],
+        proves: ['analysis.test.js'],
+        note: 'Round-103 split of analysis/backtest.js (byte-exact move): signal-to-position primitives (lagged positions, turnover, costed strategy returns, equity, drawdown, hit rate, trade count). Self-contained (no imports). Same contract as the backtest.js row it was cut from; proved by the unchanged analysis.test.js sections.',
+    },
+    'backtest/metrics.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'finval2609'],
+        proves: ['analysis.test.js'],
+        note: 'Round-103 split of analysis/backtest.js (byte-exact move): full-report metrics plus fold pooling (and the annualizeSharpe re-export, which sits with its performance.js import here). Imports the primitives from primitives.js. Same contract as the backtest.js row it was cut from; proved by the unchanged analysis.test.js sections.',
+    },
+    'backtest/folds.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'pardo2008walkforward'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-103 split of analysis/backtest.js (byte-exact move): purged-CV scoring (private scoreFold, serial purgedCVBacktest, concurrent purgedCVBacktestAsync) plus annualization. Imports primitives and metrics. Same contract as the backtest.js row it was cut from; proved by the unchanged analysis.test.js + walkforward.test.js sections.',
     },
     'walkforward.js': {
         status: LOCK_LEVELS.INVARIANT,
