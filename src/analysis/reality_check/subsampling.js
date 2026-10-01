@@ -3,7 +3,7 @@
 // Shares relativePerformance/safeRatio from ./bootstrap.js (registered there,
 // not duplicated) and mean from ../performance.js.
 import { mean } from '../performance.js';
-import { relativePerformance, safeRatio } from './bootstrap.js';
+import { relativePerformance, safeRatio } from './bootstrap/inputs.js';
 // --- Variance-consistent subsampling (Politis & Romano 1994; Politis, Romano &
 // Wolf 1999, ch. 3-4) -------------------------------------------------------
 //

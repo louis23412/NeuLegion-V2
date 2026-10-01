@@ -471,8 +471,21 @@ export const ANALYSIS_MODULES = Object.freeze({
         'stationaryBlockIndices', 'bootstrapRelativeMeans', 'whiteRealityCheck', 'hansenSpa',
         'consistentRecentring', 'hansenSpaConsistent', 'romanoWolfStepM',
         'politisWhiteBlockLength', 'autoBlockLength',
-        // Inter-part use only (subsampling.js imports it; the shim does not re-export it).
+    ],
+    'reality_check/bootstrap/inputs.js': [
+        'DEFAULT_RC_CONFIG', 'benchmarkSeries', 'relativePerformance',
+        // Inter-part use only (subsampling.js + tests.js import it; the shims do not re-export it).
         'safeRatio',
+    ],
+    'reality_check/bootstrap/resampling.js': [
+        'stationaryBlockIndices', 'politisWhiteBlockLength', 'autoBlockLength', 'bootstrapRelativeMeans',
+        // Inter-part use only (tests.js imports them; the shim does not re-export them).
+        'mulberry32', 'bootstrapStdErrors', 'studentizedBoot',
+    ],
+    'reality_check/bootstrap/tests.js': [
+        'whiteRealityCheck', 'hansenSpa', 'consistentRecentring', 'hansenSpaConsistent', 'romanoWolfStepM',
+        // Inter-part use only (no consumer yet; the shim does not re-export it).
+        'spaCore',
     ],
     'reality_check/subsampling.js': [
         'DEFAULT_SUB_CONFIG', 'neweyWestSE', 'subsamplingSpa', 'subsamplingStepM',
@@ -879,6 +892,27 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['white2000rc', 'hansen2005spa', 'romano2005stepm', 'politis1994', 'politis2004blocklength', 'patton2009correction', 'leprado2018afml'],
         proves: ['analysis.test.js'],
         note: 'Round-94 split of analysis/reality_check.js (byte-exact move; reality_check.js is the re-export shim): the block-bootstrap RC/SPA family — benchmark/relative performance, the stationary-block core, White RC, Hansen SPA (upper + consistent recentring), the Romano-Wolf step-down and the Politis-White automatic block-length selector. Exports the shared safeRatio guard for subsampling.js (registered here, not duplicated). Proved by the unchanged analysis.test.js sections.',
+    },
+    'reality_check/bootstrap/inputs.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['white2000rc', 'hansen2005spa'],
+        proves: ['analysis.test.js'],
+        note: 'Round-107 split of reality_check/bootstrap.js (byte-exact move; bootstrap.js is the re-export shim): candidate/benchmark inputs — config, benchmark series, the relative-performance matrix, the shared safeRatio guard (imported by subsampling.js + tests.js, not re-exported by the shims). Proved by the unchanged analysis.test.js sections.',
+    },
+    'reality_check/bootstrap/resampling.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['politis1994', 'politis2004blocklength', 'patton2009correction'],
+        proves: ['analysis.test.js'],
+        note: 'Round-107 split of reality_check/bootstrap.js (byte-exact move): the stationary-bootstrap engine — rng stream, index draws, the Politis-White automatic block-length selector, shared draws, bootstrap standard errors (mulberry32/bootstrapStdErrors/studentizedBoot gain export for inter-part use by tests.js). Proved by the unchanged analysis.test.js sections.',
+    },
+    'reality_check/bootstrap/tests.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['white2000rc', 'hansen2005spa', 'romano2005stepm', 'leprado2018afml'],
+        proves: ['analysis.test.js'],
+        note: 'Round-107 split of reality_check/bootstrap.js (byte-exact move): the RC/SPA/step-down tests on the shared draws — White RC, Hansen SPA (upper + consistent recentring), the Romano-Wolf stepM (spaCore gains export for inter-part use). Proved by the unchanged analysis.test.js sections.',
     },
     'reality_check/subsampling.js': {
         status: LOCK_LEVELS.INVARIANT,

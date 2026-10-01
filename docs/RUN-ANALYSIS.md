@@ -5349,3 +5349,53 @@ W5 venues.
 `analysis/walkforward/report/` directory + shim + registry rows; expect 132/132 —
 locks/analysis/walkforward/analyze proven AI-side, but only the native driver
 proves the worker/fs CLI paths and the new registry rows). No uploads.
+**Gate closed 2026-10-01:** operator `npm test` 132/132 (~360 s) closes this round (R106) as well.
+
+## 52. Round 107 — bootstrap split + stacked-band SUPPORTED + research 10j (2026-10-01, AI-side)
+
+Three tracks. **Foundations:** `src/analysis/reality_check/bootstrap.js` (574
+lines, registered) split into `reality_check/bootstrap/` ×3 + shim, per the
+round-97 registered recipe: `inputs.js` (config + benchmark/relative-performance
++ safeRatio) + `resampling.js` (rng stream, index draws, Politis-White selector,
+shared draws, standard errors) + `tests.js` (RC/SPA/consistent/step-down).
+Bodies byte-identical (line-multiset verified); mulberry32/bootstrapStdErrors/
+studentizedBoot/spaCore gain `export` for inter-part use, not re-exported by
+the shim. One self-caught missing import (resampling.js needs safeRatio) plus
+one registry correction (the parent KNOWN row over-listed the shim contract)
+— both caught by the first AI-side run (locks 41/1, analysis ReferenceError),
+both fixed, second run green. Consumer edit: subsampling.js imports
+{ relativePerformance, safeRatio } from './bootstrap/inputs.js' (one line).
+Registry: three KNOWN_TESTS rows + three module rows; three imports + map rows
+in `locks.test.js`. Verified AI-side: `locks.test.js` 41/0,
+`analysis.test.js` 856/0, `walkforward.test.js` 90/0, `analyze.test.js`
+294/0 (counts unchanged — pure move, no new checks); e58 validationPass true
+(the split's own audit guard). No golden moves. **Model track:** `e135` 3/3
+SUPPORTED (lab F-148) — the port recipe's no-trade band transfers to the
+stacked-16 book: on the pinned capped-0.125 panel every band lane beats daily
+net at lower turnover (null 0.40 vs 0.005:0.43/19.9x, 0.01:0.44/15.2x,
+0.03:0.42/8.8x; best 0.01, neighbor gap 0.00, no isolated spike). The null lane
+reproduces e132's pinned lane to the digit (coherence). Native read for TODO
+118: score the 16-panel with cap 0.125 + band ~0.01. e134 regressed 4/3 (same
+recorded NEGATIVE). No spec change, no TODO. **Research:** endpoint answers
+again — sweep 10j lands (5 new notes: cascade subcriticality + event-heterogeneous
+precursors for TODO 95's liquidation leg, optimal perp liquidation for TODO
+111's task form, collateral control for the spot leg, sign-reversal task form
+for closed L13; 3 convergence confirms, no doc changes). **Gate:** round 106
+CLOSED on the operator's `npm test` 132/132 proof (2026-10-01, ~360 s); this
+round's split re-opens it.
+
+### 52.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port with the
+stacked-16 read, now cap 0.125 + band ~0.01 per e135) + fade G5 (106/108,
+operator) + TODO 111 (still data-blocked, task form sharpened by 10j's
+2601.10812). Model track rests on the reinforced pinned spec (EWMA + 12.5%
+cap plateaued, challenger beaten, band transfers); next model work waits on
+native breadth. Queued: 117 (behind 116), L10-co/cp/cq/cr, W5 venues.
+
+### 52.2 Operator commands
+
+`npm test` from the repo root (the round-107 split needs the native gate: new
+`analysis/reality_check/bootstrap/` directory + shim + registry rows; expect 132/132 —
+locks/analysis/walkforward/analyze proven AI-side, but only the native driver
+proves the worker/fs CLI paths and the new registry rows). No uploads.

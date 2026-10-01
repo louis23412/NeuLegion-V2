@@ -50,6 +50,9 @@ import * as walkforwardSearchMod from '../../../src/analysis/walkforward/search.
 import * as overfittingMod from '../../../src/analysis/overfitting.js';
 import * as realityCheckMod from '../../../src/analysis/reality_check.js';
 import * as realityCheckBootstrapMod from '../../../src/analysis/reality_check/bootstrap.js';
+import * as realityCheckBootstrapInputsMod from '../../../src/analysis/reality_check/bootstrap/inputs.js';
+import * as realityCheckBootstrapResamplingMod from '../../../src/analysis/reality_check/bootstrap/resampling.js';
+import * as realityCheckBootstrapTestsMod from '../../../src/analysis/reality_check/bootstrap/tests.js';
 import * as realityCheckSubsamplingMod from '../../../src/analysis/reality_check/subsampling.js';
 import * as dependenceMod from '../../../src/analysis/dependence.js';
 import * as dependenceCorrelationMod from '../../../src/analysis/dependence/correlation.js';
@@ -126,6 +129,9 @@ const ANALYSIS_IMPORTS = {
     'overfitting.js': overfittingMod,
     'reality_check.js': realityCheckMod,
     'reality_check/bootstrap.js': realityCheckBootstrapMod,
+    'reality_check/bootstrap/inputs.js': realityCheckBootstrapInputsMod,
+    'reality_check/bootstrap/resampling.js': realityCheckBootstrapResamplingMod,
+    'reality_check/bootstrap/tests.js': realityCheckBootstrapTestsMod,
     'reality_check/subsampling.js': realityCheckSubsamplingMod,
     'dependence.js': dependenceMod,
     'dependence/correlation.js': dependenceCorrelationMod,
