@@ -271,6 +271,12 @@ export const ANALYSIS_MODULES = Object.freeze({
     'walkforward/report.js': [
         'poolReports', 'promoteDecision', 'pairedPromotionTest',
     ],
+    'walkforward/report/pooling.js': [
+        'poolReports',
+    ],
+    'walkforward/report/gate.js': [
+        'promoteDecision', 'pairedPromotionTest',
+    ],
     'walkforward/restate.js': [
         'restateReportAtCost', 'restateReportAtPolicy', 'verifyPolicyRoundTrip', 'exposureDeadZone',
         'restateReportAtCadence', 'exposureMatchedPair', 'costLadder',
@@ -579,6 +585,20 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['harveysliu2016', 'demsar2006', 'efftests1612', 'white2000rc', 'hansen2005spa', 'romano2005stepm', 'minervascore2608', 'algoxpert2603'],
         proves: ['analysis.test.js', 'walkforward.test.js'],
         note: 'Round-74 split of analysis/walkforward.js (byte-exact move): the report pooler, the paired promotion test and the promotion gate. Proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/report/pooling.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['pardo2008walkforward', 'leprado2018afml'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-106 split of analysis/walkforward/report.js (byte-exact move): rectangular-grid cross-stream pooling with dependence/power blocks. Self-contained apart from backtest/folds/power. Same contract as the report.js row it was cut from; proved by the unchanged analysis.test.js + walkforward.test.js sections.',
+    },
+    'walkforward/report/gate.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['harveysliu2016', 'demsar2006', 'ledoitwolf2008', 'cameronmiller2015', 'kunsch1989'],
+        proves: ['analysis.test.js', 'walkforward.test.js'],
+        note: 'Round-106 split of analysis/walkforward/report.js (byte-exact move): the paired cluster promotion tests plus the hurdle decision. Imports performance/dependence/folds/power. Same contract as the report.js row it was cut from; proved by the unchanged analysis.test.js + walkforward.test.js sections.',
     },
     'walkforward/restate.js': {
         status: LOCK_LEVELS.INVARIANT,

@@ -40,6 +40,8 @@ import * as walkforwardFoldsMod from '../../../src/analysis/walkforward/folds.js
 import * as walkforwardAuditMod from '../../../src/analysis/walkforward/audit.js';
 import * as walkforwardPowerMod from '../../../src/analysis/walkforward/power.js';
 import * as walkforwardReportMod from '../../../src/analysis/walkforward/report.js';
+import * as walkforwardReportPoolingMod from '../../../src/analysis/walkforward/report/pooling.js';
+import * as walkforwardReportGateMod from '../../../src/analysis/walkforward/report/gate.js';
 import * as walkforwardRestateMod from '../../../src/analysis/walkforward/restate.js';
 import * as walkforwardRestateCostsMod from '../../../src/analysis/walkforward/restate/costs.js';
 import * as walkforwardRestatePoliciesMod from '../../../src/analysis/walkforward/restate/policies.js';
@@ -114,6 +116,8 @@ const ANALYSIS_IMPORTS = {
     'walkforward/audit.js': walkforwardAuditMod,
     'walkforward/power.js': walkforwardPowerMod,
     'walkforward/report.js': walkforwardReportMod,
+    'walkforward/report/pooling.js': walkforwardReportPoolingMod,
+    'walkforward/report/gate.js': walkforwardReportGateMod,
     'walkforward/restate.js': walkforwardRestateMod,
     'walkforward/restate/costs.js': walkforwardRestateCostsMod,
     'walkforward/restate/policies.js': walkforwardRestatePoliciesMod,

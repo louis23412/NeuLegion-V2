@@ -5291,6 +5291,7 @@ change, no TODO. **Research:** sweep 10h is thin-honest — 3/5 queries empty,
 both hits already filed (2609.05433 3rd retrieval, 2607.11888 2nd; recorded
 as convergence, no doc change). **Gate:** round 104 CLOSED on the operator's
 `npm test` 132/132 proof (2026-10-01, ~355 s); this round's split re-opens it.
+**Gate closed 2026-10-01:** operator `npm test` 132/132 (~379 s) closes this round (R105) as well.
 
 ### 50.1 Rerank
 
@@ -5304,5 +5305,47 @@ breadth. Queued: 117 (behind 116), L10-co/cp/cq/cr, W5 venues.
 
 `npm test` from the repo root (the round-105 split needs the native gate: new
 `analysis/walkforward/restate/` directory + shim + registry rows; expect 132/132 —
+locks/analysis/walkforward/analyze proven AI-side, but only the native driver
+proves the worker/fs CLI paths and the new registry rows). No uploads.
+
+## 51. Round 106 — report split + cost-ladder + research 10i blocked (2026-10-01, AI-side)
+
+Three tracks. **Foundations:** `src/analysis/walkforward/report.js` (513
+lines, registered) split into `walkforward/report/` ×2 + shim: `pooling.js`
+(cross-stream pooling; the unused `backtestMetrics` import is dropped) +
+`gate.js` (paired cluster tests + hurdle decision). Calls mapped line-by-line
+before cutting; bodies byte-identical (both verified true). The shim keeps the
+exact 3-name registered contract; the parent `walkforward.js` shim re-exports
+through it unchanged. Registry: two `KNOWN_TESTS` rows + two module rows; two
+imports + map rows in `locks.test.js`. Verified AI-side first try:
+`locks.test.js` 41/0, `analysis.test.js` 856/0, `walkforward.test.js` 90/0,
+`analyze.test.js` 294/0 (counts unchanged — pure move, no new checks). No
+golden moves. **Model track:** `e134` 4/3 (lab F-147) traces the pinned book
+at 0/2/4/10/25 bps on majors-full + stacked-16: NEGATIVE on the letter — the
+zero-crossing bar fails on majors (net still +0.16 at 25bps; BE 42.88 puts
+the crossing near ~43bps, above the ladder top), while stacked crosses at
+25bps (net −0.02, BE 24.11). The failed check is my ladder, not the book
+(e130's sign-error mirror): monotonicity, finiteness, and 4bps coherence all
+pass (majors 0.3404/42.88 and stacked 0.4008/24.11 reproduce e131/e132 to the
+digit). No re-run (gate-shopping); the net-vs-cost curve is recorded
+descriptively — majors 0.38/0.36/0.34/0.29/0.16, stacked
+0.48/0.44/0.40/0.28/−0.02. No spec change, no TODO. e133 regressed 4/2 (same
+recorded NEGATIVE). **Research:** sweep 10i BLOCKED at the endpoint (503
+challenge + timeouts + fetch fail, 6th failure; doctrine: not chased, sync
+pauses). **Gate:** round 105 CLOSED on the operator's `npm test` 132/132
+proof (2026-10-01, ~379 s); this round's split re-opens it.
+
+### 51.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port with the
+stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (still
+data-blocked). The e134 curve sets native expectations (stacked dies near
+25bps, majors survives past it). Queued: 117 (behind 116), L10-co/cp/cq/cr,
+W5 venues.
+
+### 51.2 Operator commands
+
+`npm test` from the repo root (the round-106 split needs the native gate: new
+`analysis/walkforward/report/` directory + shim + registry rows; expect 132/132 —
 locks/analysis/walkforward/analyze proven AI-side, but only the native driver
 proves the worker/fs CLI paths and the new registry rows). No uploads.
