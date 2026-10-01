@@ -49,6 +49,10 @@ import * as dependenceClustersMod from '../../../src/analysis/dependence/cluster
 import * as dependenceStudentMod from '../../../src/analysis/dependence/student.js';
 import * as worldMod from '../../../src/analysis/world.js';
 import * as featuresMod from '../../../src/analysis/features.js';
+import * as featuresPositionMod from '../../../src/analysis/features/position.js';
+import * as featuresBaseMod from '../../../src/analysis/features/base.js';
+import * as featuresReversalMod from '../../../src/analysis/features/reversal.js';
+import * as featuresUpgradesMod from '../../../src/analysis/features/upgrades.js';
 import * as holdingMod from '../../../src/analysis/holding.js';
 import * as streamsMod from '../../../src/analysis/streams.js';
 import * as replicationMod from '../../../src/analysis/replication.js';
@@ -110,6 +114,10 @@ const ANALYSIS_IMPORTS = {
     'dependence/student.js': dependenceStudentMod,
     'world.js': worldMod,
     'features.js': featuresMod,
+    'features/position.js': featuresPositionMod,
+    'features/base.js': featuresBaseMod,
+    'features/reversal.js': featuresReversalMod,
+    'features/upgrades.js': featuresUpgradesMod,
     'holding.js': holdingMod,
     'streams.js': streamsMod,
     'replication.js': replicationMod,

@@ -1075,6 +1075,9 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    basis as collateral control; tails cost most — sweep 09y) for the
    collateral/liquidation leg; 2608.21888's compensated-liquidity framing as
    context. Borrow/margin (2502.06028) and execution beyond taker fees still open.
+   **Round-102 status:** the liquidation leg has a task form (sweep 10e's
+   2601.10812: funding-aware optimal liquidation — costs + inventory risk +
+   funding payments, closed-form for linear perp payoffs).
 
 96. [ ] **P5 — continuous test-time adaptation (deferred; gate G-D OPEN, nothing measured).** The
    shipped controller **already adapts continuously within a fold** (`getSignal` trains on

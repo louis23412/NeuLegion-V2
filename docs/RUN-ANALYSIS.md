@@ -5120,3 +5120,46 @@ stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (blocked). Queued:
 132/132: fetcher 111 + candles 192 + locks 41 + analysis 856 proven AI-side,
 but only the native driver proves the worker/fs CLI paths and the new
 registry rows). No uploads.
+
+## 47. Round 102 — features split + lambda-plateau + research resumes (2026-10-01, AI-side)
+
+Three tracks. **Foundations:** `src/analysis/features.js` (545 lines,
+registered) split into `analysis/features/` ×4 + shim, per the round-97
+registered recipe: `position.js` (bounds + causal z-score + per-candidate
+positions), `base.js` (8 shipped features + default table; keeps the
+`labels.js` import; the private window helpers gain `export` for inter-part
+use, not re-exported by the shim), `reversal.js` (4 reversal fns + table),
+`upgrades.js` (panel tools + 4 SIGUP fns + table). Anchor-based slicing with
+an exact-reconstruction check (true). One self-caught missing import before
+the harness ran (`xsMomentum` calls base `momentum` — found by a code-vs-
+comment reference scan). Registry: four `KNOWN_TESTS` rows + four module
+rows; four imports + map rows in `locks.test.js`. Verified AI-side first
+try: `locks.test.js` 41/0, `analysis.test.js` 856/0. No golden moves.
+**Model track:** `e130` 4/3 (lab F-143) runs the λ ladder 0.005–0.05 through
+the repo's own `buildFundingBook` + pinned 12.5% cap: plateau CONFIRMED
+(0.01–0.03 range 0.03, pinned 0.34 dead-center) but the pre-registered
+turnover check had the sign backwards (turnover RISES 10× with speed;
+BE falls 153→20). NEGATIVE on the letter, substance SUPPORTS plateau + the
+corrected speed mechanism (reconciles e126 from the other side); no re-run,
+no spec change, no TODO. **Research:** sweep 10e lands 6 grounded notes
+(endpoint answers again) — 2605.11263 (Ethena convergence for R8),
+2601.10812 (funding-aware liquidation → TODO 95 task form), 2506.08573
+(mechanism support), 2607.11888 (quoting PnL split → TODO 111 task form),
+2510.27334 (HFT selection → TODO 111 block), 2508.20225 (quoting context).
+**Gate:** rounds 100 + 101 CLOSED on the operator's `npm test` 132/132
+proof (2026-10-01, ~351 s); this round's split re-opens it.
+
+### 47.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port with the
+stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (task forms
+sharpened by 10e, still data-blocked). TODO 95 remainder gains the 2601.10812
+liquidation task form. Queued: 104, 117 (behind 116), L10-co/cp/cq/cr,
+W5 venues.
+
+### 47.2 Operator commands
+
+`npm test` from the repo root (the round-102 split needs the native gate: new
+`analysis/features/` directory + shim + registry rows; expect 132/132 —
+locks/analysis proven AI-side, but only the native driver proves the
+worker/fs CLI paths and the new registry rows). No uploads.

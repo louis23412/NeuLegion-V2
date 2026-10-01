@@ -398,6 +398,23 @@ export const ANALYSIS_MODULES = Object.freeze({
         // Round 45 (lab R5): the cross-sectional demean construction tool (never a roster arm).
         'panelMean', 'demeanedFn', 'xsMomentum',
     ],
+    'features/position.js': [
+        'DEFAULT_POSITION', 'clampPosition', 'causalZScore', 'positionAt', 'signalForCandidate',
+    ],
+    'features/base.js': [
+        'momentum', 'fracDiffAt', 'fracMomentum',
+        'volRegime', 'momentumAgreement', 'rangeLocation', 'volumeImbalance', 'autocorr1',
+        'acceleration', 'SIGNAL_CANDIDATES',
+        // Inter-part use only (reversal/upgrades import them; the shim does not re-export them).
+        'finiteSum', 'meanOf', 'varianceOf',
+    ],
+    'features/reversal.js': [
+        'reversal', 'reversalWindow', 'reversalVol', 'crossSectionalReversal', 'REVERSAL_CANDIDATES',
+    ],
+    'features/upgrades.js': [
+        'panelMean', 'demeanedFn', 'xsMomentum',
+        'volScaledMomentum', 'blendedMomentum', 'networkMomentum', 'regimeGatedMomentum', 'SIGUP_CANDIDATES',
+    ],
     'overfitting.js': [
         'DEFAULT_PBO_CONFIG', 'cscvBlocks', 'cscvSplit', 'relativeRank',
         'oosOnIsRegression', 'probabilityOfBacktestOverfitting',
@@ -564,6 +581,34 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['leprado2018afml', 'finval2609'],
         proves: ['analysis.test.js'],
         note: 'The causal signal family (round 23, N1) — what the A/B compares against the baseline, and what the mechanism flags are actually for. Eight pure point-in-time features are each reduced to a position by the SAME recipe: raw feature -> causal z-score over the trailing zWindow (mean/std computed ONLY from observations <= t, minObs fallback to 0) -> clampPosition to the saturation bound, so every candidate abstains (0) rather than throwing on a missing series or a degenerate window. The eight: momentum (trailing 16-bar return), frac-momentum (one-bar change of the d=0.4 fractionally-differenced log price, AFML ch. 5 — stationary but memory-preserving, the P3-1 claim that was never implemented), vol-regime (8-bar realised vol / 32-bar - 1), momentum agreement (sign consensus across 4/8/16/32 lenses), range location (close within the trailing 32-bar high/low range), volume imbalance (short/long volume share - 1), autocorr1 (lag-1 autocorrelation of returns), acceleration (change in momentum). Proved (analysis.test.js): each feature has an exact hand-computed reference vector; f(series, t) is invariant to every value after t (causality, by construction and by test); causalZScore is 0 below minObs and on a zero-variance window, and its output is the exact (raw - mean)/stdSample of the trailing window; clampPosition is bounded, odd and sign-preserving; SIGNAL_CANDIDATES ids are unique and each signal(view, test) returns exactly |test| finite positions in [-1, 1], abstaining on a returns-only or empty view. Famously, none of these is a guarantee of edge: they are candidates on the SAME family-wise gate as the mechanism flags, so the multiple-testing correction covers the whole searched universe (K >= 15). Round 29 -> 30 (P3) adds the OPT-IN short-horizon reversal family (`REVERSAL_CANDIDATES`: `reversal`, `reversalWindow`, `reversalVol`, `crossSectionalReversal`) — the same pure point-in-time + causal-z-score + `clampPosition` pipeline, resolvable only by id so the default roster and `K` are unchanged; the cross-sectional arm reads the cross-section through the optional `view.panel` (attached per stream by the driver, including on the perturbed audit pass) and abstains — never throws — when it is absent. Proved (analysis.test.js P3): exact reference vectors, causality THROUGH the panel, and the abstain-on-a-panel-less-view check. Round 30 (C-SIGUP / C-REGIME, gate G-H) adds the OPT-IN momentum-upgrade family (`SIGUP_CANDIDATES`: `volScaledMomentum`, `blendedMomentum`, `networkMomentum`, `regimeGatedMomentum`) — pre-registered (research/round30-winning-mechanisms.md §1.2), the same pipeline, resolvable only by id so the default roster, `K` and every golden are unchanged; `networkMomentum` is strictly lagged and panel-scoped (skips its own stream by `panel.streamIndex`).',
+    },
+    'features/position.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'finval2609'],
+        proves: ['analysis.test.js'],
+        note: 'Round-102 split of analysis/features.js (byte-exact move): the position pipeline — bounds, the causal z-score, per-candidate positions and the view adapter. Same contract as the features.js row it was cut from; proved by the unchanged analysis.test.js sections.',
+    },
+    'features/base.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'finval2609'],
+        proves: ['analysis.test.js'],
+        note: 'Round-102 split of analysis/features.js (byte-exact move): the eight shipped point-in-time features plus the default candidate table; exports the private window helpers for inter-part use (not re-exported by the shim). Same contract as the features.js row it was cut from; proved by the unchanged analysis.test.js sections.',
+    },
+    'features/reversal.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'finval2609'],
+        proves: ['analysis.test.js'],
+        note: 'Round-102 split of analysis/features.js (byte-exact move): the opt-in short-horizon reversal family and its table. Imports the window helpers from base.js. Same contract as the features.js row it was cut from; proved by the unchanged analysis.test.js sections.',
+    },
+    'features/upgrades.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'finval2609'],
+        proves: ['analysis.test.js'],
+        note: 'Round-102 split of analysis/features.js (byte-exact move): cross-sectional construction tools plus the opt-in momentum upgrades and their table. Imports helpers and momentum from base.js. Same contract as the features.js row it was cut from; proved by the unchanged analysis.test.js sections.',
     },
     'overfitting.js': {
         status: LOCK_LEVELS.INVARIANT,
