@@ -5001,3 +5001,41 @@ sizing upgrade, whose G5 home is TODO 104). Queued: 95 remainder, 117
 `analyze/models/` directory + shim; expect 132/132 — analyze/locks/contracts
 proven AI-side, but only the native driver proves the worker/fs CLI paths).
 No uploads.
+
+## 44. Round 99 — roster split + quantized-sizing NEGATIVE (2026-10-01, AI-side)
+
+Two tracks. **Foundations:** `src/analyze/roster.js` (505 lines,
+unregistered) split into `analyze/roster/` ×3 + shim: `tables.js` (variant
+tables + constants, keeps the file head), `registration.js`, `policy.js`.
+Bodies byte-identical, no new exports. Two self-caught path bugs (the
+familiar one-level-deeper class: unadjusted table imports, and a first shim
+draft re-exporting part names from the wrong part) — both caught by the
+harness build before any suite ran. The shim keeps the exact 18-name
+contract. Verified AI-side with baselines first (analyze 294/0, locks 41/0),
+then post-split plus contracts 255/0. `analyze/` (roster, models, evaluate,
+cli) is now fully modular. **Model track:** `e127` 4/4 NEGATIVE (lab F-140)
+tests the filed quantized design (2-state HIGH/LOW, 1.2/0.8 hysteresis,
+90-bucket min-hold, 1.25/0.75 scales): turnover controlled (1.4× flat,
+transitions ~monthly as designed) but BE falls (42.9→30.5, 39.5→27.1) and
+Sharpe slips on both panels. Reading: dispersion LEVEL does not predict
+carry returns — the R8 edge is in the XS RANK, not the level. Flat sizing
+stands twice; TODO 119 measured-closed; no third variant (target-risk parked,
+not filed). **Research:** sweep 10c after three failed attempts (503,
+timeout, OR-split noise) — one precise quoted query, one new grounding
+(2112.07386: venue fee-regime differences amend the W5 rule again).
+**Gate:** round 98 CLOSED on the operator's `npm test` 132/132 proof
+(2026-10-01, ~360 s); this round's split re-opens it.
+
+### 44.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port with the
+stacked-16 read) + fade G5 (106/108, operator) + TODO 111 (blocked). TODO
+119 measured-closed (rank-not-level). Queued: 95 remainder, 104, 117 (behind
+116), L10-co/cp/cq/cr, W5 venues (fee-alignment amendment).
+
+### 44.2 Operator commands
+
+`npm test` from the repo root (the round-99 split needs the native gate: new
+`analyze/roster/` directory + shim; expect 132/132 — analyze/locks/contracts
+proven AI-side, but only the native driver proves the worker/fs CLI paths).
+No uploads.
