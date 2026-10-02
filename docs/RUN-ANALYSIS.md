@@ -5928,16 +5928,14 @@ it lands before any midcap sleeve run is ordered.
 ## 83. Cycle C6 — 116 port package: byte-exact recipe (2026-10-02, AI-side)
 
 Lab midcap series verified in-workspace: 8/8 files, **19,728 rows each,
-2024-06-01 → 2026-08-31, zero bad closes, zero 1h-step gaps** — the TODO
-116 claims hold. Filenames already match the repo candle convention, so the
-port is a straight copy (no rename step to mistype):
+2024-06-01 → 2026-08-31, zero bad closes, zero 1h-step gaps** — and ported
+byte-exact into the repo (`src/data/candles_*usdt_1h.jsonl`, CYCLE-170: the
+repo is standalone and never reads from the lab). The script verifies them
+in place (no copy step to mistype):
 
 ```bash
 cd <repo-root>
-for s in arb avax inj near op sei sui tia; do
-  cp src/NeuLegion-lab/data/midcap/candles_${s}usdt_1h.jsonl src/data/candles_${s}usdt_1h.jsonl
-done
-ls -la src/data/candles_*usdt_1h.jsonl | wc -l   # expect 15 (7 majors here + 8 midcap; BTC lives at src/candles.jsonl)
+bash scripts/round93-midcap-116.sh port   # checks 8/8 at 19,728 rows, 15 files total, appends manifest
 ```
 
 Then append 8 entries to `CANDLE_MANIFEST` (`src/candles_audit.js`,
@@ -5974,8 +5972,9 @@ Lab record CYCLE-167.
 
 ### 83.1 Operator commands
 
-One command does it all (CYCLE-169 turnkey script — copy, manifest,
-self-checks, gate, all three runs, then prints the newest report.json paths):
+One command does it all (CYCLE-169 turnkey script, CYCLE-170 standalone fix —
+verify in-repo data, manifest, gate, all three runs, then prints the newest
+report.json paths):
 
 ```bash
 cd <repo-root>

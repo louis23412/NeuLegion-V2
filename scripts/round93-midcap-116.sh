@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 #
-# round93-midcap-116.sh — TODO 116 turnkey: port the 8 midcap series, gate, run.
+# round93-midcap-116.sh — TODO 116 turnkey: verify the ported series, manifest, gate, run.
 #
-# Why this exists: the 116 port is three mechanical steps (copy 8 files, append
-# 8 manifest entries, run) that are easy to mistype by hand (the §83 draft even
-# miscounted the post-port `ls` — BTC lives at src/candles.jsonl, so the check
-# is 15, not 16). This script does every step, refuses to proceed on mismatch,
-# and prints the report.json paths at the end.
+# The 8 midcap series ship IN this repo (src/data/candles_*usdt_1h.jsonl,
+# ported CYCLE-170). Standing rule: the repo is standalone and never reads
+# from src/NeuLegion-lab — data a run needs is ported into src/data/ first.
+# This script does every step, refuses to proceed on mismatch, and prints
+# the report.json paths at the end.
 #
 # Provenance: PLAN docs TODO 116 (Round-93, operator-owned) + RUN-ANALYSIS.md
 # §83 (the verified recipe: 8/8 series at 19,728 rows, 2024-06-01..2026-08-31,
 # zero gaps) + lab CYCLE-167/CYCLE-168.
 #
 # Usage:  bash scripts/round93-midcap-116.sh [stage]
-#   port       copy the 8 series + append the 8 manifest entries (idempotent) + verify
+#   port       verify the 8 midcap series in src/data/ + append the 8 manifest
+#              entries (idempotent) + verify
 #   gate       bash scripts/test.sh quick (structural gate incl. §J2 manifest-map checks)
 #   runs       the three runs: gh (K=5, 16-panel) + cadenced/exposure restatement + --test=10 leg
 #   all        port, gate, runs in order (default; ~2h wall, mostly the two gh runs)
@@ -27,26 +28,19 @@ set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
 SYMS="arb avax inj near op sei sui tia"
-LAB="src/NeuLegion-lab/data/midcap"
 MANIFEST="src/candles_audit.js"
 
 do_port() {
-    echo "== 116/port: checking lab sources =="
+    echo "== 116/port: checking the 8 midcap series in src/data/ =="
     for s in $SYMS; do
-        f="$LAB/candles_${s}usdt_1h.jsonl"
+        f="src/data/candles_${s}usdt_1h.jsonl"
         [ -f "$f" ] || { echo "FATAL: missing $f" >&2; return 1; }
         n=$(wc -l < "$f")
         [ "$n" -eq 19728 ] || { echo "FATAL: $f has $n lines, want 19728" >&2; return 1; }
     done
-    echo "ok: 8/8 lab series present at 19,728 rows"
-
-    echo "== 116/port: copying to src/data/ =="
-    for s in $SYMS; do
-        cp "$LAB/candles_${s}usdt_1h.jsonl" "src/data/candles_${s}usdt_1h.jsonl"
-    done
     n=$(ls src/data/candles_*usdt_1h.jsonl | wc -l)
     [ "$n" -eq 15 ] || { echo "FATAL: src/data/ holds $n candle files, want 15 (7 majors + 8 midcap; BTC is src/candles.jsonl)" >&2; return 1; }
-    echo "ok: src/data/ holds 15 candle files"
+    echo "ok: 8/8 midcap series in src/data/ at 19,728 rows (15 candle files total)"
 
     echo "== 116/port: manifest entries =="
     if grep -q "'ARBUSDT'" "$MANIFEST"; then
