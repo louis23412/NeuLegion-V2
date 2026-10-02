@@ -5850,3 +5850,138 @@ bash scripts/sleeve-runs.sh honest
 Expect `tests 133 / pass 133 / fail 0`; confirm base {11.26, 10.01, 42.9} and
 honest {6.25, 28901} to display precision. Upload both `report.json` paths.
 Then TODO 116.
+
+## 81. Operator round 2026-10-02 (121): base + honest confirm — decay is a marks-window artefact (native, uploaded)
+
+`src/runs/20261002T085226-seed1-sleeve` (base) and `...085240...` (honest),
+both `available:true`, all measured G5 knobs passing (only the two
+operator attestations fail). The CYCLE-163 pre-read confirms natively to
+display precision — base {11.26, 10.01/yr, 42.9}, honest {6.25, 28,901
+substituted} — so the workspace data and the native data are the same path.
+
+**Band dividend now measured (§74 vs this round):** turnover 10.01 → 4.95
+(halved), break-even 42.9 → 83.5 bps (~doubled), net 11.26 → 11.80 (+0.54).
+The F-52 stacking shape holds through the repo gate. TODO 121 closes.
+
+**The honest run reframes two beliefs:**
+
+1. **Dependence collapses when the nulls are filled.** Base DE 32.6 (202
+   effective bars); honest DE 2.8 (2,325 effective). The mechanism is in the
+   report: null-basis fraction 0.52 → 0.006 — the shipped-marks window's
+   shared missingness was manufacturing most of the cross-stream correlation.
+   A third of the gate's harshness on the base book is a missing-data
+   artefact, not market structure.
+2. **The decay is (mostly) a marks-window artefact.** Base yearly slope
+   −0.093, halves 0.47 → 0.20 (diff −0.27 ± 0.026, significant). Honest
+   yearly slope −0.015, halves 0.21 → 0.20 (diff −0.016 ± 0.025, null).
+   The full-history book is lower (6.25 vs 11.26) but essentially flat —
+   the shipped window is a selected subsample: higher, steeper, and
+   decaying. The C3 attestation question flips from "explain the −0.09
+   slope" to "which book is truthful?" — and the honest one now has 2,325
+   effective bars behind it.
+
+Consequence for Phase B/C: any G5 conjunction run must be scored on the
+honest book (or state why not) — promoting off the shipped window means
+promoting the selection artefact. The MRP task form from sweep 10p (§77)
+should be computed on the honest series first.
+
+### 81.1 Operator commands
+
+Done this round: the 121 pair above (both uploaded). Next, in order:
+TODO 116 (16-panel port + `gh` with `--cadences` + `--exposure-match` and a
+`--test=10` leg folded in, per §76), then 118 → 117.
+
+## 82. Deeper dig: the decay is a measurement-regime change, ext marks verified exact (2026-10-02, AI-side)
+
+Year-by-year base-vs-honest (per-bar Sharpe): 2020 0.661/0.210, 2021
+0.491/0.229, 2022 0.548/0.242, 2023 0.343/0.185, then 2024/2025/2026 agree
+to 0.000 (structural — identical inputs where shipped coverage is 100%).
+Shipped-mark coverage by year from the funding files: **0% (2020–22), 17%
+(2023), 100% (2024+)**. The entire level gap and the entire decay slope
+accumulate exactly in the low-coverage years.
+
+Mechanism (read from the code, not inferred): null-basis rows earn
+funding-only (`fin(null) = 0` in the sleeve returns), so the base book's
+early strength is funding carry *without the basis leg* — a
+measurement-regime change mid-sample, not strategy decay. The honest book
+measures funding+basis throughout: lower (6.25) and flat (slope −0.015,
+halves diff −0.016 ± 0.025).
+
+Trust test for the reconstruction: on the 24-row overlap seam where ext
+and shipped marks coexist (8 symbols × ~10-31→11-01), ext matches shipped
+to **0.004% mean absolute error, max 0.04%, zero signed bias**. The ext
+series is essentially exact where verifiable — honest 2020–22 is
+trustworthy, and the base early print is the illusion.
+
+Consequences recorded for the plan: (a) G5 scores the honest book or states
+why not (§81 stands, now with mechanism + trust test); (b) the MRP task
+form (§77) goes on the honest series; (c) TODO 118 prep must check midcap
+funding mark coverage before choosing shipped vs honest for the stacked-16
+read — if midcap coverage is partial early, run honest from the start.
+Lab record CYCLE-166.
+
+### 82.1 Operator commands
+
+Still TODO 116 first (unchanged). The 118 coverage check is AI-side prep —
+it lands before any midcap sleeve run is ordered.
+
+## 83. Cycle C6 — 116 port package: byte-exact recipe (2026-10-02, AI-side)
+
+Lab midcap series verified in-workspace: 8/8 files, **19,728 rows each,
+2024-06-01 → 2026-08-31, zero bad closes, zero 1h-step gaps** — the TODO
+116 claims hold. Filenames already match the repo candle convention, so the
+port is a straight copy (no rename step to mistype):
+
+```bash
+cd <repo-root>
+for s in arb avax inj near op sei sui tia; do
+  cp src/NeuLegion-lab/data/midcap/candles_${s}usdt_1h.jsonl src/data/candles_${s}usdt_1h.jsonl
+done
+ls -la src/data/candles_*usdt_1h.jsonl | wc -l   # expect 15 (7 majors here + 8 midcap; BTC lives at src/candles.jsonl)
+```
+
+Then append 8 entries to `CANDLE_MANIFEST` (`src/candles_audit.js`,
+`group: 'binance-1h'`, `minRows: 19_000` — under the verified 19,728):
+
+```js
+{ symbol: 'ARBUSDT', interval: '1h', file: 'src/data/candles_arbusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+{ symbol: 'AVAXUSDT', interval: '1h', file: 'src/data/candles_avaxusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+{ symbol: 'INJUSDT', interval: '1h', file: 'src/data/candles_injusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+{ symbol: 'NEARUSDT', interval: '1h', file: 'src/data/candles_nearusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+{ symbol: 'OPUSDT', interval: '1h', file: 'src/data/candles_opusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+{ symbol: 'SEIUSDT', interval: '1h', file: 'src/data/candles_seiusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+{ symbol: 'SUIUSDT', interval: '1h', file: 'src/data/candles_suiusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+{ symbol: 'TIAUSDT', interval: '1h', file: 'src/data/candles_tiausdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+```
+
+`--symbols=all` picks them up with no script change (`resolveSymbolFiles`
+is manifest-driven; the §J2 checks cover new entries generically).
+`--bars=600` slices the most recent 600 off 19,728 — no length problem.
+
+Runs (after `bash scripts/test.sh quick`):
+
+```bash
+bash scripts/round30-runs.sh gh
+npm run analyze -- --symbols=all --bars=600 --train=60 --test=15 --audit-probes=1 --reuse-base --concurrency=4 --variants=baseline,sig-momentum,sig-vol-momentum,sig-blend-momentum,sig-network-momentum --cost-ladder=0,2,5,10 --cadences=10,15,20 --exposure-match
+npm run analyze -- --symbols=all --bars=600 --train=60 --test=10 --audit-probes=1 --reuse-base --concurrency=4 --variants=baseline,sig-momentum,sig-vol-momentum,sig-blend-momentum,sig-network-momentum --cost-ladder=0,2,5,10
+```
+
+Reads, in order: (1) effStreams ≥ 2.3 on 16 + vol adjDSR up from 0.9340
+(the 116 gate); (2) verdict-neutrality under `--cadences`/`--exposure-match`
+(the 87 acceptance); (3) level-shift at `--test=10` reproducing §15's
+−0.11 → +0.90 shape (the 84 record). Upload each `report.json` path.
+Lab record CYCLE-167.
+
+### 83.1 Operator commands
+
+One command does it all (CYCLE-169 turnkey script — copy, manifest,
+self-checks, gate, all three runs, then prints the newest report.json paths):
+
+```bash
+cd <repo-root>
+bash scripts/round93-midcap-116.sh all
+```
+
+Stages run à la carte if ever needed (`port` | `gate` | `runs`), and every
+step refuses to proceed on mismatch (lab row counts, the 15-file check, the
+16-entry manifest check). Upload the printed `report.json` paths.

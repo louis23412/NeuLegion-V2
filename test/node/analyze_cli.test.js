@@ -706,10 +706,11 @@ test('the analyze CLI documents and threads the round-110 risk-spec override (--
         assert.deepEqual(manifest.risk, { cap: 0.125, bandEps: 0.01 }, 'run.json does not record the risk override');
         assert.deepEqual(report.result.risk, { cap: 0.125, bandEps: 0.01, overridden: true }, 'report.json does not record the effective risk spec');
 
-        // Refusals: outside --sleeve mode, empty, garbled.
+        // Refusals: outside --sleeve mode, empty (= and bare forms), garbled.
         for (const [flags, re] of [
             [['--sleeve-cap=0.125'], /--sleeve-cap\/--sleeve-band need --sleeve/],
             [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-cap='], /--sleeve-cap is present but empty/],
+            [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-cap'], /--sleeve-cap is present but empty/],
             [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-band=-0.5'], /--sleeve-band must be/],
             [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-cap=nope'], /--sleeve-cap must be/],
         ]) {
