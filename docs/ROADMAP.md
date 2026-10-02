@@ -7,6 +7,14 @@ scope freeze that bounds it.
 
 ## Status snapshot (this revision)
 
+- **Next-step plan (post-109): [`PLAN-next.md`](PLAN-next.md).** Lab-side
+  measuring is banked, repo-side promotion is unproven — so the plan is almost
+  entirely native scoring runs in unlock order: A (operator breadth 116 →
+  118 → 117) → B (G2 per-sleeve promotion, then the G5 conjunction) → C
+  (sized/joint/decay, only if B promotes) → D (AI-side background); model
+  direction parked measured-complete, L19 shelve-or-size, anti-re-tread
+  extended. Six native jobs, each with a pre-registered read.
+
 - **Round 31 is PARTIALLY IMPLEMENTED (`PLAN-round31.md`) — the pivot; V2.0–V2.2 landed.** The lab
   evidence (`src/NeuLegion-lab`, **81 findings** / 19 leads / 66 cycles) and the 2026-09-26/27 run
   corpus (`src/runs`; `RUN-ANALYSIS.md` §18) jointly say: no model class predicts the target, no
@@ -105,7 +113,7 @@ scope freeze that bounds it.
 - **Registry**: 60 entries — **17 bit-exact, 43 invariant, 0 needs-local-run, 0
   experimental** ([`LOCKED.md`](LOCKED.md)).
 - **Browser suite**: 2865 checks across the 32 pass/fail entries (33 entries
-  including the non-pass/fail `bench`); 132 `test()` blocks across 45 node files
+  including the non-pass/fail `bench`); 133 `test()` blocks across 45 node files
   (round 44 adds the `--sleeve` spawn block to `analyze_cli.test.js` — confirmed
   green natively 2026-09-29, 132/132; R26-12 added `checkpoint_throttle.test.js`, R26-4 added
   `parallel_folds.test.js`, R26-5 added `analyze_cli.test.js`, R26-13 added a second

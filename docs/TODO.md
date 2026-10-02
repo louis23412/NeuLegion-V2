@@ -2284,3 +2284,17 @@ not a bug fix.
    (e125: fade-all BE 0.43 bps untradeable, no flow-quintile gradient; bar-flow proxy only — trade-level aggressor flags filed as the unblock.)
 
 119. [x] **Round-98 — quantized-regime carry sizing — MEASURED-CLOSED 2026-10-01 (CYCLE-129, F-140).** e126/F-139 killed per-bar dispersion scaling (turnover 27-33x, Sharpe negative both panels): test a 2-state scale (high/low dispersion with hysteresis, transitions at most monthly) or target-risk application of the same regime signal, flat vs quantized on majors-full + midcap-window through the repo score path. Pre-registered interest: quantized BE >= flat BE with turnover <= 2x flat. G5 home if it ever wins: TODO 104. Cost: lab-only, minutes.
+
+> **Sweeps S13–S15 2026-10-02 (CYCLE-152/153/154, F-163/164/165):** the owed
+> gate is CLOSED — operator `npm test` 132/132, 0 fail, ~350 s (covers R109 +
+> S1/S5 + S7; S8–S12 docs-only). No gate owed. Tiers unchanged — **116**
+> (native midcap port + 16-panel `gh`) → **118** (stacked-16 cap 0.125 + band
+> ~0.01) → **117** only if 116 confirms. All 18 opens re-checked against the
+> only delta (a clean gate + docs): every disposition stands; archive bar not
+> met, no archives. AI-side re-verified with the gate: S7 fix intact, 0 dead
+> (1 flag exonerated), 0 dangling/cycles, run_all 138/138, FINDINGS 81+81
+> complete pre-S13. Detail: `RUN-ANALYSIS.md` §§67–69.
+
+120. [ ] **Round-110 — sleeve risk-spec override + native gate (AI-side DONE, operator gate owed).** The A2 stacked-16 band read had no CLI path (pinned `carry-dispersion` spec is cap-only): additive opt-in `--sleeve-cap=<x|none>` / `--sleeve-band=<eps|none>` (round 110; `parseSleeveRisk` in `src/sleeve/scoring.js`, threaded report→driver→CLI with run.json/report.json/summary echo, `band` stage in `scripts/sleeve-runs.sh` for the A2 read). Pinned specs unmoved (default reports byte-identical apart from the added risk line); no golden moves. AI-side: browser `analyze` 298/298 (4 new §S1 checks). Owed: `npm test` from the repo root, expect 133/133 (new CLI spawn block) — then close this item. Detail: `RUN-ANALYSIS.md` §72, lab CYCLE-157/F-167.
+
+> **Round 110 2026-10-02 (CYCLE-157/F-167):** enablement, not reordering — tiers unchanged (**116** → **118** (now turnkey via `sleeve-runs.sh band`) → **117**). Owed gate: `npm test` 133/133 (round-110 flags + ledger 3127). 18 opens + new 120 (closes on the gate). Queued AI-side next: the 10o-1 vol-tournament level-alignment experiment (synthetic ground truth; L10 row if it bites).

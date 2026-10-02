@@ -650,3 +650,78 @@ test('the analyze CLI scores a structural sleeve with --sleeve (round 44, W2)', 
         fs.rmSync(root, { recursive: true, force: true });
     }
 });
+
+test('the analyze CLI documents and threads the round-110 risk-spec override (--sleeve-cap/--sleeve-band)', () => {
+    // The A2 enabler: score the pinned book under a different cap/band without
+    // moving the pinned spec. Help must advertise both flags; a real run must
+    // thread them into run.json/report.json and the summary risk line; misuse
+    // must fail loudly (BUGS.md #69).
+    const help = spawnSync(process.execPath, [analyzePath, '--help'], { cwd: projectRoot, encoding: 'utf8' });
+    assert.equal(help.status, 0, `--help exited ${help.status}: ${help.stderr}`);
+    assert.match(help.stdout, /--sleeve-cap=<x\|none>/, '--help does not document --sleeve-cap');
+    assert.match(help.stdout, /--sleeve-band=<eps\|none>/, '--help does not document --sleeve-band');
+
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neulegion-analyze-risk-'));
+    try {
+        const grid = 28_800_000;
+        const t0 = 1_700_000_000_000 - (1_700_000_000_000 % grid);
+        const fund = (file, fn) => {
+            const rows = [];
+            for (let i = 0; i < 40; i++) rows.push(JSON.stringify({ timestamp: t0 + i * grid, fundingRate: fn(i), markPrice: 100 + i }));
+            fs.writeFileSync(file, rows.join('\n'));
+        };
+        const candles = (file, start, rets) => {
+            let p = start;
+            const rows = [];
+            for (let i = 0; i <= rets.length; i++) {
+                rows.push(JSON.stringify({ timestamp: new Date(t0 + i * grid - 3_600_000).toISOString(), close: p }));
+                if (i < rets.length) p *= (1 + rets[i]);
+            }
+            fs.writeFileSync(file, rows.join('\n'));
+        };
+        const rets = [];
+        for (let i = 0; i < 40; i++) rets.push(i % 2 ? 0.01 : -0.005);
+        const f0 = path.join(root, 'fund0.jsonl');
+        const f1 = path.join(root, 'fund1.jsonl');
+        const c0 = path.join(root, 'cand0.jsonl');
+        const c1 = path.join(root, 'cand1.jsonl');
+        fund(f0, () => 0.0001);
+        fund(f1, (i) => (i < 10 ? 0.0005 : 0.0008));
+        candles(c0, 100, rets);
+        candles(c1, 200, rets.map((r) => -r));
+        const res = spawnSync(process.execPath, [
+            analyzePath,
+            '--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`,
+            '--cost-bps=4', '--sleeve-cap=0.125', '--sleeve-band=0.01',
+        ], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: path.join(root, 'state-risk') },
+        });
+        assert.equal(res.status, 0, `the risk-override sleeve run exited ${res.status}:\n${res.stderr}`);
+        assert.match(res.stdout, /risk cap 0\.125 band 0\.01 \(override\)/, 'the summary does not print the override risk line');
+        const runDir = path.join(root, 'state-risk', 'runs', fs.readdirSync(path.join(root, 'state-risk', 'runs'))[0]);
+        const manifest = JSON.parse(fs.readFileSync(path.join(runDir, 'run.json'), 'utf8'));
+        const report = JSON.parse(fs.readFileSync(path.join(runDir, 'report.json'), 'utf8'));
+        assert.deepEqual(manifest.risk, { cap: 0.125, bandEps: 0.01 }, 'run.json does not record the risk override');
+        assert.deepEqual(report.result.risk, { cap: 0.125, bandEps: 0.01, overridden: true }, 'report.json does not record the effective risk spec');
+
+        // Refusals: outside --sleeve mode, empty, garbled.
+        for (const [flags, re] of [
+            [['--sleeve-cap=0.125'], /--sleeve-cap\/--sleeve-band need --sleeve/],
+            [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-cap='], /--sleeve-cap is present but empty/],
+            [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-band=-0.5'], /--sleeve-band must be/],
+            [['--sleeve=carry-dispersion', `--carry-files=${f0},${f1}`, `--files=${c0},${c1}`, '--sleeve-cap=nope'], /--sleeve-cap must be/],
+        ]) {
+            const bad = spawnSync(process.execPath, [analyzePath, ...flags], {
+                cwd: projectRoot,
+                encoding: 'utf8',
+                env: { ...process.env, NEULEGION_STATE: path.join(root, `state-risk-bad-${Math.random().toString(36).slice(2)}`) },
+            });
+            assert.notEqual(bad.status, 0, `${flags.join(' ')} should have failed but exited 0`);
+            assert.match(bad.stderr + bad.stdout, re, `${flags.join(' ')} was not refused`);
+        }
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});

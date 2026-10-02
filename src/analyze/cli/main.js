@@ -6,7 +6,7 @@ import { CONFIG } from '../../legion/config.js';
 import { seedDistribution, formatSeedReplication } from '../../analysis/replication.js';
 import { DEFAULT_SHOCK } from '../../analysis/world.js';
 import { CANDLE_MANIFEST } from '../../candles_audit.js';
-import { parseSleeveSizing, SLEEVE_IDS } from '../../sleeve_score.js';
+import { parseSleeveSizing, parseSleeveRisk, SLEEVE_IDS } from '../../sleeve_score.js';
 import { makeRunId, createRunDirectory, writeJson, writeReport } from '../../observer/report.js';
 import { emptyListFlagError, listVariants, formatVariantList } from '../roster.js';
 import { runAnalysis, runSleeveAnalysis } from './run.js';
@@ -89,6 +89,15 @@ export const ANALYZE_USAGE = [
     '  --sleeve-sizing-window=<n>',
     '                           trailing-RMS window in bars for --sleeve-sizing',
     '                           (default 24; needs --sleeve-sizing)',
+    '  --sleeve-cap=<x|none>     override the sleeve book cap (round 110; needs',
+    '                           --sleeve; default is the sleeve pinned spec —',
+    '                           carry-dispersion 0.125 — and "none" removes it;',
+    '                           a present-but-empty or non-positive value is an',
+    '                           error — BUGS.md #69)',
+    '  --sleeve-band=<eps|none>  override the sleeve no-trade band (round 110;',
+    '                           needs --sleeve; default is the sleeve pinned spec;',
+    '                           "none" removes it; empty/negative is an error —',
+    '                           BUGS.md #69)',
     '  --cadences=a,b,c         re-score every active candidate on each fold-grid cadence',
     '                           (P2 fixed-position restatement, no model) and report the',
     '                           majority-pass + catastrophic-veto verdict across the grid',
@@ -314,6 +323,7 @@ export async function analyzeMain() {
         // must fail loudly rather than run an A/B that ignores it.
         if (flagGiven('carry-marks') && !sleeveGiven) throw new Error('analyze: --carry-marks needs --sleeve (ext-mark substitution is a sleeve-view input)');
         if (flagGiven('oi-file') && !sleeveGiven) throw new Error('analyze: --oi-file needs --sleeve (positioning panels are a sleeve-view input)');
+        if ((flagGiven('sleeve-cap') || flagGiven('sleeve-band')) && !sleeveGiven) throw new Error('analyze: --sleeve-cap/--sleeve-band need --sleeve (they override the sleeve book risk spec)');
         if (sleeveGiven) {
             // Round 44 (W2): the sleeve run mode — a structural book scored by the
             // gate's own arithmetic, not an A/B. Writes run.json + report.json
@@ -356,19 +366,31 @@ export async function analyzeMain() {
             if (oiFilePath != null && sleeveId === 'carry-dispersion') throw new Error('analyze: --oi-file needs a positioning sleeve (oi-change, toptrader-fade)');
             if (oiFilePath != null && (!sleeveSymbols || sleeveSymbols.length !== carryFilesList.length)) throw new Error('analyze: --oi-file needs --symbols with one name per --carry-files stream (OI series are selected by symbol name)');
             if (carryMarksPath != null && positioningSleeves.includes(sleeveId)) throw new Error('analyze: --carry-marks needs the carry sleeve (carry-dispersion)');
+            // Round 110: the opt-in risk-spec override — score the pinned book
+            // with a different cap/band without moving the pinned spec (the A2
+            // stacked-16 band read: --sleeve-cap=0.125 --sleeve-band=0.01).
+            // Refused when empty/garbled (BUGS.md #69); the needs---sleeve
+            // guard sits above with the other sleeve-input guards.
+            // The effective spec echoes in run.json and the report risk line.
+            const riskCapGiven = flagGiven('sleeve-cap');
+            const riskBandGiven = flagGiven('sleeve-band');
+            const riskSpec = parseSleeveRisk({
+                cap: riskCapGiven ? (argOf('sleeve-cap') ?? '') : undefined,
+                band: riskBandGiven ? (argOf('sleeve-band') ?? '') : undefined,
+            });
             const sleeveT0 = performance.now();
             const startedAt = Date.now();
             const sleeveOut = await runSleeveAnalysis({
                 sleeve: sleeveId, carryFiles: carryFilesList, files: filesList,
                 symbols: sleeveSymbols, costBps: sleeveCost,
                 sizingTarget: sizingOpt.sized ? sizingOpt.target : null, sizingWindow: sizingOpt.window,
-                carryMarks: carryMarksPath, oiFile: oiFilePath,
+                carryMarks: carryMarksPath, oiFile: oiFilePath, riskSpec,
             });
             const durationMs = performance.now() - sleeveT0;
             const runId = `${makeRunId({ seed: num('seed', 1), startedAt })}-sleeve`;
             const runDir = createRunDirectory(CONFIG.stateFolder, runId);
-            writeJson(runDir, 'run.json', { runId, mode: 'sleeve', sleeve: sleeveId, startedAt, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, inputs: sleeveOut.inputs, carryFiles: carryFilesList, carryMarks: carryMarksPath, oiFile: oiFilePath });
-            writeReport(runDir, { mode: 'sleeve', sleeve: sleeveId, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, durationMs, inputs: sleeveOut.inputs, carryFiles: carryFilesList, carryMarks: carryMarksPath, oiFile: oiFilePath, result: sleeveOut.result });
+            writeJson(runDir, 'run.json', { runId, mode: 'sleeve', sleeve: sleeveId, startedAt, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, risk: riskSpec, inputs: sleeveOut.inputs, carryFiles: carryFilesList, carryMarks: carryMarksPath, oiFile: oiFilePath });
+            writeReport(runDir, { mode: 'sleeve', sleeve: sleeveId, costBps: sleeveCost, sizing: sizingOpt.sized ? { target: sizingOpt.target, window: sizingOpt.window } : null, risk: riskSpec, durationMs, inputs: sleeveOut.inputs, carryFiles: carryFilesList, carryMarks: carryMarksPath, oiFile: oiFilePath, result: sleeveOut.result });
             console.log(sleeveOut.summary);
             console.log(`\nsleeve report at ${path.join(runDir, 'report.json')} (${durationMs.toFixed(0)}ms)`);
         } else if (seedList) {

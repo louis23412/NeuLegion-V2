@@ -5559,3 +5559,97 @@ Docs only, no gaps. **Ledger:** 32-row table sums to exactly 3123 (`bench` off-t
 ### 66.1 Operator commands
 
 Unchanged: `npm test` from the repo root (R109 + S1 + S5 + S7 fix; S8–S12 docs-only — expect 132/132). No uploads.
+
+## 67. Native gate CLOSED + re-verification S13 (2026-10-02, operator proof + AI-side)
+
+Operator proof (chat): `tests 132 / pass 132 / fail 0`, `duration_ms 349868`
+(~350 s). Covers R109 (vol split + e137) + the S1/S5 import cleanups + the S7
+`src/analyze.js` dispatch guard (S8–S12 docs-only). The owed gate held open
+since round 109 is CLOSED; no new gate is owed. AI-side re-verification: S7
+fix intact (gated dynamic import, no static `node:` line), alias-aware scan
+0 dead across 210 src + 93 test files (one flag exonerated — `contracts.test.js`
+`{run}` is used at `await run({...})`), 0 dangling/cycles, run_all covers
+138/138 experiments, FINDINGS 81 full + 81 summary rows complete,
+registry/ledger untouched since their gated states.
+
+### 67.1 Operator commands
+
+None owed. Next operator work is the TODO 116 → 118 → 117 queue (unchanged).
+
+## 68. Opens audit S14 (2026-10-02, AI-side)
+
+Docs only, no change. All 18 opens re-checked against the only delta since S6
+(a clean gate + docs): every disposition stands (operator queue still
+operator-owed; config/model/sized/unseen/spot/idea/background/data-blocked
+sets unchanged; L10 ongoing by charter). Archive bar not met — no archives.
+
+### 68.1 Operator commands
+
+None. Unchanged: TODO 116 → 118 → 117 when the operator has machine time.
+
+## 69. Doc-pointer sync S15 (2026-10-02, AI-side)
+
+Docs only, no change. STATUS counts → 165 findings / cycles 000…154 / gate
+CLOSED; src/README native date → 2026-10-02; lab INDEX rows 152–154;
+FINDINGS F-163…F-165; TODO S13–S15 note. Post-write grep: no live "owed"
+line remains.
+
+## 70. Next-step plan (2026-10-02, AI-side, docs only)
+
+No code, no runs, per the standing order to plan without touching code.
+Wrote docs/PLAN-next.md from the current tree: lab banked, repo unproven,
+so the plan is native scoring in unlock order: phase A for breadth items
+116 then 118 then 117, phase B for G2 per-sleeve promotion R8 to R7 to OI
+then the G5 conjunction, phase C for sized and joint and decay only if B
+promotes, phase D for AI-side background. Parked: 111 execution uses, 106
+unseen, 90 and 96, 55 and 62 and 89-remainder and 95. Anti-re-tread extended.
+Pointer added to ROADMAP.md snapshot; lab record in CYCLE-155.
+
+### 70.1 Operator commands
+
+None this round. The first ask when machine time exists is A1 (TODO 116).
+
+## 71. Pre-point sweep S16 + 10o + Phase-A recipe audit (2026-10-02, AI-side, docs only)
+
+Static only. 0 dangling across 210 src + 93 test files; PLAN-next/CYCLE refs resolve.
+Sweep 10o: 3 queries, 4 grounded notes (2607.01550 trend demise, 2608.18299 crowding,
+2609.00187 map-scale, 2609.27024 level alignment), raw snapshot filed, no doc changes.
+Recipe audit: lab filenames match repo convention; --symbols=all is manifest-driven;
+GAP 1 (no cap/band override path for the A2 read) becomes round 110; GAP 2 (--symbols
+help staleness) rides with 116. Lab record CYCLE-156 / F-166.
+
+### 71.1 Operator commands
+
+None this round.
+
+## 72. Round 110 — sleeve risk-spec override flags (2026-10-02, AI-side)
+
+Code + tests + ledger, no scored-path change. The S16 recipe audit found the A2 band read
+had no CLI path, so round 110 adds opt-in `--sleeve-cap=<x|none>` / `--sleeve-band=<eps|none>`:
+`parseSleeveRisk` (sleeve/scoring.js; undefined=pinned, none=null, numbers validated,
+garbage throws naming the flag), threaded through `runSleeveReport` (normalised, echoed
+as `risk`), `runSleeveAnalysis`, and the CLI (usage + needs---sleeve guards + run.json echo),
+plus a `band` stage in `scripts/sleeve-runs.sh` (CAP/BAND env, defaults 0.125/0.01).
+Pinned specs unmoved; summary gains one risk line (all existing asserts are includes-based).
+AI-side: browser `analyze` 298/298 (4 new §S1 checks: pinned echo, override echo + turnover
+monotonicity, cap-none, garbled-refusal). Ledger: analyze 294→298, total 3123→3127, node mirror
+re-pinned; new CLI spawn block makes 133 `test()` blocks (RUNBOOK/ROADMAP/README updated).
+Lab record CYCLE-157 / F-167. TODO 120 closes on the native gate.
+
+### 72.1 Operator commands
+
+`npm test` from the repo root — expect 133/133 (round-110 flags; AI-side 298/298). No uploads.
+Then the PLAN-next Phase A queue (116 → 118 → 117) with exact recipes in TODO 116/118.
+
+## 73. Experiment e138 — vol-tournament level alignment (2026-10-02, AI-side)
+
+Lab-side, closes the 10o method checklist. Synthetic AR(1)-truth vol paths (5 seeds):
+repo EWMA/AR/MSE/QLIKE match independent recomputes; AR>EWMA>flat holds 5/5;
+train-half alignment never flips the ranking; QLIKE agrees 5/5; raw-MSE flip needs
+>= 1 vol-sigma bias (median exactly 1). No L10 row — the MSE leg is level-robust at
+realistic bias sizes. One self-caught experiment bug (NaN pre-split rows in the bias
+estimate) fixed before green. Lab record CYCLE-158 / F-168; registered in run_all.js.
+
+### 73.1 Operator commands
+
+None — background assurance, no gate impact.

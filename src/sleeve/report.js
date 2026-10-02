@@ -2,7 +2,7 @@
 // Pure, no I/O — the CLI only reads files and writes the report.
 import { SLEEVE_IDS } from './registry.js';
 import { parseSleeveInputs, parseMarksJson, parseOiJson } from './view.js';
-import { scoreSleeve } from './scoring.js';
+import { scoreSleeve, parseSleeveRisk } from './scoring.js';
 import { sleeveDsr, sleeveYearly, yearlyReport, sleeveFirstLast, firstLastReport, dsrReport } from './evidence.js';
 import { parseSleeveSizing, scoreSleeveSized, SIZED_SLEEVE_DEFAULTS } from './sizing.js';
 import { factorNeutralSharpe } from '../analysis/dependence.js';
@@ -13,7 +13,7 @@ import { scoreG5, worstBlock } from '../analysis/portfolio.js';
 // (registered on the sleeve contract), and the carry sleeve — which has none —
 // falls back to `times.slice(1)`. Any length mismatch fail-closes, never trims.
 
-export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps = 4, gridMs = 28_800_000, barMs = 3_600_000, sizingTarget = null, sizingWindow = SIZED_SLEEVE_DEFAULTS.window, marksText = null, symbols = null, oiText = null } = {}) {
+export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps = 4, gridMs = 28_800_000, barMs = 3_600_000, sizingTarget = null, sizingWindow = SIZED_SLEEVE_DEFAULTS.window, marksText = null, symbols = null, oiText = null, riskSpec = null } = {}) {
     if (!SLEEVE_IDS.includes(sleeveId)) {
         return { sleeveId, available: false, reason: `unknown sleeve "${String(sleeveId)}" (known: ${SLEEVE_IDS.join(', ')})`, costBps };
     }
@@ -62,7 +62,8 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
     if (!view.buckets) {
         return { sleeveId, available: false, reason: 'the streams share no funding bucket (empty intersection)', costBps };
     }
-    const scored = scoreSleeve(sleeveId, view, { costBps });
+    const risk = riskSpec == null ? null : parseSleeveRisk({ cap: riskSpec.cap, band: riskSpec.band !== undefined ? riskSpec.band : riskSpec.bandEps });
+    const scored = scoreSleeve(sleeveId, view, { costBps, riskSpec: risk });
     if (!scored.available) return { ...scored, streams: parsed.streams, buckets: parsed.buckets };
     const panel = positioning
         ? view.spotRet[0].map((_, j) => view.spotRet.map((row) => (row[j] === null ? 0 : row[j])))
@@ -79,6 +80,7 @@ export function runSleeveReport({ sleeveId, fundingTexts, candleTexts, costBps =
     });
     const rep = {
         sleeveId, available: true, costBps,
+        risk: scored.riskSpec,
         streams: parsed.streams, buckets: parsed.buckets,
         nullBasisFraction: positioning ? null : parsed.nullBasisFraction,
         markedFraction: positioning ? null : parsed.markedFraction,
@@ -156,9 +158,13 @@ export function formatSleeveReport(r) {
         : (r.oi
             ? `  oi coverage oiVal ${(100 * r.oi.coverageOiVal).toFixed(1)}%, topLS ${(100 * r.oi.coverageTopLS).toFixed(1)}%`
             : '  oi unscored');
+    const riskLine = (k) => k
+        ? `  risk cap ${k.cap == null ? 'none' : k.cap} band ${k.bandEps == null ? 'none' : k.bandEps}${k.overridden ? ' (override)' : ' (pinned)'}`
+        : '  risk pinned';
     const lines = [
         `[sleeve] ${r.sleeveId} @${r.costBps}bps over ${r.buckets} buckets x ${r.streams} streams`,
         `  net ${f2(r.netAnnual)} / neutral ${f2(r.neutralAnnual)} (raw ${f2(r.rawAnnual)}), turnover ${f2(r.turnoverAnnual)}/yr, break-even ${f2(r.breakEvenCostBps)} bps`,
+        riskLine(r.risk),
         basisLine,
         `  ${dsrLine(r.dsr)}`,
         `  ${yearlyLine(r.yearly)}`,

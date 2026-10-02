@@ -48,6 +48,7 @@ import { backtestMetrics } from '../../../src/analysis/backtest.js';
 import { shockCandles, volumeShockFactor, makeCandleViewFor } from '../../../src/analysis/world.js';
 import { CANDLE_MANIFEST } from '../../../src/candles_audit.js';
 import { resolveSymbolFiles } from '../../../src/analyze/cli.js';
+import { parseSleeveRisk } from '../../../src/sleeve_score.js';
 
 // A deterministic synthetic return series with a persistent, learnable rhythm:
 // slow up/down blocks, so a causal signal can genuinely carry an edge (and a
@@ -2211,6 +2212,28 @@ export async function run() {
         check('the sleeve mode substitutes ext marks by symbol name and records them',
             sMarksOut.carryMarks === 'marks' && sMarksOut.result.available === true &&
             sMarksOut.result.marks.substituted === 120 && sMarksOut.summary.includes('marks +120 ext rows'));
+        // Round 110 (risk-spec override): the pinned book scores unchanged by
+        // default, and --sleeve-cap/--sleeve-band rescore it without moving
+        // the pinned spec (the A2 stacked-16 band read).
+        const sPinnedRisk = sOut.result.risk;
+        check('the sleeve report echoes the pinned risk spec by default',
+            sPinnedRisk && sPinnedRisk.cap === 0.125 && sPinnedRisk.bandEps === null && sPinnedRisk.overridden === false &&
+            sOut.summary.includes('risk cap 0.125 band none (pinned)'));
+        const sBand = await runSleeveAnalysis({ sleeve: 'carry-dispersion', carryFiles: ['c0', 'c1', 'c2'], files: sFiles, costBps: 4, readFile: sRead, riskSpec: parseSleeveRisk({ cap: '0.125', band: '0.01' }) });
+        check('a cap+band override echoes as an override and weakly lowers turnover',
+            sBand.result.available === true && sBand.result.risk.cap === 0.125 && sBand.result.risk.bandEps === 0.01 &&
+            sBand.result.risk.overridden === true && sBand.summary.includes('risk cap 0.125 band 0.01 (override)') &&
+            sBand.result.turnoverAnnual <= sOut.result.turnoverAnnual + 1e-12);
+        const sNoCap = await runSleeveAnalysis({ sleeve: 'carry-dispersion', carryFiles: ['c0', 'c1', 'c2'], files: sFiles, costBps: 4, readFile: sRead, riskSpec: parseSleeveRisk({ cap: 'none' }) });
+        check('cap "none" removes the clip while keeping the pinned band leg',
+            sNoCap.result.available === true && sNoCap.result.risk.cap === null && sNoCap.result.risk.bandEps === null &&
+            sNoCap.result.risk.overridden === true);
+        let sRiskThrows = 0;
+        for (const bad of [{ cap: 'x' }, { cap: '-1' }, { cap: '' }, { band: '-0.5' }, { cap: '0.1', band: '0.2', bandEps: '0.3' }]) {
+            try { parseSleeveRisk(bad); } catch (err) { if (/--sleeve-(cap|band)/.test(String(err && err.message))) sRiskThrows++; }
+        }
+        check('a garbled risk spec throws naming the flag (never silently scores)',
+            sRiskThrows === 5 && parseSleeveRisk() === null && parseSleeveRisk({ cap: undefined, band: undefined }) === null);
     }
 
     try { if (typeof fs.rmSync === 'function') fs.rmSync('.nl-analyze-test', { recursive: true, force: true }); } catch { /* best effort */ }

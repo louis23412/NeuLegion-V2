@@ -17,13 +17,17 @@
 #   drawdown   + --sleeve-sizing=drawdown  (F-118: adaptive target x trailing-DD governor)
 #   honest     flat sleeve + --carry-marks (round 78, TODO 95: the basis-marked
 #              book over the full history, not just the shipped-marks window)
+#   band       carry sleeve + --sleeve-cap/--sleeve-band (round 110: the A2
+#              stacked-16 band read — cap 0.125 + band ~0.01, e135/e136;
+#              CAP/BAND env-overridable, "none" removes a leg)
 #   oi         the oi-change sleeve + --oi-file (round 80, TODO 110: the
 #              cross-sectional dOI book over the vendored OI series)
 #   top        the toptrader-fade sleeve + --oi-file (round 80, TODO 110: the
 #              crowded-side fade over the vendored top-trader ratios)
 #   all        base, adaptive, drawdown, honest, oi, top
 #
-# Env:  COST_BPS (default 4), SLEEVE (default carry-dispersion).
+# Env:  COST_BPS (default 4), SLEEVE (default carry-dispersion),
+#       CAP (default 0.125) + BAND (default 0.01) for the `band` stage.
 # Any extra args after the stage (or after "--") are appended to every run, e.g.
 #   bash scripts/sleeve-runs.sh drawdown -- --sleeve-sizing-window=48
 #
@@ -76,11 +80,12 @@ run() {          # run <label> <command...>
 usage() {
   cat <<'EOF'
 Usage: bash scripts/sleeve-runs.sh [stage] [-- extra analyze args]
-  stages: base adaptive drawdown honest oi top all (an explicit stage is required)
+  stages: base adaptive drawdown honest band oi top all (an explicit stage is required)
     base       flat carry-dispersion sleeve at --cost-bps=4
     adaptive   + --sleeve-sizing=adaptive
     drawdown   + --sleeve-sizing=drawdown
     honest     flat sleeve + --carry-marks (basis-marked book, TODO 95)
+    band       carry sleeve + --sleeve-cap/--sleeve-band (A2 band read, round 110)
     oi         oi-change sleeve + --oi-file (positioning book, TODO 110)
     top        toptrader-fade sleeve + --oi-file (positioning book, TODO 110)
     all        base, adaptive, drawdown, honest, oi, top
@@ -104,6 +109,7 @@ run_stage() {
     adaptive) run "sleeve / adaptive sizing" npm run analyze -- --sleeve="$SLEEVE" --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --sleeve-sizing=adaptive "${EXTRA[@]}" ;;
     drawdown) run "sleeve / drawdown sizing (F-118)" npm run analyze -- --sleeve="$SLEEVE" --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --sleeve-sizing=drawdown "${EXTRA[@]}" ;;
     honest)   check_file MARKS "$MARKS"; run "sleeve / honest marks (TODO 95)" npm run analyze -- --sleeve="$SLEEVE" --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --carry-marks="$MARKS" "${EXTRA[@]}" ;;
+    band)     run "sleeve / risk override (A2 band read, round 110)" npm run analyze -- --sleeve="$SLEEVE" --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --sleeve-cap="${CAP:-0.125}" --sleeve-band="${BAND:-0.01}" "${EXTRA[@]}" ;;
     oi)       check_file OI "$OI"; run "sleeve / oi-change (TODO 110)" npm run analyze -- --sleeve=oi-change --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --oi-file="$OI" "${EXTRA[@]}" ;;
     top)      check_file OI "$OI"; run "sleeve / toptrader-fade (TODO 110)" npm run analyze -- --sleeve=toptrader-fade --symbols=all --carry-files="$FUND" --cost-bps="$COST_BPS" --oi-file="$OI" "${EXTRA[@]}" ;;
     *)        usage; exit 2 ;;

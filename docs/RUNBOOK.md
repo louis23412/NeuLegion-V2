@@ -206,8 +206,8 @@ starts no run, and that the seed aggregate is written — the browser entry
 imports `runAnalysis` directly, so the argument-parsing block is otherwise
 untested; `checkpoint_throttle.test.js` proves the spool-throttle checkpoint path). `bench` is the only
 browser entry
-without a mirror (it prints timings). So `npm test` reports **132 `test()`
-blocks across 45 files** (46 with `helpers.js`) rather than 2780 checks (round 44 adds the `--sleeve` spawn block to `analyze_cli.test.js` — **confirmed green on the operator's machine 2026-09-29: `tests 132 / pass 132 / fail 0`, ~359 s**); a green
+without a mirror (it prints timings). So `npm test` reports **133 `test()`
+blocks across 45 files** (46 with `helpers.js`) rather than 3127 checks (round 44 adds the `--sleeve` spawn block to `analyze_cli.test.js`; round 110 adds the risk-override spawn block — **confirmed green on the operator's machine 2026-09-29: `tests 132 / pass 132 / fail 0`, ~359 s**); a green
 run — plus `failed === 0` and the ledger count from every wrap-style mirror — is
 the gate. Measured **~5.9 min** at round 22 (`BUGS.md` #21): the `dimensions`
 sweep of both `forceMin` branches dominates (~353 s), then `lsh` (~177 s) and
@@ -235,10 +235,10 @@ wrap-style mirrors assert against. **Expected totals (all must be 0 failures):**
 | `locks` | 41 | | `analysis` | 856 |
 | `price_precision` | 29 | | `multisymbol` | 28 |
 | `guards` | 65 | | `observer` | 76 |
-| `analyze` | 294 | | `controller_invariants` | 23 |
+| `analyze` | 298 | | `controller_invariants` | 23 |
 | `contracts` | 255 | | `legacy_hivemind` | 15 |
 
-**Total: 3123 checks.** **(Round 89** — the `--symbols` path fix: `resolveSymbolFiles`
+**Total: 3127 checks.** **(Round 89** — the `--symbols` path fix: `resolveSymbolFiles`
 in `src/analyze/cli.js` went one `..` short after the round-83 split (every native
 `--symbols` run died with `src/src/candles.jsonl` ENOENT; the CLI tests only use
 `--files`, so it stayed green). Exported for testability, root is the project root

@@ -54,7 +54,7 @@ export const makeNodeFoldDispatcher = ({ url, spawn = null, timeoutMs = null } =
 export async function runSleeveAnalysis({
     sleeve = 'carry-dispersion', carryFiles = null, files = null, symbols = null,
     file = CONFIG.file, costBps = 0, sizingTarget = null, sizingWindow = 24,
-    carryMarks = null, oiFile = null,
+    carryMarks = null, oiFile = null, riskSpec = null,
     readFile = (f) => fs.readFileSync(f, 'utf8'),
 } = {}) {
     if (!carryFiles || !carryFiles.length) {
@@ -66,8 +66,8 @@ export async function runSleeveAnalysis({
     const marksText = carryMarks == null ? null : readFile(carryMarks);
     const oiText = oiFile == null ? null : readFile(oiFile);
     const markSymbols = symbols && symbols.length === 1 && symbols[0] === 'all' ? CANDLE_MANIFEST.map((e) => e.symbol) : symbols;
-    const result = runSleeveReport({ sleeveId: sleeve, fundingTexts, candleTexts, costBps, sizingTarget, sizingWindow, marksText, symbols: markSymbols, oiText });
-    return { inputs, carryFiles, sleeve, costBps, sizingTarget, sizingWindow, carryMarks, oiFile, result, summary: formatSleeveReport(result) };
+    const result = runSleeveReport({ sleeveId: sleeve, fundingTexts, candleTexts, costBps, sizingTarget, sizingWindow, marksText, symbols: markSymbols, oiText, riskSpec });
+    return { inputs, carryFiles, sleeve, costBps, sizingTarget, sizingWindow, carryMarks, oiFile, riskSpec, result, summary: formatSleeveReport(result) };
 }
 
 // Run the A/B against real candle data. Loads the model lazily so importing this
