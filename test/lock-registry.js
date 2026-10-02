@@ -347,6 +347,15 @@ export const ANALYSIS_MODULES = Object.freeze({
         'volForecastQlike', 'tournamentVolModelAcrossSplits', 'decideVolPromotion',
         'fitRidgeArVolForecast', 'tournamentVolLadder',
     ],
+    'forecast/vol/estimators.js': [
+        'realizedVolatility', 'ewmaVolForecast', 'volForecastSkill',
+        'fitArVolForecast', 'predictArVolForecast', 'volForecastQlike', 'fitRidgeArVolForecast',
+    ],
+    'forecast/vol/tournament.js': [
+        'tournamentVolForecast', 'tournamentVolForecastAcrossSplits', 'tournamentVolModel',
+        'tournamentVolPanel', 'tournamentVolModelAcrossSplits', 'decideVolPromotion',
+        'tournamentVolLadder',
+    ],
     'forecast/range.js': [
         'rangeBarVariance', 'rangeRealizedVolatility', 'yangZhangVariance',
         'yangZhangRealizedVolatility', 'w4cSolveNormal',
@@ -790,6 +799,20 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['leprado2018afml', 'pardo2008walkforward'],
         proves: ['analysis.test.js'],
         note: 'Round-71 split of analysis/forecast.js (byte-exact move): the W4b volatility core — realized vol, EWMA/AR/ridge-AR fits, the model slot, the split/panel/ladder tournaments, QLIKE and the promotion decision. Self-contained (no imports); proved by the unchanged analysis.test.js sections.',
+    },
+    'forecast/vol/estimators.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml'],
+        proves: ['analysis.test.js'],
+        note: 'Round-109 split of forecast/vol.js (byte-exact move; vol.js is the re-export shim): vol estimators — realized vol, EWMA/AR/ridge-AR fits, MSE/QLIKE skills. Self-contained (no imports). Proved by the unchanged analysis.test.js sections.',
+    },
+    'forecast/vol/tournament.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['leprado2018afml', 'pardo2008walkforward'],
+        proves: ['analysis.test.js'],
+        note: 'Round-109 split of forecast/vol.js (byte-exact move): tournaments — split/panel/ladder AR-vs-EWMA contests, the model slot, the promotion decision. Imports the five estimators from ./estimators.js. Proved by the unchanged analysis.test.js sections.',
     },
     'forecast/range.js': {
         status: LOCK_LEVELS.INVARIANT,

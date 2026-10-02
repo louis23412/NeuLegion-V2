@@ -5446,3 +5446,17 @@ L10-co/cp/cq/cr, W5 venues.
 `analysis/reality_check/subsampling/` directory + shim + registry rows; expect 132/132 —
 locks/analysis/walkforward/analyze proven AI-side, but only the native driver
 proves the worker/fs CLI paths and the new registry rows). No uploads.
+**Gate closed 2026-10-02:** operator `npm test` 132/132 (~358 s) closes this round (R108) as well.
+
+
+## 54. Round 109 — vol split + portfolio audit + research 10l-partial (2026-10-02, AI-side)
+
+Three tracks. **Foundations:** `src/analysis/forecast/vol.js` (405 lines, registered) split into `forecast/vol/` ×2 + shim, per the round-97 registered recipe: `estimators.js` (realized vol, EWMA/AR/ridge-AR fits, MSE/QLIKE skills) + `tournament.js` (split/panel/ladder contests, the model slot, the promotion decision). Line-multiset verified byte-identical; no added exports needed (tournament imports five estimators from ./estimators.js); zero imports anywhere in the family. Registry: two KNOWN_TESTS rows + two module rows; two imports + map rows in `locks.test.js`. Verified AI-side first try: `locks.test.js` 41/0, `analysis.test.js` 856/0, `walkforward.test.js` 90/0, `analyze.test.js` 294/0 (counts unchanged — pure move, no new checks). No golden moves. **Model track:** `e137` 27/27 SUPPORTED (lab F-150) — the first audit of the scoring path itself (`analysis/portfolio.js`, which every e123-e136 number flows through): clip/band/clean composition, uniform cost application, BE identity, sizing and block diagnostics, the G5 conjunction all exact against independent recomputes. Two initial failures were both my own hand witnesses (a band-hold slip, a non-separating order witness), replaced with exact ones — the module never moved. Notable exactness: the cap-then-band order is load-bearing (edge witness [[0.12,0],[0.14,0],[0.12,0]] reads [0.12,..] vs [0.125,..]). No L10 rows (nothing found); e136 regressed 4/4. No spec change, no TODO. Reversal loop closed by reference: e24's rev-sign1 IS the 10j paper's construction (-sign(r[t])), BE 0.60/0.35 bps 1h/15m both under fee — L13's closure stands doubly, no new run. **Research:** sweep 10l partial — endpoint flaky (2x 503 + 1 timeout; doctrine: not chased, 2 queries carried over); one landed query gives 2 new notes (informedness-profitability tradeoff for TODO 111's task form; 1s LOB feature stability for TODO 111's unblock list) + 1 convergence. **Gate:** round 108 CLOSED on the operator's `npm test` 132/132 proof (2026-10-02, ~358 s); this round's split re-opens it.
+
+### 54.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port: cap 0.125 + band 0.01, holdout-certified) + fade G5 (106/108, operator) + TODO 111 (still data-blocked; task form + unblock spec sharpened by 10j/10l). Model track rests on the fully certified pinned spec; next model work waits on native breadth. Queued: 117 (behind 116), L10-co/cp/cq/cr, W5 venues.
+
+### 54.2 Operator commands
+
+`npm test` from the repo root (the round-109 split needs the native gate: new `analysis/forecast/vol/` directory + shim + registry rows; expect 132/132 — locks/analysis/walkforward/analyze proven AI-side, but only the native driver proves the worker/fs CLI paths and the new registry rows). No uploads.

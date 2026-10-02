@@ -75,6 +75,8 @@ import * as forecastScoringScoresMod from '../../../src/analysis/forecast/scorin
 import * as forecastScoringResamplingMod from '../../../src/analysis/forecast/scoring/resampling.js';
 import * as forecastScoringComparisonMod from '../../../src/analysis/forecast/scoring/comparison.js';
 import * as forecastVolMod from '../../../src/analysis/forecast/vol.js';
+import * as forecastVolEstimatorsMod from '../../../src/analysis/forecast/vol/estimators.js';
+import * as forecastVolTournamentMod from '../../../src/analysis/forecast/vol/tournament.js';
 import * as forecastRangeMod from '../../../src/analysis/forecast/range.js';
 import * as forecastCombineMod from '../../../src/analysis/forecast/combine.js';
 import * as forecastSizingMod from '../../../src/analysis/forecast/sizing.js';
@@ -156,6 +158,8 @@ const ANALYSIS_IMPORTS = {
     'forecast/scoring/resampling.js': forecastScoringResamplingMod,
     'forecast/scoring/comparison.js': forecastScoringComparisonMod,
     'forecast/vol.js': forecastVolMod,
+    'forecast/vol/estimators.js': forecastVolEstimatorsMod,
+    'forecast/vol/tournament.js': forecastVolTournamentMod,
     'forecast/range.js': forecastRangeMod,
     'forecast/combine.js': forecastCombineMod,
     'forecast/sizing.js': forecastSizingMod,
