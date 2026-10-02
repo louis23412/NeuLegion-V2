@@ -54,6 +54,8 @@ import * as realityCheckBootstrapInputsMod from '../../../src/analysis/reality_c
 import * as realityCheckBootstrapResamplingMod from '../../../src/analysis/reality_check/bootstrap/resampling.js';
 import * as realityCheckBootstrapTestsMod from '../../../src/analysis/reality_check/bootstrap/tests.js';
 import * as realityCheckSubsamplingMod from '../../../src/analysis/reality_check/subsampling.js';
+import * as realityCheckSubsamplingWindowsMod from '../../../src/analysis/reality_check/subsampling/windows.js';
+import * as realityCheckSubsamplingProceduresMod from '../../../src/analysis/reality_check/subsampling/procedures.js';
 import * as dependenceMod from '../../../src/analysis/dependence.js';
 import * as dependenceCorrelationMod from '../../../src/analysis/dependence/correlation.js';
 import * as dependenceClustersMod from '../../../src/analysis/dependence/clusters.js';
@@ -133,6 +135,8 @@ const ANALYSIS_IMPORTS = {
     'reality_check/bootstrap/resampling.js': realityCheckBootstrapResamplingMod,
     'reality_check/bootstrap/tests.js': realityCheckBootstrapTestsMod,
     'reality_check/subsampling.js': realityCheckSubsamplingMod,
+    'reality_check/subsampling/windows.js': realityCheckSubsamplingWindowsMod,
+    'reality_check/subsampling/procedures.js': realityCheckSubsamplingProceduresMod,
     'dependence.js': dependenceMod,
     'dependence/correlation.js': dependenceCorrelationMod,
     'dependence/clusters.js': dependenceClustersMod,

@@ -5399,3 +5399,50 @@ native breadth. Queued: 117 (behind 116), L10-co/cp/cq/cr, W5 venues.
 `analysis/reality_check/bootstrap/` directory + shim + registry rows; expect 132/132 —
 locks/analysis/walkforward/analyze proven AI-side, but only the native driver
 proves the worker/fs CLI paths and the new registry rows). No uploads.
+**Gate closed 2026-10-01:** operator `npm test` 132/132 (~366 s) closes this round (R107) as well.
+
+## 53. Round 108 — subsampling split + band-holdout SUPPORTED + research 10k (2026-10-01, AI-side)
+
+Three tracks. **Foundations:** `src/analysis/reality_check/subsampling.js`
+(536 lines, registered) split into `reality_check/subsampling/` ×2 + shim, per
+the round-97 registered recipe: `windows.js` (config, Newey-West SE, segment
+resolution, window starts, pooled SE) + `procedures.js` (SPA, step-down,
+k-FWER, FDP on the shared deterministic reference). Line-multiset verified
+byte-identical; five helpers + subsamplingReference/subWindowKthLargest gain
+`export` for inter-part use, not re-exported by the shim. Documented cleanups:
+the unused `mean` import dropped from windows.js (only a comment mentions it
+there) and the shim doc's stale `./bootstrap.js` path corrected to
+`./bootstrap/inputs.js`. One self-caught build error (a doc comment dropped
+between chunks, caught by the verifier before any write). Registry: two
+KNOWN_TESTS rows + two module rows; two imports + map rows in
+`locks.test.js`. Verified AI-side first try: `locks.test.js` 41/0,
+`analysis.test.js` 856/0, `walkforward.test.js` 90/0, `analyze.test.js`
+294/0 (counts unchanged — pure move, no new checks). No golden moves.
+**Model track:** `e136` 4/4 SUPPORTED (lab F-149) — the dense-split holdout
+for e135's band pick on stacked-16 (8 splits, trailing-pick + fixed-0.01 +
+daily, cost 4): the trailing pick is 0.01 at ALL 8 splits, frozen-eps beats
+daily 8/8, fixed-0.01 beats daily 8/8, coherence reproduces e135 (0.40/0.44)
+to the digit. The e135 advantage is not a full-sample artefact — TODO 118
+keeps cap 0.125 + band 0.01 with maximal pick stability. e135 regressed 3/3.
+No spec change, no TODO. **Research:** sweep 10k lands (4 new notes:
+point-in-time audit convergence for L10/e14, funding-rate-times-OI-base
+mechanism for the carry leg, predict-then-optimize framing for R26-5, AI
+profitability-limits survey for TODO 111; 5 convergence confirms, no doc
+changes). **Gate:** round 107 CLOSED on the operator's `npm test` 132/132
+proof (2026-10-01, ~366 s); this round's split re-opens it.
+
+### 53.1 Rerank
+
+Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port: cap
+0.125 + band 0.01, holdout-certified) + fade G5 (106/108, operator) + TODO
+111 (still data-blocked). Model track rests on the fully certified pinned
+spec (EWMA + cap plateaued, challenger beaten, band transfers + holdout);
+next model work waits on native breadth. Queued: 117 (behind 116),
+L10-co/cp/cq/cr, W5 venues.
+
+### 53.2 Operator commands
+
+`npm test` from the repo root (the round-108 split needs the native gate: new
+`analysis/reality_check/subsampling/` directory + shim + registry rows; expect 132/132 —
+locks/analysis/walkforward/analyze proven AI-side, but only the native driver
+proves the worker/fs CLI paths and the new registry rows). No uploads.

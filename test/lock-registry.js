@@ -491,6 +491,16 @@ export const ANALYSIS_MODULES = Object.freeze({
         'DEFAULT_SUB_CONFIG', 'neweyWestSE', 'subsamplingSpa', 'subsamplingStepM',
         'subsamplingKfwer', 'subsamplingFdp',
     ],
+    'reality_check/subsampling/windows.js': [
+        'DEFAULT_SUB_CONFIG', 'neweyWestSE',
+        // Inter-part use only (procedures.js imports them; the shim does not re-export them).
+        'meanSlice', 'resolveGroups', 'resolveSubWindows', 'groupedFullSE', 'groupWindowStarts',
+    ],
+    'reality_check/subsampling/procedures.js': [
+        'subsamplingSpa', 'subsamplingStepM', 'subsamplingKfwer', 'subsamplingFdp',
+        // Inter-part use only (no consumer yet; the shim does not re-export them).
+        'subsamplingReference', 'subWindowKthLargest',
+    ],
     'portfolio.js': [
         'MIN_TRAIN_PERIODS', 'clipWeights', 'bandWeights', 'cleanBook', 'SLEEVE_SPECS',
         'cleanForSleeve', 'inverseVolWeights', 'volTargetScale',
@@ -920,6 +930,20 @@ export const ANALYSIS_REGISTRY = Object.freeze({
         citations: ['politisromano1994subsampling', 'politisromano1999book', 'romano2005stepm', 'romano2007generalized', 'delattre2014fdp', 'meanshiftlrv2603'],
         proves: ['analysis.test.js'],
         note: 'Round-94 split of analysis/reality_check.js (byte-exact move): the variance-consistent subsampling family — Newey-West SE, subsampling SPA/StepM, single-step k-FWER and the FDP step-down heuristic, segment-aware via groups. Imports relativePerformance/safeRatio from bootstrap.js; proved by the unchanged analysis.test.js sections.',
+    },
+    'reality_check/subsampling/windows.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['politisromano1994subsampling', 'politisromano1999book', 'meanshiftlrv2603'],
+        proves: ['analysis.test.js'],
+        note: 'Round-108 split of reality_check/subsampling.js (byte-exact move; subsampling.js is the re-export shim): window machinery — config, Newey-West SE, segment resolution, window starts, pooled SE (five helpers gain export for inter-part use by procedures.js). Proved by the unchanged analysis.test.js sections.',
+    },
+    'reality_check/subsampling/procedures.js': {
+        status: LOCK_LEVELS.INVARIANT,
+        domain: 'finance',
+        citations: ['politisromano1994subsampling', 'politisromano1999book', 'romano2005stepm', 'romano2007generalized', 'delattre2014fdp'],
+        proves: ['analysis.test.js'],
+        note: 'Round-108 split of reality_check/subsampling.js (byte-exact move): the family-wise procedures on the shared deterministic reference — SPA, step-down, k-FWER, FDP (subsamplingReference/subWindowKthLargest gain export for inter-part use). Imports relativePerformance/safeRatio from bootstrap/inputs.js. Proved by the unchanged analysis.test.js sections.',
     },
     'portfolio.js': {
         status: LOCK_LEVELS.INVARIANT,
