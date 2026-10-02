@@ -12,6 +12,13 @@ order where each run unlocks (or kills) the runs below it.**
 
 ## 0. Where things stand (the three facts that order everything)
 
+> Update 2026-10-02 (operator round banked — plan unchanged): native gate green
+> (TODO 120 closed), K=5 `gh` verified on 8 majors (`20261002T071743-seed1` —
+> all keep-off, vol adjDSR 0.9340 nearest the floor), A2 majors band read done
+> (`20261002T080323-seed1-sleeve` — net 11.80, turnover 4.95/yr, BE 83.5 bps).
+> Next: TODO 121 (flat-base + honest comparators, minutes) → 116 → 118 → 117.
+> Detail: `RUN-ANALYSIS.md` §74.
+
 1. **The lab is done measuring what it can.** Every sleeve has a pinned spec,
    a falsifier survived, a capacity distribution, and a port artefact
    (`prototypes/port.js`). The only open mechanism (L19, OI-change) is a

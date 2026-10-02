@@ -207,7 +207,7 @@ imports `runAnalysis` directly, so the argument-parsing block is otherwise
 untested; `checkpoint_throttle.test.js` proves the spool-throttle checkpoint path). `bench` is the only
 browser entry
 without a mirror (it prints timings). So `npm test` reports **133 `test()`
-blocks across 45 files** (46 with `helpers.js`) rather than 3127 checks (round 44 adds the `--sleeve` spawn block to `analyze_cli.test.js`; round 110 adds the risk-override spawn block — **confirmed green on the operator's machine 2026-09-29: `tests 132 / pass 132 / fail 0`, ~359 s**); a green
+blocks across 45 files** (46 with `helpers.js`) rather than 3127 checks (round 44 adds the `--sleeve` spawn block to `analyze_cli.test.js`; round 110 adds the risk-override spawn block — **confirmed green on the operator's machine 2026-10-02: `tests 133 / pass 133 / fail 0`**); a green
 run — plus `failed === 0` and the ledger count from every wrap-style mirror — is
 the gate. Measured **~5.9 min** at round 22 (`BUGS.md` #21): the `dimensions`
 sweep of both `forceMin` branches dominates (~353 s), then `lsh` (~177 s) and

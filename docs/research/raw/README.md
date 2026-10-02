@@ -255,7 +255,11 @@ lists); the curated notes live in the round summaries that filed them
 (`RUN-ANALYSIS.md` §§39–54, lab F-136…F-150, TODO 95/104/111 context lines).
 Files: `arxiv-sweep-2026-09r.json` … `arxiv-sweep-2026-09z.json`,
 `arxiv-sweep-2026-09ae.json` … `arxiv-sweep-2026-09ag.json`,
-`arxiv-sweep-2026-10a.json` … `arxiv-sweep-2026-10n.json`.
+`arxiv-sweep-2026-10a.json` … `arxiv-sweep-2026-10n.json`,
+`arxiv-sweep-2026-10o.json` (sweep S16: funding/vol-targeting/capacity
+refresh, 4 grounded notes), `arxiv-sweep-2026-10p.json` (refresh: decay/MRP
+task form for C3, point-in-time-audit + paired-gate + alpha-chain
+convergences, L07 unchanged).
 
 - `arxiv-sweep-2026-10l.json` — **partial** (endpoint flaky): 1 landed query
   (2 notes for TODO 111 + 1 convergence), 2 queries carried to 10m. A stray

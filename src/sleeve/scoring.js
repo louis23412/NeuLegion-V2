@@ -14,11 +14,11 @@ import { factorNeutralSharpe } from '../analysis/dependence.js';
 export function parseSleeveRisk({ cap = undefined, band = undefined, bandEps = undefined } = {}) {
     if (cap === undefined && band === undefined && bandEps === undefined) return null;
     if (band !== undefined && bandEps !== undefined) {
-        const normKey = (v) => (v === null ? 'null' : String(v).trim().toLowerCase());
-        const normNum = (k) => ((k === 'none' || k === 'null') ? 'null' : Number(k));
+        const normKey = (v) => (v === null ? 'none' : String(v).trim().toLowerCase());
+        const normNum = (k) => ((k === 'none' || k === 'null') ? null : Number(k));
         const a = normKey(band), b = normKey(bandEps);
         const na = normNum(a), nb = normNum(b);
-        const same = (Number.isFinite(na) && Number.isFinite(nb)) ? na === nb : a === b;
+        const same = (na === null && nb === null) ? true : ((Number.isFinite(na) && Number.isFinite(nb)) ? na === nb : a === b);
         if (!same) throw new Error('analyze: --sleeve-band given twice with different values (BUGS.md #69)');
     }
     const one = (name, v, { min, minOk }) => {
@@ -45,11 +45,11 @@ export function scoreSleeve(sleeveId, view, { costBps = 0, panel = null, riskSpe
     const book = singleBook.compose([{ rows: raw, weight: 1 }]);
     const pinned = { cap: sleeve.spec.cap ?? null, bandEps: sleeve.spec.bandEps ?? null };
     if (riskSpec != null && riskSpec.band !== undefined && riskSpec.bandEps !== undefined) {
-        const key = (v) => (v === null ? 'null' : String(v).trim().toLowerCase());
-        const num = (k) => ((k === 'none' || k === 'null') ? 'null' : Number(k));
+        const key = (v) => (v === null ? 'none' : String(v).trim().toLowerCase());
+        const num = (k) => ((k === 'none' || k === 'null') ? null : Number(k));
         const a = key(riskSpec.band), b = key(riskSpec.bandEps);
         const na = num(a), nb = num(b);
-        const same = (Number.isFinite(na) && Number.isFinite(nb)) ? na === nb : a === b;
+        const same = (na === null && nb === null) ? true : ((Number.isFinite(na) && Number.isFinite(nb)) ? na === nb : a === b);
         if (!same) throw new Error('scoreSleeve: riskSpec carries band and bandEps with different values (pass one — BUGS.md #69)');
     }
     const noOverride = riskSpec == null || (riskSpec.cap === undefined && riskSpec.band === undefined && riskSpec.bandEps === undefined);

@@ -5653,3 +5653,200 @@ estimate) fixed before green. Lab record CYCLE-158 / F-168; registered in run_al
 ### 73.1 Operator commands
 
 None — background assurance, no gate impact.
+
+## 74. Operator round 2026-10-02 — K=5 `gh` verification + A2 band read (native, uploaded)
+
+Two native runs, both green end-to-end: `src/runs/20261002T071743-seed1`
+(K=5 `gh` on 8 majors, 44 min wall, status complete, audit clean,
+policyRoundTrip 0 mismatches over 288 folds) and
+`src/runs/20261002T080323-seed1-sleeve` (carry-dispersion + cap 0.125 /
+band 0.01 via the round-110 flags, <1 s, available:true). The operator also
+reports `npm test` green locally, which closes TODO 120 (the 133-block gate
+covering the round-110 CLI spawn block) and banks the three round-110 sanity
+fixes the AI-side pass made beforehand: bare `--sleeve-cap`/`--sleeve-band`
+(no `=`) now throws present-but-empty instead of silently unclipping;
+`parseSleeveRisk` compares dual band/bandEps aliases numerically (no false
+throw on `0.01` vs `0.010`); `scoreSleeve` throws on a raw spec carrying
+conflicting band + bandEps instead of silently preferring band.
+
+The `gh` run is the verification TODO 114 called for — the first K=5 column
+(post-trim, `sig-regime-momentum` out) beside the K=6 corpus of §35:
+
+| arm | pooled Sharpe | adjDSR @ eff bars | other hurdles |
+|---|---|---|---|
+| baseline | −0.11 | 0.08 @ 888 | null behaving as null |
+| sig-momentum | 1.08 | 0.897 @ 1192 | paired p=0.029 pass, breadth 19/17 p=0.43 |
+| sig-vol-momentum | 1.17 | 0.934 @ 1212 | nearest the 0.95 floor (margin −0.016) |
+| sig-blend-momentum | 0.71 | 0.610 @ 1079 | + paired cluster t fails (p=0.092) |
+| sig-network-momentum | 1.30 | 0.889 @ 802 | paired + stability pass; streamCorr 0.73, DE 5.38 |
+
+No promotion (all keep-off, SPA p=0.32, nothing rejected). Cross-round
+agreement with §35 is tight: network 1.3005/0.8654 → 1.30/0.889, vol
+0.9173 → 0.9340 (the small DSR moves are the K=6→K=5 trials change, same
+direction for both arms — no roster surprise). Forecast MCS keeps
+momentum/vol/network and drops blend at both 90 and 95, agreeing with the
+gate. Cost ladder: every arm survives to 5 bps; at 10 bps blend turns
+negative (−0.11) while the rest hold 0.34–0.45; break-evens sit 14–15 bps
+against 810–850/yr turnover (vs baseline 31 — the signals trade ~27× the
+null). Concentration is healthy (top-20 folds 60% of network PnL,
+delete-one-cluster range 1.26–1.37, no single-cluster carrier). Two watch
+items, neither gating: baseline `reachable` reads 229/288 while every signal
+reads 288/288 (audit still clean, violations 0 — controller warm-up, not a
+leak signal, but worth a glance next run); `nextRun` says the PAIRED
+comparison needs 28 clusters for the observed effect and 60 for 80% power
+(we have 36 — a second seed corners the observed, not the powered, claim).
+
+The band run proves the A2 majors leg of the recipe: the override echoes
+exactly (`run.json` risk {0.125, 0.01}, report risk `overridden:true`),
+net 11.80/yr at turnover 4.95/yr, break-even 83.5 bps, DSR-adjusted ~1.0
+(DE 31.0 over 6605 bars → 213 effective), every G5 knob passing except the
+two operator-owned attestations (decay, unseen — expected pre-attestation).
+Against the item-118 majors descriptive (11.26 @ cost 4) the band read prints
+slightly above — but the flat-base turnover comparator was NOT run this
+round, so the band's turnover dividend is still unmeasured; that is TODO 121.
+The decay column is the hard item for any future G5 attestation: yearly
+per-bar Sharpe 0.64 (2020) → 0.13 (2026), slope −0.09/yr, first-half 0.49 →
+second-half 0.22 with the CI excluding zero. A decay attestation cannot be a
+rubber stamp against this slope.
+
+Tiers unchanged: 116 → 118 → 117. This round banked the K=5 majors baseline
+116 must beat (vol adjDSR 0.9340, network 0.889) and the A2 majors band
+number 118 must stack against (net 11.80, BE 83.5 bps, turnover 4.95/yr).
+
+### 74.1 Operator commands
+
+Done this round: `npm test` (green, closes 120), `bash scripts/round30-runs.sh gh`
+→ `20261002T071743-seed1`, `bash scripts/sleeve-runs.sh band` →
+`20261002T080323-seed1-sleeve`. Next ask, in order: TODO 121 (flat-base +
+honest sleeve reads, minutes), then TODO 116 (the 16-panel port + `gh`).
+
+## 75. Cycle C1 — coherency sweep + AI-side gate re-proof (2026-10-02)
+
+First execution cycle of the full plan (rule: coherency before each point).
+Static verification, this workspace: 133 top-level `test()` blocks (a naive
+grep reads 144 via mid-line hits — line-anchored is exactly 133); ledger
+table sums to 3127 with `analyze` 298 pinned in the node mirror and all 32
+entries present (33rd is bench, mirrorless by design); lab `run_all.js` holds
+139 modules, 0 unregistered, 146 steps (lab STATUS said 153 — corrected, no
+code change); repo `src/data` has everything TODO 121 needs; lab vendored
+panels match the 116/117/118 recipes. Drift fixed docs-only: RUNBOOK §6 gate
+line → 2026-10-02 133/133; lab STATUS gate CLOSED + queue 121 → 116 → 118 →
+117; TODO 116 baseline 0.9173 → 0.9340 (K=5); PLAN-next §0 status note; lab
+CYCLE-159 + INDEX row. AI-side re-proof through the esbuild harness with the
+round-110 sanity fixes in-tree: browser `analyze` **298/298, 0 failures**.
+No scored-path change anywhere. Lab record CYCLE-159.
+
+### 75.1 Operator commands
+
+TODO 121 (minutes, both turnkey — data and stages verified present):
+
+```bash
+bash scripts/sleeve-runs.sh base
+bash scripts/sleeve-runs.sh honest
+```
+
+Upload each run's `report.json` path. Pre-registered reads: base turnoverAnnual
++ break-even vs the band 4.95/83.5 (band turnover < flat at net within ±1/yr);
+honest availability + marks-substituted count. Then TODO 116.
+
+## 76. Cycle C2 — Phase-D scoping: 84/85/87 need no new code (2026-10-02)
+
+Scoping before building: the P2 machinery TODO 87 asks for already exists
+and is pinned (`restateReportAtCadence`, `exposureMatchedPair`,
+`promotionAcrossCadences`, `--cadences`/`--exposure-match`, 10+ browser
+checks incl. identity restatement, sleeve carry-over, gap removal,
+single-cadence rejection). Remaining work is application: run the first
+16-panel `gh` (TODO 116) with `--cadences` + `--exposure-match` so the
+verdict-neutrality acceptance comes free, plus a `--test=10` leg for TODO
+84's level-shift question. TODO 85 decision recorded: quote cross-family
+statements only at matched exposure; reject family-normalised thresholds
+(they rescale the scored policy — wider blast radius); implementation is a
+new round with its own native gate (DESIGN §6 change). Lab record CYCLE-160.
+
+### 76.1 Operator commands
+
+None new — fold `--cadences=<grid>` + `--exposure-match` and a `--test=10`
+leg into the TODO 116 run when machine time comes.
+
+## 77. Cycle C3 — research sync 10p: MRP task form + convergences (2026-10-02)
+
+Four arXiv queries on the open fronts (decay, perps, vol-target). Six
+grounded notes filed in `docs/research/raw/arxiv-sweep-2026-10p.json`
+(README later-sweeps list updated): one task form — MRP (minimum-regime
+risk-adjusted return) beside the decay readouts for the Phase C3
+attestation, barred on agreeing with the band-run decay read on the same
+book; four convergences (publication-year decay prior, point-in-time audit
+failure backing e14/round-78, paired-gate SBS backing the cluster-t,
+alpha-chain review backing TODO 111); L07 stays data-blocked
+(event-heterogeneous cascade signatures). Vol-targeting query was pure
+noise (discarded). Lab record CYCLE-161.
+
+### 77.1 Operator commands
+
+TODO 121 still the ask (see §75.1). No new native work from this sweep.
+
+## 78. Cycle C4 — D2 hygiene review: no bug, one inert trap (2026-10-02)
+
+Read-only pass over the L10-cv/cw duplication (PLAN-next D2): the two
+`sharpeStandardError` forms are the same Lo family in different units and
+agree to exactly `sqrt(n/(n-1))` at run scales — importers use the right
+units on both paths. The weight tools exist twice (canonical
+`core/primitives/weights.js` vs legacy `analysis/portfolio.js`, bodies
+agree); `portfolio.js#SLEEVE_SPECS`/`cleanForSleeve` have zero live
+importers, but the legacy table carries a stale `R8.bandEps 0.005` against
+the pinned `null` — inert today, a trap for future importers. Both
+cleanups proposed owner-gated (lock-pinned surface); no code touched.
+Operator: flagging for your call — the rename/annotation can ride the next
+gated round, or stay as-recorded. Lab record CYCLE-162.
+
+### 78.1 Operator commands
+
+TODO 121 still the ask (see §75.1). The D2 cleanups are parked for your
+explicit go-ahead — say the word and they become the next round.
+
+## 79. Cycle C5 — 121 pre-verification: band dividend + honest level (2026-10-02)
+
+Scored the 121 recipe AI-side through the harness on the workspace data
+(same 8+8 inputs, cost 4) — turnkey proof, not the record. Base (flat
+pinned): net **11.26**, turnover **10.01**/yr, BE **42.9** bps — net matches
+the item-118 majors descriptive to the digit. Against the operator band run
+(11.80 / 4.95 / 83.5): turnover **halved**, BE **~doubled**, net +0.54 —
+the F-52 stacking shape through the repo path. Honest (ext marks, 28,901
+rows substituted): net **6.25** vs 11.26 shipped window, turnover 10.01,
+BE 43.8 — the full-history book reads materially weaker, and that gap is
+now the opening input to the C3 decay attestation. Operator: confirm base
+{11.26, 10.01, 42.9} and honest {6.25, 28901} natively to display precision;
+any deviation is a divergence signal. Lab record CYCLE-163.
+
+### 79.1 Operator commands
+
+```bash
+bash scripts/sleeve-runs.sh base
+bash scripts/sleeve-runs.sh honest
+```
+
+Upload both `report.json` paths. Then TODO 116.
+
+## 80. Bug-check round: alias-sentinel fix + full re-proof (2026-10-02)
+
+User-ordered full check over everything touched. Docs wiring 31/31 clean
+(cycles indexed, §§74–79, STATUS/TODO/PLAN/RUNBOOK/research pins). Code
+battery 12/13 caught one real bug: the alias comparison mapped `none`/`null`
+to the string `"null"`, so `{band:"none", bandEps:null}` — semantically
+identical — threw a false conflict. Fixed in both `parseSleeveRisk` and the
+`scoreSleeve` guard (real-`null` sentinel compared first; 2 lines each).
+After: unit battery **15/15**, browser `analyze` **298/298**. Note: the
+scoring.js change re-owes a native `npm test` (same paths the 133-block gate
+covers) — run it with the 121 pair below. Lab record CYCLE-164.
+
+### 80.1 Operator commands
+
+```bash
+npm test
+bash scripts/sleeve-runs.sh base
+bash scripts/sleeve-runs.sh honest
+```
+
+Expect `tests 133 / pass 133 / fail 0`; confirm base {11.26, 10.01, 42.9} and
+honest {6.25, 28901} to display precision. Upload both `report.json` paths.
+Then TODO 116.
