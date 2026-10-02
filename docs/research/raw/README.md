@@ -263,6 +263,17 @@ convergences, L07 unchanged), `arxiv-sweep-2026-10q.json` (targeted refresh:
 certified-alpha capacity/feasibility threshold for the G5 evidence-vs-decay
 question, perp no-arbitrage nesting + funding-rate design for the carry
 theory, search-aware-evaluation convergence).
+- `arxiv-sweep-2026-10r.json` — **refresh** (CYCLE-179, S6 execution):
+  `all:perpetual AND all:funding` (39 results, date-sorted): 8 grounded —
+  **2605.06405** (funding-aware optimal MM → read before any dynamic
+  rebalance costing in S6b), **2605.05089** (dynamic collateral control for
+  spot-perp basis → S6c collateral section), **2608.25348** (PIT audit +
+  negative matched-budget study on BTC perps → honesty-gate convergence),
+  **2310.14973** (OI/volume reconciliation → L19/OI capacity context),
+  **2601.06084** (funding mechanics), **2603.09164** (Slippage-at-Risk →
+  S6c forward liquidity-risk frame), **2601.10812** (optimal perp
+  liquidation → S6c limits), **2506.08573** (funding-rate design,
+  still current).
 
 - `arxiv-sweep-2026-10l.json` — **partial** (endpoint flaky): 1 landed query
   (2 notes for TODO 111 + 1 convergence), 2 queries carried to 10m. A stray

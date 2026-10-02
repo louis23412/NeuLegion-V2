@@ -2320,7 +2320,24 @@ not a bug fix.
    > DONE AI-side — `src/data/marks_midcap_8h.json` (8/8, t0 2024-06-01T00:00
    > shared, 2467 slots, 3 nulls each) + merged `src/data/marks_stacked16_8h.json`
    > (16 symbols). Turnkey: `bash scripts/sleeve-midcap-118.sh all`
-   > (mid/midband/sixteen/sixteenband, minutes total).
+   > (mid/midband/sixteen/sixteenband, minutes total). **DONE 3/4 2026-10-02
+   > (CYCLE-176):** mid-8 honest+band 8.56/5.22/BE 69.6, stacked honest flat
+   > 8.87/BE 24.7, stacked honest+band 9.50/BE ~60; markedFraction 0 on mid-8
+   > (gate premise confirmed); honesty haircut decisive (e123's 18.11 was
+   > mostly illusion). `mid` flat still missing — re-run that stage. Detail:
+   > `RUN-ANALYSIS.md` §85.
+   > **DONE 4/4 2026-10-02 (CYCLE-177):** `20261002T171237-seed1-sleeve`
+   > (mid-8 honest flat: net 8.16, turnover 11.09, BE 34.2, neutral 8.24,
+   > slope −0.128, first-last 0.36→0.17, markedFraction 0). Closes the e123
+   > apples-to-apples (funding-only 18.11 vs honest 8.16 ⇒ 55% illusion,
+   > 45% retained); band dividend on mid-8 is net +0.40 with BE ×2.0;
+   > BE inversion (mid-flat 34.2 > stacked-flat 24.7 — breadth is the net
+   > lever, band the BE lever); decay lane-independent across all 4 lanes.
+   > Detail: `RUN-ANALYSIS.md` §85.2, lab D-09…D-14.
+   > **S6a DONE-DECIDED 2026-10-02 (CYCLE-178):** trailing-beta hedge fails
+   > on all lanes (no overlay — the neutral gap is full-sample lookahead);
+   > band = pure cost story; decay bracket −0.09…−0.17/yr for S6c.
+   > Detail: `RUN-ANALYSIS.md` §85.3, lab D-14 (corrected)…D-20.
 
    (e125: fade-all BE 0.43 bps untradeable, no flow-quintile gradient; bar-flow proxy only — trade-level aggressor flags filed as the unblock.)
 

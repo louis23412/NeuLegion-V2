@@ -6016,3 +6016,115 @@ math is trusted — open question, not a bug; (3) `run.json` does not record
 `--cadences`/`--exposure-match` (report carries the evidence; worth one line
 in a later round); (4) budget 16-panel gh at ~95+ min, test=10 at ~140 min.
 Lab record CYCLE-171.
+
+## 85. TODO 118 readout — midcap + stacked-16 honest sleeve (2026-10-02, native)
+
+Three of four stages banked under `src/runs/` (`mid` flat still missing —
+needed for the e123 apples-to-apples; re-run `sleeve-midcap-118.sh mid`):
+
+* `20261002T170204` (mid-8 honest + band): net **8.56**/yr, turnover 5.22,
+  BE **69.6** bps, DSR ~1.0, 6/6 blocks positive, yearly slope −0.128,
+  first-last 0.37 → 0.18 (CI excludes 0). markedFraction **0** (22,166 ext
+  substitutions, zero shipped marks — the honesty-gate premise confirmed
+  natively), nullBasis 0.0024.
+* `20261002T170205` (stacked-16 honest flat): net **8.87**, turnover 17.26,
+  BE 24.7, slope −0.098, first-last 0.34 → 0.20. markedFraction 0.317
+  (the majors' shipped share), 51,067 substituted.
+* `20261002T170206` (stacked-16 honest + band): net **9.50**, turnover 6.65,
+  BE ~60. The band dividend reproduces on the honest book (turnover ÷2.6,
+  net +0.64, BE 24.7 → ~60).
+
+Learnings: (1) the honesty haircut is decisive — e123's funding-only 18.11
+was more than half illusion; honest midcap band book is 8.56. Never quote
+the funding-only number again. (2) Breadth adds on the honest book:
+stacked-16 honest flat 8.87 > majors honest flat 6.25 (+2.6/yr). (3) The
+pre-registered BE 30–50 band is beaten on both band lanes (69.6, ~60).
+(4) Within-window decline on the honest 2024–26 book (yearly 0.43 → 0.20 →
+0.23; first-last CIs exclude 0) — descriptive on a 2.2-year window, but it
+is the content of the S4 decay attestation below, distinct from the majors
+full-history "no decay" read.
+
+### 85.1 S4 — G5 honest-book attestation (director's decision, CYCLE-176)
+
+G5 knobs pass except the two human attestations, by design. Decided:
+* `unseen` — PASS for the midcap legs: the carry spec froze (round 42)
+  years before the midcap data existed (harvested 2026-09/10). The spec
+  did not select on this data.
+* `decay` — FAIL with measured numbers: yearly slope −0.10/yr and
+  first-last −0.15 ± 0.08 on the honest stacked-16 window. The carry edge
+  pays (BE ~60) but is weaker now than in 2024. This supersedes nothing on
+  majors (different window, different read).
+* `g5verdict` stays false (needs both) — the attestations, not the verdict,
+  are the product. Next edge push (S6): the paying-but-declining honest
+  carry book vs the keep-off momentum arms — allocation, not prediction
+  (PLAN-round31 direction).
+Lab record CYCLE-176.
+
+### 85.2 TODO 118 complete — mid-8 honest flat + 4-lane cross-read (2026-10-02, native, CYCLE-177)
+
+Fourth stage banked: `20261002T171237-seed1-sleeve` (provenance: 8 midcap
+candles + 8 midcap funding + `marks_midcap_8h.json`, cost 4) — net **8.16**,
+turnover 11.09, BE **34.2**, neutral 8.24, slope −0.128, first-last
+0.36→0.17 (CI excludes 0), DSR ~1.0, markedFraction 0, worstBlock 0.045,
+6/6 blocks positive. Scoring itself took 280 ms (the "minutes" budget was
+script + test overhead).
+
+Cross-lane learnings (lab D-09…D-14): (1) e123 apples-to-apples closed —
+funding-only 18.11 vs honest 8.16 ⇒ 9.95/yr illusion (55%), honest retains
+45%; (2) band dividend on mid-8 is net +0.40 with turnover ÷2.1 and BE ×2.0
+(34.2→69.6) — a cost mechanism, not a panel one; (3) BE inversion: breadth
+without band LOWERS the buffer (mid-flat 34.2 > stacked-flat 24.7) while
+raising net — breadth is the net lever, band the BE lever; (4) breadth
+decomposition at flat: majors 6.25 → mid-8 8.16 (+1.91) → stacked 8.87
+(+0.71) — midcap legs beat majors legs outright; (5) decay lane-independent
+(slopes −0.095…−0.128, same yearly shape plus a universal 2025→2026
+uptick) — S4 stands on 4 lanes; (6) no lane dominates: best net is
+stacked-band (9.50), best BE is mid-band (69.6) — the net-vs-BE frontier is
+the S6 allocation question; neutralAnnual ≥ netAnnual in all 4 lanes, so
+S6a first decomposes what the dispersion weighting buys.
+Lab record CYCLE-177.
+
+### 85.3 S6a readout — trailing hedge fails, book stays as-is (2026-10-02, AI-side, CYCLE-178)
+
+Vehicle: lab `experiments/s6a_hedge_overlay.js` (standalone, 7/7 checks,
+~10 s, result in lab scratch). All 4 banked lanes reproduce to 1e-9 on
+workspace data (no tree drift — AI-side harness pre-verification works).
+
+Correction: `neutralAnnual` is the first-PC-hedged Sharpe of the same book
+(full-sample beta), not an equal-weight portfolio — the neutral−net gap
+(+0.08 mid / +0.45 stacked) is an in-sample hedge upper bound. The
+implementable trailing-beta hedge (W270/W540, hedge leg costed at 4 bps)
+trails the book on every tested lane (stacked-band 9.50 → 9.10/7.41;
+stacked-flat 8.87 → 8.39/6.69; mid-band 8.56 → 7.69/5.65). The loss is
+bad-beta, not cost (hedge cost only −0.1…−0.3): mean|beta| ≈ 0.04 — the
+book is already nearly factor-pure — with betaSd 0.027 and stale-W540
+beta catastrophic. Decided: no hedge overlay.
+
+Attribution from report arithmetic: the band is purely a cost story (mid
+gross −4.2% / cost −53%; stacked gross −6.3% / cost −61.5%); breadth at
+flat adds gross +12.3% against cost +55.7%. Decay bracket for S6c:
+bars-weighted OLS −0.091 vs halves-implied −0.128…−0.172 (halves are
+seasonally balanced → primary; OLS has 3 points + seasonal mix). Sizing
+hard cap: pinned spec neverBreach 11.5e6 (OI-bound on LINK); measured
+crash-robustness is out-of-window evidence and must be labeled so.
+Lab record CYCLE-178.
+
+### 85.4 S6b readout — blend frontier + operating blend a=0.25 (2026-10-02, AI-side, CYCLE-179)
+
+Vehicle: lab `experiments/s6b_blends.js` (standalone, 5/5 checks, ~2 s).
+Design: band lanes only (pairwise dominance over flat, recorded), static
+capital blends a·midBand + (1−a)·stkBand (no rebalance turnover; exact
+series arithmetic; identical 2465-bar grids asserted, never intersected).
+
+Frontier (net / turnover / BE): a=0 → 9.50/6.65/60.1; 0.25 →
+9.87/6.29/62.0; 0.5 → 9.84/5.93/64.3; 0.75 → 9.36/5.57/66.8; 1 →
+8.56/5.22/69.6. BE monotonic in a; net peaks interior — the a=0.25 blend
+beats pure stacked on BOTH axes (genuine diversification, DSR ~1.0
+throughout, worstBlock best at 0.141).
+
+Director's operating decision: **a = 0.25** (net 9.87, BE 62.0 — above the
+30–50 pre-reg band; halves 0.39→0.22). Fallback a=0.5 (9.84/64.3) if S6c
+sizing wants more buffer. S6c (carry-vs-cash sizing of the a=0.25 book) is
+gated-open with the D-18 bracket, the 11.5e6 never-breach cap, and the 10r
+pricings (2605.05089 collateral, 2603.09164 SaR, 2601.10812 liquidation).
+Lab record CYCLE-179.

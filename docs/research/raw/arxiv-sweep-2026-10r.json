@@ -1,0 +1,66 @@
+{
+ "date": "2026-10-02",
+ "queries": [
+  "all:perpetual AND all:funding (39 results, sortBy=submittedDate)"
+ ],
+ "grounded": [
+  {
+   "id": "2605.06405v1",
+   "title": "Funding-Aware Optimal Market Making for Perpetual DEXs",
+   "note": "Funding-aware optimal market making for perpetual DEXs.",
+   "relevance": "S6b blend turnover/costing: funding-aware execution cuts the cost leg the band dividend relies on; read before costing any dynamic rebalance.",
+   "action": "Read before S6b dynamic-rebalance design (static blends need none)."
+  },
+  {
+   "id": "2605.05089v1",
+   "title": "Dynamic Collateral Control for Permissionless Spot Perpetual Basis Trading",
+   "note": "Dynamic collateral control for permissionless spot-perp basis trading.",
+   "relevance": "S6c sizing: collateral/spot-leg control for the basis book; complements the 11.5e6 never-breach cap.",
+   "action": "Cite in S6c DESIGN collateral section."
+  },
+  {
+   "id": "2608.25348v1",
+   "title": "Point-in-Time Audit Before Alpha: Public-Archive Availability and a Negative Matched-Budget Study on BTC Perpetual Futures",
+   "note": "Point-in-time audit before alpha: public-archive availability + negative matched-budget study on BTC perps.",
+   "relevance": "Honesty-gate methodology convergence: PIT audit + matched-budget framing matches the 118 honesty path; independent support for pre-registering funding-only reads as incomparable.",
+   "action": "Cite in §85 honesty-gate context when next touched."
+  },
+  {
+   "id": "2310.14973v2",
+   "title": "Reconciling Open Interest with Traded Volume in Perpetual Swaps",
+   "note": "Reconciling open interest with traded volume in perpetual swaps.",
+   "relevance": "L19 OI sleeve + S6c capacity: OI/volume reconciliation is the measurement the capacity claim needs.",
+   "action": "File to L19/OI context."
+  },
+  {
+   "id": "2601.06084v1",
+   "title": "Who sets the range? Funding mechanics and 4h context in crypto markets",
+   "note": "Funding mechanics and 4h context in crypto markets.",
+   "relevance": "Carry theory: funding-mechanics grounding for the sleeve header.",
+   "action": "None (background)."
+  },
+  {
+   "id": "2603.09164v1",
+   "title": "Slippage-at-Risk (SaR): A Forward-Looking Liquidity Risk Framework for Perpetual Futures Exchanges",
+   "note": "Slippage-at-Risk: forward-looking liquidity risk for perp exchanges.",
+   "relevance": "S6c sizing: forward liquidity-risk frame for the target-risk fraction.",
+   "action": "Cite in S6c DESIGN."
+  },
+  {
+   "id": "2601.10812v1",
+   "title": "Optimal Liquidation of Perpetual Contracts",
+   "note": "Optimal liquidation of perpetual contracts.",
+   "relevance": "S6c exit/sizing: liquidation-cost-aware position limits.",
+   "action": "Cite in S6c DESIGN."
+  },
+  {
+   "id": "2506.08573v1",
+   "title": "Designing funding rates for perpetual futures in cryptocurrency markets",
+   "note": "Designing funding rates for perpetual futures.",
+   "relevance": "Carry theory (already in 09o/10q scope; refresh confirms still current).",
+   "action": "None."
+  }
+ ],
+ "blocked": null,
+ "carryovers": []
+}
