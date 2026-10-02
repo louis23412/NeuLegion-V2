@@ -1,0 +1,45 @@
+{
+ "date": "2026-10-02",
+ "queries": [
+  "abs:online AND abs:learning AND abs:financial AND abs:time AND abs:series (25 results, top-20)"
+ ],
+ "grounded": [
+  {
+   "id": "2603.14651v1",
+   "title": "EARCP: Self-Regulating Coherence-Aware Ensemble Architecture for Sequential Decision Making",
+   "note": "Ensemble regulated by coherence + performance.",
+   "relevance": "M5/M6: principled member regulation (coherence-gated) vs fixed es and trust-score stack — candidate replacement for the bespoke trust/specialization weighting.",
+   "action": "Read before M5/M6 design."
+  },
+  {
+   "id": "2411.17900v1",
+   "title": "Pretrained LLM Adapted with LoRA as a Decision Transformer for Offline RL in Quantitative Trading",
+   "note": "Low-rank adaptation of a pretrained backbone as a trading decision transformer.",
+   "relevance": "M5 + TODO 90: frozen backbone + low-rank adaptation is the deployed pattern — supports frozen-core + LoRA-style adapter over full retraining; converges with evolve.js low-rank framing.",
+   "action": "Cite in M5/TODO-90 design."
+  },
+  {
+   "id": "2501.08040v1",
+   "title": "Convergence Analysis of Real-time Recurrent Learning (RTRL) for a class of RNNs",
+   "note": "Convergence theory for real-time recurrent learning.",
+   "relevance": "M5: online-learning convergence grounding for any per-bar recurrent adaptation.",
+   "action": "Background for M5."
+  },
+  {
+   "id": "2004.09963v3",
+   "title": "Structural clustering of volatility regimes for dynamic trading strategies",
+   "note": "Vol-regime clustering driving dynamic strategy choice.",
+   "relevance": "W4b tournament target (b) regime label: regime-conditioned sizing is the legitimate model job.",
+   "action": "Cite in W4b/M2 target spec."
+  },
+  {
+   "id": "2503.04218v1",
+   "title": "Hedging with Sparse Reward Reinforcement Learning",
+   "note": "Sparse-reward RL for hedging.",
+   "relevance": "M2 sizing use: position policy as sparse-reward problem — candidate framing if quantile sizing re-opens.",
+   "action": "File to M2."
+  }
+ ],
+ "blocked": null,
+ "carryovers": []
+}

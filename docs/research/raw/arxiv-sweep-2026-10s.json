@@ -1,0 +1,44 @@
+{
+ "date": "2026-10-02",
+ "queries": [
+  "all:liquidation AND all:perpetual (40 results, sortBy=submittedDate)"
+ ],
+ "grounded": [
+  {
+   "id": "2608.03616v1",
+   "title": "Measuring the engine of a liquidation cascade: subcritical branching inside a first-order transition",
+   "note": "Measuring the engine of a liquidation cascade: subcritical branching inside a first-order transition.",
+   "relevance": "S6e survival-cap: cascade mechanics — the tail the Sharpe does not see; grounds the funding-spike/basis-gap stress design.",
+   "action": "Read before S6e stress design."
+  },
+  {
+   "id": "2607.27070v1",
+   "title": "Where does the criticality live? Early-warning signals are event-heterogeneous across seven crypto-perpetual liquidation cascades",
+   "note": "Early-warning signals are event-heterogeneous across seven crypto-perp liquidation cascades.",
+   "relevance": "S6e: cascade early-warning is event-heterogeneous — no single trigger; stress must be scenario-based, not indicator-based.",
+   "action": "Cite in S6e DESIGN."
+  },
+  {
+   "id": "2606.15715v1",
+   "title": "Trading in the Sunshine or in the Shade: Market Impact and Adverse Selection on Hyperliquid",
+   "note": "Market impact and adverse selection on Hyperliquid.",
+   "relevance": "S6c/S6e execution: venue-impact evidence for the SaR frame.",
+   "action": "Cite in S6e DESIGN."
+  },
+  {
+   "id": "2602.15182v1",
+   "title": "Autodeleveraging as Online Learning",
+   "note": "Autodeleveraging as online learning.",
+   "relevance": "S6e survival: ADL is the terminal risk at high leverage — size below the ADL-relevant regime.",
+   "action": "Cite in S6e DESIGN."
+  }
+ ],
+ "blocked": null,
+ "carryovers": [
+  "2605.06405v1",
+  "2605.05089v1",
+  "2603.09164v1",
+  "2601.10812v1",
+  "2601.06084v1 (all in 10r)"
+ ]
+}

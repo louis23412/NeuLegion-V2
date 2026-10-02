@@ -274,6 +274,38 @@ theory, search-aware-evaluation convergence).
   S6c forward liquidity-risk frame), **2601.10812** (optimal perp
   liquidation → S6c limits), **2506.08573** (funding-rate design,
   still current).
+- `arxiv-sweep-2026-10s.json` — **refresh** (CYCLE-181, S6c survival):
+  `all:liquidation AND all:perpetual` (40 results): 4 grounded —
+  **2608.03616** (liquidation-cascade engine: subcritical branching —
+  grounds the S6e stress design), **2607.27070** (cascade early-warning
+  is event-heterogeneous across 7 crypto-perp cascades → stress must be
+  scenario-based), **2606.15715** (Hyperliquid impact/adverse selection
+  → SaR frame evidence), **2602.15182** (autodeleveraging as online
+  learning → size below the ADL-relevant regime). Carryovers from 10r
+  noted in-file.
+- `arxiv-sweep-2026-10t.json` — **refresh** (CYCLE-182, model track):
+  `abs:time AND abs:series AND abs:forecasting AND abs:linear` (741
+  results, top-20) + `abs:volatility AND abs:forecasting AND abs:HAR`
+  (36 results, top-20): 7 grounded — **2609.39386** (TSFMs ≤0.031 over
+  training-free refs; linear probes of frozen backbones win 29/30 →
+  linear-first is 2026-current; M1 design), **2609.33984**
+  (Hankel-Toeplitz structured-linear → M1 arm), **2609.27614**
+  (model-agnostic TS denoising → M1 hygiene), **2608.25369**
+  (PGA-Trans-HAR: frozen HAR anchor + gated learned residual → the M2
+  pattern IF the vol track re-opens), **2508.15922** (crypto vol
+  point→quantile → S6e/M2 tails), **2507.22409** (multi-scale crypto vol
+  components → M2 features), **2607.05291** (9 zero-shot TSFMs vs 8 HAR
+  specs → M1 TSFM-arm design).
+- `arxiv-sweep-2026-10u.json` — **refresh** (CYCLE-183, model/online track):
+  `abs:online AND abs:learning AND abs:financial AND abs:time AND
+  abs:series` (25 results, top-20): 5 grounded — **2603.14651** (EARCP
+  coherence-aware ensemble regulation → candidate replacement for the
+  bespoke trust/specialization stack, M5/M6), **2411.17900** (LoRA-adapted
+  decision transformer for quant trading → frozen-backbone + low-rank
+  adapter pattern, M5/TODO-90), **2501.08040** (RTRL convergence → online
+  adaptation theory, M5 background), **2004.09963** (vol-regime clustering
+  for dynamic strategies → W4b regime-label target), **2503.04218**
+  (sparse-reward RL hedging → M2 sizing framing).
 
 - `arxiv-sweep-2026-10l.json` — **partial** (endpoint flaky): 1 landed query
   (2 notes for TODO 111 + 1 convergence), 2 queries carried to 10m. A stray

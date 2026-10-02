@@ -1,0 +1,60 @@
+{
+ "date": "2026-10-02",
+ "queries": [
+  "abs:time AND abs:series AND abs:forecasting AND abs:linear (741 results, top-20)",
+  "abs:volatility AND abs:forecasting AND abs:HAR (36 results, top-20)"
+ ],
+ "grounded": [
+  {
+   "id": "2609.39386v1",
+   "title": "When, Not How Much: Evaluating Time-Series Foundation Models on Sparse Events",
+   "note": "TSFM point forecasts beat training-free references by ≤0.031 AP; median TSFM below them in AUC; LINEAR PROBES of frozen backbones win 29/30 pairs.",
+   "relevance": "M1 benchmark design: linear-class-first is 2026-current, not 2022 nostalgia; do not train from scratch.",
+   "action": "Cite in TODO 86 design."
+  },
+  {
+   "id": "2609.33984v1",
+   "title": "From HL to H+L-1 Parameters: A Hankel-Toeplitz Forecaster for Long-Term Time Series Forecasting",
+   "note": "Hankel-Toeplitz structured-linear long-horizon forecaster (H+L-1 params).",
+   "relevance": "M1 candidate: structured linear arm alongside DLinear/MLP.",
+   "action": "Add to TODO 86 arm list."
+  },
+  {
+   "id": "2609.27614v1",
+   "title": "Model-agnostic noise reduction for high-dimensional time series data",
+   "note": "Model-agnostic noise reduction for high-dimensional time series.",
+   "relevance": "M1 feature hygiene: denoise before blaming the class.",
+   "action": "Cite in TODO 86 design."
+  },
+  {
+   "id": "2608.25369v2",
+   "title": "Forecasting Global Volatility with Predictive Spillover Networks: A Neuro-Econometric Spatio-Temporal Transformer for Asynchronous Financial Markets",
+   "note": "PGA-Trans-HAR: rolling ridge-VAR connectedness + masked spatio-temporal attention + FROZEN HAR anchor; learned gate allocates econometric-prior vs attention weight.",
+   "relevance": "M2 design pattern IF the vol track re-opens: anchor-frozen + gated residual, not raw residual prediction (which e117 closed at -0.0090).",
+   "action": "Cite in TODO 111 re-open conditions."
+  },
+  {
+   "id": "2508.15922v1",
+   "title": "Probabilistic Forecasting Cryptocurrencies Volatility: From Point to Quantile Forecasts",
+   "note": "Probabilistic crypto volatility: point to quantile forecasts.",
+   "relevance": "M2: quantile framing for the sizing use (S6c tails).",
+   "action": "Cite in S6e/M2."
+  },
+  {
+   "id": "2507.22409v1",
+   "title": "A Predictive Framework Integrating Multi-Scale Volatility Components and Time-Varying Quantile Spillovers: Evidence from the Cryptocurrency Market",
+   "note": "Multi-scale vol components + time-varying quantile spillovers, crypto evidence.",
+   "relevance": "M2 feature family: multi-scale components on the book panel.",
+   "action": "Cite in M2."
+  },
+  {
+   "id": "2607.05291v1",
+   "title": "Forecasting Realized Volatility with Time Series Foundation Models: A Comparison with Econometric Benchmarks",
+   "note": "Nine zero-shot TSFMs vs eight HAR-family econometric specs on 50 assets.",
+   "relevance": "M1 zero-shot TSFM arm design: test against HAR, not against nothing.",
+   "action": "Cite in TODO 86 design."
+  }
+ ],
+ "blocked": null,
+ "carryovers": []
+}

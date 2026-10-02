@@ -6128,3 +6128,26 @@ sizing wants more buffer. S6c (carry-vs-cash sizing of the a=0.25 book) is
 gated-open with the D-18 bracket, the 11.5e6 never-breach cap, and the 10r
 pricings (2605.05089 collateral, 2603.09164 SaR, 2601.10812 liquidation).
 Lab record CYCLE-179.
+
+### 85.5 S6c readout — sizing prescription decided (2026-10-02, AI-side, CYCLE-181)
+
+Vehicle: lab `experiments/s6c_sizing.js` (standalone, 6/6 checks, ~2 s).
+Legs reproduce banked lanes to 1e-9; blend reproduces the s6b a=0.25 book
+to 1e-4.
+
+Operating book (a=0.25) in three cuts — FULL Sharpe **9.87**, RECENT
+(second half) **7.31**, STRESS (worst sixth) **4.67**, all positive.
+Unit-gross ann vol is 0.37–0.39% — the carry paradox: a 10% vol target
+implies **25.6–27×** leverage (38.5–40.5× at 15%), reported as a reference
+CEILING, not a prescription (unmeasured cascade tail; no crash in-window).
+Cap rule: gross ≤ $11.5M (pinned neverBreach) ⇒ max equity $448k at L25.6.
+OI gap: the repo OI file covers 8/16 (majors only) — the mid leg's F-42
+schedule is data-blocked.
+
+Director's prescription (measured vs judgment separated): scenarios +
+reference-L table + cap rule are measured; interim operating leverage
+**L ≤ 10** (~3.7% vol, equity ≤ $1.15M and cap-implied) is judgment,
+survival-pending. Follow-ups: S6e survival-cap run (maxDD-based L +
+funding-spike/basis-gap scenarios, grounded by research 10s), S6f midcap
+OI harvest (conditional). No operator load owed.
+Lab record CYCLE-181.
