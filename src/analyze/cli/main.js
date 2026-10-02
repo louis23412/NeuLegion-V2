@@ -4,11 +4,11 @@ import path from 'path';
 import { performance } from 'node:perf_hooks';
 import { CONFIG } from '../../legion/config.js';
 import { seedDistribution, formatSeedReplication } from '../../analysis/replication.js';
-import { makeCandleViewFor, worldFromCandles, DEFAULT_SHOCK } from '../../analysis/world.js';
+import { DEFAULT_SHOCK } from '../../analysis/world.js';
 import { CANDLE_MANIFEST } from '../../candles_audit.js';
-import { runSleeveReport, formatSleeveReport, parseSleeveSizing, SLEEVE_IDS } from '../../sleeve_score.js';
-import { makeRunId, createRunDirectory, writeJson, writeJsonAtomic, writeReport, appendLog, appendJsonl } from '../../observer/report.js';
-import { FEATURE_LEN, ALL_VARIANTS, LABEL_VARIANTS, emptyListFlagError, forecastKindOf, listVariants, formatVariantList, POSITION_POLICY, CONTROLLER_POSITION_POLICY, IDENTITY_POSITION_POLICY, CONTROLLER_MODEL, resolveVariant } from '../roster.js';
+import { parseSleeveSizing, SLEEVE_IDS } from '../../sleeve_score.js';
+import { makeRunId, createRunDirectory, writeJson, writeReport } from '../../observer/report.js';
+import { emptyListFlagError, listVariants, formatVariantList } from '../roster.js';
 import { runAnalysis, runSleeveAnalysis } from './run.js';
 
 

@@ -483,7 +483,7 @@ export const ANALYSIS_MODULES = Object.freeze({
     ],
     'reality_check/bootstrap/inputs.js': [
         'DEFAULT_RC_CONFIG', 'benchmarkSeries', 'relativePerformance',
-        // Inter-part use only (subsampling.js + tests.js import it; the shims do not re-export it).
+        // Inter-part use only (subsampling/procedures.js + tests.js import it; the shims do not re-export it).
         'safeRatio',
     ],
     'reality_check/bootstrap/resampling.js': [

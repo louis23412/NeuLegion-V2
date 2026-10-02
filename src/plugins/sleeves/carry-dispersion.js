@@ -21,7 +21,7 @@
 // history (5.03 vs 4.54 at a 2.93 % vs 7.96 % drawdown).
 
 import { CAPABILITIES } from '../../core/contracts/base.js';
-import { SLEEVE_CONTRACT, isSleevePlugin } from '../../core/contracts/sleeve.js';
+import { isSleevePlugin } from '../../core/contracts/sleeve.js';
 import { buildFundingBook, cleanBook, fin, MIN_TRAIN_PERIODS, rowRankWeights } from '../../core/primitives/index.js';
 
 export const CARRY_DISPERSION_SPEC = Object.freeze({

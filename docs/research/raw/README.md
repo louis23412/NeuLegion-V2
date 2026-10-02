@@ -248,6 +248,29 @@ discarded and only relevant hits are kept in the JSON snapshots.
   dropped (ids re-pulled from the arXiv API so every citation in the note is backed by this
   file). Grounding note: `../round30-winning-mechanisms.md`; plan: `../../PLAN-round30.md`.
 
+## Later sweeps (09r–10n, 2026-09/10)
+
+Snapshots after `09q` are raw JSON only (per-file `queries` + `grounded`
+lists); the curated notes live in the round summaries that filed them
+(`RUN-ANALYSIS.md` §§39–54, lab F-136…F-150, TODO 95/104/111 context lines).
+Files: `arxiv-sweep-2026-09r.json` … `arxiv-sweep-2026-09z.json`,
+`arxiv-sweep-2026-09ae.json` … `arxiv-sweep-2026-09ag.json`,
+`arxiv-sweep-2026-10a.json` … `arxiv-sweep-2026-10n.json`.
+
+- `arxiv-sweep-2026-10l.json` — **partial** (endpoint flaky): 1 landed query
+  (2 notes for TODO 111 + 1 convergence), 2 queries carried to 10m. A stray
+  `]` past the closing brace (repaired in sweep S5) once made it unparseable.
+- `arxiv-sweep-2026-10m.json` — **closed 10l**: retried both carryovers
+  (`abs:carry AND abs:factor`, `abs:slippage AND abs:crypto`); 2 notes
+  (2604.19604v6 → TODO 95 borrow/margin task form, 2407.12150 → band
+  convergence).
+- `arxiv-sweep-2026-10n.json` — **refresh** (sweep S5): `abs:carry AND
+  abs:crypto` (26 results, convergences only), `abs:sharpe AND abs:backtest`
+  (85 results, top-15 read: **2609.27051** anytime-valid referee → TODO 87
+  gate formalism, **2606.29771** CLQT cost-aware evaluation → TODO 87/95,
+  2608.27734 convergence), `abs:market AND abs:neutral AND abs:crypto`
+  (6 results, all off-topic).
+
 ## Topics swept
 
 - test-time training / test-time memory

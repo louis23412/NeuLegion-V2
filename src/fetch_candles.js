@@ -46,7 +46,6 @@ import {
     findGaps,
     intervalToMs,
     mergeCandles,
-    msToInterval,
     parseCandlesJsonl,
     planUpdate,
     resolveSourceInterval,

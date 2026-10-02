@@ -13,7 +13,6 @@
 // must be ready before that graph is evaluated.
 
 import { __ensureSql } from '../shims/better-sqlite3.js';
-import { PROJECT } from '../harness.js';
 
 function mulberry32(seed) {
     let a = seed >>> 0;

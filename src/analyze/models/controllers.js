@@ -3,9 +3,9 @@
 import fs from 'fs';
 import path from 'path';
 import { CONFIG } from '../../legion/config.js';
-import { mulberry32, hashString } from '../../legion/rng.js';
+import { hashString } from '../../legion/rng.js';
 import { confidenceToPosition, confidenceFromProb } from '../../analysis/walkforward.js';
-import { FEATURE_LEN, CONTROLLER_POSITION_POLICY, IDENTITY_POSITION_POLICY, CONTROLLER_MODEL } from '../roster.js';
+import { CONTROLLER_POSITION_POLICY, CONTROLLER_MODEL } from '../roster.js';
 import { labelDiagnostics } from './stats.js';
 import { withSeed } from './signals.js';
 

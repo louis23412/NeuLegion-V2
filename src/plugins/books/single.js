@@ -5,7 +5,7 @@
 // joint statement (F-43/F-44) is a comparison against this one.
 
 import { CAPABILITIES } from '../../core/contracts/base.js';
-import { BOOK_CONTRACT, isBookPlugin } from '../../core/contracts/book.js';
+import { isBookPlugin } from '../../core/contracts/book.js';
 
 export const singleBook = {
     id: 'single',

@@ -1,7 +1,7 @@
 // src/analyze/roster/registration.js (round-99 split of src/analyze/roster.js).
 // Roster queries (snapshot, registration, reasons, listing).
 import { hashString } from '../../legion/rng.js';
-import { DEFAULT_ROSTER_IDS, LINEAGE_BRANCHES, uncoveredVariantIds, DROPPED_VARIANT_IDS } from '../../lineage.js';
+import { LINEAGE_BRANCHES, uncoveredVariantIds, DROPPED_VARIANT_IDS } from '../../lineage.js';
 import { ALL_VARIANTS, RESOLVABLE_VARIANTS } from './tables.js';
 
 

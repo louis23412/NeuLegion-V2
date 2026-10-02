@@ -1,9 +1,9 @@
 // src/analyze/models/signals.js (round-98 split of src/analyze/models.js).
 // Seed helper + signalForVariant dispatch.
 import path from 'path';
-import { mulberry32, hashString } from '../../legion/rng.js';
-import { confidenceToPosition, confidenceFromProb } from '../../analysis/walkforward.js';
-import { FEATURE_LEN, CONTROLLER_POSITION_POLICY, IDENTITY_POSITION_POLICY, CONTROLLER_MODEL } from '../roster.js';
+import { mulberry32 } from '../../legion/rng.js';
+import { confidenceToPosition } from '../../analysis/walkforward.js';
+import { IDENTITY_POSITION_POLICY } from '../roster.js';
 
 
 

@@ -1,8 +1,7 @@
 // Sleeve evidence block (round-81 split): DSR / yearly / first-last readouts.
 // Pure, per-bar Sharpe units (Lo 2002); the report annualizes only for display.
-import { clusterJackknife, factorNeutralSharpe } from '../analysis/dependence.js';
+import { clusterJackknife } from '../analysis/dependence.js';
 import { sharpeRatio, sharpeStandardError, deflatedSharpeRatio, skewness, kurtosis } from '../analysis/performance.js';
-import { scoreBookReturns, stressHalves, worstBlock } from '../analysis/portfolio.js';
 
 // The sleeve DSR block (round 75): the G5 `dsr` knob, machine-scored.
 //

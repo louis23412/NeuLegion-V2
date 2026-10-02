@@ -3,7 +3,6 @@
 // exported for the evaluation/report/restatement parts; the `walkforward.js`
 // shim does not re-export it (same convention as round 71's `w4cSolveNormal`).
 
-import { backtestMetrics, poolFolds } from '../backtest.js';
 import { sharpeRatio } from '../performance.js';
 import {
     meanPairwiseCorrelation, equicorrelationDesignEffect, equicorrelationEffectiveSize,

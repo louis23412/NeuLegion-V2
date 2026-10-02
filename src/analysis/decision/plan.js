@@ -1,6 +1,6 @@
 // src/analysis/decision/plan.js (round-97 split of src/analysis/decision.js).
 // Decision plan section.
-import { sharpeRatio, normalInvCdf } from '../performance.js';
+import { normalInvCdf } from '../performance.js';
 import { barsToDetect, UNDERPOWERED_MDE } from '../walkforward.js';
 import { studentTCritical } from '../dependence.js';
 import { isNum, na } from './measures.js';

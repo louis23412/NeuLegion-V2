@@ -1,6 +1,6 @@
 // src/analyze/evaluate/core.js (round-96 split of src/analyze/evaluate.js).
 // evaluateAB + finalizeAB (exported for inter-part use only).
-import { walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision, formatReport, walkForwardSearch, restateReportAtCost, poolReports, costLadder, familyCorrelation } from '../../analysis/walkforward.js';
+import { walkForwardEvaluate, promoteDecision, walkForwardSearch, restateReportAtCost, poolReports } from '../../analysis/walkforward.js';
 import { ALL_VARIANTS, notApplicableReason, inertReasonFor, CONTROLLER_POSITION_POLICY } from '../roster.js';
 import { summarizeModelStats } from '../models.js';
 

@@ -5460,3 +5460,102 @@ Top tier: TODO 116 (native 16-panel) + TODO 118 (native carry port: cap 0.125 + 
 ### 54.2 Operator commands
 
 `npm test` from the repo root (the round-109 split needs the native gate: new `analysis/forecast/vol/` directory + shim + registry rows; expect 132/132 — locks/analysis/walkforward/analyze proven AI-side, but only the native driver proves the worker/fs CLI paths and the new registry rows). No uploads.
+
+## 55. Coherency sweep S1 — dead imports, doc sync, backlog rerank + archive, 10l carryovers (2026-10-02, AI-side)
+
+Operator-ordered, no measurement round. **Import sweep:** 0 dead relative targets across repo `src/` (210 files) + lab cross-tree (149 files) — the shim discipline held through 30 split rounds. 78 genuinely-unused named bindings removed across 26 files (split-leftover blocks; 14 comment-only mentions kept; emptied statements kept as side-effect imports; all 26 re-parsed clean). **Proven AI-side:** full browser suite 3123/0 with every ledger count bit-equal (analyze 294, analysis 856, walkforward 90, locks 41, contracts 255, modules 59); lab e136 4/4 + e137 27/27 re-green through the edited sleeve modules; `test.sh` ALL ↔ 45 node files with no orphans. 34 stale doc-path hits all triaged false-positive (`.jsonl` substrings, quoted error strings, round records, an `e.g.`). **Doc sync:** lab INDEX F-150 + 145 run_all steps, READMEs (src: 150 findings / rounds 80–109). **Backlog:** round-109 rerank note in TODO.md (top tier 116 → 118-with-cap+band → 117-if-confirmed; R109 `npm test` owed); archived 91/92 (gate unopenable — no positive-skill primary), 98/103 (superseded corpus), 100/108 (consumed). **Research:** 10l carryovers closed as sweep 10m (raw `arxiv-sweep-2026-10m.json`): 2604.19604v6 carry-gap wedge → TODO 95's borrow/margin leg; 2407.12150 boundary-rebalancing → band-design convergence (no change). Lab record: CYCLE-140 / F-151 / INDEX row.
+
+### 55.1 Rerank
+
+Unchanged from the TODO.md round-109 note (§55 above): operator top tier is 116, then 118, then 117-if-confirmed; G5 second; 104/95-remainder/W5-venues/L10 queued; 111 + 94 parked data-blocked. Flagged for an owner (not changed here): L19 still OPEN on the leads board while round 80 characterised OI "not bankable".
+
+### 55.2 Operator commands
+
+`npm test` from the repo root — now covering R109 **plus** this sweep's 26-file import cleanup (runtime-no-op by construction and browser-proven 3123/0, but only the native driver proves the worker/fs/CLI paths). Expect 132/132. No uploads.
+
+## 56. Coherency sweep S2 — bug-hunt layer (2026-10-02, AI-side)
+
+Static checks only, two doc fixes, no code change. **Shims:** 20/20 exact in both directions (every re-export resolves; 0 dangling named imports across 452 repo+lab files — first checker run flooded on an off-by-one, fixed, re-run clean). **Graph:** 0 import cycles, 0 CJS leftovers in 210 src files; the 7 hot-module `console.*` are deliberate diagnostics. **Ledger/mirrors:** §6 table re-added to exactly 3123 (32 + bench = 33 entries); node 24+8+13 = 45 with 1:1 entry↔mirror names; §6 now names the 13th node-only suite (`checkpoint_throttle.test.js`). **Lineage/goldens/registry:** 37/37 in sync, 11 golden hashes, 112 module keys (R109 parts present; `analyze/*` absent by round-83 convention). **Lab reds:** e128/e130/e133/e134 failures are the published falsifiers firing to the digit — verdicts, not bugs. **Corpus:** `src/runs/README.md` §6 annotated (20260930T154333 raw dir not vendored; table stands as record). **Kept deliberately:** 6 dead-surface exports, BUGS #50's home, "50 gated". Lab record: CYCLE-141 / F-152 / INDEX row.
+
+### 56.1 Operator commands
+
+Unchanged: `npm test` from the repo root (R109 + S1 cleanup; expect 132/132). No uploads.
+
+## 57. Coherency sweep S3 — cross-doc consistency (2026-10-02, AI-side)
+
+Docs only, no code change. **DROPPED ↔ lineage:** 12/12 DROPPED branches named in `DROPPED.md`. **FOLD-BACK:** queue current; appended the missing R8 stacked-16 band status (cap 0.125 + band ~0.01 holdout-certified, supersedes 0.03 for 16-wide — the TODO-118 native read now lives in the port contract too). **THEORY:** J5 updated (V2.2 risk plugins exist but unpromoted; joint stands). Lab record: CYCLE-142 / F-153 / INDEX row.
+
+### 57.1 Operator commands
+
+Unchanged: `npm test` from the repo root (R109 + S1 cleanup; expect 132/132). No uploads.
+
+## 58. Coherency sweep S4 — lead-library refresh (2026-10-02, AI-side)
+
+Docs only, no code change. **Cross-refs:** post-archive framings of the six archived TODOs are all historical snapshots — no live contradiction. **PROTOCOL:** blessed L07-style compound statuses in §2. **Leads refreshed** (log + Last-updated; verdicts unchanged): L16 → CYCLE-138, L17 → CYCLE-134, L18 → CYCLE-108, L09 → CYCLE-129, L03 → CYCLE-126. Board rows left as summaries; L19 untouched (owner verdict). Lab record: CYCLE-143 / F-154 / INDEX row.
+
+### 58.1 Operator commands
+
+Unchanged: `npm test` from the repo root (R109 + S1 cleanup; expect 132/132). No uploads.
+## 59. Coherency sweep S5 — dead-import round two + 10l repair + sweep 10n (2026-10-02, AI-side)
+
+Code + docs, no scored-path change. **Dead imports:** 23 across 16 files (two batches; the second found by a comment-stripping re-scan: walkforward search/power/folds parts, factories, evidence, analyze entry) (every name import-line-only + cross-file-checked; the three shim leftovers are pre-split residue; `hivemind/hiveMind.js#Database` had no references at all). Registry note corrected (`subsampling/procedures.js` owns the `safeRatio` import); harness `PROJECT` kept (internally used). **Tree:** 303 js files, 0 dangling / 0 cycles / 0 CJS in `src/`. **10l:** stray bracket trimmed (parses again); carryovers already retried in 10m. **10n** (`docs/research/raw/arxiv-sweep-2026-10n.json`, 3/3 queries): 2609.27051 (anytime-valid referee → TODO 87) + 2606.29771 (CLQT cost-aware evaluation → TODO 87/95), rest convergences. **Rerank:** tiers unchanged; no archives (nothing measurably closeable). Lab record: CYCLE-144 / F-155 / INDEX row.
+
+### 59.1 Operator commands
+
+Unchanged: `npm test` from the repo root (R109 + S1 + S5 cleanup; expect 132/132). No uploads.
+
+## 60. Coherency sweep S6 — alias-aware re-scan + ledger census + lab pointer (2026-10-02, AI-side)
+
+Docs only, no scored-path change. **Static:** alias-aware dead-import re-scan 0 (210 src files + tests; S1's naive form would false-positive `selectStreams as runStreamSelection`), 0 dangling, 0 cycles; `run_all` 152 steps cover all 138 experiments; ledger 33 entries / 45 mirrors matches; all 18 split shims present (`analyze/models.js` is the models shim — no `analysis/models.js` was ever split); raw snapshots 10a–10n all parse. **Ledger-shape audit:** heading census reads 81 `## F-` rows but the `## Summary table` carries F-01…F-155 with 0 gaps — full rows stop at F-81 by design, citations in §§55–59/TODO/leads all resolve; rule recorded in CYCLE-145 so the next census doesn't re-discover it. **Runtime:** live page-ESM smoke on `prototypes/port.js` (clip/band, R8/R7/OI specs, MIN_TRAIN_PERIODS) + `analysis/streams.js` (all four exports); the `execute_js`-worker import failure is my own probe error, not a repo bug (RUNNER.md's harness recipe stands). **Docs sync:** `src/README.md` counts corrected (155 findings, cycles 000–144 → 156 / 000–145); new lab `STATUS.md` orientation pointer, wired into INDEX. **Rerank:** tiers unchanged (116 → 118 → 117); all 18 opens re-verified with dispositions, no archives. Lab record: CYCLE-145 / F-156 / INDEX row + STATUS.md.
+
+### 60.1 Operator commands
+
+Unchanged: `npm test` from the repo root (R109 + S1 + S5; S6 is docs-only so the gate does not grow — expect 132/132). No uploads.
+
+## 61. Shim audit S7 — the analyze.js node:url import (2026-10-02, AI-side)
+
+One latent fix, import-line + dispatch only. **Probe:** page-ESM loaded 10/11 split shims; `src/analyze.js` failed on its static `import { pathToFileURL } from 'node:url'` (the `isMain` tail) — fatal wherever `node:url` doesn't resolve (raw page, future tooling), invisible to Node, the worker importer (`analysis/fold_worker.js`), and the harness (which aliases `node:url`). The shim's contract ("every importer keeps working") and its header ("node-only imports live in ./cli.js") were both false of the code — the F-61 class. **Fix:** `process.versions?.node` gate + dynamic `await import('node:url')`, exact dispatch preserved (`node ./src/analyze.js` → `analyzeMain()`; test/worker/harness paths never branch). `type: module` + engines ≥22 keep the top-level await legal. **Post-fix:** the `node:url` failure is gone (stops later at the `cli/` chain's `fs` — inherent CLI Node I/O, harness-shimmed, not a bug). Latent: no suite/run/number ever touched it; no golden moves; no fold-back row. Lab record: CYCLE-146 / F-157 / L10-cu / INDEX row.
+
+### 61.1 Operator commands
+
+`npm test` from the repo root — now also covers this fix (R109 + S1 + S5 + S7; expect 132/132). No uploads.
+
+## 62. Registry census S8 — every declared export resolves (2026-10-02, AI-side)
+
+Docs only, no code change. **Export census:** 916/916 registry-declared names resolve across 112 files (ANALYSIS 65 + CORE 31 + SUPPORT 16; comment-stripped parser, `export *` followed one level — the first pass false-positived 22 on comment apostrophes, same class as S5's comment-masked imports). **Proves refs:** 30/30 resolve to real test files. **Lead cites:** 72/72 experiment backticks in `leads/INDEX.md` resolve. Capability-shaped registries (HIVEMIND/CONTROLLER/PLUGIN) exempt by shape. Lab record: CYCLE-147 / F-158 / INDEX row.
+
+### 62.1 Operator commands
+
+Unchanged: `npm test` from the repo root (R109 + S1 + S5 + S7 fix; S8 is docs-only — expect 132/132). No uploads.
+
+## 63. Reference census S9 — doc refs vs the split tree (2026-10-02, AI-side)
+
+Docs only, no change. **Census:** 301 `src|test|scripts` `.js` refs across 43 docs (boundary-strict; two earlier passes false-positived on `.jsonl`/apostrophes). **6 stale-file hits, all exonerated** (quoted typos/error text, an intentional forbidden-pattern example, a planned-test name in a Done-when, two workspace-relative lab paths that exist). **12 stale line-numbers** are pre-split coordinates in frozen records (`src/analyze.js:238–2118` = the 3674-line pre-round-83 file; `walkforward.js:189` pre-split) — history left intact. **Standing rule:** round ≤83 coordinates address pre-split files; live docs cite part paths. Lab record: CYCLE-148 / F-159 / INDEX row.
+
+### 63.1 Operator commands
+
+Unchanged: `npm test` from the repo root (R109 + S1 + S5 + S7 fix; S8/S9 docs-only — expect 132/132). No uploads.
+
+## 64. Collision census S10 — duplicate export names (2026-10-02, AI-side)
+
+Docs only, no change. **Census:** 883 export names, 347 shared; top-30 all benign shim↔part chains. Body-level inspection of the rest: **L10-cv** — `sharpeStandardError` is two formulas (Lo object-form in `performance.js`, scalar form in `walkforward/power.js`) with correct importers on each side (`sleeve/evidence.js` takes performance's; the shim re-exports power's); **L10-cw** — `clipWeights`/`bandWeights`/`cleanBook` live twice (core ships in sleeves, portfolio is test-pinned; `clipWeights` byte-identical, `bandWeights` differs by one `Array.isArray` guard; no caller passes non-array; single-source proposed as a repo task, not rewired without the native gate); `meanOf` overload (core vs `features/base.js`) benign — correct importers, no formula conflict. Lab record: CYCLE-149 / F-160 / L10-cv/cw / INDEX row.
+
+### 64.1 Operator commands
+
+Unchanged: `npm test` from the repo root (R109 + S1 + S5 + S7 fix; S8/S9/S10 docs-only — expect 132/132). No uploads.
+
+## 65. Ledger sync S11 — snapshots, goldens, fold-back queue (2026-10-02, AI-side)
+
+Docs only, one queue gap closed. **Raw snapshots:** 43/43 parse (09b–09z + 10a–10n), every file listed. **Goldens:** 11/11 present in `golden.test.js` (6 `hm:` + 5 `ctl:` per LOCKED.md — an `hm:`-only grep reads 6; composition recorded). **FOLD-BACK:** R1/R2/R3/R5 ported, R6 dropped, R7/R8 V2.2 bit-verified, R9 latent — but R4 lacked its round-78 native `--carry-marks` port status (flag verified in `sleeve/view.js` + `analyze/cli/main.js`); appended with the honest-net prediction and the TODO 95 remainder. No code change. Rerank unchanged. Lab record: CYCLE-150 / F-161 / INDEX row.
+
+### 65.1 Operator commands
+
+Unchanged: `npm test` from the repo root (R109 + S1 + S5 + S7 fix; S8–S11 docs-only — expect 132/132). No uploads.
+
+## 66. Ledger arithmetic S12 — quoted numbers (2026-10-02, AI-side)
+
+Docs only, no gaps. **Ledger:** 32-row table sums to exactly 3123 (`bench` off-table by design); names match files both directions. **Data:** TODO-cited `midcap/`/`midcap2/`/`midcap_funding/` all present (9 files each) with harvest recipes. **THEORY:** corrections folded in-line, no stale joint. Rerank unchanged. Lab record: CYCLE-151 / F-162 / INDEX row.
+
+### 66.1 Operator commands
+
+Unchanged: `npm test` from the repo root (R109 + S1 + S5 + S7 fix; S8–S12 docs-only — expect 132/132). No uploads.

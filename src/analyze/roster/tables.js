@@ -2,10 +2,10 @@
 // Variant tables + constants (the roster data).
 // A/B roster — variant tables, register contract, guards, policies (round-83 split of src/analyze.js).
 // Pure, no I/O. Imported by ./models.js, ./evaluate.js and ./cli.js; re-exported by the analyze.js shim.
-import { hashString } from '../../legion/rng.js';
+import '../../legion/rng.js';
 import { SIGNAL_CANDIDATES, REVERSAL_CANDIDATES, SIGUP_CANDIDATES, signalForCandidate } from '../../analysis/features.js';
 import { BENCHMARK_KINDS } from '../../analysis/benchmark.js';
-import { DEFAULT_ROSTER_IDS, LINEAGE_BRANCHES, uncoveredVariantIds, DROPPED_VARIANT_IDS } from '../../lineage.js';
+import { DEFAULT_ROSTER_IDS } from '../../lineage.js';
 
 
 // Feature-vector length used by the online model (a trailing return window plus

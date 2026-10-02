@@ -1,6 +1,6 @@
 // src/analyze/models/features.js (round-98 split of src/analyze/models.js).
 // featureVector (model input row).
-import { FEATURE_LEN, CONTROLLER_POSITION_POLICY, IDENTITY_POSITION_POLICY, CONTROLLER_MODEL } from '../roster.js';
+import { FEATURE_LEN } from '../roster.js';
 
 
 

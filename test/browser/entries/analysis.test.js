@@ -103,7 +103,7 @@ import {
 import {
     clipWeights, bandWeights, cleanBook, cleanForSleeve, SLEEVE_SPECS, MIN_TRAIN_PERIODS,
     inverseVolWeights, volTargetScale, clippedTrailingMedianSchedule, fixedSplitJointSize,
-    bookReturns, bookTurnover, scoreBook, scoreSleeveBook, stressHalves, worstBlock, scoreBookReturns, blockSharpes, scoreG5,
+    bookReturns, bookTurnover, scoreBook, scoreSleeveBook, stressHalves, worstBlock, blockSharpes, scoreG5,
 } from '../../../src/analysis/portfolio.js';
 import {
     benchmarkSeries, relativePerformance, stationaryBlockIndices,

@@ -2,7 +2,7 @@
 // round 74 (byte-exact move): per-fold pooling, the R2 window-robustness
 // statistic, the R1 long-sample scorers and the fold-win fraction.
 
-import { strategyReturns, backtestMetrics, purgedCVBacktest, poolFolds } from '../backtest.js';
+import { strategyReturns, backtestMetrics, poolFolds } from '../backtest.js';
 import { positionAt } from '../features.js';
 import { sharpeRatio } from '../performance.js';
 import { barReturns } from './returns.js';

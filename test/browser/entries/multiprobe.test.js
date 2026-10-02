@@ -59,7 +59,7 @@ import {
 } from '../../../src/hivemind/memory/multiprobe.js';
 import {
     probeRecoveryCoverage, recoveryDepth, calibrateNoiseFromFlips, expectedFlippedBits,
-    bitFlipProbabilities, marginContainmentDepth, marginContainmentCoverage,
+    bitFlipProbabilities,
 } from '../../../src/hivemind/memory/bitweight.js';
 
 function mulberry32(seed) {

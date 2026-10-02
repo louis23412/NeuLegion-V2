@@ -1,6 +1,6 @@
 // Sleeve sizing composition (round-81 split): trailing vol, adaptive /
 // drawdown targets, sized re-score through the vol-target risk plugin. Pure.
-import { resolveSleeve } from './registry.js';
+import './registry.js';
 import { scoreSleeve } from './scoring.js';
 import { volTargetRisk } from '../plugins/risk/vol-target.js';
 import { scoreBookReturns, stressHalves, worstBlock } from '../analysis/portfolio.js';

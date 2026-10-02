@@ -43,8 +43,8 @@ export {
   readCloses, readCandles, probesPerFold, auditBlock, makeNodeFoldDispatcher,
   runSleeveAnalysis, runAnalysis, replicateAnalysis, ANALYZE_USAGE,
 } from './analyze/cli.js';
-import { pathToFileURL } from 'node:url';
 import { analyzeMain } from './analyze/cli.js';
-const isAnalyzeMain = typeof process !== 'undefined' && process.argv && process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
-if (isAnalyzeMain) analyzeMain();
+if (typeof process !== 'undefined' && process.argv && process.argv[1] && typeof process.versions?.node === 'string') {
+  const { pathToFileURL } = await import('node:url');
+  if (import.meta.url === pathToFileURL(process.argv[1]).href) analyzeMain();
+}

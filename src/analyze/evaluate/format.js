@@ -1,11 +1,11 @@
 // src/analyze/evaluate/format.js (round-96 split of src/analyze/evaluate.js).
 // Report formatters (auditVerdict, formatFullHistory, formatAnalysis).
-import { walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision, formatReport, walkForwardSearch, restateReportAtCost, poolReports, costLadder, familyCorrelation } from '../../analysis/walkforward.js';
+import { formatReport, costLadder, familyCorrelation } from '../../analysis/walkforward.js';
 import { formatTurnoverSweep } from '../../analysis/holding.js';
 import { formatStreamSelection } from '../../analysis/streams.js';
 import { formatForecast } from '../../analysis/forecast.js';
 import { formatDecision } from '../../analysis/decision.js';
-import { ALL_VARIANTS, notApplicableReason, inertReasonFor, CONTROLLER_POSITION_POLICY } from '../roster.js';
+import { CONTROLLER_POSITION_POLICY } from '../roster.js';
 import { summarizeModelStats } from '../models.js';
 
 

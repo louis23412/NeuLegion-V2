@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import Database from 'better-sqlite3';
 
-import { isValidNumber, isFiniteNumber } from './utils.js';
+import { isValidNumber } from './utils.js';
 import { installMethods } from './internal/mixins.js';
 import { activationMethods } from './kernels/activations.js';
 import { linalgMethods } from './kernels/linalg.js';

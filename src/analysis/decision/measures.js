@@ -1,6 +1,6 @@
 // src/analysis/decision/measures.js (round-97 split of src/analysis/decision.js).
 // Fold concentration + confidence persistence; isNum/na exported for inter-part use only.
-import { sharpeRatio, normalInvCdf } from '../performance.js';
+import { sharpeRatio } from '../performance.js';
 import { strategyReturns } from '../backtest.js';
 
 export const isNum = (x) => typeof x === 'number' && Number.isFinite(x);

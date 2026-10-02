@@ -50,7 +50,7 @@ import {
     dot, norm, cosine, normalize, meanVector, normalizedCentroid,
     dotProductSum, collisionProbabilityFromCos, collisionProbability,
     averageCollisionProbability, firstOrderCollisionProbability,
-    averageCovariance, signBit, hashBits, collidesWithSet,
+    averageCovariance, signBit, collidesWithSet,
     centroidCollidesWithSet, collisionCoverage, selectCandidates,
     blendVectors, modifiedQuery, queryModificationGain,
 } from '../../../src/hivemind/memory/querymod.js';

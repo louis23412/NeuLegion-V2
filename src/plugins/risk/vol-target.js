@@ -12,7 +12,7 @@
 // input, never banks.
 
 import { CAPABILITIES } from '../../core/contracts/base.js';
-import { RISK_CONTRACT, isRiskPlugin } from '../../core/contracts/risk.js';
+import { isRiskPlugin } from '../../core/contracts/risk.js';
 
 export const VOL_TARGET_DEFAULTS = Object.freeze({ target: 0.01, cap: 4 });
 

@@ -2,11 +2,11 @@
 // HiveMind + benchmark model factories.
 import fs from 'fs';
 import path from 'path';
-import { mulberry32, hashString } from '../../legion/rng.js';
+import { hashString } from '../../legion/rng.js';
 import { makeBenchmarkForecaster } from '../../analysis/benchmark.js';
-import { FEATURE_LEN, CONTROLLER_POSITION_POLICY, IDENTITY_POSITION_POLICY, CONTROLLER_MODEL } from '../roster.js';
+import { FEATURE_LEN } from '../roster.js';
 import { featureVector } from './features.js';
-import { withSeed, makeSignalForVariant } from './signals.js';
+import { withSeed } from './signals.js';
 
 
 

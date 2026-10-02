@@ -13,7 +13,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import IndicatorProcessor from '../../src/hivemind/indicatorProcessor.js';
-import { makeCandles, mulberry32 } from './helpers.js';
+import { makeCandles } from './helpers.js';
 
 const BASE_TS = Date.parse('2024-01-01T00:00:00Z');
 const ts = (i) => new Date(BASE_TS + i * 60000).toISOString();

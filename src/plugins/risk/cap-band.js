@@ -17,7 +17,7 @@
 // (the reason `port.js` exports `SLEEVE_SPECS`).
 
 import { CAPABILITIES } from '../../core/contracts/base.js';
-import { RISK_CONTRACT, isRiskPlugin } from '../../core/contracts/risk.js';
+import { isRiskPlugin } from '../../core/contracts/risk.js';
 import { cleanBook } from '../../core/primitives/index.js';
 
 export const CAP_BAND_SPECS = Object.freeze({

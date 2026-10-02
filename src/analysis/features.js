@@ -29,10 +29,8 @@
 // Grounding: Lopez de Prado, AFML ch. 5 (fractional differentiation preserves
 // memory while restoring stationarity), ch. 17 (feature families) and
 // `docs/research/financial-validation.md`. The fractional-differencing weights are
-// the proven `fractionalDiffWeights` from `labels.js`, not a re-derivation.
-
-import { fractionalDiffWeights } from './labels.js';
-
+// the proven `fractionalDiffWeights` from `labels.js`, not a re-derivation
+// (base.js imports it directly).
 //
 // Round-102 foundations split: the implementation lives in src/analysis/features/
 // (four parts); this file carries the exact registered contract so every importer

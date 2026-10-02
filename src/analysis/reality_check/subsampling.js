@@ -1,9 +1,8 @@
 // Variance-consistent subsampling inference (round-94 split, part 2 of 2).
 // Moved byte-exact from analysis/reality_check.js; re-exported by its shim.
-// Shares relativePerformance/safeRatio from ./bootstrap/inputs.js (registered there,
-// not duplicated) and mean from ../performance.js.
-import { mean } from '../performance.js';
-import { relativePerformance, safeRatio } from './bootstrap/inputs.js';
+// The shared inputs (relativePerformance/safeRatio in ./bootstrap/inputs.js,
+// mean in ../performance.js) are imported by the part files that use them
+// (windows.js, procedures.js), not here.
 // --- Variance-consistent subsampling (Politis & Romano 1994; Politis, Romano &
 // Wolf 1999, ch. 3-4) -------------------------------------------------------
 //

@@ -1,6 +1,6 @@
 // src/analysis/features/upgrades.js (round-102 split of src/analysis/features.js).
 // Cross-sectional construction tools + the opt-in momentum upgrades (round 30 / round 45).
-import { finiteSum, meanOf, varianceOf, momentum } from './base.js';
+import { finiteSum, varianceOf, momentum } from './base.js';
 // ---- cross-sectional demean as a construction tool (round 45, lab R5) ------
 //
 // F-03: demeaning a signal across the basket collapses the panel's design

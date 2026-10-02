@@ -1,7 +1,7 @@
 // src/analyze/evaluate/async.js (round-96 split of src/analyze/evaluate.js).
 // evaluateABAsync (worker/callback path).
-import { walkForwardEvaluate, walkForwardEvaluateAsync, promoteDecision, formatReport, walkForwardSearch, restateReportAtCost, poolReports, costLadder, familyCorrelation } from '../../analysis/walkforward.js';
-import { ALL_VARIANTS, notApplicableReason, inertReasonFor, CONTROLLER_POSITION_POLICY } from '../roster.js';
+import { walkForwardEvaluateAsync, promoteDecision, poolReports } from '../../analysis/walkforward.js';
+import { ALL_VARIANTS, notApplicableReason } from '../roster.js';
 import { finalizeAB } from './core.js';
 
 

@@ -6,7 +6,7 @@ import { scoreSleeve } from './scoring.js';
 import { sleeveDsr, sleeveYearly, yearlyReport, sleeveFirstLast, firstLastReport, dsrReport } from './evidence.js';
 import { parseSleeveSizing, scoreSleeveSized, SIZED_SLEEVE_DEFAULTS } from './sizing.js';
 import { factorNeutralSharpe } from '../analysis/dependence.js';
-import { scoreBookReturns, scoreG5, stressHalves, worstBlock } from '../analysis/portfolio.js';
+import { scoreG5, worstBlock } from '../analysis/portfolio.js';
 
 // The earn-time grid for the yearly attribution (round 80) now rides on the
 // sleeve: positioning sleeves expose optional `earnTimes(view, weightRows)`

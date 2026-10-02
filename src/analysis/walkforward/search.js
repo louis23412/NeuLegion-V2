@@ -7,8 +7,6 @@ import {
     pearsonCorrelation, meanPairwiseCorrelation, equicorrelationDesignEffect,
     equicorrelationEffectiveSize,
 } from '../dependence.js';
-import { walkForwardEvaluate } from './audit.js';
-import { promoteDecision } from './report.js';
 import { blockStability } from './folds.js';
 
 

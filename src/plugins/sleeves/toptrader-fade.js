@@ -14,7 +14,7 @@
 // assumed additive with R8 (F-43: the two bind on the same thin alts).
 
 import { CAPABILITIES } from '../../core/contracts/base.js';
-import { SLEEVE_CONTRACT, isSleevePlugin } from '../../core/contracts/sleeve.js';
+import { isSleevePlugin } from '../../core/contracts/sleeve.js';
 import { buildCrossSectionalBook, cleanBook, fin, firstCommonIndex, MIN_TRAIN_PERIODS } from '../../core/primitives/index.js';
 
 export const TOPTRADER_FADE_SPEC = Object.freeze({

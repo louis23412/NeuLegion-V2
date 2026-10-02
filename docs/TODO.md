@@ -1006,12 +1006,12 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    `2506.23424`, `2601.05975`), optionally triggered by an online changepoint (`0710.3742`,
    `2302.04759`). Acceptance: the measured level becomes invariant across `testSize ∈ {10,15}`.
    Off by default; goldens unmoved. `PLAN-round29.md` P5.
-91. [ ] **Meta-labeling (round-29 P6 — GATED on item 86).** A secondary model that sizes/filters
+91. [x] **Meta-labeling (round-29 P6 — GATED on item 86).** **ARCHIVED (round-109 sweep, no action):** the gate cannot open — the model track (item 111, measured-complete) found no positive-skill primary (directional −0.0069, HAR-residual −0.0090; only e115's +0.0246 magnitude skill, not a tradeable primary), and meta-labeling cannot rescue a negative-skill primary by its own premise. Recover if a positive-skill forecaster ever appears. A secondary model that sizes/filters
    a primary signal (AFML ch. 3; `2107.11972`, `2306.09862`). It **cannot** rescue a negative-skill
    primary, so it is not started unless item 86 finds a positive-skill forecaster.
    `PLAN-round29.md` P6.
 
-92. [ ] **Ensemble-size capacity probe (round-29 P7 — GATED on item 86; short run).** The
+92. [x] **Ensemble-size capacity probe (round-29 P7 — GATED on item 86; short run).** **ARCHIVED (round-109 sweep, no action):** same unopenable gate as 91 — skill, not decorrelation, governs (2608.16190), cost is linear in `es`, and an `es` change is RNG-confounded (BUGS.md #44). Recover with 91. The
    core hivemind design's own question: does more members per controller (`es = 4 → 8, 16`)
    buy capacity/diversity/skill? A pre-registered sweep `es ∈ {2,4,8,16}` at `forceMin`,
    ≥3 seeds, short window, one table {Brier skill vs the base rate, net Sharpe **at
@@ -1107,8 +1107,8 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    `report.configurationRobust`, default off); this item is the stronger re-train half.
    Detail: `METHOD.md` §10, `RUN-ANALYSIS.md` §16.3.
 
-98. [ ] **Re-run the P3/P4 acceptance commands with the file variables verified (the 2026-09-24/25
-   batch's 3c and 3d were off-spec).** On the returned batch, `$CANDLES_15M` and `$FUND` were unset
+98. [x] **Re-run the P3/P4 acceptance commands with the file variables verified (the 2026-09-24/25
+   batch's 3c and 3d were off-spec).** **ARCHIVED (round-109 sweep, no action):** superseded — the 3e 8×600 verdict run, the §18.3 G-H corpus, and the §35 K=6 re-run all ran on correct specs, so the off-spec 3c/3d pair has no remaining read. On the returned batch, `$CANDLES_15M` and `$FUND` were unset
    in the running shell, so 3c scored a **single 1h stream** (not the 8-symbol 15m basket) and 3d
    ran with **no carry sleeve** (`carry: null`, `panelStreams: 0`). Both P3 and P4 acceptance gates
    are therefore still **UNMEASURED** and must be re-run — same commands, with the variables
@@ -1126,7 +1126,7 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    search and `familywise.best`; pinned by the pure taxonomy checks and an end-to-end `evaluateAB`
    check (1 stream → not-applicable/out-of-search; 2 streams → in-`K`). Detail: `BUGS.md` #69/#70.
 
-100. [ ] **Round-30 direction — invest/drop, evidence-backed (`RUN-ANALYSIS.md` §17.7).** **Invest:**
+100. [x] **Round-30 direction — invest/drop, evidence-backed (`RUN-ANALYSIS.md` §17.7).** **ARCHIVED (round-109 sweep, consumed):** the invest arm executed via 102/111–119 (breadth banked lab-side, roster trimmed K=6→K=5, model track measured-complete) and the drop arm stands (nothing promoted since); the live remainder is 116–118. **Invest:**
    the **signal family**, above all `sig-momentum` (break-even 14.6 bps, matched-exposure robust,
    adjDSR 0.774) and `sig-accel` (11.6 bps, adjDSR 0.861); the **funding/carry sleeve** as a *breadth*
    purchase (the one measured independence lever); **decorrelated / non-crypto data and more
@@ -1165,7 +1165,7 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    in round 90 (`20260930T154333-seed1`: reachable 288/288, 0 violations, adjDSR 0.8654 —
    measured-not-promoted; `RUN-ANALYSIS.md` §35).
 
-103. [ ] **Round-30 operator runs (M4–M6, M8).** Re-run **3c** (`CANDLES_15M` non-empty) and **3d**
+103. [x] **Round-30 operator runs (M4–M6, M8).** **ARCHIVED (round-109 sweep, no action):** superseded by the §18.3 G-H corpus and the §35 K=6 re-run (round 90) — no remaining M4–M6/M8 read. Re-run **3c** (`CANDLES_15M` non-empty) and **3d**
    (`FUND` non-empty) on the corrected commands; run the **G-F** seed replication (5 seeds, CRN), the
    **G-G** breadth run, and the **pruned verdict** run at the pre-registered roster. All are scripted
    (`scripts/round30-runs.sh`; the script defines and *checks* the file lists so the `BUGS.md` #69
@@ -1212,7 +1212,7 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    lock rows needed — curated subset unchanged, import law covers core/plugins only). Two `../`
    path fixes (dynamic hivemind imports, fold_worker URL) + `isMain` dispatch moved to the shim.
 
-108. [ ] **Round-77 operator runs (gate the round; repo only).** `npm test` (expect 132/132 — the node mirror
+108. [x] **Round-77 operator runs (gate the round; repo only).** **ARCHIVED (round-109 sweep, consumed):** `npm test` 132/132 green and the base re-run printed the predicted line (§22.1); e109 needs no operator run (§21.3); the report.json upload is moot next to the later honest/sleeve runs. `npm test` (expect 132/132 — the node mirror
    asserts the 249-contracts ledger), `bash scripts/sleeve-runs.sh base` (expect the new
    `first-last per-bar Sharpe … (Δ … ± …)` line beside dsr/yearly, G5 still false on (decay,unseen)).
    Upload the new `state/runs/<runId>-sleeve/report.json`. Until these run, the §U/U4-U5
@@ -2169,6 +2169,85 @@ not a bug fix.
    attract liquidity and lower execution costs vs hidden metaorders
    (Hyperliquid address-level evidence) — mechanism support for the taker-timing
    use; the L2/fill data block stands.
+   **Round-109 context (sweep 10m's 2604.19604v6):** the carry gap is a measured
+   implementation wedge (margin + daily settlement + finite capital, volatility ×
+   sqrt(tau) path-risk term, leave-one-year-out stable) — the borrow/margin leg's
+   task form. 2407.12150's boundary-triggered rebalancing converges on the
+   cap-then-band design (no change — e136 holdout-certified).
+
+> **Rerank 2026-10-02 (round 109, coherency sweep):** top tier stays operator-owned
+> and ordered: **116** (native midcap port + 16-panel `gh` — the read that unlocks
+> everything below), then **118** (score the stacked-16 book with cap 0.125 + band
+> ~0.01 — the e135/e136 holdout-certified read: trailing pick 0.01 at 8/8 splits,
+> frozen + fixed beat daily 8/8), then **117** only if 116 confirms (effStreams
+> ≥ 2.3 natively; sublinear scaling measured: +34% then +12% — no third lab wave).
+> Owed gate: **`npm test`** covering R109 (vol split + e137; AI-side locks 41/0,
+> analysis 856/0, walkforward 90/0, analyze 294/0, e137 27/27, e136 regressed 4/4).
+> Fade G5 stays second tier (106 unseen waits on a fresh post-freeze year; decay
+> attestation reads "no decay on honest book" since the round-79 flip). Queued, not
+> urgent: 104 (behind any sized win — none), 95 remainder (borrow/margin, execution
+> beyond taker fees), W5 venues, L10 rows. Parked/data-blocked: 111 execution uses,
+> 94 queue half, 96, 97, 90. Background: 14, 55, 62, 84–89. AI-side next: the two
+> 10l carryover queries (endpoint flaky, doctrine: not chased), then the lab's next
+> model-track step only if data unblocks it. Archived this sweep: 91, 92 (gate
+> unopenable), 98, 100, 103, 108 (superseded/consumed) — recoverable from the notes.
+
+> **Rerank 2026-10-02 (sweep S5, CYCLE-144/F-155):** tiers unchanged — **116**
+> (native midcap port + 16-panel `gh`) → **118** (stacked-16 cap 0.125 + band
+> ~0.01) → **117** only if 116 confirms. Owed gate grows: **`npm test`**
+> covering R109 + S1 + S5 (S5: 23 dead imports across 16 files in two batches + 1 registry
+> note; AI-side analysis 856/contracts 255/locks 41/modules 59/walkforward
+> 90/analyze 294/features 11/golden 23 all 0-fail, e58 39/39 + e63 11/11).
+> Supersedes the round-109 note's "AI-side next": the two 10l carryover queries
+> were already retried in 10m (no retry owed); 10n landed (2609.27051 +
+> 2606.29771 → TODO 87/95 context, no doc change). No archives this sweep —
+> none of the 18 opens is measurably closeable without operator runs or new
+> data. Parked/data-blocked/background sets unchanged.
+
+> **Rerank 2026-10-02 (sweep S6, CYCLE-145/F-156):** tiers unchanged — **116**
+> (native midcap port + 16-panel `gh`) → **118** (stacked-16 cap 0.125 + band
+> ~0.01) → **117** only if 116 confirms. Owed gate unchanged: **`npm test`**
+> covering R109 + S1 + S5 (S6 is docs-only: alias-aware re-scan 0 dead, 0
+> dangling/cycles; shims 18/18; run_all 152/138; ledger 33/45; live ESM smoke
+> on port.js + streams.js). Dispositions for all 18 opens: operator queue
+> (116/117/118) waits on the operator; config program (84/85/87) waits on
+> native runs; model benchmark (86) + P5 (90) + P2-re-train (97) + entry-age
+> (62) need native A/B or locked-path work; sized G5 (104) waits on a sized
+> win; unseen (106) waits on a fresh post-freeze year; spot-leg remainder (95)
+> is borrow/margin + beyond-taker execution; gated leads (55) stay an idea
+> store; untested surfaces (14) stay background; model execution uses (111)
+> stay data-blocked (venue L2 + trade prints). No archives this sweep —
+> same bar as S5: nothing measurably closeable without runs or data.
+
+> **Sweep S7 2026-10-02 (CYCLE-146/F-157/L10-cu):** one latent code fix —
+> `src/analyze.js` shim's static `node:url` import (broke non-harness loads;
+> browser entry + CLI + worker + harness paths all unaffected) is now a
+> `process.versions?.node`-gated dynamic import with the exact CLI dispatch
+> preserved. Rerank unchanged (S6 tiers stand). Owed `npm test` now also
+> covers this fix.
+
+> **Sweep S8 2026-10-02 (CYCLE-147/F-158):** docs-only registry census —
+> 916/916 declared exports resolve (112 files), 30/30 proves refs, 72/72 lead
+> cites. Rerank unchanged. Owed `npm test` unchanged.
+
+> **Sweep S9 2026-10-02 (CYCLE-148/F-159):** docs-only reference census —
+> 301 refs; 6 stale exonerated, 12 pre-split coordinates (frozen history left
+> intact; standing rule recorded). Rerank unchanged. Owed `npm test` unchanged.
+
+> **Sweep S10 2026-10-02 (CYCLE-149/F-160/L10-cv/cw):** docs-only collision
+> census — 883 names, top-30 benign chains; two latent rows (dual-formula
+> `sharpeStandardError` with correct importers; twice-defined weight tools
+> with 1-guard drift, single-source proposed). Rerank unchanged. Owed
+> `npm test` unchanged.
+
+> **Sweep S11 2026-10-02 (CYCLE-150/F-161):** docs-only ledger sync — 43/43
+> raws parse and listed, 11/11 goldens (6+5 composition recorded), FOLD-BACK
+> R4 port status appended (round-78 `--carry-marks` verified native).
+> Rerank unchanged. Owed `npm test` unchanged.
+
+> **Sweep S12 2026-10-02 (CYCLE-151/F-162):** docs-only arithmetic — table
+> sums to 3123, data dirs complete, THEORY folded. Rerank unchanged. Owed
+> `npm test` unchanged.
 
 > **Rerank 2026-09-30 (round 85):** the W6 re-freeze arc for the network-arm audit
 > (F-130) takes the top tier: e118 proves the Sharpe-1.3/BE-15.3bp arm is causal under

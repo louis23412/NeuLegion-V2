@@ -16,7 +16,7 @@
 // largest band, underperforming fixed 0.03 OOS (1.03-1.22 vs 1.40-1.65).
 
 import { CAPABILITIES } from '../../core/contracts/base.js';
-import { SLEEVE_CONTRACT, isSleevePlugin } from '../../core/contracts/sleeve.js';
+import { isSleevePlugin } from '../../core/contracts/sleeve.js';
 import { blendBooks, buildCrossSectionalBook, cleanBook, dlogMatrix, fin, firstCommonIndex, MIN_TRAIN_PERIODS } from '../../core/primitives/index.js';
 
 export const OI_CHANGE_SPEC = Object.freeze({

@@ -15,7 +15,7 @@
 // window would understate the joint book).
 
 import { CAPABILITIES } from '../../core/contracts/base.js';
-import { BOOK_CONTRACT, isBookPlugin } from '../../core/contracts/book.js';
+import { isBookPlugin } from '../../core/contracts/book.js';
 
 // The index map of the entries' shared time grid: `keep[t]` is the per-entry row
 // index of the t-th common time. Exported so a test can pin the alignment.

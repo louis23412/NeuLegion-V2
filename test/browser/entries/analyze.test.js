@@ -37,7 +37,7 @@ import {
     FEATURE_LEN, resolveVariant, applyVariant, notApplicableReason, listVariants, formatVariantList, forecastKindOf, inertReasonFor,
     rosterSnapshot, rosterRegistration, emptyListFlagError,
     featureVector, makeHiveMindModelFactory, makeControllerModelFactory, makeBenchmarkModelFactory, makeSignalForVariant,
-    withSeed, evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, formatFullHistory, readCloses, readCandles, runAnalysis,
+    evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, formatFullHistory, readCloses, readCandles, runAnalysis,
     runSleeveAnalysis,
     replicateAnalysis,
     CONTROLLER_MODEL, CONTROLLER_POSITION_POLICY, probesPerFold, auditVerdict,

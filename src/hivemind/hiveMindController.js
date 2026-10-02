@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import HiveMind from './hiveMind.js';
 import IndicatorProcessor from './indicatorProcessor.js';
 
-import { truncateToDecimals, isValidNumber, isValidTimestamp } from './utils.js';
+import { truncateToDecimals, isValidNumber } from './utils.js';
 import { priceDecimals } from '../price_precision.js';
 import { sanitizeSignal, assertControllerArgs } from '../legion/sanitize.js';
 import { installMethods } from './internal/mixins.js';
