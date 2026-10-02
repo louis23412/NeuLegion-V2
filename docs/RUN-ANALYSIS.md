@@ -5984,3 +5984,35 @@ bash scripts/round93-midcap-116.sh all
 Stages run à la carte if ever needed (`port` | `gate` | `runs`), and every
 step refuses to proceed on mismatch (lab row counts, the 15-file check, the
 16-entry manifest check). Upload the printed `report.json` paths.
+
+## 84. TODO 116 readout — 16-panel gh + cadenced/exposure + test=10 (2026-10-02, native)
+
+Three runs banked under `src/runs/` (turnkey script worked end-to-end, tests
+green, audits clean, 16 streams live — 94.6 + 99.2 + 139.3 min wall):
+
+* `20261002T093402-seed1` — gh K=5, test=15, 576 folds: **all keep-off**.
+  vol pooled DSR 0.9706 (up from the 0.9340 majors baseline ✓) with
+  effStreams 3.73 (≥ 2.3 ✓) — the breadth half of the gate passes. But
+  dependence-adjusted DSR is 0.70, paired dSharpe ns (p=0.19), and the
+  mean-fold-Sharpe hurdle binds everywhere. momentum~vol excess r=0.94;
+  family effectiveTrials 1.37 of 4 (DE 2.92). Cost ladder promotes none at
+  every rung; at +10 bps all four signals go negative net.
+* `20261002T110840-seed1` — cadenced restatement + exposure-match: **verdicts
+  neutral across 10/15/20** (the 87 acceptance passes; closest approach is
+  momentum at cadence 10, paired p=0.09, still ns). Exposure-match could not
+  be constructed within tolerance on any arm (signals ~89% nonzero vs
+  baseline ~46% — matching needs deadZone 0.50 vs 0.055): the activity
+  mismatch itself is the finding.
+* `20261002T124753-seed1` — test=10 leg, 864 folds: **all keep-off**, but the
+  §15 level-shift reproduces in direction — baseline pooled Sharpe 0.34 (vs
+  0.11 at test=15), baseline mean-fold +0.45 (vs −0.03); vol adj DSR 0.76
+  (margin −0.19, the closest DSR approach of the round); network mean-fold
+  turns positive (+0.34). Power still far (need 331 clusters, have 54).
+
+Cross-run learning: (1) breadth without edge — midcaps buy streams, not
+significance; (2) the pooled-vs-mean-fold sign gap (pooled +0.3..+0.5 vs
+mean-fold −0.25..−0.66 at test=15) needs an explanation before any promotion
+math is trusted — open question, not a bug; (3) `run.json` does not record
+`--cadences`/`--exposure-match` (report carries the evidence; worth one line
+in a later round); (4) budget 16-panel gh at ~95+ min, test=10 at ~140 min.
+Lab record CYCLE-171.

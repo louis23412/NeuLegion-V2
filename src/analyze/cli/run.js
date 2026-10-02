@@ -472,6 +472,8 @@ export async function runAnalysis({
             gate: gateMode, gateAlpha: gateAlphaResolved, costLadder: ladderLevels.slice(),
             turnoverSweep: turnoverEnabled,
             turnoverTarget: turnoverEnabled ? turnoverTargetBps : null,
+            cadences: Array.isArray(cadences) && cadences.length ? cadences.slice() : null,
+            exposureMatch: !!exposureMatch,
             trials: variants.length,
             positionPolicy: useController ? POSITION_POLICY : null,
             node: process.version,

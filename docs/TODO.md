@@ -965,6 +965,10 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    second cadence; (d) `--test=10` also buys more clusters at the same bars, so a cadence change
    is simultaneously a power purchase and a nuisance change. `RUN-ANALYSIS.md` §15.3/§15.6;
    `METHOD.md` §7's caveat.
+   > **Native 16-panel confirmation 2026-10-02 (`RUN-ANALYSIS.md` §84):**
+   > test=10 leg on 16 streams reproduces the shift in direction (baseline
+   > pooled 0.11 → 0.34, mean-fold −0.03 → +0.45; vol adj DSR margin −0.19).
+   > Level statements must still name their `testSize` — now measured twice.
 85. [ ] **Make a cross-family comparison name its exposure, and decide the confidence-scale
    policy (`BUGS.md` #61).** The three runs measured that the unified confidence space is
    dimensionally shared but not distributionally comparable: the controller's `|confidence|` never
@@ -978,6 +982,12 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    > **Scoped CYCLE-160 (no code yet):** director's proposal — quote cross-family statements
    > only at matched exposure (machinery exists + pinned); reject family-normalised thresholds
    > (rescales the scored policy). Implementation = new round with native gate.
+   > **122a datum (CYCLE-173):** mean-of-15-bar-fold-Sharpes is a win-rate contest
+   > on ±3.4-magnitude noise (sd 3.7–4.2, SE of the comparison ~0.24) while
+   > pooled weights by realized variance — the two need not agree in sign, and
+   > did not (all four signals pooled-positive, three mean-negative). Proposal:
+   > demote the mean-fold hurdle to diagnostic, keep paired-cluster + adj DSR
+   > binding. Needs a DESIGN decision + native gate, not this round.
 
 86. [ ] **Model-class benchmark: is the forecaster the problem or the target? (round-29 P1).**
    The round-28 Step-2 baseline has **negative** forecast skill (`brierSkill −0.07382`,
@@ -995,6 +1005,13 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    quoted at matched exposure (per-family `|confidence|` quantiles or matched `nonZeroFraction`;
    `BUGS.md` #61). Acceptance: verdict-neutral on the retained runs with `sig-accel`'s 0-bps
    promotion killed. `PLAN-round29.md` P2.
+   > **First native exercise 2026-10-02 (`RUN-ANALYSIS.md` §84):** cadence
+   > verdicts neutral at 10/15/20 on the 16-panel (acceptance met; closest
+   > approach momentum@10, paired p=0.09). Exposure-match inconstructible
+   > within tolerance on all four arms (89% vs 46% nonzero; matched deadZone
+   > 0.50 vs 0.055) — a `BUGS.md` #61 datum for the 85 decision: matched
+   > exposure quotes may often be unconstructible, which itself argues for the
+   > quote-only-at-matched-exposure policy over rescaling.
 88. [x] **Short-horizon reversal on new bars (round-29 P3) — MEASURED-CLOSED 2026-10-01 (CYCLE-127, F-138).** The documented crypto edge is
    **15-minute reversal** (`2608.21888`: 90 % of 183 Binance pairs, signs not magnitudes) and
    this round's measurement shows 1h has none (AC −0.013; `sig:autocorr` net Sharpe −0.0996).
@@ -2280,14 +2297,30 @@ not a bug fix.
 
 115. [x] **Round-92 — W5 symbol breadth: harvest mid-cap Binance perps + e121 stacked-panel test.** **DONE (round 93, AI-side).** Harvested exactly as specified (futures-um monthly zips — not spot daily; 8/8 symbols, 2024-06-01..2026-08-31, 19,728 bars each, zero gaps) via durable `src/NeuLegion-lab/data/harvest_midcap_1h.js`, vendored at `src/NeuLegion-lab/data/midcap/` with manifest. e121 6/6 SUPPORTED: stacked-16 effStreams 2.35 vs majors 1.75 (1.35× ≥ 1.25 gate), rbar 0.51 → 0.39; calibration bit-matches 1.0848. Honest notes: window Sharpe ~0.13–0.15 everywhere (F-01 face — verdict is dependence, not edge); midcaps add breadth, no extra edge. Detail: `RUN-ANALYSIS.md` §38, lab F-134.
 
-116. [ ] **Round-93 — native 16-panel run (operator-owned).** e121/F-134 measured the breadth lab-side; the 8 midcap series now ship IN the repo (`src/data/candles_*usdt_1h.jsonl`, ported CYCLE-170 — the repo never reads from the lab). Run `bash scripts/round93-midcap-116.sh all`: verifies the 8 series (19,728 rows each), appends the 8 entries to `CANDLE_MANIFEST` in `src/candles_audit.js` (`--symbols=all` is manifest-driven via `resolveSymbolFiles`), runs `test.sh quick` (the §J2 manifest-map checks cover the new entries), then the K=5 `gh` roster natively on the 16-symbol panel — read vol/network adjDSR + effStreams vs the 8-major baseline. Pre-registered interest: effStreams ≥ 2.3 with vol adjDSR moving up from 0.9340 (K=5 majors baseline, `RUN-ANALYSIS.md` §74). Cost: ~17 MB added to the shipped tree + one ~45-min run. Upload `state/runs/<runId>/report.json`. Turnkey: `bash scripts/round93-midcap-116.sh all` (CYCLE-169: port + gate + all three runs with self-checks; `port`/`gate`/`runs` à la carte).
+116. [ ] **Round-93 — native 16-panel run (operator-owned).** e121/F-134 measured the breadth lab-side; the 8 midcap series now ship IN the repo (`src/data/candles_*usdt_1h.jsonl`, ported CYCLE-170 — the repo never reads from the lab). Run `bash scripts/round93-midcap-116.sh all`: verifies the 8 series (19,728 rows each), appends the 8 entries to `CANDLE_MANIFEST` in `src/candles_audit.js` (`--symbols=all` is manifest-driven via `resolveSymbolFiles`), runs `test.sh quick` (the §J2 manifest-map checks cover the new entries), then the K=5 `gh` roster natively on the 16-symbol panel — read vol/network adjDSR + effStreams vs the 8-major baseline. Pre-registered interest: effStreams ≥ 2.3 with vol adjDSR moving up from 0.9340 (K=5 majors baseline, `RUN-ANALYSIS.md` §74). Cost: ~17 MB added to the shipped tree + one ~45-min run. Upload `state/runs/<runId>/report.json`. Turnkey: `bash scripts/round93-midcap-116.sh all` (CYCLE-169: port + gate + all three runs with self-checks; `port`/`gate`/`runs` à la carte). **DONE 2026-10-02 (CYCLE-171):** breadth half passes (vol effStreams 3.73 ≥ 2.3, pooled DSR 0.9706 up from 0.9340) but all keep-off (paired ns, adj DSR < 0.95); cadence verdicts neutral 10/15/20; test=10 level-shift reproduces in direction (baseline 0.11 → 0.34). Detail: `RUN-ANALYSIS.md` §84.
 
 117. [ ] **Round-94 follow-up — bank wave-2 breadth (operator-owned, QUEUED behind 116).** e122/F-135 measured the second wave lab-side (`src/NeuLegion-lab/data/midcap2/`: LTC/ETC/UNI/AAVE/ATOM/DOT/FIL/APT, 19,728 bars each, zero gaps): stacked-24 effStreams 2.63 vs stacked-16 2.35 (1.12×, MIXED vs the 1.20 bar), rbar 0.39 → 0.35; wave-2 standalone Sharpe −0.09 (breadth only, no edge). Run ONLY if 116 confirms on the 16-panel (effStreams ≥ 2.3 natively): same port recipe for the 8 wave-2 series, one K=5 `gh` on the 24-panel, read effStreams vs 2.35. If 116 fails, park this with the symbol-breadth leg (no third lab wave — sublinear scaling measured: +34% then +12%). Cost if run: ~17 MB + one ~60-min run. Upload `state/runs/<runId>/report.json`.
+   > **Parked 2026-10-02 (CYCLE-171/172):** the letter of the trigger is met
+   > (native effStreams 3.6–4.2 ≥ 2.3) but 116 shows breadth buys streams, not
+   > significance — and paired-test clusters are time-bound (36 at test=15),
+   > so wave-2 cannot buy the missing power, only trim per-window se via
+   > diversification (lab e122: rbar 0.39 → 0.35). Revisit only if a future
+   > arm sits exactly on a verdict boundary that diversification could flip.
 
-118. [ ] **Round-95 — native midcap-carry port + sleeve run (operator-owned, QUEUED behind 116).** e123/F-136 measured the carry breadth lab-side (`src/NeuLegion-lab/data/midcap_funding/funding_*_8h.jsonl`: 8/8 series, 2466 rows each, zero gaps; carry-dispersion available 2466x8, descriptive net 18.11 vs majors 11.26 @ cost 4): copy the 8 funding series to the repo `src/data/funding_<sym>_8h.jsonl` convention (8 x ~200 KB) beside the 116 candle port and score `carry-dispersion` natively on the 8-midcap panel — read availability + pooled net/turnover/BE vs the majors baseline, plus the stacked-16 read (window-matched 16-stream book + cross-leg corr, per e124/F-137). Pre-registered interest: available:true with BE in the 30-50 bps band. Cost if run: ~2 MB + minutes (sleeve-only, no fold loop). Upload nothing (report the three numbers in chat).
+118. [ ] **Round-95 — native midcap-carry port + sleeve run (operator-owned, QUEUED behind 116).** e123/F-136 measured the carry breadth lab-side (8/8 series; carry-dispersion available 2466x8, descriptive net 18.11 vs majors 11.26 @ cost 4): the 8 funding series now ship IN the repo (`src/data/funding_*usdt_8h.jsonl`, ported CYCLE-172 — the repo never reads from the lab). Score `carry-dispersion` natively on the 8-midcap panel — read availability + pooled net/turnover/BE vs the majors baseline, plus the stacked-16 read (window-matched 16-stream book + cross-leg corr, per e124/F-137). Pre-registered interest: available:true with BE in the 30-50 bps band. Cost if run: minutes (sleeve-only, no fold loop). Upload nothing (report the three numbers in chat).
    **Round-107 update (e135/F-148):** score the stacked-16 book with cap 0.125 + band ~0.01 — lab-side every band lane beats daily net at lower turnover (best 0.01 at net 0.44 vs daily 0.40 @ cost 4).
 
    > **Honesty gate (CYCLE-166, 2026-10-02 — read before running):** lab midcap funding carries **zero shipped marks in every year (2024–26)** — a shipped-marks midcap run would be 100% funding-only illusion (§82 mechanism). Either harvest midcap mark klines into an ext-marks file first (same `marks_8h.json` shape), or pre-register the midcap read as funding-only and incomparable to the majors honest book. No midcap sleeve run without one of the two stated up front.
+   > **Data note (CYCLE-172):** 7/8 series are 8h × 2466 rows; TIA is 4h ×
+   > 4931 rows over the same window (harvester manifest confirms). Benign by
+   > construction: `buildCarrySleeveView` buckets sub-grid rows and sums rates
+   > (two 4h payments = the 8h bucket's carry; marks last-wins), so e123's
+   > 2466×8 stands. No re-harvest needed for 118.
+   > **Director decision (CYCLE-174):** honesty path = harvest midcap marks,
+   > DONE AI-side — `src/data/marks_midcap_8h.json` (8/8, t0 2024-06-01T00:00
+   > shared, 2467 slots, 3 nulls each) + merged `src/data/marks_stacked16_8h.json`
+   > (16 symbols). Turnkey: `bash scripts/sleeve-midcap-118.sh all`
+   > (mid/midband/sixteen/sixteenband, minutes total).
 
    (e125: fade-all BE 0.43 bps untradeable, no flow-quintile gradient; bar-flow proxy only — trade-level aggressor flags filed as the unblock.)
 
@@ -2306,5 +2339,7 @@ not a bug fix.
 120. [x] **Round-110 — sleeve risk-spec override + native gate. DONE 2026-10-02.** The operator reports `npm test` green locally (133-block gate: round-110 flags + ledger 3127) and uploaded both proof runs (`20261002T071743-seed1`, `20261002T080323-seed1-sleeve`). Banked with it are three AI-side sanity fixes (bare `--sleeve-cap`/`--sleeve-band` now throws present-but-empty; dual band/bandEps aliases compare numerically; `scoreSleeve` throws on conflicting raw band+bandEps) — operator: confirm these three guards are present in your tree (they ride the files you synced). Detail: `RUN-ANALYSIS.md` §72 + §74, lab CYCLE-157/F-167. CYCLE-168 (2026-10-02 bug + sanity sweep): added the bare-form (`--sleeve-cap` with no `=`) native refusal case to `analyze_cli.test.js` — the exact form the CYCLE-164 fix addressed, previously uncovered natively — and corrected the §83 port self-check to `expect 15` (7 majors in `src/data/` + 8 midcap; BTC lives at `src/candles.jsonl`).
 
 121. [x] **Round-111 — flat-base + honest sleeve reads on majors. DONE 2026-10-02.** Operator `20261002T085226-seed1-sleeve` (base) + `...085240...` (honest), both `available:true`, all measured knobs pass. Confirms the CYCLE-163 pre-read to the digit: base {11.26, 10.01/yr, 42.9} → band dividend measured (turnover halved, BE ~doubled, net +0.54); honest {6.25, 28,901 substituted} with DE 32.6 → 2.8 (null-basis 0.52 → 0.006) and decay slope −0.093 → −0.015 — the decay is a marks-window artefact, and G5 must score the honest book. Detail: `RUN-ANALYSIS.md` §81.
+
+122. [x] **Round-96 — 116 follow-ups, lab-first. DONE 2026-10-02 (CYCLE-173).** (a) Gap explained from `folds.jsonl`: 15-bar fold Sharpes sd 3.7–4.2, zero-inflated, mean-vs-pooled sign split is heteroscedastic equal-weighting — proposal: demote mean-fold hurdle to diagnostic (datum appended to TODO 85; needs DESIGN + native gate). (b) `run.json` now records `cadences`/`exposureMatch` + native P2-flags test in `analyze_cli.test.js` (AI-verified; native `npm test` owed). (c) Power audit: wave-2 buys ~8% se trim under measured correlations (closest t 1.36→1.47, still ns) — 117 revisit condition closed to a number (needs an arm at one-sided p≲0.07).
 
 > **Round 110 2026-10-02 (CYCLE-157/F-167):** enablement, not reordering — tiers unchanged (**116** → **118** (now turnkey via `sleeve-runs.sh band`) → **117**). Owed gate: `npm test` 133/133 (round-110 flags + ledger 3127). 18 opens + new 120 (closes on the gate). Queued AI-side next: the 10o-1 vol-tournament level-alignment experiment (synthetic ground truth; L10 row if it bites).

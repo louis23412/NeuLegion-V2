@@ -42,6 +42,14 @@ export const CANDLE_MANIFEST = Object.freeze([
     { symbol: 'ADAUSDT', interval: '1h', file: 'src/data/candles_adausdt_1h.jsonl', minRows: 71_000, group: 'binance-1h' },
     { symbol: 'DOGEUSDT', interval: '1h', file: 'src/data/candles_dogeusdt_1h.jsonl', minRows: 61_000, group: 'binance-1h' },
     { symbol: 'LINKUSDT', interval: '1h', file: 'src/data/candles_linkusdt_1h.jsonl', minRows: 65_000, group: 'binance-1h' },
+    { symbol: 'ARBUSDT', interval: '1h', file: 'src/data/candles_arbusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+    { symbol: 'AVAXUSDT', interval: '1h', file: 'src/data/candles_avaxusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+    { symbol: 'INJUSDT', interval: '1h', file: 'src/data/candles_injusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+    { symbol: 'NEARUSDT', interval: '1h', file: 'src/data/candles_nearusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+    { symbol: 'OPUSDT', interval: '1h', file: 'src/data/candles_opusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+    { symbol: 'SEIUSDT', interval: '1h', file: 'src/data/candles_seiusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+    { symbol: 'SUIUSDT', interval: '1h', file: 'src/data/candles_suiusdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
+    { symbol: 'TIAUSDT', interval: '1h', file: 'src/data/candles_tiausdt_1h.jsonl', minRows: 19_000, group: 'binance-1h' },
 ]);
 
 // The 15-minute basket (round 29 -> 30, P3). The same venue and the same eight

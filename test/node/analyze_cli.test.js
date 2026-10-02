@@ -105,6 +105,49 @@ test('the analyze CLI documents the R26-5 turnover flags and wires them into the
     }
 });
 
+test('the analyze CLI records the P2 restatement flags in run.json (round-96)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neulegion-analyze-p2flags-'));
+    try {
+        const file = path.join(root, 'candles.jsonl');
+        writeCandles(file, 100);
+        const runOnce = (extra) => {
+            const stateDir = fs.mkdtempSync(path.join(root, 'state-'));
+            const res = spawnSync(process.execPath, [
+                analyzePath,
+                `--file=${file}`,
+                '--bars=100', '--train=20', '--test=5',
+                '--model=controller', '--variants=sig-momentum',
+                '--audit=0', '--progress-ms=-1',
+                ...extra,
+            ], {
+                cwd: projectRoot,
+                encoding: 'utf8',
+                env: { ...process.env, NEULEGION_STATE: stateDir },
+            });
+            assert.equal(res.status, 0, `the CLI run exited ${res.status}:\n${res.stderr}`);
+            const runDir = path.join(stateDir, 'runs', fs.readdirSync(path.join(stateDir, 'runs'))[0]);
+            return {
+                run: JSON.parse(fs.readFileSync(path.join(runDir, 'run.json'), 'utf8')),
+                report: JSON.parse(fs.readFileSync(path.join(runDir, 'report.json'), 'utf8')),
+            };
+        };
+        const on = runOnce(['--cadences=5,10', '--exposure-match']);
+        assert.deepEqual(on.run.cadences, [5, 10], 'run.json does not record the cadence grid');
+        assert.equal(on.run.exposureMatch, true, 'run.json does not record exposure-match as on');
+        assert.deepEqual(on.report.configurationRobust && on.report.configurationRobust.cadences, [5, 10],
+            'report.json carries no configuration-robust block for the grid');
+        assert.ok(on.report.exposureMatched && on.report.exposureMatched.candidates['sig-momentum'],
+            'report.json carries no exposure-matched row for the candidate');
+        const off = runOnce([]);
+        assert.equal(off.run.cadences, null, 'run.json should record a null cadence grid by default');
+        assert.equal(off.run.exposureMatch, false, 'run.json should record exposure-match as off by default');
+        assert.equal(off.report.configurationRobust, null, 'the default report should carry no configuration-robust block');
+        assert.equal(off.report.exposureMatched, null, 'the default report should carry no exposure-matched block');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('the analyze CLI documents the R26-13 CRN/replication flags and writes the seed aggregate', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neulegion-analyze-seeds-'));
     try {
