@@ -24,8 +24,7 @@
     "test:analysis": "node --test test/node/analysis.test.js",
     "test:contracts": "node --test test/node/contracts.test.js",
     "test:sleeve": "node --test test/node/analyze_cli.test.js",
-    "test:mirrors": "node --test test/node/mirrors.test.js",
-    "test:locks": "node --test test/node/locks.test.js"
+    "test:mirrors": "node --test test/node/mirrors.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0"

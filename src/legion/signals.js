@@ -1,4 +1,4 @@
-// NeuLegion legion component: signal collection, influence propagation and aggregation
+// NeuLegion legion component: signal collection, score-only weighting and aggregation
 //
 // Split out of the original monolithic src/mainController.js; the bodies are
 // byte-identical apart from the shared mutable state being read/written as
@@ -6,7 +6,6 @@
 // now just the entry point that runs ./legion/runner.js.
 
 import { state } from './state.js';
-import { PriorityQueue } from './priorityQueue.js';
 import { CONFIG } from './config.js';
 import { updateLegionAccuracy } from './accuracy.js';
 import { canonicalJSON } from './serialization.js';
@@ -75,84 +74,11 @@ export const collectAndEnrichSignals = () => {
     return signals;
 };
 
-export const getHierarchyFactor = (group, section, layer) => {
-    const revG = state.structureDims[0] - 1 - group;
-    const revS = state.structureDims[1] - 1 - section;
-    const revL = state.structureDims[2] - 1 - layer;
-
-    return (1 + CONFIG.groupPopBoost * revG) * (1 + CONFIG.sectionPopBoost * revS) * (1 + CONFIG.layerPopBoost * revL);
-};
-
 export const computeDynamicWeights = (signals) => {
-    const maxMem = Math.max(...signals.map(s => s.memConnections), 1);
-    const maxChild = Math.max(...signals.map(s => s.childConnections), 1);
-    const maxTier = Math.max(...signals.map(s => s.tier), 1);
-
-    return signals.map(s => {
-        const hier = getHierarchyFactor(s.group, s.section, s.layer);
-        const memNorm = 1 + (s.memConnections / maxMem) * 0.3;
-        const childNorm = 1 + (s.childConnections / maxChild) * 0.3;
-        const tierNorm = 1 + (s.tier / maxTier) * CONFIG.tierWeightMultiplier;
-
-        const vaultBoost = 1 + s.vaultMemories * CONFIG.broadcastRatio * 2;
-        const perfBoost = 1 + (s.recentPerf - 0.5) * 2;
-        const base = s.prob * s.score * perfBoost;
-
-        const weight = base * memNorm * childNorm * tierNorm * vaultBoost * hier * CONFIG.performanceBoostFactor;
-        return { ...s, weight: Math.max(0.01, weight) };
-    });
-};
-
-export const propagateInfluence = (weightedSignals) => {
-    const pq = new PriorityQueue();
-    const visited = new Map();
-
-    const sorted = [...weightedSignals].sort((a, b) => b.weight - a.weight);
-    const seedCount = Math.ceil(sorted.length * 0.3);
-    for (let i = 0; i < seedCount; i++) {
-        const s = sorted[i];
-        pq.push({ ...s, accumDist: -s.weight, depth: 0 });
-    }
-
-    while (pq.size > 0) {
-        const curr = pq.pop();
-        const key = curr.id;
-        const currBoost = -curr.accumDist;
-
-        if (visited.has(key) && visited.get(key) >= currBoost) continue;
-        visited.set(key, currBoost);
-
-        weightedSignals.forEach(neigh => {
-            if (neigh.id === key) return;
-
-            const sameLevel = neigh.section === curr.section && neigh.layer === curr.layer;
-            const sameCompat = curr.compatibility && neigh.compatibility && curr.compatibility === neigh.compatibility;
-            const proximity = Math.abs(neigh.group - curr.group) + Math.abs(neigh.section - curr.section) + Math.abs(neigh.layer - curr.layer);
-            const tierDiff = Math.abs(neigh.tier - curr.tier);
-            const tierBonus = tierDiff === 0 ? (curr.tier === CONFIG.maxTier ? 1.4 : 1) : (curr.tier > neigh.tier ? 1.4 : 0.6);
-
-            if (sameLevel || sameCompat || proximity <= 2) {
-                const edgeDist = sameCompat ? 0.5 : (proximity * 0.3) + (tierDiff * 0.2);
-                const newBoost = currBoost * tierBonus * Math.exp(-edgeDist * CONFIG.volatileHierarchyThreshold);
-
-                const newAccumDist = -newBoost;
-
-                const existing = visited.get(neigh.id) || 0;
-                if (newBoost > existing) {
-                    visited.set(neigh.id, newBoost);
-                    pq.push({ ...neigh, accumDist: newAccumDist, depth: curr.depth + 1 });
-                }
-            }
-        });
-    }
-
-    return weightedSignals.map(s => {
-        const boosted = visited.get(s.id) || s.weight;
-        return {
-            ...s,
-            finalWeight: s.weight * 0.7 + boosted * 0.3
-        };
-    });
+    return signals.map(s => ({
+        ...s,
+        finalWeight: Math.max(0.01, s.prob * s.score),
+    }));
 };
 
 export const hierarchicalAggregate = (propagated) => {
@@ -292,8 +218,6 @@ export const getLegionConsensus = (candle) => {
 
     let signals = collectAndEnrichSignals();
     signals = computeDynamicWeights(signals);
-    signals = propagateInfluence(signals);
-
     const agg = hierarchicalAggregate(signals);
 
     const rawAnswer = sanitizeConsensus(resolveConsensus(agg, market));

@@ -1,11 +1,11 @@
 # NeuLegion — TODO / research backlog
 
 Living backlog, ordered by expected value. Each item names the research note it
-belongs to (`docs/research/`) and what "done + provable" means. The rule from
-the task: a component is only promoted into the **LOCKED** registry
-(`docs/LOCKED.md`, `test/lock-registry.js`) once a test proves it *and* a
-citation grounds it; anything not yet provable stays **EXPERIMENTAL** in
-`src/analysis/` or is listed under `npm test` for a local run.
+belongs to (`docs/research/`) and what "done + provable" means. Standing rule
+(unlock CYCLE-206 — the LOCKED registry and golden fingerprints were deleted):
+a change is done when a test proves it *and* a citation grounds it; anything not
+yet provable stays **EXPERIMENTAL** in `src/analysis/` or is listed under
+`npm test` for a local run. The ordinary suites are the regression net.
 
 ## Scope freeze + prioritized backlog
 
@@ -490,7 +490,8 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    row / NaN / duplicate timestamp / shuffled order / `maxBars`) and the
    report-completeness contract over the R26-8 decision block (`analyze.test.js`).
    `guards.test.js` 58 → 65, `analyze.test.js` 220 → 221, ledger 2268 → 2276.
-55. [ ] **Gated research leads (only after R26-5/R26-6 give evidence).** (a) rank
+55. [x] **Gated research leads (only after R26-5/R26-6 give evidence). SUPERSEDED CYCLE-235 (director).** (a) rank
+   > **CYCLE-235:** dissolved — (b) XS rejected (e120/F-133), (c) composite diluted not diversified (e113/F-125), (d) needs its own A/B with no live consumer, (a) subsumed by TODO 85's selection-criterion decision. TTA half lives on at 90/96.
    candidates by raw-confidence half-life × gross edge per unit turnover (alpha
    decay, arXiv 2502.04284) — measurement first, then a selection criterion;
    (b) a **cross-sectional** candidate family (rank the basket, long the leaders /
@@ -646,8 +647,7 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    current candle timestamp into `_processClosedTrades` (and its `processCount=1`
    call site in `hiveMindController.js`), accumulate entry→train ages into a new
    counter beside the accuracy bag, persist it, and add a native assertion. This
-   touches a **locked hot path** (`trades.js`) and must preserve all 11 golden
-   fingerprints, so it needs its own A/B + golden decision, exactly like R26-12/13.
+   touches the hot path (`trades.js`) and must keep the ordinary suites green (unlock CYCLE-206 — no golden apparatus), so it needs its own A/B, exactly like R26-12/13.
    Grounding: López de Prado 2018 ch. 3 (event-based sampling; the sample is only as
    fresh as the drain makes it).
 63. [x] **The round-26 corrected power run, and the offline forensics.**
@@ -989,7 +989,8 @@ attempt-3 power run; `RUN-ANALYSIS.md` §5, `BUGS.md` #26/#27)**
    > demote the mean-fold hurdle to diagnostic, keep paired-cluster + adj DSR
    > binding. Needs a DESIGN decision + native gate, not this round.
 
-86. [ ] **Model-class benchmark: is the forecaster the problem or the target? (round-29 P1).**
+86. [x] **Model-class benchmark: is the forecaster the problem or the target? (round-29 P1). MEASURED-CLOSED CYCLE-235 (director).**
+   > **CYCLE-235:** the decision rule executed — none beats the base rate on the measured targets (e114–e117: directional −0.0069, 8h-bucket −0.0105, HAR-residual −0.0090; B-track: body carries no signal, m5g raw +0.18 vs members −0.05). The **features/labels** are the constraint, confirmed five ways.
    The round-28 Step-2 baseline has **negative** forecast skill (`brierSkill −0.07382`,
    `accuracySkill −0.13007`, `status 'base-rate'`), and the research sweep
    (`docs/research/round29-model-class.md`) says a from-scratch tiny transformer is the
@@ -2162,7 +2163,8 @@ re-freeze between two tested branches rather than a blind change. Each remaining
 item is pinned by the golden fingerprints; changing one is a deliberate re-freeze,
 not a bug fix.
 
-111. [ ] **Model track — turn the first model skill into an edge (round-84 e114/e115; HIGHEST model EV).**
+111. [x] **Model track — turn the first model skill into an edge (round-84 e114/e115; HIGHEST model EV). MEASURED-CLOSED CYCLE-235 (director).**
+   > **CYCLE-235:** every arm measured (directional, 1h big-move, 8h bucket, HAR-residual — all ≤0 except e115's non-actionable +0.0246); the follow-up B-track (B1/B2/m5–m5g) closed the evolution path at MEMBER-LEVEL-FAILURE. 1h execution-uses stays an idea; M3 builds stay parked data-blocked.
    e114 sets the honest baseline (live-HiveMind next-bar-sign skill −0.0069, 6/24 — no directional
    work anywhere, closed three ways with F-110 + 2603.16886). e115 finds the first positive
    shipped-model skill (big-move Brier +0.0246, 19/24, 7/8 symbols; lagged persistence −0.67).
@@ -2297,7 +2299,7 @@ not a bug fix.
 
 115. [x] **Round-92 — W5 symbol breadth: harvest mid-cap Binance perps + e121 stacked-panel test.** **DONE (round 93, AI-side).** Harvested exactly as specified (futures-um monthly zips — not spot daily; 8/8 symbols, 2024-06-01..2026-08-31, 19,728 bars each, zero gaps) via durable `src/NeuLegion-lab/data/harvest_midcap_1h.js`, vendored at `src/NeuLegion-lab/data/midcap/` with manifest. e121 6/6 SUPPORTED: stacked-16 effStreams 2.35 vs majors 1.75 (1.35× ≥ 1.25 gate), rbar 0.51 → 0.39; calibration bit-matches 1.0848. Honest notes: window Sharpe ~0.13–0.15 everywhere (F-01 face — verdict is dependence, not edge); midcaps add breadth, no extra edge. Detail: `RUN-ANALYSIS.md` §38, lab F-134.
 
-116. [ ] **Round-93 — native 16-panel run (operator-owned).** e121/F-134 measured the breadth lab-side; the 8 midcap series now ship IN the repo (`src/data/candles_*usdt_1h.jsonl`, ported CYCLE-170 — the repo never reads from the lab). Run `bash scripts/round93-midcap-116.sh all`: verifies the 8 series (19,728 rows each), appends the 8 entries to `CANDLE_MANIFEST` in `src/candles_audit.js` (`--symbols=all` is manifest-driven via `resolveSymbolFiles`), runs `test.sh quick` (the §J2 manifest-map checks cover the new entries), then the K=5 `gh` roster natively on the 16-symbol panel — read vol/network adjDSR + effStreams vs the 8-major baseline. Pre-registered interest: effStreams ≥ 2.3 with vol adjDSR moving up from 0.9340 (K=5 majors baseline, `RUN-ANALYSIS.md` §74). Cost: ~17 MB added to the shipped tree + one ~45-min run. Upload `state/runs/<runId>/report.json`. Turnkey: `bash scripts/round93-midcap-116.sh all` (CYCLE-169: port + gate + all three runs with self-checks; `port`/`gate`/`runs` à la carte). **DONE 2026-10-02 (CYCLE-171):** breadth half passes (vol effStreams 3.73 ≥ 2.3, pooled DSR 0.9706 up from 0.9340) but all keep-off (paired ns, adj DSR < 0.95); cadence verdicts neutral 10/15/20; test=10 level-shift reproduces in direction (baseline 0.11 → 0.34). Detail: `RUN-ANALYSIS.md` §84.
+116. [x] **Round-93 — native 16-panel run (operator-owned).** e121/F-134 measured the breadth lab-side; the 8 midcap series now ship IN the repo (`src/data/candles_*usdt_1h.jsonl`, ported CYCLE-170 — the repo never reads from the lab). Run `bash scripts/round93-midcap-116.sh all`: verifies the 8 series (19,728 rows each), appends the 8 entries to `CANDLE_MANIFEST` in `src/candles_audit.js` (`--symbols=all` is manifest-driven via `resolveSymbolFiles`), runs `test.sh quick` (the §J2 manifest-map checks cover the new entries), then the K=5 `gh` roster natively on the 16-symbol panel — read vol/network adjDSR + effStreams vs the 8-major baseline. Pre-registered interest: effStreams ≥ 2.3 with vol adjDSR moving up from 0.9340 (K=5 majors baseline, `RUN-ANALYSIS.md` §74). Cost: ~17 MB added to the shipped tree + one ~45-min run. Upload `state/runs/<runId>/report.json`. Turnkey: `bash scripts/round93-midcap-116.sh all` (CYCLE-169: port + gate + all three runs with self-checks; `port`/`gate`/`runs` à la carte). **DONE 2026-10-02 (CYCLE-171):** breadth half passes (vol effStreams 3.73 ≥ 2.3, pooled DSR 0.9706 up from 0.9340) but all keep-off (paired ns, adj DSR < 0.95); cadence verdicts neutral 10/15/20; test=10 level-shift reproduces in direction (baseline 0.11 → 0.34). Detail: `RUN-ANALYSIS.md` §84.
 
 117. [ ] **Round-94 follow-up — bank wave-2 breadth (operator-owned, QUEUED behind 116).** e122/F-135 measured the second wave lab-side (`src/NeuLegion-lab/data/midcap2/`: LTC/ETC/UNI/AAVE/ATOM/DOT/FIL/APT, 19,728 bars each, zero gaps): stacked-24 effStreams 2.63 vs stacked-16 2.35 (1.12×, MIXED vs the 1.20 bar), rbar 0.39 → 0.35; wave-2 standalone Sharpe −0.09 (breadth only, no edge). Run ONLY if 116 confirms on the 16-panel (effStreams ≥ 2.3 natively): same port recipe for the 8 wave-2 series, one K=5 `gh` on the 24-panel, read effStreams vs 2.35. If 116 fails, park this with the symbol-breadth leg (no third lab wave — sublinear scaling measured: +34% then +12%). Cost if run: ~17 MB + one ~60-min run. Upload `state/runs/<runId>/report.json`.
    > **Parked 2026-10-02 (CYCLE-171/172):** the letter of the trigger is met
@@ -2307,7 +2309,7 @@ not a bug fix.
    > diversification (lab e122: rbar 0.39 → 0.35). Revisit only if a future
    > arm sits exactly on a verdict boundary that diversification could flip.
 
-118. [ ] **Round-95 — native midcap-carry port + sleeve run (operator-owned, QUEUED behind 116).** e123/F-136 measured the carry breadth lab-side (8/8 series; carry-dispersion available 2466x8, descriptive net 18.11 vs majors 11.26 @ cost 4): the 8 funding series now ship IN the repo (`src/data/funding_*usdt_8h.jsonl`, ported CYCLE-172 — the repo never reads from the lab). Score `carry-dispersion` natively on the 8-midcap panel — read availability + pooled net/turnover/BE vs the majors baseline, plus the stacked-16 read (window-matched 16-stream book + cross-leg corr, per e124/F-137). Pre-registered interest: available:true with BE in the 30-50 bps band. Cost if run: minutes (sleeve-only, no fold loop). Upload nothing (report the three numbers in chat).
+118. [x] **Round-95 — native midcap-carry port + sleeve run (operator-owned, QUEUED behind 116).** e123/F-136 measured the carry breadth lab-side (8/8 series; carry-dispersion available 2466x8, descriptive net 18.11 vs majors 11.26 @ cost 4): the 8 funding series now ship IN the repo (`src/data/funding_*usdt_8h.jsonl`, ported CYCLE-172 — the repo never reads from the lab). Score `carry-dispersion` natively on the 8-midcap panel — read availability + pooled net/turnover/BE vs the majors baseline, plus the stacked-16 read (window-matched 16-stream book + cross-leg corr, per e124/F-137). Pre-registered interest: available:true with BE in the 30-50 bps band. Cost if run: minutes (sleeve-only, no fold loop). Upload nothing (report the three numbers in chat).
    **Round-107 update (e135/F-148):** score the stacked-16 book with cap 0.125 + band ~0.01 — lab-side every band lane beats daily net at lower turnover (best 0.01 at net 0.44 vs daily 0.40 @ cost 4).
 
    > **Honesty gate (CYCLE-166, 2026-10-02 — read before running):** lab midcap funding carries **zero shipped marks in every year (2024–26)** — a shipped-marks midcap run would be 100% funding-only illusion (§82 mechanism). Either harvest midcap mark klines into an ext-marks file first (same `marks_8h.json` shape), or pre-register the midcap read as funding-only and incomparable to the majors honest book. No midcap sleeve run without one of the two stated up front.

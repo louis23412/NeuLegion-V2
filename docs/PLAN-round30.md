@@ -1,3 +1,5 @@
+> **Archived (cleanup CYCLE-210): frozen round-30 plan, executed — read-only evidence. Live plan: `PLAN-next.md`. Index: `ARCHIVE.md`.
+
 # PLAN — round 30: prune the search, buy independence, version the designs
 
 **Status: plan frozen; execution underway (M1–M3, M7 implemented).** This document freezes the

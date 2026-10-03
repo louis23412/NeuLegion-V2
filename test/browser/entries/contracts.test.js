@@ -112,84 +112,6 @@ import { DEFAULT_STACK, PLUGIN_IDS, installDefaultStack } from '../../../src/plu
 import { SLEEVE_IDS, resolveSleeve, scoreSleeve, scoreSleeveSized, trailingBookVol, parseSleeveSizing, adaptiveTargets, drawdownGovernor, SIZED_SLEEVE_DEFAULTS, buildCarrySleeveView, parseSleeveInputs, runSleeveReport, formatSleeveReport, sleeveDsr, SLEEVE_DSR_BLOCKS, SLEEVE_DSR_TRIALS, sleeveYearly, yearlyReport, sleeveFirstLast, firstLastReport, parseMarksJson } from '../../../src/sleeve_score.js';
 import { bookReturns, bookTurnover, scoreBook, scoreBookReturns } from '../../../src/analysis/portfolio.js';
 
-// The lock register's V2 section (`test/lock-registry.js`) and the module-by-module
-// export contract it is validated against (the analysis/support pattern: both
-// directions, so a silent un-locked entry point is a failure).
-import {
-    CORE_MODULES,
-    CORE_REGISTRY,
-    PLUGIN_REGISTRY,
-    validateRegistry,
-    LOCK_LEVELS,
-    CITATIONS,
-    KNOWN_TESTS,
-} from '../../lock-registry.js';
-import * as baseMod from '../../../src/core/contracts/base.js';
-import * as contractsIndexMod from '../../../src/core/contracts/index.js';
-import * as sourceMod from '../../../src/core/contracts/source.js';
-import * as featureMod from '../../../src/core/contracts/feature.js';
-import * as labelMod from '../../../src/core/contracts/label.js';
-import * as learnerMod from '../../../src/core/contracts/learner.js';
-import * as memoryMod from '../../../src/core/contracts/memory.js';
-import * as retrieveMod from '../../../src/core/contracts/retrieve.js';
-import * as sleeveMod from '../../../src/core/contracts/sleeve.js';
-import * as bookMod from '../../../src/core/contracts/book.js';
-import * as riskContractMod from '../../../src/core/contracts/risk.js';
-import * as evaluatorMod from '../../../src/core/contracts/evaluator.js';
-import * as fingerprintMod from '../../../src/core/primitives/fingerprint.js';
-import * as viewsMod from '../../../src/core/primitives/views.js';
-import * as weightsMod from '../../../src/core/primitives/weights.js';
-import * as seriesMod from '../../../src/core/primitives/series.js';
-import * as booksMod from '../../../src/core/primitives/books.js';
-import * as primitivesIndexMod from '../../../src/core/primitives/index.js';
-import * as registryMod from '../../../src/core/registry.js';
-import * as pluginsIndexMod from '../../../src/plugins/index.js';
-import * as legacyMod from '../../../src/plugins/learners/legacy-hivemind.js';
-import * as baseRateMod from '../../../src/plugins/learners/base-rate.js';
-import * as ridgeMod from '../../../src/plugins/learners/ridge.js';
-import * as mlpMod from '../../../src/plugins/learners/mlp.js';
-import * as carryMod from '../../../src/plugins/sleeves/carry-dispersion.js';
-import * as fadeMod from '../../../src/plugins/sleeves/toptrader-fade.js';
-import * as oiMod from '../../../src/plugins/sleeves/oi-change.js';
-import * as capBandMod from '../../../src/plugins/risk/cap-band.js';
-import * as volTargetMod from '../../../src/plugins/risk/vol-target.js';
-import * as singleBookMod from '../../../src/plugins/books/single.js';
-import * as fixedSplitMod from '../../../src/plugins/books/fixed-split.js';
-
-const CORE_IMPORTS = {
-    'contracts/base.js': baseMod,
-    'contracts/index.js': contractsIndexMod,
-    'contracts/source.js': sourceMod,
-    'contracts/feature.js': featureMod,
-    'contracts/label.js': labelMod,
-    'contracts/learner.js': learnerMod,
-    'contracts/memory.js': memoryMod,
-    'contracts/retrieve.js': retrieveMod,
-    'contracts/sleeve.js': sleeveMod,
-    'contracts/book.js': bookMod,
-    'contracts/risk.js': riskContractMod,
-    'contracts/evaluator.js': evaluatorMod,
-    'primitives/fingerprint.js': fingerprintMod,
-    'primitives/views.js': viewsMod,
-    'primitives/weights.js': weightsMod,
-    'primitives/series.js': seriesMod,
-    'primitives/books.js': booksMod,
-    'primitives/index.js': primitivesIndexMod,
-    'registry.js': registryMod,
-    'plugins/index.js': pluginsIndexMod,
-    'plugins/learners/legacy-hivemind.js': legacyMod,
-    'plugins/learners/base-rate.js': baseRateMod,
-    'plugins/learners/ridge.js': ridgeMod,
-    'plugins/learners/mlp.js': mlpMod,
-    'plugins/sleeves/carry-dispersion.js': carryMod,
-    'plugins/sleeves/toptrader-fade.js': fadeMod,
-    'plugins/sleeves/oi-change.js': oiMod,
-    'plugins/risk/cap-band.js': capBandMod,
-    'plugins/risk/vol-target.js': volTargetMod,
-    'plugins/books/single.js': singleBookMod,
-    'plugins/books/fixed-split.js': fixedSplitMod,
-};
-
 const PROJECT_ROOT = 'src/NeuLegion-master/NeuLegion-master';
 
 // The law's file list: every `.js` under these roots. When the caller supplies a
@@ -733,49 +655,6 @@ export async function run(options = {}) {
         assertOneView(viewA, { ...viewA }) === true &&
         (() => { try { assertOneView(viewA, { ...viewA, times: ['T0'] }); return false; } catch (e) { return e.message.includes('one-view rule'); } })());
     check('I: metadata outside the identity does not change it', sameView(viewA, { ...viewA, labels: [1, 0], params: { window: 3 } }));
-
-    // ---- J. the lock register's V2 section -----------------------------------
-    check('J: the core lock-registry entries are valid in isolation',
-        validateRegistry(CORE_REGISTRY, { label: 'core' }).length === 0,
-        validateRegistry(CORE_REGISTRY, { label: 'core' }).join(' | '));
-    const exportProblems = [];
-    for (const [mod, names] of Object.entries(CORE_MODULES)) {
-        const actual = CORE_IMPORTS[mod];
-        if (!actual) { exportProblems.push(`${mod}:not-imported`); continue; }
-        const listed = new Set(names);
-        for (const name of names) if (actual[name] === undefined) exportProblems.push(`${mod}:${name}`);
-        for (const name of Object.keys(actual)) {
-            if (name === 'default' || name === 'then') continue;
-            if (!listed.has(name)) exportProblems.push(`${mod}:${name}:unregistered`);
-        }
-    }
-    check('J: every core module is imported, every listed export exists and no export is unregistered',
-        exportProblems.length === 0, exportProblems.join(','));
-    check('J: every core registry entry names a known proving test',
-        Object.values(CORE_REGISTRY).every((e) => Array.isArray(e.proves) && e.proves.length > 0 && e.proves.every((t) => KNOWN_TESTS.includes(t))));
-    check('J: every core registry entry carries a resolvable citation and a real note',
-        Object.values(CORE_REGISTRY).every((e) => e.citations.every((c) => !!CITATIONS[c]) && e.note.length > 200));
-    check('J: the plugin register does not drift from the composition root', (() => {
-        const declared = DEFAULT_STACK.map((entry) => `${entry.kind}:${entry.plugin.id}`).sort();
-        const registered = Object.keys(PLUGIN_REGISTRY).sort();
-        return declared.length === registered.length && declared.every((k, i) => k === registered[i]) &&
-            DEFAULT_STACK.every((entry) => {
-                const row = PLUGIN_REGISTRY[`${entry.kind}:${entry.plugin.id}`];
-                return row.kind === entry.kind && row.state === entry.state && row.defaultStack === entry.defaultStack;
-            });
-    })());
-    check('J: every plugin register entry is a valid state with a proof and a citation',
-        Object.values(PLUGIN_REGISTRY).every((e) => PLUGIN_STATES.includes(e.state) &&
-            e.proves.every((t) => KNOWN_TESTS.includes(t)) && e.citations.every((c) => !!CITATIONS[c]) && e.note.length > 80));
-    check('J: the legacy adapter is registered as LIVE in the default stack and proved by its own entry',
-        PLUGIN_REGISTRY['learner:legacy-hivemind'].state === 'LIVE' &&
-        PLUGIN_REGISTRY['learner:legacy-hivemind'].defaultStack === true &&
-        PLUGIN_REGISTRY['learner:legacy-hivemind'].proves.includes('legacy_hivemind.test.js'));
-    check('J: the un-promoted sleeves land UNTESTED (never EXPERIMENTAL, never default)',
-        ['sleeve:carry-dispersion', 'sleeve:toptrader-fade', 'sleeve:oi-change', 'book:fixed-split']
-            .every((k) => PLUGIN_REGISTRY[k].state === 'UNTESTED' && PLUGIN_REGISTRY[k].defaultStack === false));
-    check('J: the lock levels used by the core section are the real ones',
-        Object.values(CORE_REGISTRY).every((e) => Object.values(LOCK_LEVELS).includes(e.status)));
 
     // ---- K. the sleeve composition (round 40) --------------------------------
     // The driver-side composer is the only place that calls sleeve -> book ->

@@ -1,5 +1,5 @@
 // FNV-1a over a canonical rendering of a value — the project's one fingerprint
-// primitive (`golden.test.js`, `rosterSnapshot()`, the lock registry).
+// primitive (`rosterSnapshot()`, the module registry).
 //
 // The canonicalisation rules are copied from the golden suite so a hash computed
 // here and a hash computed there mean the same thing: numbers are stringified
@@ -9,7 +9,7 @@
 // into a hash), object keys are sorted, typed arrays are walked as arrays, and
 // every part is joined with U+0001 so "ab"+"c" cannot collide with "a"+"bc".
 // `contracts.test.js` §D pins the string/function rules against this doc, and
-// `test/browser/entries/golden.test.js` is the definition they must match.
+// `test/node/contracts.test.js` pins the contract they must match.
 
 function canonicalParts(value, parts) {
     if (value === null) { parts.push('null'); return; }

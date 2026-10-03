@@ -30,7 +30,7 @@ export {
   RESOLVABLE_VARIANTS, rosterSnapshot, emptyListFlagError, rosterRegistration,
   notApplicableReason, inertReasonFor, forecastKindOf, listVariants, formatVariantList,
   POSITION_POLICY, CONTROLLER_POSITION_POLICY, IDENTITY_POSITION_POLICY, CONTROLLER_MODEL,
-  resolveVariant, applyVariant,
+  resolveVariant, applyVariant, validateGenome, applyGenomeToMind, snapshotGenome,
 } from './analyze/roster.js';
 export {
   featureVector, makeHiveMindModelFactory, makeBenchmarkModelFactory,

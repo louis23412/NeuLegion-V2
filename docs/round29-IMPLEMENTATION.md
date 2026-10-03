@@ -1,3 +1,5 @@
+> **Archived (CYCLE-206 cleanup): execution log, work done — read-only evidence. Readouts: `RUN-ANALYSIS.md` §16. Index: `ARCHIVE.md`.
+
 # Round 29 → 30 implementation tracker
 
 Status board for turning [`PLAN-round29.md`](PLAN-round29.md) into code and measurements.

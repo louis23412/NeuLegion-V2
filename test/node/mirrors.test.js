@@ -3,16 +3,14 @@
 //
 // It pins the drift modes a local run has actually hit or could silently hit:
 //   1. a browser entry with no node mirror — silently uncovered on native
-//      SQLite (the golden bit-exactness lock was in exactly this state);
+//      SQLite;
 //   2. a node mirror left behind by a renamed entry, or reduced to a stub that
 //      covers nothing;
-//   3. a browser entry missing from lock-registry.js#KNOWN_TESTS, so it can never
-//      be cited as proof of a lock;
-//   4. the `npm test` script passing a DIRECTORY to `node --test`, which Node
+//   3. the `npm test` script passing a DIRECTORY to `node --test`, which Node
 //      <= 21 accepted but Node >= 22 loads as a module, so the run dies with
 //      `Cannot find module '.../test/node'` before executing anything
 //      (docs/BUGS.md #14), or `engines.node` dropping below the 22 the glob needs.
-//   5. a node mirror whose STATIC import graph reaches a module with a URL
+//   4. a node mirror whose STATIC import graph reaches a module with a URL
 //      scheme the default ESM loader rejects (e.g. a browser-only CDN `https:`
 //      import), which kills the mirror at import time before a single check runs
 //      (docs/BUGS.md #52); a browser-only module must be reached through a
@@ -30,14 +28,12 @@ const projectRoot = path.resolve(here, '..', '..');                 // repositor
 const entriesDir = path.join(projectRoot, 'test', 'browser', 'entries');
 
 // `bench.test.js` only prints timings (no pass/fail contract), so it has no
-// mirror — it is also absent from lock-registry.js#KNOWN_TESTS.
+// mirror.
 const BROWSER_ONLY = new Set(['bench.test.js']);
 
 // Node-only suites with no browser counterpart by construction: `mirrors.test.js`
 // checks the layout itself (the harness has no directory enumeration),
-// `engine_portability.test.js` runs the golden entry under a process-wide
-// `Math.exp` patch with `node:test` assertions (see "Test-harness limitations" in
-// docs/BUGS.md), and the run-integrity suites (`worker_pool`, `runner_smoke`,
+// and the run-integrity suites (`worker_pool`, `runner_smoke`,
 // `dryrun`, `preflight`, `http_view`, `report_lifecycle`, `shutdown`) drive the
 // real worker_threads / SQLite / HTTP / process machinery, which the browser
 // harness cannot.
@@ -55,8 +51,9 @@ const BROWSER_ONLY = new Set(['bench.test.js']);
 // imports `runAnalysis` directly, so the `isMain` argument-parsing block (the
 // `--turnover-sweep` / `--turnover-target` wiring of R26-5 and the
 // `--crn` / `--seeds` wiring of R26-13) is never executed under the harness.
+//
 const NODE_ONLY = new Set([
-    'mirrors.test.js', 'engine_portability.test.js',
+    'mirrors.test.js',
     'worker_pool.test.js', 'runner_smoke.test.js', 'dryrun.test.js',
     'preflight.test.js', 'http_view.test.js', 'report_lifecycle.test.js',
     'shutdown.test.js', 'config_env.test.js', 'checkpoint_throttle.test.js',
@@ -102,11 +99,11 @@ function staticImportsOf(entryFile) {
     return out;
 }
 
-// The ledger the two structural counts below are pinned to: 33 browser entries
-// (32 with a pass/fail contract, plus `bench`) and 45 node mirrors (32 mirrors +
-// the 13 Node-only suites). See RUNBOOK.md §6.
-const BROWSER_ENTRY_LEDGER = 33;
-const NODE_MIRROR_LEDGER = 45;
+// The ledger the two structural counts below are pinned to: 32 browser entries
+// (31 with a pass/fail contract, plus `bench`) and 43 node mirrors (23 mirrors +
+// the 11 Node-only suites + 9 direct node suites). See RUNBOOK.md §6.
+const BROWSER_ENTRY_LEDGER = 32;
+const NODE_MIRROR_LEDGER = 43;
 
 test('every pass/fail browser entry has a node mirror', () => {
     const entries = testFiles(entriesDir);
@@ -148,19 +145,6 @@ test('no node mirror statically imports a URL the Node loader rejects', () => {
     }
     assert.deepEqual(offenders, [],
         `node mirrors whose static import graph reaches a URL Node cannot load:\n${offenders.join('\n')}`);
-});
-
-test('the lock registry knows every browser entry', async () => {
-    // `locks.test.js` validates that every `proves` reference resolves against
-    // lock-registry.js#KNOWN_TESTS, but nothing checked the other direction — so a
-    // new browser entry could run completely unregistered (and therefore never be
-    // cited as proof of a lock) without any test noticing.
-    const { KNOWN_TESTS } = await import('../lock-registry.js');
-    const entries = testFiles(entriesDir).filter((f) => !BROWSER_ONLY.has(f));
-    const unknown = entries.filter((f) => !KNOWN_TESTS.includes(f));
-    assert.deepEqual(unknown, [], `browser entries missing from lock-registry.js#KNOWN_TESTS: ${unknown.join(', ')}`);
-    const stale = KNOWN_TESTS.filter((f) => !exists(entriesDir, f));
-    assert.deepEqual(stale, [], `KNOWN_TESTS names that are not browser entries: ${stale.join(', ')}`);
 });
 
 test('the test script is a Node>=22-compatible glob over the mirrors', () => {

@@ -4,6 +4,7 @@
 // Pure, no I/O. Imported by ./models.js, ./evaluate.js and ./cli.js; re-exported by the analyze.js shim.
 import '../../legion/rng.js';
 import { SIGNAL_CANDIDATES, REVERSAL_CANDIDATES, SIGUP_CANDIDATES, signalForCandidate } from '../../analysis/features.js';
+import { applyGenomeToMind } from './evolved.js';
 import { BENCHMARK_KINDS } from '../../analysis/benchmark.js';
 import { DEFAULT_ROSTER_IDS } from '../../lineage.js';
 
@@ -67,18 +68,20 @@ export const VARIANTS = Object.freeze([
     {
         id: 'multiprobe',
         label: 'multi-probe',
-        note: 'margin-ordered multi-probe LSH (Lv et al. VLDB 2007), maxFlips=2 — BROADCAST path only (R27-2: cannot reach the scored model)',
+        note: 'margin-ordered multi-probe LSH (Lv et al. VLDB 2007), maxFlips=2 — LIVE via _multiProbeConfig, which _retrieveTopRelevantProtos reads (C3, lab CYCLE-203); default-off',
         configure: (hm) => { hm._multiProbeConfig = { maxFlips: 2, budget: 8 }; },
         afterFit: null,
-        appliesTo: 'broadcast',
+        // C6/#71 (BUGS.md #71): scored-live since C3 — same journey as pca-hash (R28/#53).
+        appliesTo: 'model',
     },
     {
         id: 'querymod',
         label: 'query-mod',
-        note: 'dynamic query modification (arXiv 2605.23807) — centroid re-query — BROADCAST path only (R27-2: cannot reach the scored model)',
+        note: 'dynamic query modification (arXiv 2605.23807) — centroid re-query — LIVE via _queryModConfig, which _retrieveTopRelevantProtos reads (C3, lab CYCLE-203); default-off',
         configure: (hm) => { hm._queryModConfig = { enabled: true }; },
         afterFit: null,
-        appliesTo: 'broadcast',
+        // C6/#71 (BUGS.md #71): scored-live since C3 — same journey as pca-hash (R28/#53).
+        appliesTo: 'model',
     },
     {
         id: 'pca-hash',
@@ -210,6 +213,28 @@ export const OPT_IN_VARIANTS = Object.freeze([
             };
         },
         afterFit: null,
+    },
+    {
+        // B3 (lab CYCLE-224/225): the EVOLVED-READOUT arm. Carries an optional
+        // `genome` (`{ members: [{ w, b }] }`, see `./evolved.js`); `afterFit`
+        // writes it into each member's linear readout AFTER training, so the
+        // transformer body trains exactly as stock and only the readout is
+        // evolved (Lamarckian seeding). With `genome: null` (the registered
+        // default) `afterFit` is a no-op and the arm is bit-identical to the
+        // baseline — a driver injects genomes per candidate on a CLONE
+        // (`{...resolveVariant('evolved-readout'), genome}`), never on the
+        // frozen table object, and evaluates each genome on a FRESH mind
+        // (predict is stateful — lab CYCLE-225 — so genomes are never scored
+        // sequentially on one live mind).
+        id: 'evolved-readout',
+        label: 'evolved:readout',
+        note: 'B3 evolved per-member linear readout (lab CYCLE-224): null genome = stock bit-identical; a driver-supplied genome replaces outputWeights/outputBias post-training',
+        appliesTo: 'model',
+        genome: null,
+        configure: null,
+        afterFit(mind) {
+            if (this.genome != null) applyGenomeToMind(mind, this.genome);
+        },
     },
 ]);
 

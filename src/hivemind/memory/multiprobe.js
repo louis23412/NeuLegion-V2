@@ -11,7 +11,7 @@
 //
 // This module is pure and deterministic: no I/O, no RNG, no dependency on the
 // HiveMind instance. It is the *provable* core of a flag-gated retrieval
-// upgrade (see docs/LOCKED.md); it does not touch the locked hot path on its
+// upgrade (see docs/DESIGN.md §6); it does not touch the locked hot path on its
 // own.
 //
 // Why it works (the lemma the test suite pins): if the neighbour is

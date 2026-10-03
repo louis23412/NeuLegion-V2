@@ -1,3 +1,5 @@
+> **Archived (CYCLE-206 cleanup): implemented and measured — read-only evidence. Live plan: `PLAN-next.md`. Index: `ARCHIVE.md`.
+
 # NeuLegion — Round 29 plan: stop tuning the game, find the edge (measurement-first pivot)
 
 Status: **FINAL (round 29) — coherence-checked 2026-09-24, implementation-ready for round 30.**

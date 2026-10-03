@@ -1,0 +1,24 @@
+{
+  "sweep": "11i",
+  "date": "2026-10-03",
+  "queries": [
+    "all:\"test-time adaptation\" AND all:\"time series\" (21 hits)"
+  ],
+  "entries": [
+    {
+      "id": "http://arxiv.org/abs/2605.17250v1",
+      "title": "Towards Principled Test-Time Adaptation for Time Series Forecasting",
+      "note": "adapt ONLY on matured ground truth; frequency-aware calibration with few params. Our controller already trains on resolved labels — validates the existing online protocol; FAC is the concrete adapter shape."
+    },
+    {
+      "id": "http://arxiv.org/abs/2602.00073v1",
+      "title": "Test-Time Adaptation for Non-stationary Time Series: From Synthetic Regime Shifts to Financial Markets",
+      "note": "frozen backbone + norm-affine-only; in markets a plain BN-stat update is the robust default and aggressive norm-only adaptation can HURT. Grounds 96's freeze-by-construction AND adds a do-no-harm-vs-frozen arm to gate G-D."
+    },
+    {
+      "id": "http://arxiv.org/abs/2506.23424v1",
+      "title": "Accurate Parameter-Efficient Test-Time Adaptation for Time Series Forecasting",
+      "note": "PETSA: low-rank input/output calibration modules + gating, body untouched. Concrete replacement shape for TTA: calibrate the interfaces, not the body."
+    }
+  ]
+}

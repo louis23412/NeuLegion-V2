@@ -9,7 +9,7 @@
 //
 // None of these helpers are on a hot arithmetic path; each is an error-path or
 // setup-path guard, so the golden fingerprints are unaffected (proven
-// separately by golden.test.js).
+// separately by the determinism checks).
 
 import {
     finiteOr, finiteOrNull, safeParseJSON, sanitizeSignal, sanitizeConsensus,

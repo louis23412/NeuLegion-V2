@@ -68,6 +68,7 @@
     { "id": "NL-MECH-querymod@r17", "lineage": "MECH", "branch": "querymod", "state": "PARK", "variant": "querymod", "evidence": "appliesTo broadcast; not scoreable here (R27-2)" },
     { "id": "NL-MECH-sample-weights@r28", "lineage": "MECH", "branch": "sample-weights", "state": "PARK", "variant": "sample-weights", "evidence": "opt-in; confounded BUGS.md #54" },
     { "id": "NL-MECH-sample-weights-scale-control@r28", "lineage": "MECH", "branch": "sample-weights-scale-control", "state": "PARK", "variant": "sample-weights-scale-control", "evidence": "LR-only control arm" },
+    { "id": "NL-MECH-evolved-readout@r32", "lineage": "MECH", "branch": "evolved-readout", "state": "PARK", "variant": "evolved-readout", "evidence": "B3 opt-in; null genome = stock bit-identical (lab CYCLE-224/225)" },
     { "id": "NL-MECH-memory@r29", "lineage": "MECH", "branch": "memory-subsystem", "state": "FROZEN", "note": "the LSH/replay/consolidation subsystem itself is core and golden-pinned; only the hypotheses above are dropped" },
 
     { "id": "NL-SIG-momentum@r23", "lineage": "SIG", "branch": "momentum", "state": "KEEP", "variant": "sig-momentum", "evidence": "net Sharpe +1.0848, break-even 14.64 bps, adjDSR 0.7736 (binding hurdle only)" },

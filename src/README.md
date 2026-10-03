@@ -65,7 +65,7 @@ their measurements in `../docs/DROPPED.md`; the register `../docs/LINEAGE.md` (m
 versions and states of every branch. **Dropping a hypothesis does not delete the module that
 implements it:**
 
-| branch | state | module (still shipped, golden-pinned) |
+| branch | state | module (still shipped) |
 | --- | --- | --- |
 | `surprise` | DROPPED (≈ baseline) | `hivemind/memory/surprise.js` — flag off by default; `surprise.test.js` |
 | `homeostasis` | DROPPED (negative) | `hivemind/ensemble/homeostasis.js` — flag off by default; `homeostasis.test.js` |
@@ -91,7 +91,7 @@ live in `analysis.test.js` §G-H and the resolvability check in `analyze.test.js
 
 The **additive** modularity layer from round 31 (`../docs/ARCHITECTURE-v2.md`,
 `../docs/MIGRATION-V2.md`). Nothing under the legacy tree imports it, and it imports no legacy
-module except the single adapter below, so the 11 golden fingerprints cannot move — a fact the
+module except the single adapter below, so the legacy behavior cannot change silently — a fact the
 `contracts.test.js` import-law section asserts over every file (the legacy tree never imports
 `core/`; the contract kernel imports *nothing*; no plugin imports another plugin).**
 
@@ -103,16 +103,13 @@ module except the single adapter below, so the 11 golden fingerprints cannot mov
 | `core/registry.js` | `registerPlugin`, `resolve`/`resolveOrNull`, `ids`/`entries`, `activeRoster`, `stackSnapshot`/`rosterSnapshot`, `report`, `resetRegistry`, … | validate-on-register, no duplicate id, no silent `K`; the roster/stack hashes are registration-order independent and move only when the **default stack** moves | `contracts.test.js` |
 | `core/primitives/{fingerprint,views,weights,series,books}.js` | the ported pure arithmetic | the FNV-1a fingerprint, the one-view rule, the lab's cap→band chain + `MIN_TRAIN_PERIODS`, the causal row math, and the two book constructions (`n` = the book-grid length, explicit) | `contracts.test.js` §D + the lab's `e73_port_verify.js` |
 | `plugins/index.js` | `DEFAULT_STACK`, `installDefaultStack`, `PLUGIN_IDS` | the composition root: the only file that imports plugins; `learner:legacy-hivemind` is the only `defaultStack` plugin | `contracts.test.js` |
-| `plugins/learners/legacy-hivemind.js` | `LEGACY_HIVEMIND_DEFAULTS`, `legacyHivemindLearner`, `isLegacyHivemind` | the **one** legacy bridge: a `learner` factory that constructs the shipped `HiveMind` and delegates every call — no arithmetic of its own | `legacy_hivemind.test.js` + `golden.test.js` (the engine's own 11 fingerprints) |
+| `plugins/learners/legacy-hivemind.js` | `LEGACY_HIVEMIND_DEFAULTS`, `legacyHivemindLearner`, `isLegacyHivemind` | the **one** legacy bridge: a `learner` factory that constructs the shipped `HiveMind` and delegates every call — no arithmetic of its own | `legacy_hivemind.test.js` |
 | `plugins/sleeves/{carry-dispersion,toptrader-fade,oi-change}.js` | one spec + one sleeve + an `isX` helper each | the lab's three pinned sleeves: R8 (ewma 0.02, cap 1/8, no band), R7 (sign −1, ewma 0.05, cap 1/8, no band), OI (50/50 ewma 0.1+0.25, band 0.03, no cap). Land **`UNTESTED`** | `contracts.test.js`; the port is verified by the lab's `e73` (F-81) |
 | `plugins/risk/cap-band.js` | `CAP_BAND_SPECS`, `DEFAULT_POSITION_SPEC`, `capBandRisk` | the ported cap/no-trade-band chain + the shipped ±1 clamp | `contracts.test.js` |
 | `plugins/books/{single,fixed-split}.js` | `singleBook`, `commonTimeIndexes`, `fixedSplitBook` | single-sleeve and fixed-capital-fraction composition (on the intersection of book times) | `contracts.test.js` |
 
-**The lock class is per-plugin, not whole-engine** (audit A14): a model plugin is pinned by a
-fingerprint (the adapter by the engine's own goldens), an analytic plugin by exact reference
-vectors. Adding a NON-DEFAULT plugin moves no existing proof. The registry holds ids/states only;
-the proofs live in `../test/lock-registry.js` (`CORE_REGISTRY`, `PLUGIN_REGISTRY`) and a drift test
-compares it to `DEFAULT_STACK` in both directions. `docs/LOCKED.md` has the summary block. The
+No component is locked (unlock CYCLE-206): everything is open for edit, and the
+ordinary suites are the regression net. The
 **port itself is verified on the lab's real data** by `src/NeuLegion-lab/experiments/e73_port_verify.js`
 (F-81): the repo reproduces the published books bit-for-bit (R8 `6.18`, R7 `1.07`, OI `0.92`).
 
@@ -122,9 +119,8 @@ compares it to `DEFAULT_STACK` in both directions. `docs/LOCKED.md` has the summ
 file. They are now thin class shells plus a set of **component modules** whose
 methods are copied onto the class prototype by
 `hivemind/internal/mixins.js#installMethods`. The split is *behavioural*: the
-method bodies are byte-identical to the originals, and the golden suite
-(`test/browser/entries/golden.test.js`) proves it by fingerprinting the exact
-floating-point trajectory.
+method bodies are byte-identical to the originals, and `sanity.test.js` /
+`modules.test.js` guard the split.
 
 The rule when editing:
 
@@ -141,43 +137,43 @@ Anything that is a pure helper over `this` state belongs in a component bag.
 `hiveMind.js` is the shell: imports, `_`-prefixed fields, the constructor, the
 public `predict` / `train` / `dumpState`, and the install loop. All ~100
 helpers (the manifest is authoritative) live in the modules below, grouped by
-domain. **The hot math is locked to bit-exactness** — see the golden suite and
+domain. **The hot math must stay bit-stable** — see
 `../docs/OPTIMIZATION.md` for the A/B method. Do not reorder multiply-add
 chains, change `Math.fround` placement, or alter the seeded PRNG call order
-without re-freezing the golden fingerprints.
+without recording the trajectory effect in the change.
 
 | module | methods | technique / what it does | proven by |
 | --- | --- | --- | --- |
 | `internal/mixins.js` | `installMethods` | prototype assembly helper; throws on duplicate key / non-method / assertCount mismatch | `modules.test.js` |
-| `internal/diagnostics.js` | `diagnostics` | read-only weight/gradient stats, per-member memory counts, LSH consistency | `sanity.test.js`, `golden.test.js` |
+| `internal/diagnostics.js` | `diagnostics` | read-only weight/gradient stats, per-member memory counts, LSH consistency | `sanity.test.js` |
 | `kernels/activations.js` | `_silu`, `_siluDerivative`, `_sigmoid`, `_softmax` | SiLU/Swish, logistic, numerically-stable softmax (log-sum-exp) | `sanity.test.js` |
 | `kernels/linalg.js` | `_fastVectorDot`, `_fastVectorAdd`, `_fastVectorScale`, `_vectorDot`, `_vectorNorm`, `_vectorSub`, `_cosineSimilarity`, `_weightedMean`, `_maxPairwiseKernel`, `_projSimilarity` | dense vector ops; cosine similarity; projection-average similarity | `sanity.test.js` |
 | `kernels/normalization.js` | `_rmsNorm`, `_normalizeSemantic`, `_applyRoPE` | RMSNorm; semantic renormalisation; rotary position embedding | `sanity.test.js` |
 | `kernels/sampling.js` | `_randomNormal`, `_sampleDirichlet`, `_generateProjectionMatrix`, `_generateLshHyperplanesLow`, `_dynamicInit` | Box–Muller normal; Dirichlet draws; random projection & LSH hyperplane generation; scale-aware init | `sanity.test.js` |
 | `kernels/statistics.js` | `_computeVariance`, `_computeEMA`, `_computeDualEMA`, `_computeGradientConformity`, `_computeKernelRate`, `_computeFractalDimension`, `_computePercentile`, `_computeNTKStability`, `_computeDynamicPercentile`, `_computeSparseThreshold`, `_computeSpectralNorm`, `_computeGradientNorm`, `_detectSuddenDrop`, `_isStagnating` | dispersion (MAD proxy), EMAs, gradient-conformity/spectral statistics, percentile/threshold helpers, sudden-drop & stagnation detection | `sanity.test.js`, `core.test.js` |
 | `persistence/load.js` | `_loadState` | restore the model from SQLite (dimensions, weights, gradients, protos, LSH) | `sanity.test.js` case F |
-| `persistence/save.js` | `_saveState` | write the model to SQLite (float32 blobs — see known finding below) | `sanity.test.js`, `golden.test.js` |
+| `persistence/save.js` | `_saveState` | write the model to SQLite (float32 blobs — see known finding below) | `sanity.test.js` |
 | `persistence/dimensions.js` | `_scaleAndSetDimensions`, `_setTransformerStructure`, `_setGradientStructure` | choose/scale hidden size, layer count, head count, LSH dims (compact `forceMin` branch frozen; full branch follows a width-scaling law) | `dimensions.test.js`, `sanity.test.js` |
-| `memory/lsh.js` | `_computeContentHash`, `_computeProjNorms`, `_invalidateProjCache`, `_getLshBitMasks`, `_computeLSHHashesLow`, `_insertProtoToLSH`, `_removeProtoFromLSH`, `_updateProtoInLSH`, `_getGlobalLSHCandidates`, `_refreshLshHyperplanes` | locality-sensitive hashing index (multi-set, multi-table) over prototype means; optional margin-order probing and a data-aware (PCA-aligned) hyperplane refresh, both off by default | `lsh.test.js` (recall + θ/π rounding law + refresh), `sanity.test.js` case C (churn consistency), `golden.test.js` |
+| `memory/lsh.js` | `_computeContentHash`, `_computeProjNorms`, `_invalidateProjCache`, `_getLshBitMasks`, `_computeLSHHashesLow`, `_insertProtoToLSH`, `_removeProtoFromLSH`, `_updateProtoInLSH`, `_getGlobalLSHCandidates`, `_refreshLshHyperplanes` | locality-sensitive hashing index (multi-set, multi-table) over prototype means; optional margin-order probing and a data-aware (PCA-aligned) hyperplane refresh, both off by default | `lsh.test.js` (recall + θ/π rounding law + refresh), `sanity.test.js` case C (churn consistency) |
 | `memory/protos.js` | `_createNewProto`, `_reinforceProto`, `_finalizeSemanticProto`, `_decayProtos`, `_updateSemanticStats`, `_getAvgProtoVariance`, `_sortByUtilityDescInPlace`, `_sortedByUtilityDesc`, `_sortByScoreDescInPlace`, `_computeProtoUtility`, `_computeMemberAffinity` | prototype (mean + variance + size + importance + accessCount) lifecycle and utility ranking | `sanity.test.js`, `core.test.js` |
 | `memory/replay.js` | `_replayOldMemory`, `_generativeReplay`, `_poolMultiPrototype` | experience replay / generative replay to fight catastrophic forgetting | `core.test.js` |
 | `memory/retrieval.js` | `_kernelSimilarity`, `_retrieveTopRelevantProtos` | RBF kernel similarity + top-k prototype retrieval | `sanity.test.js`, `core.test.js` |
-| `memory/consolidation.js` | `_consolidateSemanticProtos`, `_computeMemoryScoreFromProtos` | semantic prototype merge/split; attention-entropy memory scoring | `sanity.test.js`, `golden.test.js` |
+| `memory/consolidation.js` | `_consolidateSemanticProtos`, `_computeMemoryScoreFromProtos` | semantic prototype merge/split; attention-entropy memory scoring | `sanity.test.js` |
 | `memory/banks.js` | `_updateSemanticProtos`, `_pruneMemory`, `_updateMemoryBanks` | episodic/adaptive/semantic/core bank maintenance, capacity trim, prune; surprise-gated semantic writes (off by default) | `sanity.test.js`, `surprise.test.js` |
 | `memory/surprise.js` | `DEFAULT_SURPRISE_CONFIG`, `clamp01`, `surpriseFromSimilarity`, `surpriseGate`, `surpriseGateFromSimilarity`, `updateSurpriseMomentum`, `smoothedSurprise` | pure surprise gate for memory writes (Titans): scales a write by `floor + (1-floor)·s^sharpness`; `floor=1` is an exact no-op | `surprise.test.js` |
-| `memory/multiprobe.js` | margin-ordered multi-probe LSH (Lv et al. VLDB 2007): `DEFAULT_MULTIPROBE_CONFIG`, `resolveMultiProbeConfig`, `marginOrder`, `marginRanks`, `perturbationCost`, `rankPerturbations`, `applyFlips`, `multiProbeKeys`, `marginSingleBitKeys`, `prefixSingleBitKeys`, `flippedBits`, `marginCoverBudget`, `DEFAULT_ADAPTIVE_CONFIG`, `resolveAdaptiveConfig`, `adaptiveMultiProbeConfig`, `resolveEffectiveProbeConfig`, `adaptiveSingleBitBudget`, `adaptiveSingleBitKeys`. Wired into `_getGlobalLSHCandidates` behind the default-off `_multiProbeConfig`; with `_multiProbeConfig.adaptive` the probe depth is derived per query from the exact recovery coverage (Round 16). | `multiprobe.test.js`, `golden.test.js` |
+| `memory/multiprobe.js` | margin-ordered multi-probe LSH (Lv et al. VLDB 2007): `DEFAULT_MULTIPROBE_CONFIG`, `resolveMultiProbeConfig`, `marginOrder`, `marginRanks`, `perturbationCost`, `rankPerturbations`, `applyFlips`, `multiProbeKeys`, `marginSingleBitKeys`, `prefixSingleBitKeys`, `flippedBits`, `marginCoverBudget`, `DEFAULT_ADAPTIVE_CONFIG`, `resolveAdaptiveConfig`, `adaptiveMultiProbeConfig`, `resolveEffectiveProbeConfig`, `adaptiveSingleBitBudget`, `adaptiveSingleBitKeys`. Wired into `_getGlobalLSHCandidates` behind the default-off `_multiProbeConfig`; with `_multiProbeConfig.adaptive` the probe depth is derived per query from the exact recovery coverage (Round 16). | `multiprobe.test.js` |
 | `memory/binarypc.js` | **data-aware** binary principal components (BinaryPC arXiv 2608.04405): `DEFAULT_BINARYPC_CONFIG`, `resolveBinaryPCConfig`, `createRng`, `randomNormal`, `randomVector`, `meanVector`, `centerRows`, `covarianceMatrix`, `matVec`, `dot`, `norm`, `powerIteration`, `principalComponents`, `explainedVariance`, `randomOrthonormalBasis`, `pcaHashTables`, `alignedHashTables`, `randomHashTables`, `binaryCode`, `quantizationError`. The Eckart–Young case for replacing the random LSH hyperplanes with PCA-aligned ones; imported by the locked `lsh` bag behind the default-off `_pcaHashConfig` (`_refreshLshHyperplanes`); also reports each direction's exact data variance (`tableVariances`) and takes a data-driven `rankPolicy` (`above-mean`/`noise`). | `binarypc.test.js`, `lsh.test.js` section I |
-| `memory/bitweight.js` | bit-reliability theory for the LSH hash bits: `DEFAULT_BITWEIGHT_CONFIG`, `resolveBitWeightConfig`, `binaryEntropy`, `erf`, `normalCdf`, `flipProbability`, `reliabilityWeight`, `bitInformation`, `flipProbabilityFromMargin`, `estimateNoiseVariance`, `selectReliableRank`, `reliabilityWeights`, `weightedHamming`, `weightedKeyDistance`, `unpackWord`, `bitFlipProbabilities`, `poissonBinomialPmf`, `poissonBinomialQuantile`, `expectedFlippedBits`, `marginContainmentCoverage`, `marginContainmentDepth`, `probeRecoveryCoverage`, `recoveryDepth`, `calibrateNoiseFromFlips`. The exact flip law `P = arccos(sqrt(lambda/(lambda+sigma^2)))/pi` and its binary-symmetric-channel reading; fuels `binarypc.js`'s `rankPolicy` behind the default-off `_pcaHashConfig`. | `bitweight.test.js`, `binarypc.test.js`, `lsh.test.js`, `golden.test.js` |
+| `memory/bitweight.js` | bit-reliability theory for the LSH hash bits: `DEFAULT_BITWEIGHT_CONFIG`, `resolveBitWeightConfig`, `binaryEntropy`, `erf`, `normalCdf`, `flipProbability`, `reliabilityWeight`, `bitInformation`, `flipProbabilityFromMargin`, `estimateNoiseVariance`, `selectReliableRank`, `reliabilityWeights`, `weightedHamming`, `weightedKeyDistance`, `unpackWord`, `bitFlipProbabilities`, `poissonBinomialPmf`, `poissonBinomialQuantile`, `expectedFlippedBits`, `marginContainmentCoverage`, `marginContainmentDepth`, `probeRecoveryCoverage`, `recoveryDepth`, `calibrateNoiseFromFlips`. The exact flip law `P = arccos(sqrt(lambda/(lambda+sigma^2)))/pi` and its binary-symmetric-channel reading; fuels `binarypc.js`'s `rankPolicy` behind the default-off `_pcaHashConfig`. | `bitweight.test.js`, `binarypc.test.js`, `lsh.test.js` |
 | `memory/querymod.js` | dynamic query modification for binary LSH (arXiv 2605.23807): `DEFAULT_QUERYMOD_CONFIG`, `resolveQueryModConfig`, `dot`, `norm`, `cosine`, `normalize`, `meanVector`, `normalizedCentroid`, `dotProductSum`, `collisionProbabilityFromCos`, `collisionProbability`, `averageCollisionProbability`, `firstOrderCollisionProbability`, `averageCovariance`, `signBit`, `hashBits`, `collidesWithSet`, `centroidCollidesWithSet`, `collisionCoverage`, `selectCandidates`, `blendVectors`, `modifiedQuery`, `queryModificationGain`. Replaces the query with the l2-normalised centroid of the found neighbours (Theorems 1–2, Appendix C.1, §6.4); wired into `_getGlobalLSHCandidates` behind the default-off `_queryModConfig`. | `querymod.test.js`, `lsh.test.js` section J |
-| `transformer/attention.js` | `_multiHeadAttention`, `_contextAwareAttention`, `_computeAttentionWeights`, `_cacheAverageWeights` | multi-head attention; memory-augmented context attention; average-weight cache | `sanity.test.js`, `golden.test.js` |
-| `transformer/forward.js` | `_feedForwardBatch`, `_processTransformer` | transformer block forward pass (attention + gated FFN + norms) | `sanity.test.js`, `golden.test.js` |
-| `ensemble/hiveState.js` | `_updateHiveState`, `_hiveMemorySharing`, `_computeWeightedSum`, `_getSpecWeightMatrix` | per-member forward + ensemble readout; inter-member prototype transfer/specialization gating | `sanity.test.js`, `golden.test.js` |
-| `ensemble/scores.js` | `_computeSpecializationScores`, `_updatePerformanceScores`, `_updateAgreementScores`, `_updateTrustScores`, `_adjustPerformanceScores`, `_updateEnsembleWeights`, `_normalizeEnsembleWeights`, `_updateAdaptiveLearningRates`, `_updateMetrics` | the evolutionary layer: performance/agreement/trust scoring, ensemble weighting, adaptive per-member learning rates; optionally homeostatic (off by default) | `sanity.test.js`, `golden.test.js`, `homeostasis.test.js` |
+| `transformer/attention.js` | `_multiHeadAttention`, `_contextAwareAttention`, `_computeAttentionWeights`, `_cacheAverageWeights` | multi-head attention; memory-augmented context attention; average-weight cache | `sanity.test.js` |
+| `transformer/forward.js` | `_feedForwardBatch`, `_processTransformer` | transformer block forward pass (attention + gated FFN + norms) | `sanity.test.js` |
+| `ensemble/hiveState.js` | `_updateHiveState`, `_computeWeightedSum`, `_getSpecWeightMatrix` | per-member forward + ensemble readout; specialization gating | `sanity.test.js` |
+| `ensemble/scores.js` | `_computeSpecializationScores`, `_updatePerformanceScores`, `_updateAgreementScores`, `_updateTrustScores`, `_adjustPerformanceScores`, `_updateEnsembleWeights`, `_normalizeEnsembleWeights`, `_updateAdaptiveLearningRates`, `_updateMetrics` | the evolutionary layer: performance/agreement/trust scoring, ensemble weighting, adaptive per-member learning rates; optionally homeostatic (off by default) | `sanity.test.js`, `homeostasis.test.js` |
 | `ensemble/homeostasis.js` | `DEFAULT_HOMEOSTASIS_CONFIG`, `resolveHomeostasisConfig`, `isStableConfig`, `homeostaticScale`, `homeostaticLearningRates`, `updateActivity`, `rootMeanSquare`, `deviationEnergy` | pure homeostatic activity controller (Turrigiano synaptic scaling): a bounded/monotone error-driven multiplier that regulates each member's activity toward a set-point; `gain=0` is an exact no-op | `homeostasis.test.js` |
-| `training/gradients.js` | `_scaleGradientMatrix`, `_scaleGradientVector`, `_scaleGradients`, `_accumulateGradients`, `_applyGradients`, `_rollbackGradients` | manual backprop accumulation, clipping/scaling, apply/rollback; the logit gradient carries an optional per-sample weight | `sanity.test.js`, `golden.test.js`, `sample_weights.test.js` |
+| `training/gradients.js` | `_scaleGradientMatrix`, `_scaleGradientVector`, `_scaleGradients`, `_accumulateGradients`, `_applyGradients`, `_rollbackGradients` | manual backprop accumulation, clipping/scaling, apply/rollback; the logit gradient carries an optional per-sample weight | `sanity.test.js`, `sample_weights.test.js` |
 | `training/distillation.js` | `_distillKnowledge` | knowledge distillation from the ensemble into members | `sanity.test.js` |
 | `training/sample_weights.js` | `DEFAULT_WEIGHT_CONFIG`, `overlapUniqueness`, `clampWeights`, `normalizeWeights`, `weightEffectiveSampleSize`, `weightedMean`, `sampleWeights`, `spanWeightsFromEntries`, `causalWindowWeight`, `emittedWeightNormalizer` | sample-uniqueness loss weights (LdP ch. 4): overlapping labels share credit so the weighted objective's effective sample size matches the labels' independent information. Round 27 adds the pure causal streaming-window weight (`causalWindowWeight`) — the only form expressible on a one-label-at-a-time trainer. **Round 28** adds `emittedWeightNormalizer({mode: 'mean1' | 'scale' | 'none'})`: a causal EMA (α 0.1) of the *emitted* weights so the trained stream has running mean 1 (`mean1`), the raw running mean (`scale`, the P3 control arm), or the raw stream (`none`), with the raw value still reported as `meanUnnormalised` (`BUGS.md` #54) | `sample_weights.test.js` §E |
-| `knowledge/transfer.js` | `broadcastMemory`, `translateMemory` | public API: export prototypes for the "hivemind", import others' prototypes | `core.test.js`, `golden.test.js` |
+| `knowledge/transfer.js` | `broadcastMemory`, `translateMemory` | public API: export prototypes for the "hivemind", import others' prototypes | `core.test.js` |
 
 `indicatorProcessor.js` (candles → 10 indicator series) and `utils.js` (numeric
 predicates) are standalone and unchanged.
@@ -190,10 +186,10 @@ predicates) are standalone and unchanged.
 | module | methods | what it does | proven by |
 | --- | --- | --- | --- |
 | `controller/database.js` | `_initDatabase` | SQLite schema (`open_trades`, `closed_trades`, `candles`, `trained_features`, `global_stats`) | `core.test.js` |
-| `controller/accuracy.js` | `_loadGlobalAccuracy`, `_saveGlobalAccuracy` | persist win/loss/points/memory counters | `golden.test.js` |
+| `controller/accuracy.js` | `_loadGlobalAccuracy`, `_saveGlobalAccuracy` | persist win/loss/points/memory counters | `core.test.js` |
 | `controller/candles.js` | `_getRecentCandles` | validated candle ring buffer (`cacheSize`-bounded) | `core.test.js` |
-| `controller/features.js` | `_robustNormalize`, `_computeProtoQuality`, `_interleave`, `_extractFeatures`, `_chooseDimension` | percentile-robust feature scaling; prototype quality score; O(n) interleave; tier-aware feature vector; input-dimension search | `features.test.js`, `golden.test.js` |
-| `controller/trades.js` | `_updateOpenTrades`, `_processClosedTrades`, `_sampleWeightsForBatch`, `_accumulateSampleWeightStats`, `sampleWeightSummary` | simulate TP/SL fills against new candles; turn closed trades into training steps (dedup by feature/outcome hash). R27-4b: `_updateOpenTrades` derives the true holding length from the cached window (capped at `cacheSize − 1`) so the `triple` vertical barrier is reachable; `_sampleWeightsForBatch` is the additive uniqueness-weight bridge (off by default; the opt-in `causal-window` mode is R27-3) | `core.test.js`, `golden.test.js`, `controller_invariants.test.js` |
+| `controller/features.js` | `_robustNormalize`, `_computeProtoQuality`, `_interleave`, `_extractFeatures`, `_chooseDimension` | percentile-robust feature scaling; prototype quality score; O(n) interleave; tier-aware feature vector; input-dimension search | `features.test.js` |
+| `controller/trades.js` | `_updateOpenTrades`, `_processClosedTrades`, `_sampleWeightsForBatch`, `_accumulateSampleWeightStats`, `sampleWeightSummary` | simulate TP/SL fills against new candles; turn closed trades into training steps (dedup by feature/outcome hash). R27-4b: `_updateOpenTrades` derives the true holding length from the cached window (capped at `cacheSize − 1`) so the `triple` vertical barrier is reachable; `_sampleWeightsForBatch` is the additive uniqueness-weight bridge (off by default; the opt-in `causal-window` mode is R27-3) | `core.test.js`, `controller_invariants.test.js` |
 
 ## Legion — `legion/`
 
@@ -228,11 +224,9 @@ state.
 ## Analysis supercharges — `analysis/`
 
 Additive, pure modules for **honest evaluation**. They read signals/candles and
-never import from (or are imported by) the locked hot path, so they cannot move
-a golden fingerprint. Each has exact reference vectors in `analysis.test.js`
+never import from (or are imported by) the model hot path. Each has exact reference vectors in `analysis.test.js`
 (638 checks; the walk-forward harness also has a real-candle end-to-end run in
-`walkforward.test.js`, 63 checks) and is registered `LOCKED-invariant` in
-`../test/lock-registry.js`.
+`walkforward.test.js`, 63 checks) .
 
 | module | exports | what it does | proven by |
 | --- | --- | --- | --- |
@@ -274,8 +268,8 @@ with its gate open** — `hivemind/training/gradients.js` and the golden-pinned 
 
 | module | exports | what it does | proven by |
 | --- | --- | --- | --- |
-| `analysis/benchmark.js` (new) | `BENCHMARK_KINDS`, `makeBenchmarkForecaster`, `fitBaseRate`/`predictBaseRate`, `fitRidge`/`predictRidge`, `fitMLP`/`predictMLP`, `fitStandardiser`/`applyStandardiser` (the opt-in roster `BENCHMARK_VARIANTS` lives in `analyze.js`) | **the model-class benchmark** (round-29 P1): base rate / ridge (closed form) / one-hidden-layer tanh MLP (seeded SGD) / a pluggable pretrained-TSFM arm, scored on the **same causal `featureVector`** the bare path uses and through the **same** `evaluateAB` walk-forward, audit, gate and cost ladder as every other arm (a `kind: 'benchmark'` variant — selected by `--variants=bench-*` and dispatched to its own factory under either `--model=controller` or `--model=bare`; there is no `model: 'benchmark'`). Its forecast kind (`benchmark`) joins the controller in the **calibration** MCS group via `analyze.js#forecastKindOf`, so "same inputs" is structural. Opt-in, never in the default roster (adding candidates re-deflates every Sharpe). Registered `LOCKED-invariant` in `../test/lock-registry.js` | `analysis.test.js`, `analyze.test.js` |
-| `analysis/carry.js` (new) | `parseFundingJsonl`, `auditFundingSeries`, `auditFundingProblems`, `carryPerPeriod`, `carryReturns`, `carryOnBarGrid`, `carryPanelStream`, `correlation`, `pooledCarry`, `FUNDING_GRID_MS`, `FUNDING_PER_YEAR` | **the funding/basis carry sleeve** (round-29 P4): audit a funding series on its own grid (off-grid-step budget, exact-zero periods, unclosed rows = timestamp in the future), project the funding rates onto the candle bar grid (epoch-ms coercion of both axes — the shipped JSONL stores ISO strings), and build the **delta-neutral** (short perp / long spot) return per period. Output is a *per-stream* series fed to the panel — the price-only dependence is retained beside the extended one so the increment is visible. Registered `LOCKED-invariant` in `../test/lock-registry.js` | `analysis.test.js` (P4 carry/panel section) |
+| `analysis/benchmark.js` (new) | `BENCHMARK_KINDS`, `makeBenchmarkForecaster`, `fitBaseRate`/`predictBaseRate`, `fitRidge`/`predictRidge`, `fitMLP`/`predictMLP`, `fitStandardiser`/`applyStandardiser` (the opt-in roster `BENCHMARK_VARIANTS` lives in `analyze.js`) | **the model-class benchmark** (round-29 P1): base rate / ridge (closed form) / one-hidden-layer tanh MLP (seeded SGD) / a pluggable pretrained-TSFM arm, scored on the **same causal `featureVector`** the bare path uses and through the **same** `evaluateAB` walk-forward, audit, gate and cost ladder as every other arm (a `kind: 'benchmark'` variant — selected by `--variants=bench-*` and dispatched to its own factory under either `--model=controller` or `--model=bare`; there is no `model: 'benchmark'`). Its forecast kind (`benchmark`) joins the controller in the **calibration** MCS group via `analyze.js#forecastKindOf`, so "same inputs" is structural. Opt-in, never in the default roster (adding candidates re-deflates every Sharpe). Open for edit (unlock CYCLE-206) | `analysis.test.js`, `analyze.test.js` |
+| `analysis/carry.js` (new) | `parseFundingJsonl`, `auditFundingSeries`, `auditFundingProblems`, `carryPerPeriod`, `carryReturns`, `carryOnBarGrid`, `carryPanelStream`, `correlation`, `pooledCarry`, `FUNDING_GRID_MS`, `FUNDING_PER_YEAR` | **the funding/basis carry sleeve** (round-29 P4): audit a funding series on its own grid (off-grid-step budget, exact-zero periods, unclosed rows = timestamp in the future), project the funding rates onto the candle bar grid (epoch-ms coercion of both axes — the shipped JSONL stores ISO strings), and build the **delta-neutral** (short perp / long spot) return per period. Output is a *per-stream* series fed to the panel — the price-only dependence is retained beside the extended one so the increment is visible. Open for edit (unlock CYCLE-206) | `analysis.test.js` (P4 carry/panel section) |
 | `funding_fetcher.js` (new) | `FUNDING_SOURCES`, `FUNDING_PERIOD_MS`, `FUNDING_MINUTE`, `DEFAULT_FUNDING_BACKFILL_START`, `getFundingSource`, `normalizeFundingRow`, `formatFundingRow`, `serializeFundingRates`, `fetchFundingRates`, `fetchFundingSeries` | **the funding fetch path** (round-29 P4, step 0): Binance USDⓈ-M funding history through the existing fetch discipline, a byte-exact JSONL round-trip serializer, and the merge/backfill CLI used to build the basket (network-free library is tested; the fetch CLI is the driver) | `fetcher.test.js` (111 checks) + `candles.test.js` (192 checks; the funding-basket manifest audit, +45, and the byte-round-trip, +8, live there) |
 
 **New data manifests (`candles_audit.js`).** The 15m basket is `CANDLE_MANIFEST_15M` /
@@ -310,9 +304,7 @@ controller's take-profit/stop-loss grid uses, derived from the price magnitude s
 the grid is always at least 10× finer than `price * minPriceMovement` (clamped to
 2–8 dp). It replaced a hardcoded `2`, which collapsed sub-cent symbols to `0.00`
 and inverted their trade direction (see `../docs/BUGS.md` #9). Prices ≥ $40 keep
-2 dp, so the controller golden fingerprints are unchanged. Proven by
-`price_precision.test.js` + `multisymbol.test.js`, registered `LOCKED-invariant`
-in `../test/lock-registry.js` (`SUPPORT_REGISTRY`).
+2 dp. Proven by `price_precision.test.js` + `multisymbol.test.js`.
 
 ## LSH recall — `hivemind/memory/lsh.js`
 
@@ -325,8 +317,7 @@ fail), hash words equal the hyperplane sign pattern bit-for-bit, the bucket inde
 mirrors `_semanticProtos` without leaking, exact-match queries recall 100% of the
 bank at both config widths, the measured bit-flip rate matches the Charikar
 rounding law `Pr[differ] = θ/π` to ≤0.03, and the end-to-end retrieval path
-recalls the query prototype. Registered under the `lsh` bag in
-`../test/lock-registry.js`; details and the width caveat in
+recalls the query prototype. Details and the width caveat in
 `../docs/research/lsh-ann.md`.
 
 ## Margin-ordered multi-probe LSH — `hivemind/memory/multiprobe.js`
@@ -348,9 +339,8 @@ that `P(flip)` falls monotonically with margin (0.48 → 0.04 across octiles), t
 margin order dominates both the historical prefix probe and 12 sampled random
 orders at every budget, the exact ≤1-bit/≤2-bit completeness identities, and — on
 a real 107-bit index — a self-recall gain from 0.03 to 0.30 at σ=0.25 exactly
-where the prefix probe collapses. Registered `LOCKED-invariant`; the wiring is done
-(off by default via `_multiProbeConfig`; `golden.test.js` proves the no-op and
-section F measures 0.167 → 0.517 at σ=0.25 with the flag on), leaving only an
+where the prefix probe collapses. The wiring is done
+(off by default via `_multiProbeConfig`; section F measures 0.167 → 0.517 at σ=0.25 with the flag on), leaving only an
 intentional `hm:broadcast` re-freeze for the on-by-default flip in
 `../docs/TODO.md` item 2.
 
@@ -510,8 +500,7 @@ exactly `1.0`. `surprise.test.js` (32 checks) proves the pure math, the bit-exac
 off switch (two identically-seeded banks fingerprint equally → all 11 goldens
 unmoved), and that the enabled gate's measured gated/ungated write ratio equals
 `surpriseGate(1 - measuredSimilarity)` with novel written >2× more strongly than
-predictable. Registered `LOCKED-invariant` in `../test/lock-registry.js`
-(`SUPPORT_REGISTRY`); rationale in `../docs/research/memory-retrieval.md`.
+predictable. Open for edit (unlock CYCLE-206); rationale in `../docs/research/memory-retrieval.md`.
 
 ## Sample-uniqueness weighted training — `hivemind/training/sample_weights.js`
 
@@ -542,8 +531,7 @@ realized holding periods of trades already drained, or an explicit
 `--sample-weight-horizon`), and the *emitted* stream is renormalised to running mean 1 by
 `emittedWeightNormalizer` (with a `none` mode reproducing the raw stream and a `scale`
 control arm, `sample-weights-scale-control`), so the weighting experiment is no longer
-confounded by a ≈2.6× effective-learning-rate change. Registered `LOCKED-invariant` in
-`../test/lock-registry.js`; rationale in `../docs/research/financial-validation.md` and
+confounded by a ≈2.6× effective-learning-rate change. Rationale in `../docs/research/financial-validation.md` and
 `../docs/METHOD.md` §9.
 
 ## Homeostatic plasticity — `hivemind/ensemble/homeostasis.js`
@@ -563,10 +551,9 @@ analytic stability region `0 < gain·target < 2`. `_updateAdaptiveLearningRates`
 applies the multiplier to each already-rank-controlled rate when
 `_homeostasisEnabled` is true. The shipped default is **false**, and the test
 proves that enabling with `gain = 0` produces fingerprint-equal trajectories to
-the disabled path, so all 11 golden values are unaffected. `homeostasis.test.js`
+the disabled path. `homeostasis.test.js`
 (30 checks) proves the pure math and the closed-loop convergence to `target/k`
-on the toy system `activity = k·lr`. Registered `LOCKED-invariant` in
-`../test/lock-registry.js` (`SUPPORT_REGISTRY`); rationale in
+on the toy system `activity = k·lr`. Rationale in
 `../docs/research/continual-learning.md` and
 `../docs/research/ensemble-evolution.md`.
 
@@ -606,51 +593,11 @@ basket orchestrator. See the repo `README.md` for the `npm run fetch*` scripts.
 
 ## Status legend
 
-The full, machine-readable classification — with the citations and proving tests
-for every component — is [`../docs/LOCKED.md`](../docs/LOCKED.md) and
-[`../test/lock-registry.js`](../test/lock-registry.js) (checked by
-`locks.test.js`). Summary:
-
-- **LOCKED (bit-exact)** — `hiveMind.js` + everything under `hivemind/`
-  (except `internal/mixins.js`, pure additions like `diagnostics`, and
-  `persistence/dimensions.js`, which is now `LOCKED-invariant`). Any
-  change must keep `golden.test.js` fingerprints identical, or be an
-  intentional, documented re-freeze. (One exception to "identical": the
-  `hm:predictions` fingerprint is compared at 6 significant digits, because it
-  hashes raw float64 `predict()` output and was JS-engine-sensitive rather than
-  driver-sensitive — see `../docs/BUGS.md` #17 and
-  `test/node/engine_portability.test.js`. The other ten are literal.)
-- **LOCKED (structural)** — `legion/` and `hivemind/controller/` are covered by
-  `legion.test.js` / `modules.test.js` / `core.test.js`; they are not
-  fingerprint-locked method-by-method, but their behaviour is pinned.
-- **LOCKED (invariant)** — the `analysis/` supercharges (`performance.js`,
-  `splits.js`, `labels.js`, `uniqueness.js`, `backtest.js`, `walkforward.js`,
-  `overfitting.js`, `reality_check.js`) and the hot-path support modules (`price_precision.js`, `hivemind/memory/surprise.js`,
-  `hivemind/training/sample_weights.js`, `hivemind/ensemble/homeostasis.js`,
-  `legion/evolve.js`, `hivemind/memory/multiprobe.js`, `hivemind/memory/binarypc.js`,
-  `hivemind/memory/bitweight.js`, `hivemind/memory/querymod.js`,
-  `consolidation_logic.js`,
-  `candle_quality.js`): exact reference vectors.
-- **LOCKED (invariant, V2)** — the round-31 layer (`core/contracts/*`, `core/registry.js`,
-  `core/primitives/*`, `plugins/*`): exact reference vectors in `contracts.test.js` (151 checks) plus
-  the engine's own goldens for the legacy adapter (`legacy_hivemind.test.js`, 15 checks). Registered
-  in `../test/lock-registry.js#CORE_REGISTRY` (8) + `PLUGIN_REGISTRY` (7); not part of the legacy
-  registry totals. See the "V2" section above and `docs/LOCKED.md`.
-  `price_precision.js` is additionally covered by `multisymbol.test.js` and the
-  unchanged golden fingerprints; `surprise.js`, `sample_weights.js`,
-  `homeostasis.js` and `evolve.js` are each covered by their own entry (the first
-  three are default-off no-ops that keep the goldens unchanged; `evolve.js` is the
-  one remaining additive module nothing imports yet), while `multiprobe.js`,
-  `binarypc.js`, `bitweight.js` and `querymod.js` are flag-gated into the locked
-  `lsh` bag behind `_multiProbeConfig`, `_pcaHashConfig` and `_queryModConfig`,
-  so each is pinned by its own entry **and** the golden no-op.
-- **NEEDS-LOCAL-RUN** — **none remain.** The `test/node/` mirrors (real
-  `better-sqlite3` + real `worker_threads`) are green locally
-  (`npm test`, **115/115 blocks across 39 files** at round 22,
-  `../docs/BUGS.md` #20/#21), so the three controller
-  DB bags (`controllerDatabase`, `controllerAccuracy`, `controllerTrade`) were
-  promoted to `LOCKED-invariant` (`../docs/LOCKED.md`, `../test/lock-registry.js`).
-  Re-run `npm test` locally after any change to the hot path or the mirrors.
+Nothing is locked (unlock CYCLE-206 — the golden/lock apparatus was deleted:
+`test/lock-registry.js`, `docs/LOCKED.md`, the golden + locks entries). Every
+component is open for edit; `sanity`, `core`, `controller_invariants`,
+`walkforward` and `multisymbol` are the regression net. History kept in
+`../docs/BUGS.md`.
 
 ## Known findings (details in `../docs/BUGS.md`)
 
@@ -666,9 +613,5 @@ for every component — is [`../docs/LOCKED.md`](../docs/LOCKED.md) and
   sql.js shim).
 - The browser test shim cannot run the same entry twice in one worker (sql.js
   `registry` vs `globalThis.__vfs` mismatch); use a fresh worker per entry.
-- **The `hm:predictions` golden fingerprint is JS-engine-sensitive by nature**
-  (it is the one observable over raw, unrounded float64 `predict()` output), so
-  it is compared at 6 significant digits; a last-ulp transcendental difference
-  moves it and nothing else. The other ten golden hashes are literal.
-  `test/node/engine_portability.test.js` guards the invariant under a simulated
-  +1-ulp `Math.exp` drift; see `BUGS.md` #17.
+- JS-engine float notes: prediction output is raw float64; treat last-ulp
+  differences as engine noise, not model changes (old `BUGS.md` #17).

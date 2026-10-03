@@ -2,7 +2,7 @@
 //
 // The adapter constructs a real `HiveMind`, so this mirror runs it against the
 // native better-sqlite3 driver (the browser entry runs the sql.js shim) — the same
-// convention as `golden.test.js`/`surprise.test.js`. `labelledStateDir` memoises
+// convention as `surprise.test.js`. `labelledStateDir` memoises
 // per label so a repeated `stateDir('det-a')` resolves to the SAME database, which
 // is what the adapter's determinism check assumes.
 //

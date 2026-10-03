@@ -336,7 +336,10 @@ test('the analyze CLI documents and threads the R27-9 flag surface', () => {
         // (2) `--list-variants` prints the resolvable taxonomy (id/kind/applies-to/
         //     default?/applicable-here) and exits WITHOUT starting a run. The
         //     taxonomy is the only place an operator can see why a variant is
-        //     `not-applicable` on the controller (R27-2).
+        //     `not-applicable` (R27-2). Since #71 (multiprobe/querymod scored-live
+        //     since C3) every row is applicable on the controller, so the
+        //     not-applicable explanation is exercised via `--model=bare`, where
+        //     the controller-scoped variants cannot reach the scored model.
         const listState = path.join(root, 'state-list');
         const lv = spawnSync(process.execPath, [analyzePath, '--list-variants'], {
             cwd: projectRoot,
@@ -345,10 +348,16 @@ test('the analyze CLI documents and threads the R27-9 flag surface', () => {
         });
         assert.equal(lv.status, 0, `--list-variants exited ${lv.status}:\n${lv.stderr}`);
         assert.match(lv.stdout, /applies-to/, '--list-variants does not print the taxonomy header');
-        assert.match(lv.stdout, /not-applicable:/, '--list-variants does not explain the not-applicable variants');
         for (const id of ['multiprobe', 'querymod', 'sample-weights', 'pca-hash', 'sig-momentum']) {
             assert.ok(lv.stdout.includes(id), `--list-variants does not list ${id}`);
         }
+        const lvBare = spawnSync(process.execPath, [analyzePath, '--list-variants', '--model=bare'], {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            env: { ...process.env, NEULEGION_STATE: listState },
+        });
+        assert.equal(lvBare.status, 0, `--list-variants --model=bare exited ${lvBare.status}:\n${lvBare.stderr}`);
+        assert.match(lvBare.stdout, /not-applicable:/, '--list-variants does not explain the not-applicable variants');
         assert.ok(!fs.existsSync(path.join(listState, 'runs')), '--list-variants must not start a run');
 
         // (3) The R27-9 defaults: reachability ON, one audit probe per fold, the

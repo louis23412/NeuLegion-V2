@@ -48,13 +48,13 @@ export const COMPONENTS = {
     replay: ['_replayOldMemory', '_generativeReplay', '_poolMultiPrototype'],
     retrieval: ['_kernelSimilarity', '_retrieveTopRelevantProtos'],
     consolidation: ['_consolidateSemanticProtos', '_computeMemoryScoreFromProtos'],
-    banks: ['_updateSemanticProtos', '_pruneMemory', '_updateMemoryBanks'],
+    banks: ['_updateSemanticProtos', '_pruneMemory', '_promoteStagedDiscards', '_updateMemoryBanks'],
     attention: [
         '_multiHeadAttention', '_contextAwareAttention',
         '_computeAttentionWeights', '_cacheAverageWeights',
     ],
     forward: ['_feedForwardBatch', '_processTransformer'],
-    hiveState: ['_updateHiveState', '_hiveMemorySharing', '_computeWeightedSum', '_getSpecWeightMatrix'],
+    hiveState: ['_updateHiveState', '_computeWeightedSum', '_getSpecWeightMatrix'],
     scores: [
         '_computeSpecializationScores', '_updatePerformanceScores', '_updateAgreementScores',
         '_updateTrustScores', '_adjustPerformanceScores', '_updateEnsembleWeights',

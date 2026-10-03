@@ -1,3 +1,5 @@
+> **Archived (CYCLE-206 cleanup): implemented and run — read-only evidence. Live plan: `PLAN-next.md`. Index: `ARCHIVE.md`.
+
 # NeuLegion — Round 28 plan (reading coherence, the weighting confound, then the label-policy decision)
 
 Status: **IMPLEMENTED (round 28) — P1a–P1f and P2 landed with the full browser suite green and

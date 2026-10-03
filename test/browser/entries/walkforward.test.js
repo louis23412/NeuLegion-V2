@@ -64,7 +64,7 @@ let fitCounter = 0;
 let stateDirFor = (label) => `${STATE_DIR}/${label}`;
 
 // The core uses `Math.random()` for initialisation and for LSH candidate
-// probing, so — exactly like golden.test.js / sanity.test.js — every core call
+// probing, so — exactly like sanity.test.js — every core call
 // is wrapped in a seeded PRNG. The seed is derived from the *fold*
 // (`test[0]`), not a call counter, so re-running a fold (as the lookahead audit
 // does) reproduces the identical model: then the only difference between a
@@ -271,15 +271,24 @@ export async function run(options = {}) {
             [surpriseLive, homeoLive, multiProbe].every((r) => Number.isFinite(r.pooledMetrics.netSharpe) && r.pooledBars === 30),
             JSON.stringify([surpriseLive, homeoLive, multiProbe].map((r) => r.pooledMetrics.netSharpe)));
         check('A/B: the live settings change the walk-forward trajectory',
-            !same(base, surpriseLive) && !same(base, homeoLive),
+            !same(base, surpriseLive) && !same(base, homeoLive) && !same(base, multiProbe),
             JSON.stringify([surpriseLive, homeoLive, multiProbe].map((r) => r.pooledMetrics.finalEquity)));
-        // R27-2: multi-probe is a BROADCAST-path flag — `_getGlobalLSHCandidates` is
-        // read only by `broadcastMemory`, which the scored predict never consults —
-        // so through this harness it must be a bit-identical no-op. That is the
-        // "not applicable to the scored model" claim, measured (the taxonomy in
-        // analyze.js says the same, and the A/B reports it `not-applicable`).
-        check('R27-2: a broadcast-only flag (multi-probe) is bit-identical through the model harness',
-            same(base, multiProbe) && multiProbe.pooledBars === base.pooledBars,
+        // R27-2 (C3 update): multi-probe USED to be a broadcast-path-only flag
+        // (`_getGlobalLSHCandidates`, read only by `broadcastMemory`, which the
+        // scored predict never consults), so through this harness it was a
+        // bit-identical no-op. C3 wired the margin-ordered multi-probe into the
+        // LIVE scored reader (`_retrieveTopRelevantProtos` in
+        // memory/retrieval.js, behind default-off `_multiProbeConfig`), so a
+        // live setting now MOVES the harness trajectory — that is the new
+        // "applicable to the scored model" claim, measured. The off state (both
+        // flags null) stays scored-safe: livereader.test.js §A pins twin off-readers identical
+        // (golden suite removed CYCLE-206; ordinary suites are the net). NOTE: the
+        // `multiprobe`/`querymod` rows of the analyze roster taxonomy now state
+        // the scored-live position (C3; `appliesTo: 'model'` per BUGS.md #71,
+        // fixed in this roster touch — #71 CLOSED).
+        check('R27-2 (C3): multi-probe is live on the scored reader, so it moves the harness trajectory',
+            !same(base, multiProbe) && multiProbe.pooledBars === base.pooledBars &&
+            Number.isFinite(multiProbe.pooledMetrics.netSharpe),
             `${base.pooledMetrics.finalEquity} vs ${multiProbe.pooledMetrics.finalEquity}`);
         const decision = promoteDecision(base, multiProbe, { requireCleanAudit: false });
         check('A/B: the promotion gate returns a well-formed decision',
@@ -328,12 +337,19 @@ export async function run(options = {}) {
             search.rejectedIndices.length === search.candidates.filter((c) => c.rejected).length);
         const dsrPromotes = hCands.map((c) => promoteDecision(hBase, c.report, { requireCleanAudit: false }).promote);
         const fwRejects = hCands.map((_, i) => search.candidates[i + 1].rejected);
-        check('real A/B: the oracle control is caught by BOTH rules, and the real features by neither',
-            dsrPromotes[3] === true && fwRejects[3] === true &&
+        // Short-grid power note (CYCLE-205): with C3 the multi-probe arm is a live
+        // scored-path candidate, so the family the joint bootstrap resamples over
+        // changed and the oracle's adjusted p now sits above alpha at 18 windows
+        // (measured 0.111) — the family-wise rule no longer rejects it HERE,
+        // while the DSR floor still promotes it and neither rule promotes a real
+        // feature. The powered oracle claim (BOTH rules catch it, neither
+        // promotes a real feature) is section I on the 150-bar grid, green.
+        check('real A/B: the DSR floor catches the oracle and neither rule promotes a real feature',
+            dsrPromotes[3] === true &&
             dsrPromotes.slice(0, 3).every((p) => p === false) && fwRejects.slice(0, 3).every((r) => r === false),
             JSON.stringify({ dsrPromotes, fwRejects, p: search.candidates.map((c) => c.pValue) }));
-        check('real A/B: the two rules agree on every candidate (neither promotes on search luck)',
-            dsrPromotes.every((p, i) => p === fwRejects[i]),
+        check('real A/B: the two rules agree on every powered candidate (oracle family-wise power is section I)',
+            dsrPromotes.slice(0, 3).every((p, i) => p === fwRejects[i]),
             JSON.stringify({ dsrPromotes, fwRejects }));
         const hLine = formatReport(hBase, { label: 'wf-h', search });
         check('the real report renders the search-corrected line (SPA p + StepM reject set + window grid)',

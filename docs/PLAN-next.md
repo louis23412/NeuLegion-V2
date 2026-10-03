@@ -132,6 +132,7 @@ must earn its file (the 10a–10n bar: task-form for an open TODO or it stays
 a convergence).
 **D4 — Untested surfaces (14).** Fetcher CLIs, vault capacity/prune, ledger
 floors, SQLite reload idempotency — background, batch it.
+**D5 — Model-track probes (lab CYCLE-214–217, falsifier-first).** B1 coherence-gating DROPPED, members independent. B2 TRANSFORMER-BOTTLENECK: closed-form ridge doubles shipped transformer on big-move (+0.079 vs +0.037); linear-first doctrine adopted. M4 PARK stands; B3 gated. Base-rate rule: skill vs causal train-fitted base, aggregation named.
 
 ## Parked (do not touch until their unblock arrives)
 

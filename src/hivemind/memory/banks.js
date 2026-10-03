@@ -5,7 +5,7 @@
 // (see internal/mixins.js), so every method still runs with a HiveMind
 // instance as `this` and reads/writes the underscore-prefixed state declared
 // in the class body. Splitting by concern keeps each file reviewable; the
-// golden suite (test/browser/entries/golden.test.js) pins the numerics.
+// ordinary suites (sanity determinism, controller invariants, walk-forward) pin the behavior.
 import { surpriseGateFromSimilarity } from './surprise.js';
 
 export const bankMethods = {
@@ -292,7 +292,6 @@ export const bankMethods = {
         selectedIndices.sort((a, b) => a - b);
         this._attentionMemory[transformerIdx] = selectedIndices.map(idx => memory[idx]);
 
-        const perf = this._performanceScores[transformerIdx] ?? 0.5;
         const allIndices = Array.from({length: memory.length}, (_, i) => i);
         const discardedIndices = allIndices.filter(idx => !selectedIndices.includes(idx));
 
@@ -303,36 +302,67 @@ export const bankMethods = {
             }));
             discardWithScore.sort((a, b) => b.score - a.score);
 
-            const numPromote = Math.min(Math.round(this._baseProtoCapacity * (0.25 + 0.5 * (1 - perf))), discardWithScore.length);
-
-            const promotedEntries = [];
-            for (let k = 0; k < numPromote; k++) {
-                const { idx } = discardWithScore[k];
-                const entry = memory[idx];
-                const newProtos = entry.protos.map(p => {
-                    const newMean = new Float32Array(p.mean);
-                    const newProto = this._createNewProto(newMean, new Float32Array(p.variance), p.size * 1.1, true);
-                    this._reinforceProto(newProto, p.accessCount * 0.4, p.size * 0.2, this._baseImpInc * 3, this._coreBoostMultiplier);
-                    this._finalizeSemanticProto(newProto, null);
-                    return newProto;
-                });
-                const repMean = entry.repMean ? new Float32Array(entry.repMean) : this._weightedMean(entry.protos);
-                promotedEntries.push({
-                    protos: newProtos,
-                    repMean,
-                    repProj: this._computeProjNorms(repMean)
-                });
+            // C6 (lab CYCLE-206): stage the ranked discards for GLOBAL top-K
+            // promotion at the end of the forward pass
+            // (`_promoteStagedDiscards`, called from `_updateHiveState`).
+            // Per-member budgets picked each member's own best (C4 flipped the
+            // sign so skilled members promote more); the probe measured global
+            // top-K archiving higher mean utility (global 1.3043 > flipped
+            // 1.2673 > stock 1.1767), so selection is now pooled across
+            // members while ownership is preserved (each winner still lands in
+            // its own member's core store). Total promoted is unchanged in
+            // shape: K = the summed per-member C4 budgets.
+            const staged = this._stagedDiscards || (this._stagedDiscards = []);
+            for (const { idx, score } of discardWithScore) {
+                staged.push({ t: transformerIdx, entry: memory[idx], score });
             }
+        }
+    },
 
-            this._coreEpisodic[transformerIdx].push(...promotedEntries);
+    _promoteStagedDiscards () {
+        const staged = this._stagedDiscards;
+        if (!staged || staged.length === 0) return;
+        this._stagedDiscards = [];
 
-            if (this._coreEpisodic[transformerIdx].length > this._coreEpisodicMaxEntries) {
-                const coreWithScore = this._coreEpisodic[transformerIdx].map(entry => ({
+        let budget = 0;
+        for (let m = 0; m < this._ensembleSize; m++) {
+            const perf = this._performanceScores[m] ?? 0.5;
+            budget += Math.round(this._baseProtoCapacity * (0.25 + 0.5 * perf));
+        }
+        const numPromote = Math.min(budget, staged.length);
+
+        staged.sort((a, b) => b.score - a.score);
+
+        const byMember = new Map();
+        for (let k = 0; k < numPromote; k++) {
+            const { t, entry } = staged[k];
+            const newProtos = entry.protos.map(p => {
+                const newMean = new Float32Array(p.mean);
+                const newProto = this._createNewProto(newMean, new Float32Array(p.variance), p.size * 1.1, true);
+                this._reinforceProto(newProto, p.accessCount * 0.4, p.size * 0.2, this._baseImpInc * 3, this._coreBoostMultiplier);
+                this._finalizeSemanticProto(newProto, null);
+                return newProto;
+            });
+            const repMean = entry.repMean ? new Float32Array(entry.repMean) : this._weightedMean(entry.protos);
+            const promoted = {
+                protos: newProtos,
+                repMean,
+                repProj: this._computeProjNorms(repMean)
+            };
+            if (!byMember.has(t)) byMember.set(t, []);
+            byMember.get(t).push(promoted);
+        }
+
+        for (const [t, promotedEntries] of byMember) {
+            this._coreEpisodic[t].push(...promotedEntries);
+
+            if (this._coreEpisodic[t].length > this._coreEpisodicMaxEntries) {
+                const coreWithScore = this._coreEpisodic[t].map(entry => ({
                     entry,
-                    score: this._computeMemoryScoreFromProtos(entry.protos, null, transformerIdx, -1, [], true)
+                    score: this._computeMemoryScoreFromProtos(entry.protos, null, t, -1, [], true)
                 }));
                 coreWithScore.sort((a, b) => b.score - a.score);
-                this._coreEpisodic[transformerIdx] = coreWithScore.slice(0, this._coreEpisodicMaxEntries).map(item => item.entry);
+                this._coreEpisodic[t] = coreWithScore.slice(0, this._coreEpisodicMaxEntries).map(item => item.entry);
             }
         }
     },

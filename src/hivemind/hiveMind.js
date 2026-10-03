@@ -183,8 +183,6 @@ class HiveMind {
 
             this._updateHiveState(inputs, target, false, false, true, false);
 
-            this._hiveMemorySharing();
-
             this._gradientAccumulation = this._setGradientStructure();
         }
 

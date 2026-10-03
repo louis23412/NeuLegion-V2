@@ -4,15 +4,14 @@
 // The architecture audit's conclusion (`docs/ARCHITECTURE-v2.md` §5) is that the
 // model core is the part the evidence says is inert AND the part whose
 // whole-engine lock blocks modularity, so V2 rebuilds it as plugins — but it
-// keeps the legacy math available as exactly one plugin, so its 11 golden
-// fingerprints are never lost. This file is that plugin. It is the only file
+// keeps the legacy math available as exactly one plugin, so the legacy behavior is never lost. This file is that plugin. It is the only file
 // under `src/plugins/` allowed to import the legacy engine, and nothing under
 // `src/core/` may import it (the import law is enforced by `contracts.test.js`).
 //
 // Two consequences worth stating explicitly:
 //   * `create()` is a plain constructor call — this adapter must not (and does
-//     not) reimplement, wrap or re-order any arithmetic, so the goldens stay the
-//     engine's own (`golden.test.js` 23/0 is the V2.0 acceptance condition).
+//     not) reimplement, wrap or re-order any arithmetic, so behavior stays the
+//     engine's own (the `contracts` suite + ordinary suites are the acceptance condition).
 //   * the engine's own lock is untouched: `docs/COMPONENTS.md` rule 4 ("don't
 //     touch the hot math") still governs `src/hivemind/**`, which is why this is
 //     an additive read-only consumer.

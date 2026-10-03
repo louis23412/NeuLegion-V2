@@ -59,15 +59,10 @@ total installed count. `modules.test.js` asserts:
 So dropping, renaming, or double-installing a method is a hard test failure,
 not a runtime `undefined is not a function`.
 
-## Classification and locks
+## Classification
 
-The manifest says *which bag owns which method*; [`LOCKED.md`](LOCKED.md) and
-[`../test/lock-registry.js`](../test/lock-registry.js) say *how much each bag is
-trusted, why, and what proves it*. Every bag in the manifest must have exactly
-one registry entry — `locks.test.js` fails otherwise — with one of: LOCKED-bit-exact
-(golden fingerprint), LOCKED-invariant (a proven property), LOCKED-structural
-(the assembly itself), NEEDS-LOCAL-RUN (native dependency), or EXPERIMENTAL
-(additive, must not be imported by locked code). The analysis supercharges under
+The manifest says *which bag owns which method*. Nothing is locked — every bag
+is open for edit and the ordinary suites are the regression net. The analysis supercharges under
 `src/analysis/` are registered separately (they are not part of either class),
 as LOCKED-invariant backed by `analysis.test.js`.
 

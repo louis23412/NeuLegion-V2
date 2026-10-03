@@ -5,7 +5,7 @@
 // (see internal/mixins.js), so every method still runs with a HiveMind
 // instance as `this` and reads/writes the underscore-prefixed state declared
 // in the class body. Splitting by concern keeps each file reviewable; the
-// golden suite (test/browser/entries/golden.test.js) pins the numerics.
+// ordinary suites (sanity determinism, controller invariants, walk-forward) pin the behavior.
 import { isFiniteNumber } from '../utils.js';
 
 export const consolidationMethods = {

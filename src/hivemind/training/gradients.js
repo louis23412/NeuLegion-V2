@@ -5,7 +5,7 @@
 // (see internal/mixins.js), so every method still runs with a HiveMind
 // instance as `this` and reads/writes the underscore-prefixed state declared
 // in the class body. Splitting by concern keeps each file reviewable; the
-// golden suite (test/browser/entries/golden.test.js) pins the numerics.
+// ordinary suites (sanity determinism, controller invariants, walk-forward) pin the behavior.
 import { isValidNumber } from '../utils.js';
 
 export const gradientMethods = {
@@ -162,31 +162,10 @@ export const gradientMethods = {
             const memberWeight = Number.isFinite(this._ensembleWeights[idx]) ? this._ensembleWeights[idx] : 1 / this._ensembleSize;
             const effective_dL = dL_dLogit * memberWeight;
 
-            let agreement_dL = 0;
-            if (Number.isFinite(outputs[idx])) {
-                agreement_dL = dL_dLogit * memberWeight * (outputs[idx] - finalLogit);
-            }
-
-            let attWeightGrad = 0;
-            if (Number.isFinite(agreement_dL)) {
-                attWeightGrad = agreement_dL / sqrtH;
-            }
-            const attWeightGradOk = Number.isFinite(attWeightGrad);
+            // C5 verdict (lab CYCLE-204): the agreement-herding auxiliary
+            // (agreement_dL into attentionBias/Matrix) had no measurable
+            // Brier effect at achievable disagreement — removed.
             const accum = this._gradientAccumulation[idx];
-            for (let k = 0; k < H; k++) {
-                if (attWeightGradOk) {
-                    accum.attentionBias[k] += attWeightGrad * lr;
-                }
-                for (let i = 0; i < IS; i++) {
-                    const inputVal = inputs[i];
-                    if (!isValidNumber(inputVal)) continue;
-                    const update = attWeightGrad * inputVal * specFactor * lr;
-                    if (Number.isFinite(update)) {
-                        accum.attentionWeightMatrix[k] += update;
-                    }
-                }
-            }
-
             for (let j = 0; j < H; j++) {
                 const specAccRow = accum.specializationWeights[j];
                 for (let k = 0; k < H; k++) {

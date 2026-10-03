@@ -1,3 +1,5 @@
+> **Archived (CYCLE-206 cleanup): consumed test guide — read-only evidence. Current commands: `RUNBOOK.md` §6. Index: `ARCHIVE.md`.
+
 # Round 29 → 30 — operator test guide (commands in order + what to send back)
 
 This is the **final** state of the round-29 work. `PLAN-round29.md` is implemented and measured

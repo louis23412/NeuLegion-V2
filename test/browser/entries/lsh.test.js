@@ -36,7 +36,7 @@
 //     * At production dimensions the hash width (100+ bits) is far larger than
 //       the 4 single-bit flips `_getGlobalLSHCandidates` probes, so that lean
 //       helper only recalls near-exact matches. It is a *supplementary* pool
-//       (see `broadcastMemory`, docs/LOCKED.md); the recall-critical path,
+//       (see `broadcastMemory`, docs/DESIGN.md §6); the recall-critical path,
 //       `_retrieveTopRelevantProtos`, probes every bit plus random multi-bit
 //       perturbations and is checked end to end below.
 //

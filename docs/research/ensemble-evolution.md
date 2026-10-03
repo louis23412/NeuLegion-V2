@@ -15,7 +15,7 @@ ensemble** with an internal economy of trust.
 | Ensemble weights | `_updateEnsembleWeights`, `_normalizeEnsembleWeights`, `_getSpecWeightMatrix` | Weighted vote over member predictions, normalised to a simplex. |
 | Adaptive learning rates | `_updateAdaptiveLearningRates` | Fast learners on shifting regimes, slow learners on stable ones; rank-based, with an opt-in absolute homeostatic term. |
 | Homeostatic plasticity | `ensemble/homeostasis.js` | Regulate each member's activity toward an absolute set-point, correcting common-mode drift the rank controller cannot see. Off by default. |
-| Shared hive state | `_updateHiveState`, `_hiveMemorySharing`, `_computeWeightedSum` | Members exchange a compressed summary of what they learned. |
+| Shared hive state | `_updateHiveState`, `_computeWeightedSum` | Members contribute forward outputs to a shared ensemble readout. |
 | Knowledge distillation | `_distillKnowledge` | Compress the ensemble into each member (see `training-distillation.md`). |
 
 ## Literature

@@ -2995,3 +2995,58 @@ Six latent analysis-layer rows from the lab's F-73/F-75/F-77/F-79 audits, fixed 
 - **L10-cn** (`walkforward.js#restateReportAtPolicy`): the restatement replaced `folds` but carried the original `foldInputs`, mixing bases in `foldConcentration`. Now carries restated inputs (`{...input, signals: sig}`); the cost-only sibling is unaffected (same signals), and the input object is not mutated.
 
 Kernels L10-co/cp/cq/cr deliberately untouched (scored path — a fix would move goldens without a re-freeze decision).
+
+## Found by the CYCLE-205 npm-test triage — #71, OPEN (documented, no scored-path change)
+
+The first full `npm test` after the C3 live-reader wiring (lab CYCLE-203/204) came back
+130/135: the new `livereader` entry failed 6/13, `walkforward` failed 3/90, and the three
+`mirrors` ledger counts were stale (33/45 vs 34/46 on disk). The ledger counts were a pure
+book-keeping miss (CYCLE-203 added the entry + mirror but never bumped
+`BROWSER_ENTRY_LEDGER`/`NODE_MIRROR_LEDGER` or RUNBOOK.md §6) — fixed here. The other two
+were real expectation bugs, both fixed here with no scored-path change:
+
+- **livereader (test bug).** Every cross-instance comparison used reference equality
+  (`includes`/`===}`) across separately-constructed HiveMinds, which own distinct proto
+  objects — always false, so the suite measured `off=0/48` and failed twins/determinism
+  even when the reader behaved. The entry now compares exact mean+size fingerprints,
+  resolves each query source to its value-identical counterpart per arm, clones the
+  query proto per read (the reader caches `projNorms` onto the passed object), and reads
+  the battery on fresh pristine instances (D reads mutate access counts via
+  `_reinforceProto`). Still 13 checks, same names.
+- **walkforward R27-2 + section H (stale contract).** R27-2 asserted multi-probe is a
+  broadcast-only no-op through the scored harness — true before C3, false after: C3
+  wired it into the LIVE scored reader, so the measured trajectory moves
+  (base 1.00094 vs multi-probe 0.99703). The check now pins the live contract. Section H's
+  short-grid family-wise oracle rejection was collateral of the same change (the joint
+  bootstrap resamples a different family; oracle adjusted p 0.111 at 18 windows): the DSR
+  floor still catches the oracle and neither rule promotes a real feature, and the powered
+  both-rules-catch-it claim stays in section I (150-bar grid, green).
+
+### 71. CLOSED (roster touch, lab CYCLE-211): the analyze roster taxonomy still declares multi-probe/query-mod broadcast-only after C3 made them scored-live
+
+`resolveVariant('multiprobe')` / `resolveVariant('querymod')` still carry
+`appliesTo: 'broadcast'`, so `notApplicableReason(variant, 'controller')` names
+`broadcastMemory` and `evaluateAB` certifies them `not-applicable` on the controller —
+but since C3 both flags are consulted by the LIVE scored reader
+(`_retrieveTopRelevantProtos`, default-off), a configured flag DOES move the scored
+trajectory (walkforward §G measures it). The taxonomy text, the B2 pins and the §M
+enforcement pin in `analyze.test.js` therefore describe the pre-C3 position. Fixed in this pass: both rows flipped to `appliesTo:'model'` (pca-hash precedent,
+R28/#53) with C3-live notes; B2 + table-render pins rewritten to the new contract;
+§M enforcement untouched (synthetic fixture); walkforward NOTEs updated. Liveness
+consequence reviewed: both were already scored-live through the reader — the flip only
+makes the taxonomy honest, K/search membership now matches reality. No ledger bump
+(no files added/removed; analyze stays 298 checks). Verified AI-side: analyze 298/298.
+
+## Unlock CYCLE-206 — the golden/lock apparatus removed (director order)
+
+Nothing is locked or golden anymore. Deleted: `test/browser/entries/golden.test.js`
++ node mirror (bit-exact trajectory fingerprints), `test/node/engine_portability.test.js`,
+`test/browser/entries/locks.test.js` + node mirror, `test/lock-registry.js`,
+`scripts/freeze-goldens.mjs`, `docs/LOCKED.md`. Cut from suites: contracts §J
+(lock-register pins, 9 checks → `contracts` 255 → 246), the mirrors
+lock-registry check. Ledgers re-pinned: 32 browser entries / 43 node mirrors,
+131 test blocks, 3067 browser checks (RUNBOOK.md §6). Rationale: the apparatus
+had become the work — every scored-path change paid a re-freeze/ledger tax, and
+the freeze workflow (capture → paste → pin) cost operator round-trips. The
+ordinary suites (sanity determinism, controller invariants, walk-forward,
+multisymbol) remain the regression net; history below is kept as evidence.

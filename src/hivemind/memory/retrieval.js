@@ -5,7 +5,10 @@
 // (see internal/mixins.js), so every method still runs with a HiveMind
 // instance as `this` and reads/writes the underscore-prefixed state declared
 // in the class body. Splitting by concern keeps each file reviewable; the
-// golden suite (test/browser/entries/golden.test.js) pins the numerics.
+// ordinary suites (sanity determinism, controller invariants, walk-forward) pin the behavior.
+import { multiProbeKeys } from './multiprobe.js';
+import { modifiedQuery, resolveQueryModConfig } from './querymod.js';
+
 export const retrievalMethods = {
     _kernelSimilarity (protoA, protoB) {
         if (!protoA.mean || !protoB.mean) return 0;
@@ -34,14 +37,16 @@ export const retrievalMethods = {
         return Math.exp(-this._kernelGamma * Math.max(0, D));
     },
 
-    // R27-2 (which reader is LIVE): this is the path the scored model actually
-    // reads. It probes `_semanticLSHBuckets` directly under `_lshHyperplanes` and
-    // draws `Math.random()` a bucket-content-dependent number of times, so a change
-    // to the hash basis (`_refreshLshHyperplanes` under `_pcaHashConfig`) reaches
-    // the emitted position through here — while `_multiProbeConfig` and
-    // `_queryModConfig` are consulted only by `_getGlobalLSHCandidates`, whose one
-    // caller (`broadcastMemory`) is a discard path (`BUGS.md` #44). See
-    // `memory/lsh.js` for the other, broadcast-only reader.
+    // R27-2 (which reader is LIVE) + C3: this is the path the scored model
+    // actually reads. It probes `_semanticLSHBuckets` directly under
+    // `_lshHyperplanes` and draws `Math.random()` a bucket-content-dependent
+    // number of times, so a change to the hash basis
+    // (`_refreshLshHyperplanes` under `_pcaHashConfig`) reaches the emitted
+    // position through here. Since C3 the margin-ordered multi-probe
+    // (`_multiProbeConfig`) and dynamic query modification (`_queryModConfig`)
+    // are ALSO consulted here — default-off, so with both flags null the
+    // probe results are bit-identical to before. `_getGlobalLSHCandidates`
+    // (memory/lsh.js) keeps its own copies for the broadcast path.
     _retrieveTopRelevantProtos (transformerIdx, currentProtos, maxRetrieve = this._maxRetrievedProtos) {
         if (currentProtos.length === 0) return [];
 
@@ -254,32 +259,101 @@ export const retrievalMethods = {
             const flipsPerLevel = [2, 3, 4, Math.round(this._lshHashBits * 0.08), Math.round(this._lshHashBits * 0.15)];
             const probesPerLevel = Math.round(numProbes / flipsPerLevel.length);
 
+            const liveMultiProbe = this._multiProbeConfig || null;
+            const liveQueryMod = this._queryModConfig || null;
+            const perSetFound = liveQueryMod ? Array.from({ length: this._numLshSets }, () => new Set()) : null;
+
             for (let s = 0; s < this._numLshSets; s++) {
                 const hashes = hashesPerSet[s];
                 const tableArray = this._semanticLSHBuckets[transformerIdx][s];
+                const foundS = perSetFound ? perSetFound[s] : null;
                 for (let t = 0; t < this._lshNumTables; t++) {
                     let key = hashes[t];
                     let bucket = tableArray[t].get(key);
-                    if (bucket) for (const proto of bucket) semCandidates.add(proto);
+                    if (bucket) for (const proto of bucket) { semCandidates.add(proto); if (foundS) foundS.add(proto); }
 
                     for (let b = 0; b < this._lshHashBits; b++) {
                         const flipped = key ^ bitMasks[b];
                         bucket = tableArray[t].get(flipped);
-                        if (bucket) for (const proto of bucket) semCandidates.add(proto);
+                        if (bucket) for (const proto of bucket) { semCandidates.add(proto); if (foundS) foundS.add(proto); }
                     }
 
-                    for (let level = 0; level < flipsPerLevel.length && semCandidates.size < maxCandidateCap; level++) {
-                        const flipBits = flipsPerLevel[level];
-                        for (let pr = 0; pr < probesPerLevel && semCandidates.size < maxCandidateCap; pr++) {
-                            let flippedHash = key;
-                            for (let f = 0; f < flipBits; f++) {
-                                const bit = Math.floor(Math.random() * this._lshHashBits);
-                                flippedHash ^= bitMasks[bit];
+                    if (liveMultiProbe) {
+                        const hyp = this._lshHyperplanes[s][t];
+                        const qp = queryProjs[s];
+                        const dots = new Array(this._lshHashBits);
+                        for (let b = 0; b < this._lshHashBits; b++) {
+                            const hv = hyp[b];
+                            let d = 0;
+                            for (let l = 0; l < this._lowDim; l++) d += qp[l] * hv[l];
+                            dots[b] = d;
+                        }
+                        const probes = multiProbeKeys(key, dots, bitMasks, liveMultiProbe);
+                        for (let i = 1; i < probes.length && semCandidates.size < maxCandidateCap; i++) {
+                            const mb = tableArray[t].get(probes[i]);
+                            if (mb) for (const proto of mb) { semCandidates.add(proto); if (foundS) foundS.add(proto); }
+                        }
+                    } else {
+                        for (let level = 0; level < flipsPerLevel.length && semCandidates.size < maxCandidateCap; level++) {
+                            const flipBits = flipsPerLevel[level];
+                            for (let pr = 0; pr < probesPerLevel && semCandidates.size < maxCandidateCap; pr++) {
+                                let flippedHash = key;
+                                for (let f = 0; f < flipBits; f++) {
+                                    const bit = Math.floor(Math.random() * this._lshHashBits);
+                                    flippedHash ^= bitMasks[bit];
+                                }
+                                bucket = tableArray[t].get(flippedHash);
+                                if (bucket) for (const proto of bucket) { semCandidates.add(proto); if (foundS) foundS.add(proto); }
                             }
-                            bucket = tableArray[t].get(flippedHash);
-                            if (bucket) for (const proto of bucket) semCandidates.add(proto);
                         }
                     }
+                }
+            }
+
+            if (liveQueryMod) {
+                const qmcfg = resolveQueryModConfig(liveQueryMod);
+                const qmProjs = queryProjs.map((q) => q.slice());
+                for (let round = 0; round < qmcfg.rounds; round++) {
+                    let changed = false;
+                    for (let s = 0; s < this._numLshSets; s++) {
+                        const foundSet = perSetFound[s];
+                        if (foundSet.size === 0) continue;
+                        const candProjs = [];
+                        for (const p of foundSet) {
+                            const v = p.projNorms && p.projNorms[s];
+                            if (v && v.length === this._lowDim) candProjs.push(v);
+                        }
+                        const modified = modifiedQuery(qmProjs[s], candProjs, qmcfg);
+                        if (modified === qmProjs[s]) continue;
+                        changed = true;
+                        qmProjs[s] = modified;
+                        const modifiedHashes = this._computeLSHHashesLow(modified, this._lshHyperplanes[s]);
+                        const qmTables = this._semanticLSHBuckets[transformerIdx][s];
+                        for (let tbl = 0; tbl < this._lshNumTables; tbl++) {
+                            const bucket = qmTables[tbl].get(modifiedHashes[tbl]);
+                            if (bucket) for (const p of bucket) { semCandidates.add(p); foundSet.add(p); }
+                        }
+                        if (qmcfg.probeBudget > 0) {
+                            for (let tbl = 0; tbl < this._lshNumTables; tbl++) {
+                                const hyp = this._lshHyperplanes[s][tbl];
+                                const dots = new Array(this._lshHashBits);
+                                for (let b = 0; b < this._lshHashBits; b++) {
+                                    const hv = hyp[b];
+                                    let d = 0;
+                                    for (let l = 0; l < this._lowDim; l++) d += modified[l] * hv[l];
+                                    dots[b] = d;
+                                }
+                                const probes = multiProbeKeys(modifiedHashes[tbl], dots, bitMasks, {
+                                    maxFlips: qmcfg.maxFlips, budget: qmcfg.probeBudget,
+                                });
+                                for (let i = 1; i < probes.length; i++) {
+                                    const b2 = qmTables[tbl].get(probes[i]);
+                                    if (b2) for (const p of b2) { semCandidates.add(p); foundSet.add(p); }
+                                }
+                            }
+                        }
+                    }
+                    if (!changed) break;
                 }
             }
 

@@ -16,8 +16,7 @@ root) is unrelated scaffolding and should be ignored.
 frozen core design), then [`docs/RUNBOOK.md`](docs/RUNBOOK.md) (configuration +
 commands), [`src/README.md`](src/README.md) (the per-module map),
 [`docs/COMPONENTS.md`](docs/COMPONENTS.md) (how the classes are assembled from
-components), [`docs/LOCKED.md`](docs/LOCKED.md) (what is proven and by what) and
-[`docs/BUGS.md`](docs/BUGS.md). The research grounding for every core mechanism
+components), [`docs/BUGS.md`](docs/BUGS.md). The research grounding for every core mechanism
 lives in [`docs/research/`](docs/research/) with the bibliography in
 [`docs/CITATIONS.md`](docs/CITATIONS.md); the prioritized backlog is
 [`docs/TODO.md`](docs/TODO.md) and the current plan is
@@ -134,7 +133,6 @@ docs/
   PLAN-round27.md          the round-27 plan (liveness first, then the runs)
   TODO.md                  full history + research backlog
   RUN-ANALYSIS.md          A/B run forensics + the plan to a citable verdict
-  LOCKED.md                per-component proofs and lock status
   CITATIONS.md             bibliography for every grounded mechanism
   research/                per-domain literature notes + raw arXiv sweeps
 ```
@@ -230,7 +228,6 @@ Web Worker. Entries are `test/browser/entries/*.test.js`, each exporting
 | `consolidation.test.js` | 48 | pure memory-lifecycle algorithms in `consolidation_logic.js` |
 | `consolidation_worker.test.js` | 18 | end-to-end `consolidation_worker.js` wiring (real worker, sql.js `memory_vault.db`, posted `delta`) |
 | `fetcher.test.js` | 111 | `candle_fetcher.js`: interval/source mapping, URL build/parse, pagination, merge/dedupe/gaps, JSONL round-trip (round 29 adds the funding fetch/normalise/serialise path) |
-| `golden.test.js` | 23 | **bit-exactness**: FNV-1a fingerprints of a seeded, deterministic training + controller trajectory; the guard for any refactor |
 | `modules.test.js` | 51 | **assembly**: every component method installed exactly once, manifest/prototype agreement, `installMethods` guard rails |
 | `legion.test.js` | 57 | the `mainController.js` -> `legion/` split: module graph, statements, signals, broadcast, serialization |
 | `candles.test.js` | 192 | candle-file integrity: per-file OHLCV/grid/gap audit, cross-file timestamp-grid equality, wick-repair behaviour, row/size budget (round 29 adds the 15m and funding basket manifests and the funding JSONL byte round-trip) |
@@ -249,17 +246,15 @@ Web Worker. Entries are `test/browser/entries/*.test.js`, each exporting
 | `analyze.test.js` | 286 | the **A/B driver** (`npm run analyze`): the variant table + `applyVariant` flags, the causal `featureVector`, the deterministic fake model factory, `evaluateAB`'s audit-driven promotion / zero-skill rejection, the family-wise statistics, the `formatAnalysis`/`readCandles` paths, and the round-24/24b run-integrity sections (per-fit state reclamation, the per-pass event stream, run checkpointing + the failed-run post-mortem, the volume-shocked audit, the assumption-free break-even cost, the offline-readable journal and `--reuse-base`); round 25 adds the dependence-aware gate, the cost ladder, the family diagnostic and the paired promotion test; round 26 adds the R26-0 window contract, R26-12 checkpoint throttle, R26-2 model/label diagnostics, R26-11 label-policy variants, R26-4 concurrency, R26-5 turnover sweep, R26-6 stream selection, R26-13 CRN/seed replication (the per-fold net-Sharpe series on every row plus `replicateAnalysis`/`--seeds`) and R26-14 forecast comparison (the default-on `forecast` block + MCS, `--forecast=0` to disable) and R26-8 the decision-grade report (the default-on six-question `decision` block + the summary lines, `--decision=0` to disable); round 30 adds §A2b (the pruned-roster pin, the `rosterSnapshot()` hash + `rosterRegistration()` contract against `src/lineage.js`), §A2c (the present-but-empty list-flag guard — `--file=`/`--files=`/`--carry-files=`/`--symbols=`/`--variants=`/`--seeds=`, `BUGS.md` #69) and §A2d (the cross-sectional panel taxonomy, `BUGS.md` #70) and the G-H momentum-upgrade family check; round 33 adds the `--history=full` long-sample readout wiring (opt-in, recorded, pure post-processing) |
 | `walkforward.test.js` | 83 | the **walk-forward harness on real shipped candles**: a live `HiveMind` re-fit per fold (frozen afterwards) with a clean no-lookahead audit, the audit catching a `t+1` feature, an always-long == per-fold buy-and-hold closed form, a flat signal exactly inert, bit-identical determinism, an honest promotion-gate decision, and the default-off features (surprise/homeostasis/multi-probe) A/B'd through the harness — their inert settings bit-identical to off, plus the family-wise search on the real-candle walk-forward (section H: the step-down p-values `[1,1,0.333,1,0]` agree with the DSR floor on all five candidates, both catching the oracle control; section I repeats it on the full 150-bar / 6-fold slice, widening the grid from 18 to 48 windows with the same verdict) Section K is the round-23 vacuity regression guard: the candle-driven `t+1` leak that used to pass clean because a returns-only perturbation could not reach a candle model is now **caught** via the `viewFor` hook (with `viewDiffers`/`reachable` true), an honest candle signal stays clean, and a `viewFor` that ignores the perturbation is flagged `vacuous`; the section also pins `sharpeStandardError`/`minimumDetectableSharpe`, `worldFromCandles`, and that `walkForwardEvaluate` forwards `viewFor` to both the scoring view and the audit; round 32 adds the `blockStability` window-robustness statistic (exact trailing windows, the price-only-panel pooler rule, the `blocks:` line and the default-off gate hurdle); round 33 adds the model-free long-sample scorer (contiguous == walk-forward bar-for-bar per the F-13 equivalence, the equal-weight pooler with the one-stream identity, and the report block with no raw series). |
 | `dimensions.test.js` | 185 | the **structure-scaling contract** (`persistence/dimensions.js`): the compact `forceMin` overrides frozen as exact constants, and the full-size branch swept over an `es × is` grid — tensor shapes match their declared counts, layers/heads/hidden are monotone non-increasing in ensemble size while the learning rate is monotone non-decreasing, only the learning rate depends on `inputSize`, end-to-end churn keeps the LSH index consistent with unit-norm projections, and boundary configs (`es=1`, `is=1`) construct cleanly |
-| `locks.test.js` | 41 | the lock registry: every component classified + grounded, statuses valid, research notes + citations exist, the frozen-design docs (`DESIGN.md`, `RUNBOOK.md`) exist, support modules exported, LSH recall invariant registered, surprise gate + uniqueness weighting + homeostasis + low-rank ES + multi-probe + data-aware binary-PC + dynamic query modification registered |
-| `guards.test.js` | 65 | **run-integrity guards** (`legion/sanitize.js`, `legion/rng.js`; ROADMAP P0-1/P0-2): finite coercion, safe JSON, signal/consensus sanitising, the controller-failure budget, config fingerprinting, deterministic per-worker seed derivation, and fail-fast config validation — all error-path/setup-path, so no golden fingerprint moves |
+| `guards.test.js` | 65 | **run-integrity guards** (`legion/sanitize.js`, `legion/rng.js`; ROADMAP P0-1/P0-2): finite coercion, safe JSON, signal/consensus sanitising, the controller-failure budget, config fingerprinting, deterministic per-worker seed derivation, and fail-fast config validation |
 | `observer.test.js` | 76 | **legion health observer** (`observer/*`; ROADMAP P1-2): calibration (Brier + Murphy decomposition), diversity (entropy/HHI/effective voters/Gini/kappa), drift (EWMA/CUSUM), the consensus-probability map and the pure alert rule engine, plus the deterministic run-id/spool report and the read-only snapshot collector |
 | `controller_invariants.test.js` | 23 | controller determinism + open-book invariants (R27-6): identical emitted positions **and** identical `Math.random()` draw counts across two seeded runs, the exhaustive resolved-barrier split and cache-bounded holding period, monotone `trainingSteps`, the off-state no-op / `inert`-on-`optimistic` liveness facts, and audit non-vacuity |
 | `contracts.test.js` | 151 | **the V2 contract layer** (round-31/M11): the kernel + the ten contracts validate/throw exactly (a missing method, a non-object, a duplicate id, an unknown kind/state, a stateful instance that is not a factory), the registry is deterministic and registration-order independent, the ported primitives match exact reference vectors (the cap→band chain's order, `turnoverSeries`/`ewmaUpdate`/`blendRows` incl. the lab's finite guard, the fingerprint/canonicalisation incl. the golden suite's string-quoting and `[fn]` rules, the one-view rule), the two book shells phase a `hold` policy identically and the sleeves' `returns` share the builder's clamped start, the sleeves/books/risk plugins reproduce the lab's hand-computed fixtures, the absent-data masks (a `null` signal column / a non-finite leg) neither throw nor inject `NaN` (R31c: `dlogMatrix`'s inner `!series` guard was dead, `blendBooks` had no `fin`), `stackSnapshot`/`rosterSnapshot` move only when the default stack moves, **the import law** is enforced over every file (kernel imports nothing; a negative control asserts exactly one file bridges to the engine), and §K proves the driver-side sleeve composition (each sleeve's own P&L through the pinned chain by the shared `scoreBookReturns` core with the A2/A18 readouts beside it) |
 | `legacy_hivemind.test.js` | 15 | the **single legacy bridge** (`plugins/learners/legacy-hivemind.js`) is a pass-through over the shipped engine: a real `HiveMind` behind the adapter's `create()` satisfies the `learner` contract, `fit`/`predict`/`diagnostics`/`dumpState` forward correctly, `LEGACY_HIVEMIND_DEFAULTS` pins the compact dimensions + `forceMin`, and the adapter is deterministic under a seeded PRNG |
 | `bench.test.js` | — | not pass/fail: construct / predict / train / broadcast timings and per-step call counters |
 
-`golden.test.js` is the one to run after **any** edit under `src/hivemind/`: if a
-fingerprint changes, either you changed the math (re-freeze the constants in
-the same commit and say why) or you broke it.
+`sanity.test.js` is the one to run after **any** edit under `src/hivemind/`: if a
+check fails, either you changed the math (say why in the same commit) or you broke it.
 
 To run them from the Perchance agent workspace, use `execute_js` (one worker per
 entry; see `test-harness limitations` in `docs/BUGS.md`):
@@ -292,38 +287,29 @@ The glob is deliberate: Node ≤ 21 accepted a bare directory
 the positional argument as a glob pattern and tries to load a directory as a
 module, so the old form dies with `Cannot find module '.../test/node'` before
 running a single file (see `docs/BUGS.md` #14 and `docs/RUNBOOK.md` §7). The
-focused scripts (`npm run test:locks`, `test:candles`, `test:analysis`) pass a
+focused scripts (`npm run test:candles`, `test:analysis`) pass a
 file path, which is a valid glob in both regimes.
 
-It mirrors the browser checks with a shared `helpers.js`, in **two styles**: 24
+It mirrors the browser checks with a shared `helpers.js`, in **two styles**: 23
 files import the browser entry's `run()` and assert `failed === 0` **and**
 `total ===` that entry's count in the `RUNBOOK.md` §6 ledger (so a silently
 skipped section cannot pass), and 8 re-declare the same contracts directly with
 `node:test` against the real driver (`sanity`, `core`, `features`, `indicators`,
 `fetcher`, `consolidation`, `consolidation_worker`, `legion`). The remaining
-thirteen are Node-only suites the browser harness cannot provide: `mirrors.test.js`
+twelve are Node-only suites the browser harness cannot provide: `mirrors.test.js`
 checks the mirror layout itself (ledger counts, no orphan or stub mirrors, the
 `engines.node` floor, and that the `test` script is a runner-compatible glob);
-`engine_portability.test.js` runs one golden pass under a simulated last-ulp
-`Math.exp` drift and asserts all 23 checks still hold; and the rest are native-driver
+and the rest are native-driver
 suites (`worker_pool`, `runner_smoke`, `dryrun`, `preflight`, `http_view`,
 `report_lifecycle`, `shutdown`, `config_env`, `checkpoint_throttle`,
-`parallel_folds`, `analyze_cli`). `golden` runs
-here too — the bit-exactness lock on the
-**native** driver, not just on the sql.js shim — and its live-prediction
-fingerprint is compared at 6 significant digits because it is over raw float64
-`predict()` output (the other nine hashes are literal; `hm:postReloadPrediction`
-is the second rounded one, per P2-3). `bench` is the only
+`parallel_folds`, `analyze_cli`). `bench` is the only
 browser entry with no mirror (it prints timings and has no pass/fail contract),
 so a run reports **131 `test()` blocks, not 2768 individual checks**, and takes a few minutes
 (the `dimensions` sweep dominates). Mirror-injected options must respect the
 entries' contracts: `stateDir` is pure in its label (use `labelledStateDir`) and
 the sql.js shim is imported lazily (and its own CDN import is lazy too, so
 even a static shim import cannot drag an `https:` module into Node) — see
-`docs/BUGS.md` #15–#17 and #52, which
-record the first two local runs, the three mirror defects they exposed, the
-coverage gaps closed since, the engine-portability fix to the golden lock, and
-the recurrence of #15.3 that `mirrors.test.js` now guards structurally.
+`docs/BUGS.md` #15–#17 and #52.
 
 The consolidation mirror is special: `consolidation_logic.js` is pure, so it
 imports the exact module the worker uses, and `consolidation_worker.test.js`

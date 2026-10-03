@@ -37,7 +37,6 @@ npm install        # or: npm ci   (reproducible, uses package-lock.json)
 | --- | --- |
 | `npm run train` | run the system: `node ./src/mainController.js` (reads `src/candles.jsonl`; HTTP state view on `CONFIG.httpPort`, default 3000) |
 | `npm test` | the full Node suite (`node --test "test/node/*.test.js"`) — the authoritative local gate |
-| `npm run test:locks` | the lock registry only |
 | `npm run test:candles` | the candle data/quality audit only |
 | `npm run test:analysis` | the analysis / walk-forward supercharges only |
 | `npm run fetch` | incremental update of `src/candles.jsonl` |
@@ -102,7 +101,7 @@ hm._sampleWeightConfig  = { /* see training/sample_weights.js */ };
 hm._homeostasisEnabled  = true;
 ```
 
-None of them change the golden fingerprints while off; turning one on by default
+All of them are off by default; turning one on by default
 in `CONFIG`/code is a deliberate decision gated on the walk-forward A/B
 (backlog P0).
 
@@ -166,27 +165,25 @@ never a paraphrase or a placeholder.
 npm test               # full Node suite (real better-sqlite3 + worker_threads)
 ```
 
-The glob expands to all 45 `test/node/*.test.js` files (`helpers.js` is not a
+The glob expands to all 43 `test/node/*.test.js` files (`helpers.js` is not a
 test file and is excluded).
 
-The Node suite mirrors the browser entries in two styles: **24 mirrors** import
+The Node suite mirrors the browser entries in two styles: **23 mirrors** import
 the browser entry's `run()` and assert `failed === 0` **and**
 `result.total ===` that entry's count in the ledger below (analysis, analyze,
-binarypc, bitweight, candles, contracts, dimensions, evolve, golden, guards, homeostasis,
-legacy_hivemind, locks, lsh, modules, multiprobe, multisymbol, observer, price_precision, querymod,
+binarypc, bitweight, candles, contracts, dimensions, evolve, guards, homeostasis,
+legacy_hivemind, livereader, lsh, modules, multiprobe, multisymbol, observer, price_precision, querymod,
 sample_weights, surprise, walkforward, controller_invariants — the counts are
 **exact** as of the round-31/V2 ledger, not floors; every
-number was re-measured in the harness before pinning), and **21 of the remaining files**
+number was re-measured in the harness before pinning), and **20 of the remaining files**
 re-declare the same contracts directly with `node:test`
 against the real driver (sanity, core, features, indicators, fetcher,
-consolidation, consolidation_worker, legion — 8) or check the mirror layout and
-invariants the browser harness cannot (the thirteen Node-only suites). The Node-only
+consolidation, consolidation_worker, legion, patch — 9) or check the mirror layout and
+invariants the browser harness cannot (the twelve Node-only suites). The Node-only
 suites are `mirrors.test.js` (every browser entry has a mirror, no orphans, no
-stub mirror files, the ledger counts 33 entries / 45 mirrors, the `test` script
+stub mirror files, the ledger counts 32 entries / 44 mirrors, the `test` script
 passes a glob rather than a directory, and `engines.node` pins the required Node
-floor — `BUGS.md` #14); `engine_portability.test.js` (a single golden pass under
-a simulated last-ulp transcendental drift still satisfies all 23 checks —
-`BUGS.md` #17); `worker_pool.test.js` (worker fault injection: `{error}` payload,
+floor — `BUGS.md` #14); `worker_pool.test.js` (worker fault injection: `{error}` payload,
 `error` event, non-zero exit, malformed message, spawn failure, watchdog
 timeout, settle-once); `runner_smoke.test.js` (a good stream completes, a
 malformed line is counted and skipped, a broken pool breaches the failure
@@ -206,14 +203,14 @@ starts no run, and that the seed aggregate is written — the browser entry
 imports `runAnalysis` directly, so the argument-parsing block is otherwise
 untested; `checkpoint_throttle.test.js` proves the spool-throttle checkpoint path). `bench` is the only
 browser entry
-without a mirror (it prints timings). So `npm test` reports **133 `test()`
-blocks across 45 files** (46 with `helpers.js`) rather than 3127 checks (round 44 adds the `--sleeve` spawn block to `analyze_cli.test.js`; round 110 adds the risk-override spawn block — **confirmed green on the operator's machine 2026-10-02: `tests 133 / pass 133 / fail 0`**); a green
+without a mirror (it prints timings). So `npm test` reports **131 `test()`
+blocks across 43 files** (44 with `helpers.js`) rather than 3126 checks (round 44 adds the `--sleeve` spawn block to `analyze_cli.test.js`; round 110 adds the risk-override spawn block — **confirmed green on the operator's machine 2026-10-02: `tests 133 / pass 133 / fail 0`**; CYCLE-250 removes the R-BODY-1 instrument (P1b DEAD — the 7-block `variate.test.js` suite, p1b scripts, and body deleted) alongside the R-LEGION collapse and R-SHARING deletion — **re-gate + both firewalls owed**); a green
 run — plus `failed === 0` and the ledger count from every wrap-style mirror — is
 the gate. Measured **~5.9 min** at round 22 (`BUGS.md` #21): the `dimensions`
 sweep of both `forceMin` branches dominates (~353 s), then `lsh` (~177 s) and
 `walkforward` (~83 s); the runner parallelises the rest. Re-measured in the
 round-23 harness run: `dimensions` 364 s, `lsh` 282 s, `multisymbol` 17 s,
-`candles` 3 s, and `walkforward`/`analysis`/`analyze`/`golden`/`locks` each well
+`candles` 3 s, and `walkforward`/`analysis`/`analyze`/`lsh` each well
 under a minute.
 
 The counts below are each **browser entry's** own check count — the ledger the
@@ -228,17 +225,19 @@ wrap-style mirrors assert against. **Expected totals (all must be 0 failures):**
 | `consolidation` | 48 | | `evolve` | 36 |
 | `consolidation_worker` | 18 | | `multiprobe` | 77 |
 | `fetcher` | 111 | | `binarypc` | 39 |
-| `golden` | 23 | | `bitweight` | 69 |
-| `modules` | 59 | | `querymod` | 51 |
+| `bitweight` | 69 | | `querymod` | 51 |
 | `legion` | 57 | | `walkforward` | 90 |
 | `candles` | 192 | | `dimensions` | 185 |
-| `locks` | 41 | | `analysis` | 856 |
+| `modules` | 59 | | `analysis` | 856 |
 | `price_precision` | 29 | | `multisymbol` | 28 |
 | `guards` | 65 | | `observer` | 76 |
-| `analyze` | 298 | | `controller_invariants` | 23 |
-| `contracts` | 255 | | `legacy_hivemind` | 15 |
+| `analyze` | 299 | | `controller_invariants` | 23 |
+| `contracts` | 246 | | `legacy_hivemind` | 15 |
+| `livereader` | 13 | | | |
 
-**Total: 3127 checks.** **(Round 89** — the `--symbols` path fix: `resolveSymbolFiles`
+**Total: 3068 checks.** (B3 readout-evolution instrument: `src/analyze/roster/evolved.js` — genome validate/apply/snapshot over the per-member linear readout, fail-closed — plus the opt-in `evolved-readout` roster arm with null-genome default, its lineage PARK entry, and one `analyze` pin — `analyze` 298 → 299, node mirror re-pinned. Default-off; no scored-path change, no golden moves.) (Unlock CYCLE-206: `golden` 23, `locks` 41 and the
+contracts §J lock-register pins (9) deleted — nothing is locked or golden; the
+round-by-round history below is kept as evidence.) **(Round 89** — the `--symbols` path fix: `resolveSymbolFiles`
 in `src/analyze/cli.js` went one `..` short after the round-83 split (every native
 `--symbols` run died with `src/src/candles.jsonl` ENOENT; the CLI tests only use
 `--files`, so it stayed green). Exported for testability, root is the project root

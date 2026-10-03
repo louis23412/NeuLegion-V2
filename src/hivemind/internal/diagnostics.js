@@ -5,7 +5,7 @@
 // (see internal/mixins.js), so every method still runs with a HiveMind
 // instance as `this` and reads/writes the underscore-prefixed state declared
 // in the class body. Splitting by concern keeps each file reviewable; the
-// golden suite (test/browser/entries/golden.test.js) pins the numerics.
+// ordinary suites (sanity determinism, controller invariants, walk-forward) pin the behavior.
 export const diagnosticsMethods = {
     // Read-only introspection for the test suite and for debugging a live
     // instance. It walks the private weight/gradient trees and the LSH buckets

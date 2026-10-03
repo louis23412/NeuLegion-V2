@@ -1,0 +1,24 @@
+{
+  "sweep": "11h",
+  "date": "2026-10-03",
+  "queries": [
+    "ti:transformer AND ti:time AND ti:series AND ti:forecasting (181 hits)"
+  ],
+  "entries": [
+    {
+      "id": "http://arxiv.org/abs/2607.00154v1",
+      "title": "EVOTS: Evolutionary Transformer Search for Time Series Forecasting",
+      "note": "evolutionary NAS over attention/FFN/projection genome; evolved task-adaptive transformer-likes beat fixed baselines. Grounds the body-VARIANT path: search architectures, not weights."
+    },
+    {
+      "id": "http://arxiv.org/abs/2605.17689v2",
+      "title": "Do Stationarity Transformations Actually Improve Time Series Forecasts? A Controlled Experimental Evaluation",
+      "note": "35k-eval controlled study: signal-preserving transforms (detrending matched to structure) help; indiscriminate differencing hurts; stationarity only weakly tied to accuracy. Grounds a feature-pipeline probe: our [0,1] squash-all is indiscriminate."
+    },
+    {
+      "id": "http://arxiv.org/abs/2605.05151v1",
+      "title": "Superposition Is Not Necessary: A Mechanistic Interpretability Analysis of Transformer Representations for Time Series Forecasting",
+      "note": "narrow single-layer matches deep configs; FFN reps sparse without superposition; linear competitiveness stands. Converges with B2/m5g: the transformer adds nothing over linear on noisy series."
+    }
+  ]
+}

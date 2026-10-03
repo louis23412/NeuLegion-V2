@@ -2,7 +2,7 @@
 //
 // V2.0's acceptance condition is that the contract layer is *additive*: the
 // shipped engine's 11 golden fingerprints must reproduce with zero edits to any
-// locked module (`docs/ARCHITECTURE-v2.md` §9). `golden.test.js` is the engine's
+// locked module (`docs/ARCHITECTURE-v2.md` §9). sanity determinism is the engine's
 // own proof; this suite is the *adapter's* proof, i.e. that the single bridge
 // between the V2 registry and the engine is a pass-through:
 //

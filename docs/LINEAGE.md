@@ -95,11 +95,12 @@ queue-position model could revisit it (`TODO.md` 94).
 | `surprise` | `NL-MECH-surprise@r2` | **DROPPED** | ≈baseline: +0.098 @200 / −0.028 @600; never significant |
 | `homeostasis` | `NL-MECH-homeostasis@r2` | **DROPPED** | negative: −0.225 @200 / −0.163 @600 |
 | `pca-hash` | `NL-MECH-pca-hash@r13` | **DROPPED** | inert at 200 bars (72/72 folds identical); 6/288 at 600 but economically nil (paired ΔSharpe 0.0043, p 0.19, foldWin 0.01) |
-| `multiprobe` | `NL-MECH-multiprobe@r16` | **PARK** | `appliesTo:'broadcast'` — cannot reach the scored path (R27-2); retained as a documented memory-subsystem feature, never scored here |
-| `querymod` | `NL-MECH-querymod@r17` | **PARK** | same: broadcast path only |
+| `multiprobe` | `NL-MECH-multiprobe@r16` | **PARK** | scored-live since C3 (lab CYCLE-203; `appliesTo:'model'` per #71) — retained resolvable, out of the default roster |
+| `querymod` | `NL-MECH-querymod@r17` | **PARK** | same: scored-live since C3 (`appliesTo:'model'` per #71) |
 | `sample-weights` | `NL-MECH-sample-weights@r28` | **PARK** | opt-in, confounded (`BUGS.md` #54); needs its own clean re-run |
 | `sample-weights-scale-control` | `NL-MECH-sample-weights-scale-control@r28` | **PARK** | the LR-only control arm for the above |
-| *(memory subsystem itself)* | `NL-MECH-memory@r29` | FROZEN | `lsh`/`replay`/`consolidation`/`banks`/`protos` are **core**, golden-pinned, heavily tested — the *hypotheses* above are dropped, **not** the code |
+| `evolved-readout` | `NL-MECH-evolved-readout@r32` | **PARK** | B3 opt-in (lab CYCLE-224/225): null genome = stock bit-identical; promotion evidence pending |
+| *(memory subsystem itself)* | `NL-MECH-memory@r29` | FROZEN | `lsh`/`replay`/`consolidation`/`banks`/`protos` are **core**, heavily tested — the *hypotheses* above are dropped, **not** the code |
 
 > **Purge rule (important):** a DROPPED *mechanism hypothesis* removes the candidate from the
 > A/B roster and the future search — it does **not** delete the underlying memory/subsystem code,

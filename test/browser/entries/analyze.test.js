@@ -35,6 +35,7 @@ import path from 'path';
 import {
     VARIANTS, SIGNAL_VARIANTS, ALL_VARIANTS, LABEL_VARIANTS, OPT_IN_VARIANTS, RESOLVABLE_VARIANTS, BENCHMARK_VARIANTS, REVERSAL_VARIANTS, SIGUP_VARIANTS,
     FEATURE_LEN, resolveVariant, applyVariant, notApplicableReason, listVariants, formatVariantList, forecastKindOf, inertReasonFor,
+    validateGenome, applyGenomeToMind, snapshotGenome,
     rosterSnapshot, rosterRegistration, emptyListFlagError,
     featureVector, makeHiveMindModelFactory, makeControllerModelFactory, makeBenchmarkModelFactory, makeSignalForVariant,
     evaluateAB, evaluateABAsync, makeNodeFoldDispatcher, formatAnalysis, formatFullHistory, readCloses, readCandles, runAnalysis,
@@ -227,10 +228,12 @@ export async function run() {
             ['agnostic', 'model', 'controller', 'broadcast'].includes(r.appliesTo) && typeof r.applicable === 'boolean') &&
         taxonomy.every((r) => r.applicable || (typeof r.reason === 'string' && r.reason.length > 0)),
         JSON.stringify(taxonomy.map((r) => [r.id, r.appliesTo, r.applicable])));
-    check('R27-2: multi-probe and query-mod are broadcast-only, so they are not-applicable on the scored controller',
-        notApplicableReason(resolveVariant('multiprobe'), 'controller').includes('broadcastMemory') &&
-        notApplicableReason(resolveVariant('querymod'), 'controller').includes('broadcastMemory') &&
-        listVariants('controller').filter((r) => !r.applicable).map((r) => r.id).sort().join(',') === 'multiprobe,querymod');
+    check('R27-2 (C3/#71): multi-probe and query-mod are scored-live, so they are applicable on the controller',
+        notApplicableReason(resolveVariant('multiprobe'), 'controller') === null &&
+        notApplicableReason(resolveVariant('querymod'), 'controller') === null &&
+        resolveVariant('multiprobe').note.includes('_retrieveTopRelevantProtos') &&
+        resolveVariant('querymod').note.includes('_retrieveTopRelevantProtos') &&
+        listVariants('controller').every((r) => r.applicable || !['multiprobe', 'querymod'].includes(r.id)));
     check('R27-2: pca-hash stays applicable on the controller (its live reader is _retrieveTopRelevantProtos)',
         notApplicableReason(resolveVariant('pca-hash'), 'controller') === null &&
         resolveVariant('pca-hash').note.includes('_retrieveTopRelevantProtos'));
@@ -238,12 +241,40 @@ export async function run() {
         notApplicableReason(resolveVariant('sample-weights'), 'bare').includes('controller-backed') &&
         notApplicableReason(resolveVariant('surprise'), 'bare') === null &&
         notApplicableReason(resolveVariant(SIGNAL_VARIANTS[0].id), 'bare') === null);
-    check('R27-2: the taxonomy table renders one row per resolvable variant with an applies-to column',
-        (() => { const s = formatVariantList(taxonomy); return s.split('\n').length === taxonomy.length + 2 && s.includes('applies-to') && s.includes('broadcast'); })());
+    check('R27-2 (C3/#71): the taxonomy table renders one row per resolvable variant with an applies-to column',
+        (() => { const s = formatVariantList(taxonomy); return s.split('\n').length === taxonomy.length + 2 && s.includes('applies-to') && s.includes('multiprobe') && s.includes('model'); })());
     check('R27-2: sample-weights is resolvable (opt-in) but NOT in the default roster',
         !ALL_VARIANTS.some((v) => v.id === 'sample-weights') && resolveVariant('sample-weights').id === 'sample-weights' &&
         listVariants('controller').find((r) => r.id === 'sample-weights').inDefaultRoster === false &&
         listVariants('controller').find((r) => r.id === 'sample-weights').controllerScoped === true);
+    // B3 (lab CYCLE-224/225): the evolved-readout arm is resolvable and opt-in
+    // (never in the default roster), its registered genome is null (a no-op
+    // afterFit, so stock bit-identical), and the genome instrument validates
+    // shapes fail-closed on a fake mind.
+    check('B3: evolved-readout resolves opt-in with a null genome and a fail-closed genome instrument',
+        (() => {
+            const v = resolveVariant('evolved-readout');
+            if (!v || v.id !== 'evolved-readout' || v.genome !== null) return false;
+            if (ALL_VARIANTS.some((x) => x.id === 'evolved-readout')) return false;
+            if (listVariants('controller').find((r) => r.id === 'evolved-readout').inDefaultRoster !== false) return false;
+            const fakeMind = { _transformers: [{ outputWeights: [[0.1], [0.2]], outputBias: [0.3] }] };
+            if (validateGenome(null, fakeMind).ok !== false) return false;
+            const good = { members: [{ w: [0.5, -0.5], b: 0.1 }] };
+            if (validateGenome(good, fakeMind).ok !== true) return false;
+            if (validateGenome({ members: [{ w: [0.5], b: 0 }] }, fakeMind).ok !== false) return false;
+            if (validateGenome({ members: [{ w: [0.5, NaN], b: 0 }] }, fakeMind).ok !== false) return false;
+            v.afterFit(fakeMind);
+            if (fakeMind._transformers[0].outputWeights[0][0] !== 0.1) return false;
+            const clone = { ...v, genome: good };
+            clone.afterFit(fakeMind);
+            if (!(fakeMind._transformers[0].outputWeights[0][0] === 0.5 &&
+                fakeMind._transformers[0].outputWeights[1][0] === -0.5 &&
+                fakeMind._transformers[0].outputBias[0] === 0.1 &&
+                snapshotGenome(fakeMind).members[0].w[0] === 0.5)) return false;
+            let threw = false;
+            try { applyGenomeToMind(fakeMind, { members: [{ w: [1], b: 0 }] }); } catch { threw = true; }
+            return threw;
+        })());
     check('R27-5: forecastKindOf groups the controller family (baseline/mechanism/label) apart from the signals',
         forecastKindOf(resolveVariant('baseline')) === 'controller' &&
         forecastKindOf(resolveVariant('surprise')) === 'controller' &&
@@ -1346,7 +1377,7 @@ export async function run() {
         applyVariant(swCtl, resolveVariant('sample-weights'));
         check('R28 (P3/BUGS.md #54): the scale-control arm exists, is opt-in, and differs from sample-weights ONLY in the emitted normalisation',
             !!scaleVariant && scaleVariant.controllerScoped === true && scaleVariant.appliesTo === 'controller' &&
-            OPT_IN_VARIANTS.length === 2 && !ALL_VARIANTS.some((v) => v.id === 'sample-weights-scale-control') &&
+            OPT_IN_VARIANTS.length === 3 && !ALL_VARIANTS.some((v) => v.id === 'sample-weights-scale-control') &&
             listVariants('controller').find((r) => r.id === 'sample-weights-scale-control').inDefaultRoster === false &&
             scaleCtl._sampleWeightConfig.emittedNormalization === 'scale' &&
             swCtl._sampleWeightConfig.emittedNormalization === 'mean1' &&

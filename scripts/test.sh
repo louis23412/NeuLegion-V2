@@ -2,7 +2,7 @@
 #
 # test.sh — run only the tests you need (nothing more).
 #
-# The full gate is `npm test` (node --test "test/node/*.test.js", 132 blocks,
+# The full gate is `npm test` (node --test "test/node/*.test.js", 131 blocks,
 # ~6 min on the operator's machine). Most edits touch one area, so use:
 #
 #   bash scripts/test.sh quick               # structural gate (ledger pins) — seconds
@@ -40,7 +40,7 @@ usage() {
   cat <<'EOF'
 Usage: bash scripts/test.sh [quick] [full] [<name> ...]
   quick   mirrors locks modules contracts guards (the structural gate)
-  full    identical to npm test (all 132 blocks, ~6 min)
+  full    identical to npm test (all 131 blocks, ~6 min)
   <name>  one test/node file by stem, with or without .test.js;
           repeatable: bash scripts/test.sh core guards locks
 Names:

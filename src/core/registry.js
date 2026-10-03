@@ -11,7 +11,7 @@
 //      `rosterSnapshot` lesson from round 30 — a silent roster edit is the way a
 //      deflated Sharpe gets inflated);
 //   3. the registry holds CODE + IDS only. Proofs live with the plugin, in
-//      `test/lock-registry.js` — a test asserts the two do not drift.
+//      `test/node/contracts.test.js` — a test asserts the two do not drift.
 //
 // The registry is pure in-memory state and imports only contracts + primitives.
 // It never imports a plugin: the composition root (`src/plugins/index.js`) pushes

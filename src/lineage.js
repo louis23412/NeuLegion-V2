@@ -37,6 +37,7 @@ export const LINEAGE_BRANCHES = Object.freeze([
     { id: "NL-MECH-querymod@r17", lineage: "MECH", branch: "querymod", state: "PARK", variant: "querymod" },
     { id: "NL-MECH-sample-weights@r28", lineage: "MECH", branch: "sample-weights", state: "PARK", variant: "sample-weights" },
     { id: "NL-MECH-sample-weights-scale-control@r28", lineage: "MECH", branch: "sample-weights-scale-control", state: "PARK", variant: "sample-weights-scale-control" },
+    { id: "NL-MECH-evolved-readout@r32", lineage: "MECH", branch: "evolved-readout", state: "PARK", variant: "evolved-readout" },
     { id: "NL-MECH-memory@r29", lineage: "MECH", branch: "memory-subsystem", state: "FROZEN" },
     { id: "NL-SIG-momentum@r23", lineage: "SIG", branch: "momentum", state: "KEEP", variant: "sig-momentum" },
     { id: "NL-SIG-accel@r27", lineage: "SIG", branch: "accel", state: "KEEP", variant: "sig-accel" },

@@ -72,9 +72,10 @@ This entry implements `AUDIT-round31-v2.md` amendment **A23**.
 
 Recorded here so a reader does not mistake PARK for DROPPED:
 
-- **`multiprobe`, `querymod`** — `appliesTo:'broadcast'`: they act on the memory broadcast path the
-  scored model never reads back (R27-2). They are **not proven bad**; they are **not scoreable on
-  this harness**. Parked (kept resolvable, never in the default roster).
+- **`multiprobe`, `querymod`** — scored-live since C3 (lab CYCLE-203; `appliesTo:'model'`
+  per #71, CLOSED CYCLE-211). Previously `broadcast`-only (R27-2); the C3 wiring made them
+  move the scored trajectory, so the taxonomy now matches reality. Still out of the default
+  roster (PARKED lineage stands) — applicable and resolvable, never in the default search.
 - **`sig-range`, `sig-agreement`** — *positive* Sharpe arms with a **real cross-sectional
   component** (`RUN-ANALYSIS.md` §16.1: common-share 0.61 / 0.66). They fail the gate, but they are
   the only arms that are not ~100 % market exposure, so they are the natural seed of a
