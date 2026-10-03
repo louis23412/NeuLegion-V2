@@ -36,6 +36,10 @@ const P = 16, ES = 4;
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
+const mulberry32 = (seed) => { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+const realRandom = Math.random;
+const seedRandom = (seed) => { Math.random = mulberry32(seed); };
+
 function globalClip(hm, idx, thresh) {
   const acc = hm._gradientAccumulation[idx];
   let sum = 0;
@@ -185,6 +189,7 @@ function main() {
     const te = rows.slice(te0, te0 + N_TEST);
     if (tr.length < 100 || te.length < 50) continue;
     for (const arm of arms) {
+      seedRandom(777 + b);
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), `c2-${arm}-`));
       const hm = makeHive(arm, dir, N_TRAIN * N_BLOCKS);
       for (const r of tr) hm.train(r.x, r.y, 1);
@@ -212,6 +217,7 @@ function main() {
   }
   summary.dm = dm;
   summary.losses = Object.fromEntries(arms.map((a) => [a, losses[a].length]));
+  Math.random = realRandom;
   fs.writeFileSync(OUT, JSON.stringify(summary, null, 2));
   console.log(`c2-ablation: n=${summary.n} train=${N_TRAIN} test=${N_TEST} blocks=${N_BLOCKS}`);
   console.log(`brier ${JSON.stringify(summary.brier)}`);

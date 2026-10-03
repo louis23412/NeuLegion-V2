@@ -667,7 +667,7 @@ export const gradientMethods = {
         if (shouldClone) gradClone = this._setGradientStructure();
 
         this._transformers.forEach((transformer, idx) => {
-            if (shouldScale) this._scaleGradients(idx);
+            this._scaleGradients(idx);
 
             for (let k = 0; k < this._hiddenSize; k++) {
                 const biasAcc = this._gradientAccumulation[idx].attentionBias[k];
