@@ -154,20 +154,20 @@ const PRICE = { atrFactor: 2, stopFactor: 1, minPriceMovement: 0.0025, maxPriceM
 export const roundPredictions = (values) => values.map((p) => Number(p.toPrecision(6)));
 
 const EXPECTED = {
-    'hm:diagnostics': '740d2e1a',
+    'hm:diagnostics': 'a325b1af',
     // Re-frozen once, deliberately: this fingerprint is the *rounded* live
     // prediction sequence (see `roundPredictions` above and docs/BUGS.md #16).
     // It was `a2ce390b` while it hashed the raw float64 values, which made it the
     // one engine-sensitive check in the suite.
-    'hm:predictions': 'b6ca75d6',
+    'hm:predictions': 'c0ffb128',
     // Re-frozen for the same reason (ROADMAP P2-3): it now hashes the *rounded*
     // post-reload prediction, so the last raw-float64 fingerprinted observable is
     // engine-portable too (it was `f9cef898` while raw).
     // 'hm:postReloadPrediction' below.
-    'hm:memberCounts': 'e3341ca5',
-    'hm:broadcast': '31d90624',
+    'hm:memberCounts': 'e9b28c58',
+    'hm:broadcast': '2fff45d4',
     'hm:translate': '8e4e4d29',
-    'hm:postReloadPrediction': '5f703135',
+    'hm:postReloadPrediction': '57990839',
     // Re-frozen once, deliberately, for round 26 R26-0 (BUGS.md #33). The
     // controller block used to be fed the whole growing candle prefix
     // (`cache.slice(0, i)`); production feeds the last `cacheSize` candles, and
@@ -177,11 +177,17 @@ const EXPECTED = {
     // is now the production window. `ctl:signalCount` and `ctl:lastTrainingStep`
     // are unchanged; `hm:*` are untouched. Was: ctl:finalSignal `224a8b19`,
     // ctl:signalTrajectory `17d78ef3`, ctl:accuracyTotals `a0ece37d`.
-    'ctl:finalSignal': 'a7b13a39',
-    'ctl:signalTrajectory': '5d341253',
+    // Re-frozen C2-delete (lab CYCLE-200): optimizer stack retired. Was:
+    // hm:diagnostics `740d2e1a`, hm:predictions `b6ca75d6`, hm:memberCounts
+    // `e3341ca5`, hm:broadcast `31d90624`, hm:postReloadPrediction `5f703135`,
+    // ctl:finalSignal `a7b13a39`, ctl:signalTrajectory `5d341253`,
+    // ctl:accuracyTotals `09d8fb5a`. Unchanged by the delete (mechanism
+    // intact): hm:translate, ctl:signalCount, ctl:lastTrainingStep.
+    'ctl:finalSignal': '24a68d9c',
+    'ctl:signalTrajectory': '518f4303',
     'ctl:signalCount': '74386641',
     'ctl:lastTrainingStep': '6433cfe3',
-    'ctl:accuracyTotals': '09d8fb5a',
+    'ctl:accuracyTotals': '9f465532',
 };
 
 export async function run(options = {}) {

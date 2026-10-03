@@ -140,62 +140,16 @@ export const scoreMethods = {
         }
     },
 
+    // C2 verdict: the rank-based LR controller had no measurable effect
+    // (lab CYCLE-198/200), so rates stay frozen at `_learningRate`. The
+    // opt-in homeostatic hook below is preserved (homeostasis.test.js C).
     _updateAdaptiveLearningRates (outputs = null) {
-        const recent_performance = this._historicalPerformance.map(history => {
-            const len = history.length;
-            if (len === 0) return 0.5;
-            const sum = history.reduce((s, v) => s + (isValidNumber(v) ? v : 0), 0);
-            return sum / len;
-        });
-
-        const recent_trust = this._trustScoresHistory.map(history => {
-            const len = history.length;
-            if (len === 0) return 0.5;
-            const sum = history.reduce((s, v) => s + (isValidNumber(v) ? v : 0), 0);
-            return sum / len;
-        });
-
-        const sorted_specialization = this._specializationScores.slice().sort((a, b) => b - a);
-        const max_spec = sorted_specialization[Math.floor(this._ensembleSize * 0.05)] || 1e-10;
-        const min_spec = sorted_specialization[this._ensembleSize - 1] || 0;
-        const spec_range = Math.max(max_spec - min_spec, 1e-10);
-        const normalized_specialization = this._specializationScores.map(score => 
-            Math.min(Math.max((score - min_spec) / spec_range, 0), 1)
-        );
-
-        const composite_scores = recent_performance.map((perf, idx) => {
-            const trust = recent_trust[idx];
-            const spec = normalized_specialization[idx];
-            const weighted_sum = 0.4 * perf + 0.3 * trust + 0.3 * spec;
-            return this._sigmoid(5 * weighted_sum);
-        });
-
-        const sorted_composite = composite_scores.slice().sort((a, b) => b - a);
-        const thresholdIdx = Math.max(1, Math.floor(composite_scores.length * 0.25));
-        const acceptable_threshold = sorted_composite[thresholdIdx] || 0.5;
-
         const min_lr = this._learningRate * 0.5;
         const max_lr = this._learningRate * 1.5;
 
         this._adaptiveLearningRate = this._adaptiveLearningRate.map((lr, idx) => {
-            let newLr = lr;
-            const score = composite_scores[idx];
-            const score_diff = score - acceptable_threshold;
+            let newLr = this._learningRate;
 
-            const adjustment_magnitude = Math.max(-1, Math.min(1, score_diff * 2));
-            if (score >= acceptable_threshold) {
-                newLr *= (1 - this._learningRateDecay * this._learningRate * Math.abs(adjustment_magnitude) * 0.8);
-            } else {
-                newLr *= (1 + this._learningRateDecay * this._learningRate * Math.abs(adjustment_magnitude) * 1.2);
-            }
-
-            newLr = 0.95 * newLr + 0.05 * lr;
-
-            newLr = Math.max(min_lr, Math.min(newLr, max_lr));
-
-            // Optional homeostatic regulation of the (already rank-controlled)
-            // rate toward an absolute activity set-point. Off by default so the
-            // golden fingerprints are unchanged (see ensemble/homeostasis.js).
             if (this._homeostasisEnabled) {
                 const cfg = this._homeostasisConfig || DEFAULT_HOMEOSTASIS_CONFIG;
                 const activity = updateActivity(

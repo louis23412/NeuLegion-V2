@@ -9,8 +9,11 @@
 import { isValidNumber } from '../utils.js';
 
 export const gradientMethods = {
-    _scaleGradientMatrix (gradMatrix, threshold, minScaleFactor, alpha, decay, sparseThreshold, precomputedNorm = null) {
-        const spectralNorm = precomputedNorm !== null ? precomputedNorm : this._computeSpectralNorm(gradMatrix);
+    // RETIRED (C2 proof, lab CYCLE-198/200: plain~=stock DM p=0.86, n=800) —
+    // the per-tensor spectral/quant/EMA/fractal stack below is dead code,
+    // kept only because test/component-manifest.js contracts the method
+    // names. `_scaleGradients` is now a global-norm clip (threshold 1.0).
+    _scaleGradientMatrix (gradMatrix, threshold, minScaleFactor, alpha, decay, sparseThreshold, precomputedNorm = null) {        const spectralNorm = precomputedNorm !== null ? precomputedNorm : this._computeSpectralNorm(gradMatrix);
         if (spectralNorm <= threshold) return;
 
         const scale = Math.max(minScaleFactor, Math.pow(threshold / spectralNorm, alpha) * decay);
@@ -38,135 +41,28 @@ export const gradientMethods = {
         }
     },
 
+    // C2 verdict: the shipped per-tensor scaler stack was retired (no
+    // measurable effect vs global clip). This is now a global-norm clip.
     _scaleGradients (idx) {
-        const baseAttentionPercentile = 0.95;
-        const baseFfnPercentile = 0.9;
-        const baseVectorPercentile = 0.8;
-
-        const trustVariance = this._computeVariance(this._trustScoresHistory[idx].slice(-10));
-        const lossVariance = this._computeVariance(this._historicalPerformance[idx].slice(-10));
-        const stabilityMetric = 0.5 * lossVariance + 0.5 * trustVariance;
-
-        const minScaleFactor = Math.max(0.01, 0.1 / (Math.sqrt(this._ensembleSize) * (1 + stabilityMetric)));
-
-        const emaBetaShort = Math.min(0.95, Math.max(0.8, this._computeKernelRate(this._historicalPerformance[idx])));
-        const emaBetaLong = Math.min(0.999, Math.max(0.95, this._computeKernelRate(this._trustScoresHistory[idx])));
-
-        const fractalDim = this._computeFractalDimension(this._historicalPerformance[idx].slice(-10));
-        const componentWeights = {
-            ensemble: Math.min(0.4, Math.max(0.1, 0.2 * (1 + 0.1 * fractalDim))),
-            specialization: Math.min(0.4, Math.max(0.1, 0.2 * (1 + 0.15 * fractalDim * Math.min(this._specializationScores[idx], 10)))),
-            trust: Math.min(0.4, Math.max(0.1, 0.2 * (1 - 0.1 * fractalDim))),
-            historicalPerformance: Math.min(0.4, Math.max(0.1, 0.2 * (1 + 0.05 * fractalDim))),
-            performance: Math.min(0.4, Math.max(0.1, 0.2 * (1 + 0.05 * fractalDim)))
+        const acc = this._gradientAccumulation[idx];
+        let sum = 0;
+        const visit = (n) => {
+            if (typeof n === 'number') { if (isValidNumber(n)) sum += n * n; return; }
+            if (n != null && typeof n === 'object') for (const k of Object.keys(n)) visit(n[k]);
         };
-        const totalWeight = Object.values(componentWeights).reduce((sum, w) => sum + w, 0);
-        Object.keys(componentWeights).forEach(key => {
-            componentWeights[key] /= Math.max(totalWeight, 1e-8);
-        });
-
-        const trust_ema = this._computeDualEMA(this._trustScoresHistory[idx], emaBetaShort, emaBetaLong);
-        const perf_ema = this._computeDualEMA(this._historicalPerformance[idx], emaBetaShort, emaBetaLong);
-
-        const robustnessFactor = Math.min(0.9, Math.max(0.1, 0.5 + 0.5 * (trust_ema / (Math.abs(trust_ema) + Math.abs(perf_ema) + 1e-10))));
-        const compositeScore = (
-            this._ensembleWeights[idx] * componentWeights.ensemble +
-            this._specializationScores[idx] * componentWeights.specialization +
-            trust_ema * componentWeights.trust +
-            perf_ema * componentWeights.historicalPerformance +
-            this._performanceScores[idx] * componentWeights.performance
-        ) * robustnessFactor;
-
-        const totalCompositeScore = this._ensembleWeights.reduce((sum, _, i) => {
-            const memberTrustEma = this._computeDualEMA(this._trustScoresHistory[i], emaBetaShort, emaBetaLong);
-            const memberPerfEma = this._computeDualEMA(this._historicalPerformance[i], emaBetaShort, emaBetaLong);
-            const memberRobustness = Math.min(0.9, Math.max(0.1, 0.5 + 0.5 * (memberTrustEma / (Math.abs(memberTrustEma) + Math.abs(memberPerfEma) + 1e-10))));
-            return sum + (
-                this._ensembleWeights[i] * componentWeights.ensemble +
-                this._specializationScores[i] * componentWeights.specialization +
-                memberTrustEma * componentWeights.trust +
-                memberPerfEma * componentWeights.historicalPerformance +
-                this._performanceScores[i] * componentWeights.performance
-            ) * memberRobustness;
-        }, 0);
-
-        const normalizedScore = Math.min(1, Math.max(0, 0.8 * (compositeScore / Math.max(totalCompositeScore, 1e-8)) + 0.2 / this._ensembleSize));
-        const ntkStability = this._computeNTKStability(this._historicalPerformance[idx].slice(-10), lossVariance);
-        const weightFactorMin = 0.5 / (1 + lossVariance);
-        const weightFactorMax = 1 + this._ensembleSize / (10 * (1 + lossVariance));
-        const weightFactor = Math.min(weightFactorMax, Math.max(weightFactorMin, normalizedScore * this._ensembleSize * ntkStability));
-
-        const sigmoidSlope = 5 / (1 + trustVariance);
-        const alpha = Math.min(1, Math.max(0.1, 0.5 + 0.5 * (1 / (1 + Math.exp(sigmoidSlope * trust_ema)) - 0.5)));
-
-        const dynamicK = 4 / (1 + trustVariance);
-        const decay = Math.max(0.1, Math.min(1, 1 / (1 + dynamicK * trustVariance)));
-
-        const attentionMatrixNorms = [];
-        const ffnMatrixNorms = [];
-        const vectorNorms = [];
-        const specMatrixNorms = [];
-
-        ffnMatrixNorms.push(this._computeSpectralNorm(this._gradientAccumulation[idx].outputWeights));
-        vectorNorms.push(this._computeGradientNorm(this._gradientAccumulation[idx].outputBias, false));
-
-        for (let layer = 0; layer < this._numLayers; layer++) {
-            ['Wq', 'Wk', 'Wv', 'Wo'].forEach(key => {
-                const gradMatrix = this._gradientAccumulation[idx].attentionWeights[layer][key];
-                attentionMatrixNorms.push(this._computeSpectralNorm(gradMatrix));
-            });
-
-            ['gate_proj', 'up_proj'].forEach(key => {
-                const gradMatrix = this._gradientAccumulation[idx].ffnWeights[layer][key];
-                ffnMatrixNorms.push(this._computeSpectralNorm(gradMatrix));
-            });
-            const downGrad = this._gradientAccumulation[idx].ffnWeights[layer].down_proj;
-            ffnMatrixNorms.push(this._computeSpectralNorm(downGrad));
-
-            vectorNorms.push(this._computeGradientNorm(this._gradientAccumulation[idx].layerNormWeights[layer].gamma1, false));
-            vectorNorms.push(this._computeGradientNorm(this._gradientAccumulation[idx].layerNormWeights[layer].gamma2, false));
-        }
-
-        vectorNorms.push(this._computeGradientNorm(this._gradientAccumulation[idx].attentionBias, false));
-        vectorNorms.push(this._computeGradientNorm(this._gradientAccumulation[idx].attentionWeightMatrix, false));
-
-        specMatrixNorms.push(this._computeSpectralNorm(this._gradientAccumulation[idx].specializationWeights));
-
-        const sparseThreshold = this._computeSparseThreshold([...attentionMatrixNorms, ...ffnMatrixNorms, ...vectorNorms, ...specMatrixNorms]);
-
-        const attentionPercentile = this._computeDynamicPercentile(attentionMatrixNorms, baseAttentionPercentile);
-        const ffnPercentile = this._computeDynamicPercentile(ffnMatrixNorms, baseFfnPercentile);
-        const vectorPercentile = this._computeDynamicPercentile(vectorNorms, baseVectorPercentile);
-        const specPercentile = this._computeDynamicPercentile(specMatrixNorms, baseAttentionPercentile);
-
-        const attentionMatrixThreshold = Math.min(this._computePercentile(attentionMatrixNorms, attentionPercentile), 1.0) * weightFactor;
-        const ffnMatrixThreshold = Math.min(this._computePercentile(ffnMatrixNorms, ffnPercentile), 1.0) * weightFactor;
-        const vectorThreshold = Math.min(this._computePercentile(vectorNorms, vectorPercentile), 1.0) * weightFactor;
-        const specMatrixThreshold = Math.min(this._computePercentile(specMatrixNorms, specPercentile), 1.0) * weightFactor;
-
-        let ffnNormIdx = 0;
-        let vectorNormIdx = 0;
-
-        this._scaleGradientMatrix(this._gradientAccumulation[idx].outputWeights, ffnMatrixThreshold, minScaleFactor, alpha, decay, sparseThreshold, ffnMatrixNorms[ffnNormIdx++]);
-        this._scaleGradientVector(this._gradientAccumulation[idx].outputBias, vectorThreshold, minScaleFactor, alpha, decay, sparseThreshold, vectorNorms[vectorNormIdx++]);
-
-        for (let layer = 0; layer < this._numLayers; layer++) {
-            ['Wq', 'Wk', 'Wv', 'Wo'].forEach((key, keyIdx) => {
-                this._scaleGradientMatrix(this._gradientAccumulation[idx].attentionWeights[layer][key], attentionMatrixThreshold, minScaleFactor, alpha, decay, sparseThreshold, attentionMatrixNorms[layer * 4 + keyIdx]);
-            });
-
-            ['gate_proj', 'up_proj'].forEach(key => {
-                this._scaleGradientMatrix(this._gradientAccumulation[idx].ffnWeights[layer][key], ffnMatrixThreshold, minScaleFactor, alpha, decay, sparseThreshold, ffnMatrixNorms[ffnNormIdx++]);
-            });
-            this._scaleGradientMatrix(this._gradientAccumulation[idx].ffnWeights[layer].down_proj, ffnMatrixThreshold, minScaleFactor, alpha, decay, sparseThreshold, ffnMatrixNorms[ffnNormIdx++]);
-
-            this._scaleGradientVector(this._gradientAccumulation[idx].layerNormWeights[layer].gamma1, vectorThreshold, minScaleFactor, alpha, decay, sparseThreshold, vectorNorms[vectorNormIdx++]);
-            this._scaleGradientVector(this._gradientAccumulation[idx].layerNormWeights[layer].gamma2, vectorThreshold, minScaleFactor, alpha, decay, sparseThreshold, vectorNorms[vectorNormIdx++]);
-        }
-
-        this._scaleGradientVector(this._gradientAccumulation[idx].attentionBias, vectorThreshold, minScaleFactor, alpha, decay, sparseThreshold, vectorNorms[vectorNormIdx++]);
-        this._scaleGradientVector(this._gradientAccumulation[idx].attentionWeightMatrix, vectorThreshold, minScaleFactor, alpha, decay, sparseThreshold, vectorNorms[vectorNormIdx++]);
-        this._scaleGradientMatrix(this._gradientAccumulation[idx].specializationWeights, specMatrixThreshold, minScaleFactor, alpha, decay, sparseThreshold, specMatrixNorms[0]);
+        visit(acc);
+        const norm = Math.sqrt(sum);
+        if (!(norm > 1.0)) return;
+        const sc = 1.0 / norm;
+        const scale = (n) => {
+            if (typeof n === 'number') return isValidNumber(n) ? n * sc : n;
+            if (n != null && typeof n === 'object') {
+                if (Array.isArray(n)) { for (let i = 0; i < n.length; i++) n[i] = scale(n[i]); return n; }
+                for (const k of Object.keys(n)) n[k] = scale(n[k]);
+            }
+            return n;
+        };
+        scale(acc);
     },
 
     _accumulateGradients (inputs, outputs, target, probability, layerOutputs, activations, attentionIntermediates, sampleWeight = 1) {

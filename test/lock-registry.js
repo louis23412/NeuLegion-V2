@@ -1359,7 +1359,7 @@ export const HIVEMIND_REGISTRY = Object.freeze({
         citations: ['lakshminarayanan2017deep', 'diversitycollapse2608'],
         proves: ['golden.test.js', 'core.test.js', 'legion.test.js'],
         fingerprints: ['hm:diagnostics'],
-        note: 'Specialisation/performance/agreement/trust + ensemble weights. Invariant: weights non-negative and sum to 1.',
+        note: 'Specialisation/performance/agreement/trust + ensemble weights. Invariant: weights non-negative and sum to 1. C2 verdict (lab CYCLE-198/200, DM p=0.86): the rank-based LR controller is retired — rates stay frozen at _learningRate; opt-in homeostasis hook preserved. Fingerprints re-frozen post-delete.',
     },
     gradients: {
         status: LOCK_LEVELS.BIT_EXACT,
@@ -1367,7 +1367,7 @@ export const HIVEMIND_REGISTRY = Object.freeze({
         citations: ['goyal2017accurate'],
         proves: ['golden.test.js', 'core.test.js', 'sanity.test.js'],
         fingerprints: ['hm:predictions'],
-        note: 'Capture -> scale -> accumulate -> apply / rollback. Rollback is an exact undo.',
+        note: 'Capture -> scale -> accumulate -> apply / rollback. Rollback is an exact undo. C2 verdict (lab CYCLE-198/200, DM p=0.86): per-tensor spectral/quant/EMA/fractal scaler retired — _scaleGradients is now a global-norm clip (thr 1.0). Fingerprints re-frozen post-delete.',
     },
     distillation: {
         status: LOCK_LEVELS.BIT_EXACT,
